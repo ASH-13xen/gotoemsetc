@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EMS</title>
+    <!--
+      The federation plugin's own dynamic per-remote CSS injection is broken
+      under Vite 8 (see each remote's scripts/fixRemoteEntry.cjs), so each
+      remote's stylesheet is linked statically here instead. All four apps
+      share the same Tailwind theme, so this is safe to always load.
+    -->
+    <link rel="stylesheet" href="http://localhost:5173/assets/remote-style.css" />
+    <link rel="stylesheet" href="http://localhost:5174/assets/remote-style.css" />
+    <link rel="stylesheet" href="http://localhost:5175/assets/remote-style.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
