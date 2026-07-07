@@ -5,11 +5,21 @@ const env = require('../src/config/env');
 const User = require('../src/models/User');
 const { USER_ROLES } = require('../src/config/constants');
 
+// Passwords are never hardcoded here — they come from .env (gitignored) or
+// the deploy host's env var dashboard, so they never end up committed to git.
+function requiredPassword(envVar) {
+  const value = process.env[envVar];
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${envVar}`);
+  }
+  return value;
+}
+
 const users = [
-  { username: 'admin', password: 'admin', role: USER_ROLES.ADMIN },
-  { username: 'worker1', password: 'worker1', role: USER_ROLES.WORKER },
-  { username: 'worker2', password: 'worker2', role: USER_ROLES.WORKER },
-  { username: 'worker3', password: 'worker3', role: USER_ROLES.WORKER },
+  { username: 'admin', password: requiredPassword('SEED_ADMIN_PASSWORD'), role: USER_ROLES.ADMIN },
+  { username: 'worker1', password: requiredPassword('SEED_WORKER1_PASSWORD'), role: USER_ROLES.WORKER },
+  { username: 'worker2', password: requiredPassword('SEED_WORKER2_PASSWORD'), role: USER_ROLES.WORKER },
+  { username: 'worker3', password: requiredPassword('SEED_WORKER3_PASSWORD'), role: USER_ROLES.WORKER },
 ];
 
 async function main() {

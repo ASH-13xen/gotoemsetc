@@ -10,10 +10,12 @@
       under Vite 8 (see each remote's scripts/fixRemoteEntry.cjs), so each
       remote's stylesheet is linked statically here instead. All four apps
       share the same Tailwind theme, so this is safe to always load.
+      Vite substitutes the placeholders below from .env locally, or from
+      whatever env vars are configured on the Vercel project in production.
     -->
-    <link rel="stylesheet" href="http://localhost:5173/assets/remote-style.css" />
-    <link rel="stylesheet" href="http://localhost:5174/assets/remote-style.css" />
-    <link rel="stylesheet" href="http://localhost:5175/assets/remote-style.css" />
+    <link rel="stylesheet" href="%VITE_EMS_URL%/assets/remote-style.css" />
+    <link rel="stylesheet" href="%VITE_SALES_URL%/assets/remote-style.css" />
+    <link rel="stylesheet" href="%VITE_FOLLOWUPS_URL%/assets/remote-style.css" />
   </head>
   <body>
     <div id="root"></div>
