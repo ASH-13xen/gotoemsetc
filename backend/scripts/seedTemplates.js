@@ -10,7 +10,7 @@ const employeeName = {
   source: 'computed', group: 'Personal', order: 1,
 };
 const employeeAddress = {
-  key: 'employeeAddress', label: 'Employee address', type: 'textarea', required: true,
+  key: 'employeeAddress', label: 'Employee address', type: 'textarea', required: false,
   source: 'computed', group: 'Personal', order: 2,
 };
 const todayDate = {
@@ -90,9 +90,13 @@ const templates = [
     docxFilePath: 'appointment-letter.docx',
     fields: [
       employeeName, employeeAddress, designation, workLocation, jobDescription,
-      dateOfJoining, annualCTC, annualCTCInWords, monthlyGross, todayDate,
+      dateOfJoining, annualCTC, annualCTCInWords, todayDate,
     ],
-    loops: [salaryComponentsLoop],
+    // Explicit empty array, not just an absent key — findOneAndUpdate's
+    // implicit $set on a plain object only sets keys that are present, so
+    // omitting `loops` entirely would leave a stale salaryComponents loop
+    // from a previous seed in place instead of clearing it.
+    loops: [],
   },
   {
     key: 'offer-letter',
