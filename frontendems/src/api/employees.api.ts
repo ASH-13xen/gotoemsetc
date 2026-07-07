@@ -17,6 +17,11 @@ export interface SalaryComponent {
   monthlyAmount: number
 }
 
+export interface ExtraDetail {
+  key: string
+  value?: string
+}
+
 export interface Employee {
   _id: string
   employeeCode: string
@@ -35,11 +40,13 @@ export interface Employee {
   reportingManager?: string
   workLocation?: string
   ctcAnnual?: number
+  monthlyPay?: number
   salaryComponents?: SalaryComponent[]
   bankAccountNumber?: string
   bankIFSC?: string
   panNumber?: string
   aadharNumber?: string
+  extraDetails?: ExtraDetail[]
   status: EmployeeStatus
   createdAt: string
   updatedAt: string

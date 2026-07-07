@@ -146,8 +146,8 @@ export function RequestDocumentsModal({ employeeId, trigger }: { employeeId: str
           </div>
         ) : (
           <div className="grid gap-4">
-            <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-3">
-              <code className="flex-1 truncate text-xs">{link}</code>
+            <div className="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 p-3">
+              <code className="min-w-0 flex-1 truncate text-xs">{link}</code>
               <Button size="sm" variant="outline" onClick={onCopy}>
                 {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
                 Copy

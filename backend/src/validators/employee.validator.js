@@ -19,6 +19,11 @@ const salaryComponentSchema = z.object({
   monthlyAmount: z.coerce.number(),
 });
 
+const extraDetailSchema = z.object({
+  key: z.string().min(1),
+  value: z.string().optional(),
+});
+
 const mutableFields = {
   firstName: z.string().min(1),
   lastName: z.string().optional(),
@@ -36,11 +41,13 @@ const mutableFields = {
   reportingManager: z.string().optional(),
   workLocation: z.string().optional(),
   ctcAnnual: z.coerce.number().optional(),
+  monthlyPay: z.coerce.number().optional(),
   salaryComponents: z.array(salaryComponentSchema).optional(),
   bankAccountNumber: z.string().optional(),
   bankIFSC: z.string().optional(),
   panNumber: z.string().optional(),
   aadharNumber: z.string().optional(),
+  extraDetails: z.array(extraDetailSchema).optional(),
 
   status: statusEnum.optional(),
 };
@@ -64,10 +71,12 @@ const create = {
     reportingManager: true,
     workLocation: true,
     ctcAnnual: true,
+    monthlyPay: true,
     bankAccountNumber: true,
     bankIFSC: true,
     panNumber: true,
     aadharNumber: true,
+    extraDetails: true,
   }),
 };
 

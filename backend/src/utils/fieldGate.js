@@ -1,14 +1,22 @@
 const sensitiveFields = require('../config/sensitiveFields');
 const { USER_ROLES } = require('../config/constants');
 
-// Single flip-point for role-based field redaction. Today it is a no-op for
-// every role — both admin and worker see everything — until exact visibility
-// rules are specified. When that happens, strip `sensitiveFields[resourceType]`
-// from the returned object for USER_ROLES.WORKER here, nowhere else.
+function stripFields(doc, fields) {
+  if (!doc) return doc;
+  const plain = typeof doc.toObject === 'function' ? doc.toObject() : doc;
+  const shaped = { ...plain };
+  for (const field of fields) delete shaped[field];
+  return shaped;
+}
+
+// Single flip-point for role-based field redaction. Non-admin roles never see
+// sensitiveFields[resourceType] on the way out, regardless of which endpoint
+// the document came through. Admin always sees everything.
 function shapeForRole(resourceType, doc, role) {
-  void sensitiveFields[resourceType];
-  void USER_ROLES;
-  return doc;
+  const fields = sensitiveFields[resourceType];
+  if (!fields || !fields.length || role === USER_ROLES.ADMIN || !doc) return doc;
+
+  return Array.isArray(doc) ? doc.map((item) => stripFields(item, fields)) : stripFields(doc, fields);
 }
 
 module.exports = { shapeForRole };

@@ -26,6 +26,10 @@ const router = Router();
 router.get('/health', (req, res) => res.json({ status: 'ok' }));
 router.use('/auth', authRoutes);
 router.use('/public', publicRoutes);
+// Non-sensitive static config (doc type labels, whether email is set up) —
+// PublicUploadPage needs this to render doc type names for unauthenticated
+// applicants, so it must stay open rather than behind verifyToken.
+router.use('/config', configRoutes);
 
 // Everything below requires a valid JWT.
 router.use(verifyToken);
@@ -36,7 +40,6 @@ router.use('/templates', templateRoutes);
 router.use('/documents', documentRoutes);
 router.use('/upload-requests', uploadRequestRoutes);
 router.use('/uploaded-documents', uploadedDocumentRoutes);
-router.use('/config', configRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/applicants', applicantRoutes);
 router.use('/clients', clientRoutes);

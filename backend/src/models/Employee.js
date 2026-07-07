@@ -18,6 +18,13 @@ const salaryComponentSchema = new Schema(
   { _id: false }
 );
 
+// Freeform key/value pairs, similar to an env var editor — lets HR record
+// anything that doesn't have a dedicated field without a schema change.
+const extraDetailSchema = new Schema(
+  { key: { type: String, required: true, trim: true }, value: { type: String, trim: true } },
+  { _id: false }
+);
+
 const employeeSchema = new Schema(
   {
     employeeCode: { type: String, unique: true, sparse: true },
@@ -42,6 +49,7 @@ const employeeSchema = new Schema(
     reportingManager: String,
     workLocation: String,
     ctcAnnual: Number,
+    monthlyPay: Number,
     // Itemized monthly breakup (Basic, HRA, etc.) — ctcAnnual above is kept as
     // a simple summary field, this drives the detailed salary table in letters.
     salaryComponents: [salaryComponentSchema],
@@ -49,6 +57,7 @@ const employeeSchema = new Schema(
     bankIFSC: String,
     panNumber: String,
     aadharNumber: String,
+    extraDetails: [extraDetailSchema],
 
     status: {
       type: String,

@@ -281,9 +281,11 @@ async function main() {
   await mongoose.connect(env.mongodbUri);
 
   const seededKeys = new Set(templates.map((t) => t.key));
-  for (const template of templates) {
-    await documentTemplateRepository.upsertByKey(template.key, template);
-    console.log(`Seeded template: ${template.key}`);
+  for (const [index, template] of templates.entries()) {
+    // The array above is already in the intended wizard display order —
+    // reflect that as an explicit sortOrder rather than relying on category/title.
+    await documentTemplateRepository.upsertByKey(template.key, { ...template, sortOrder: index + 1 });
+    console.log(`Seeded template: ${template.key} (sortOrder ${index + 1})`);
   }
 
   // Deactivate any previously-seeded templates that no longer exist in this list.

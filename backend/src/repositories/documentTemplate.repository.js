@@ -2,7 +2,7 @@ const DocumentTemplate = require('../models/DocumentTemplate');
 
 function list({ active } = {}) {
   const query = active === undefined ? {} : { isActive: active };
-  return DocumentTemplate.find(query).sort({ category: 1, title: 1 });
+  return DocumentTemplate.find(query).sort({ sortOrder: 1, title: 1 });
 }
 
 function findById(id) {

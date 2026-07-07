@@ -4,6 +4,7 @@
 module.exports = {
   Employee: [
     'ctcAnnual',
+    'monthlyPay',
     'salaryComponents',
     'bankAccountNumber',
     'bankIFSC',

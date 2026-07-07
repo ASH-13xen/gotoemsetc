@@ -48,6 +48,8 @@ const documentTemplateSchema = new Schema(
     docxFilePath: { type: String, required: true }, // relative path under templates/files/
     version: { type: Number, default: 1 },
     isActive: { type: Boolean, default: true },
+    // Controls display order in the "generate docs" wizard — lower first.
+    sortOrder: { type: Number, default: 0 },
     fields: [fieldSchema],
     loops: [loopSchema],
   },

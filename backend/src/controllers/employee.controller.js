@@ -5,7 +5,7 @@ const { shapeForRole } = require('../utils/fieldGate');
 
 const list = asyncHandler(async (req, res) => {
   const result = await employeeService.listEmployees(req.query);
-  res.json(result);
+  res.json({ ...result, items: shapeForRole('Employee', result.items, req.user.role) });
 });
 
 const getById = asyncHandler(async (req, res) => {
@@ -21,7 +21,7 @@ const create = asyncHandler(async (req, res) => {
     resourceId: employee._id,
     metadata: { employeeCode: employee.employeeCode },
   };
-  res.status(201).json({ employee });
+  res.status(201).json({ employee: shapeForRole('Employee', employee, req.user.role) });
 });
 
 const update = asyncHandler(async (req, res) => {
@@ -32,7 +32,7 @@ const update = asyncHandler(async (req, res) => {
     resourceId: employee._id,
     metadata: req.body,
   };
-  res.json({ employee });
+  res.json({ employee: shapeForRole('Employee', employee, req.user.role) });
 });
 
 const remove = asyncHandler(async (req, res) => {
