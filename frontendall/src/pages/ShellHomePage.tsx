@@ -16,13 +16,13 @@ export default function ShellHomePage() {
     <div className="min-h-screen bg-background">
       <ShellNav />
       <main className="mx-auto max-w-6xl space-y-6 p-6">
-        <h1 className="text-3xl font-black tracking-tighter uppercase">Welcome, {user?.username}</h1>
-        <div className="grid gap-4 md:grid-cols-3">
+        <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Welcome, {user?.username}</h1>
+        <div className="grid gap-6 md:grid-cols-3">
           {SECTIONS.map((s) => (
             <Link key={s.to} to={s.to}>
-              <Card className="h-full transition-colors hover:bg-accent/50">
+              <Card className="h-full transition-all duration-300 hover:bg-card hover:shadow-md hover:-translate-y-0.5 border border-border">
                 <CardHeader>
-                  <CardTitle className="uppercase tracking-widest">{s.title}</CardTitle>
+                  <CardTitle className="tracking-wide text-primary font-bold text-lg">{s.title}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-muted-foreground">{s.description}</p>

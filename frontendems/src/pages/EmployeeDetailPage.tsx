@@ -5,6 +5,7 @@ import { Loader2, Plus, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -30,10 +31,12 @@ type FormValues = {
   lastName: string
   personalEmail: string
   phone: string
+  address: string
   designation: string
   department: string
   reportingManager: string
   workLocation: string
+  dateOfJoining: string
   employmentType: EmploymentType
   status: EmployeeStatus
   ctcAnnual: string
@@ -43,16 +46,25 @@ type FormValues = {
   extraDetails: { key: string; value: string }[]
 }
 
+function toDateInputValue(value: string | undefined): string {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toISOString().slice(0, 10)
+}
+
 function toFormValues(employee: Employee): FormValues {
   return {
     firstName: employee.firstName ?? '',
     lastName: employee.lastName ?? '',
     personalEmail: employee.personalEmail ?? '',
     phone: employee.phone ?? '',
+    address: employee.address?.line1 ?? '',
     designation: employee.designation ?? '',
     department: employee.department ?? '',
     reportingManager: employee.reportingManager ?? '',
     workLocation: employee.workLocation ?? '',
+    dateOfJoining: toDateInputValue(employee.dateOfJoining),
     employmentType: employee.employmentType ?? 'full-time',
     status: employee.status ?? 'draft',
     ctcAnnual: employee.ctcAnnual != null ? String(employee.ctcAnnual) : '',
@@ -101,6 +113,8 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         ...values,
         ctcAnnual: values.ctcAnnual ? Number(values.ctcAnnual) : undefined,
         monthlyPay: values.monthlyPay ? Number(values.monthlyPay) : undefined,
+        dateOfJoining: values.dateOfJoining || undefined,
+        address: values.address ? { line1: values.address } : undefined,
         extraDetails: values.extraDetails?.filter((d) => d.key.trim().length > 0),
       },
       {
@@ -200,6 +214,10 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   <Label htmlFor="phone" className="text-xs font-black uppercase tracking-widest text-neutral-400">PHONE</Label>
                   <Input id="phone" {...register('phone')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
                 </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="address" className="text-xs font-black uppercase tracking-widest text-neutral-400">ADDRESS</Label>
+                  <Textarea id="address" {...register('address')} className="bg-neutral-900 border-white text-white rounded-none" />
+                </div>
               </div>
             </div>
 
@@ -224,6 +242,10 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 <div className="grid gap-1.5">
                   <Label htmlFor="workLocation" className="text-xs font-black uppercase tracking-widest text-neutral-400">WORK LOCATION</Label>
                   <Input id="workLocation" {...register('workLocation')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="dateOfJoining" className="text-xs font-black uppercase tracking-widest text-neutral-400">DATE OF JOINING</Label>
+                  <Input id="dateOfJoining" type="date" {...register('dateOfJoining')} className="bg-neutral-900 border-white text-white rounded-none" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-1.5">

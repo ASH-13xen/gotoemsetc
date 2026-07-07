@@ -48,33 +48,33 @@ export default function ClientsPage() {
   const clients = data?.items ?? []
 
   return (
-    <div className="min-h-screen bg-black p-6 text-white">
+    <div className="min-h-screen bg-background p-6 text-foreground">
       <main className="mx-auto max-w-6xl space-y-8">
         {/* HERO HEADER */}
-        <div className="grid grid-cols-1 border-2 border-white bg-black md:grid-cols-3">
-          <div className="flex min-h-[180px] flex-col justify-between border-b-2 border-white p-8 md:col-span-2 md:border-r-2 md:border-b-0">
-            <span className="text-xs font-black tracking-widest text-neutral-400 uppercase">
+        <div className="grid grid-cols-1 gap-6 bg-transparent md:grid-cols-3">
+          <div className="flex min-h-[180px] flex-col justify-between bg-card border border-border p-8 rounded-2xl md:col-span-2 shadow-sm">
+            <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
               SALES PIPELINE
             </span>
-            <h1 className="text-5xl font-black tracking-tighter text-white uppercase select-none md:text-7xl">
+            <h1 className="text-5xl font-extrabold tracking-tight text-foreground uppercase select-none md:text-7xl">
               CLIENTS
             </h1>
           </div>
-          <div className="grid grid-cols-1 divide-y-2 divide-white">
+          <div className="flex flex-col gap-4">
             <RegisterClientDialog
               trigger={
-                <div className="flex min-h-[120px] cursor-pointer flex-col justify-between bg-emerald-600 p-8 text-white transition-all hover:opacity-90 active:scale-[0.99]">
-                  <span className="text-xs font-black uppercase tracking-widest opacity-80">NEW LEAD</span>
-                  <span className="text-3xl font-extrabold tracking-wide uppercase">REGISTER CLIENT</span>
+                <div className="flex min-h-[100px] cursor-pointer flex-col justify-between bg-emerald-600 p-6 rounded-xl text-white hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all">
+                  <span className="text-xs font-bold uppercase tracking-wider opacity-90">NEW LEAD</span>
+                  <span className="text-2xl font-extrabold tracking-wide uppercase">REGISTER CLIENT</span>
                 </div>
               }
             />
             <div
               onClick={() => navigate('/quotation-templates')}
-              className="flex min-h-20 cursor-pointer flex-col justify-center gap-1 bg-neutral-900 p-6 transition-all hover:bg-neutral-800 active:scale-[0.99]"
+              className="flex min-h-[80px] cursor-pointer flex-col justify-center gap-1 bg-card border border-border p-6 rounded-xl shadow-sm hover:shadow hover:bg-secondary/40 active:scale-[0.99] transition-all"
             >
-              <span className="flex items-center gap-2 text-sm font-extrabold tracking-wide text-white uppercase">
-                <FileCog className="size-4" />
+              <span className="flex items-center gap-2 text-sm font-semibold tracking-wide text-foreground uppercase">
+                <FileCog className="size-4 text-primary" />
                 Quotation Templates
               </span>
             </div>
@@ -82,21 +82,21 @@ export default function ClientsPage() {
         </div>
 
         {/* FILTERS */}
-        <div className="grid grid-cols-1 gap-4 border-2 border-white bg-black p-6 md:grid-cols-3">
+        <div className="bg-card border border-border rounded-xl p-5 grid grid-cols-1 md:grid-cols-3 gap-4 shadow-sm">
           <div className="relative flex items-center md:col-span-2">
-            <Search className="pointer-events-none absolute left-4 z-10 size-5 text-neutral-400" />
+            <Search className="pointer-events-none absolute left-4 z-10 size-5 text-muted-foreground/60" />
             <Input
-              placeholder="SEARCH BY CLIENT OR BRAND NAME..."
-              className="h-14 rounded-none border-2 border-white bg-black pl-12 text-lg font-bold text-white uppercase placeholder:text-neutral-500 focus:border-primary"
+              placeholder="Search by client or brand name..."
+              className="h-12 border border-border bg-card pl-12 text-base font-medium text-foreground placeholder:text-muted-foreground/60 focus:border-primary"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
           <Select value={status} onValueChange={(v) => setStatus(v as ClientStatus | 'all')}>
-            <SelectTrigger className="h-14 rounded-none border-2 border-white bg-black text-lg font-bold text-white uppercase focus:border-primary">
+            <SelectTrigger className="h-12 border border-border bg-card text-base font-medium text-foreground focus:border-primary rounded-lg uppercase">
               <SelectValue placeholder="FILTER BY STATUS" />
             </SelectTrigger>
-            <SelectContent className="rounded-none border-2 border-white bg-black text-white">
+            <SelectContent className="border border-border bg-card text-foreground rounded-lg">
               <SelectItem value="all">ALL STATUSES</SelectItem>
               <SelectItem value="lead">LEAD</SelectItem>
               <SelectItem value="onboarded">ONBOARDED</SelectItem>
@@ -106,45 +106,45 @@ export default function ClientsPage() {
         </div>
 
         {/* CLIENTS TABLE */}
-        <div className="overflow-x-auto border-2 border-white bg-black">
+        <div className="bg-card border border-border rounded-xl overflow-x-auto shadow-sm">
           {isLoading ? (
             <div className="space-y-4 p-6">
               {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full bg-neutral-800" />
+                <Skeleton key={i} className="h-12 w-full bg-muted/40 rounded-lg" />
               ))}
             </div>
           ) : clients.length === 0 ? (
             <div className="flex flex-col items-center gap-4 py-20 text-center">
-              <Users2 className="size-16 text-neutral-600" />
-              <p className="text-2xl font-black tracking-wider text-white uppercase">No clients yet</p>
-              <p className="text-sm tracking-widest text-neutral-400 uppercase">
+              <Users2 className="size-16 text-muted-foreground/40" />
+              <p className="text-xl font-bold tracking-tight text-foreground">No clients yet</p>
+              <p className="text-sm tracking-wider text-muted-foreground uppercase">
                 Register your first client to get started.
               </p>
             </div>
           ) : (
             <Table className="w-full border-collapse">
-              <TableHeader className="border-b-2 border-white bg-neutral-900">
-                <TableRow className="border-none hover:bg-transparent">
-                  <TableHead className="p-4 text-xs font-black tracking-widest text-white uppercase">CLIENT</TableHead>
-                  <TableHead className="p-4 text-xs font-black tracking-widest text-white uppercase">BRAND</TableHead>
-                  <TableHead className="p-4 text-xs font-black tracking-widest text-white uppercase">DATE REGISTERED</TableHead>
-                  <TableHead className="p-4 text-xs font-black tracking-widest text-white uppercase">STATUS</TableHead>
+              <TableHeader className="bg-muted/30 border-b border-border">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="p-4 text-xs font-semibold tracking-wider text-muted-foreground uppercase">CLIENT</TableHead>
+                  <TableHead className="p-4 text-xs font-semibold tracking-wider text-muted-foreground uppercase">BRAND</TableHead>
+                  <TableHead className="p-4 text-xs font-semibold tracking-wider text-muted-foreground uppercase">DATE REGISTERED</TableHead>
+                  <TableHead className="p-4 text-xs font-semibold tracking-wider text-muted-foreground uppercase">STATUS</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody className="divide-y-2 divide-neutral-900">
+              <TableBody className="divide-y divide-border/60">
                 {clients.map((client) => (
                   <TableRow
                     key={client._id}
-                    className="cursor-pointer border-none transition-colors hover:bg-neutral-900"
+                    className="cursor-pointer hover:bg-secondary/40 transition-colors"
                     onClick={() => navigate(`/clients/${client._id}`)}
                   >
-                    <TableCell className="p-4 text-base font-black tracking-wider text-white uppercase">
+                    <TableCell className="p-4 text-base font-semibold tracking-wide text-foreground">
                       {client.clientName}
                     </TableCell>
-                    <TableCell className="p-4 text-sm font-bold text-neutral-300 uppercase">
+                    <TableCell className="p-4 text-sm text-foreground/80 font-medium">
                       {client.brandName}
                     </TableCell>
-                    <TableCell className="p-4 font-mono text-sm font-bold text-neutral-400">
+                    <TableCell className="p-4 font-mono text-sm text-muted-foreground">
                       {new Date(client.dateRegistered).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="p-4">

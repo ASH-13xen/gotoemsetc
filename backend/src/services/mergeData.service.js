@@ -20,13 +20,6 @@ function formatCurrency(value) {
   }).format(num);
 }
 
-function formatAddress(address) {
-  if (!address) return undefined;
-  return [address.line1, address.line2, address.city, address.state, address.pincode, address.country]
-    .filter(Boolean)
-    .join(', ');
-}
-
 const ONES = [
   '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
   'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen',
@@ -93,8 +86,6 @@ function resolveComputedField(key, employee) {
   switch (key) {
     case 'employeeName':
       return `${employee.firstName} ${employee.lastName || ''}`.trim();
-    case 'employeeAddress':
-      return formatAddress(employee.address);
     case 'todayDate':
       return formatDate(new Date());
     case 'annualCTC':
@@ -108,9 +99,24 @@ function resolveComputedField(key, employee) {
   }
 }
 
-// Resolves a template's loops[] against the employee record — currently only
-// `salaryComponents`, formatted per-item to match the loop's declared fields.
-function buildLoopData(loops, employee) {
+// Job description is entered one point per line in the wizard — rendered as
+// a bulleted list (docxtemplater's `linebreaks: true` turns each \n into a
+// <w:br/>), rather than requiring a real Word list/loop in every template.
+function formatBulletPoints(value) {
+  if (typeof value !== 'string' || !value.trim()) return value;
+  return value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => `• ${line}`)
+    .join('\n');
+}
+
+// Resolves a template's loops[] — `salaryComponents` comes from the employee
+// record, `responsibilities` is generation-time-only manual input (like
+// jobDescription, it isn't stored on the employee), so blank rows never
+// produce empty bullets and the admin can add as many as needed.
+function buildLoopData(loops, employee, overrides) {
   const data = {};
   for (const loop of loops || []) {
     if (loop.key === 'salaryComponents') {
@@ -120,6 +126,12 @@ function buildLoopData(loops, employee) {
         monthlyAmount: formatCurrency(c.monthlyAmount),
         annualAmount: formatCurrency((Number(c.monthlyAmount) || 0) * 12),
       }));
+    }
+    if (loop.key === 'responsibilities') {
+      const items = Array.isArray(overrides.responsibilities) ? overrides.responsibilities : [];
+      data.responsibilities = items
+        .filter((r) => r != null && String(r).trim())
+        .map((r) => ({ text: String(r).trim() }));
     }
   }
   return data;
@@ -146,6 +158,8 @@ function buildMergeData(template, employee, overrides = {}) {
       value = getByPath(plainEmployee, field.mapsTo || field.key);
     }
 
+    if (field.key === 'jobDescription') value = formatBulletPoints(value);
+
     if (field.source !== 'computed') {
       if (field.type === 'date') value = formatDate(value);
       if (field.type === 'currency') value = formatCurrency(value);
@@ -166,7 +180,7 @@ function buildMergeData(template, employee, overrides = {}) {
     // reports it as missing (see docxRender.service's precise error message).
   }
 
-  Object.assign(data, buildLoopData(template.loops, plainEmployee));
+  Object.assign(data, buildLoopData(template.loops, plainEmployee, overrides));
 
   return data;
 }

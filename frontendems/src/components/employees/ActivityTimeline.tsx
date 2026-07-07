@@ -53,7 +53,7 @@ export function ActivityTimeline({ employeeId }: { employeeId: string }) {
       <CardHeader>
         <CardTitle className="text-base">Activity</CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-3">
+      <CardContent>
         {isLoading ? (
           <Skeleton className="h-10 w-full" />
         ) : entries.length === 0 ? (
@@ -62,20 +62,22 @@ export function ActivityTimeline({ employeeId }: { employeeId: string }) {
             No activity yet.
           </p>
         ) : (
-          entries.map((entry) => {
-            const Icon = ACTION_CONFIG[entry.action]?.icon ?? History
-            return (
-              <div key={entry._id} className="flex items-start gap-3 text-sm">
-                <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                <div className="flex flex-1 items-baseline justify-between gap-2">
-                  <span>{describe(entry)}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {new Date(entry.createdAt).toLocaleString()}
-                  </span>
+          <div className="grid max-h-80 gap-3 overflow-y-auto pr-2">
+            {entries.map((entry) => {
+              const Icon = ACTION_CONFIG[entry.action]?.icon ?? History
+              return (
+                <div key={entry._id} className="flex items-start gap-3 text-sm">
+                  <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                  <div className="flex flex-1 items-baseline justify-between gap-2">
+                    <span>{describe(entry)}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {new Date(entry.createdAt).toLocaleString()}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            )
-          })
+              )
+            })}
+          </div>
         )}
       </CardContent>
     </Card>

@@ -20,6 +20,7 @@ interface ReviewGenerateStepProps {
   isGenerating: boolean
   results: GenerateResult[] | null
   salaryComponents?: SalaryComponent[]
+  responsibilities?: string[]
 }
 
 export function ReviewGenerateStep({
@@ -29,6 +30,7 @@ export function ReviewGenerateStep({
   isGenerating,
   results,
   salaryComponents,
+  responsibilities,
 }: ReviewGenerateStepProps) {
   const monthlyGross = (salaryComponents ?? []).reduce((sum, c) => sum + (Number(c.monthlyAmount) || 0), 0)
 
@@ -50,6 +52,21 @@ export function ReviewGenerateStep({
               <span>Annual CTC</span>
               <span>{formatCurrency(monthlyGross * 12)}</span>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {responsibilities && responsibilities.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">New responsibilities</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-1 text-sm">
+            {responsibilities.map((r, i) => (
+              <div key={i} className="text-muted-foreground">
+                • {r}
+              </div>
+            ))}
           </CardContent>
         </Card>
       )}

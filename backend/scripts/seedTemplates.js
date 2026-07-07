@@ -10,8 +10,8 @@ const employeeName = {
   source: 'computed', group: 'Personal', order: 1,
 };
 const employeeAddress = {
-  key: 'employeeAddress', label: 'Employee address', type: 'textarea', required: false,
-  source: 'computed', group: 'Personal', order: 2,
+  key: 'employeeAddress', label: 'Employee address', type: 'textarea', required: true,
+  source: 'employee', mapsTo: 'address.line1', group: 'Personal', order: 2,
 };
 const todayDate = {
   key: 'todayDate', label: "Today's date", type: 'date', required: true,
@@ -45,6 +45,7 @@ const employmentType = {
 const jobDescription = {
   key: 'jobDescription', label: 'Job description', type: 'textarea', required: true,
   source: 'manual', group: 'Job Details', order: 20,
+  helpText: 'One point per line — each line is rendered as its own bullet.',
 };
 
 // Computed purely from employee.salaryComponents — never shown in the wizard
@@ -58,20 +59,6 @@ const annualCTCInWords = {
   key: 'annualCTCInWords', label: 'Annual CTC (in words)', type: 'text', required: true,
   source: 'computed', group: 'Compensation', order: 31,
 };
-const monthlyGross = {
-  key: 'monthlyGross', label: 'Monthly gross', type: 'currency', required: true,
-  source: 'computed', group: 'Compensation', order: 32,
-};
-const salaryComponentsLoop = {
-  key: 'salaryComponents',
-  label: 'Salary breakup',
-  itemFields: [
-    { key: 'label', label: 'Component', type: 'text' },
-    { key: 'monthlyAmount', label: 'Monthly amount', type: 'currency' },
-    { key: 'annualAmount', label: 'Annual amount', type: 'currency' },
-  ],
-};
-
 const lastWorkingDate = {
   key: 'lastWorkingDate', label: 'Last working date', type: 'date', required: true,
   source: 'manual', group: 'Offboarding Details', order: 40,
@@ -101,14 +88,16 @@ const templates = [
   {
     key: 'offer-letter',
     title: 'Offer Letter',
-    description: 'Extended to a candidate before they join, with full compensation breakup.',
+    description: 'Extended to a candidate before they join, with compensation and key employment details.',
     category: 'onboarding',
     docxFilePath: 'offer-letter.docx',
     fields: [
       employeeName, designation, department, dateOfJoining, employmentType,
-      workLocation, jobDescription, annualCTC, annualCTCInWords, monthlyGross,
+      workLocation, jobDescription, annualCTC,
     ],
-    loops: [salaryComponentsLoop],
+    // Explicit empty array — see the appointment-letter entry above for why
+    // this can't just be an absent key.
+    loops: [],
   },
   {
     key: 'code-of-conduct',
@@ -168,17 +157,14 @@ const templates = [
         key: 'benefitsDetails', label: 'Benefits/allowances (if any)', type: 'text', required: false,
         source: 'manual', group: 'Promotion Details', order: 46,
       },
+    ],
+    // Variable-length list — only the responsibilities actually entered get
+    // a bullet in the letter, and the admin can add as many as needed.
+    loops: [
       {
-        key: 'responsibility1', label: 'New responsibility 1', type: 'text', required: true,
-        source: 'manual', group: 'Promotion Details', order: 47,
-      },
-      {
-        key: 'responsibility2', label: 'New responsibility 2', type: 'text', required: false,
-        source: 'manual', group: 'Promotion Details', order: 48,
-      },
-      {
-        key: 'responsibility3', label: 'New responsibility 3', type: 'text', required: false,
-        source: 'manual', group: 'Promotion Details', order: 49,
+        key: 'responsibilities',
+        label: 'New responsibilities',
+        itemFields: [{ key: 'text', label: 'Responsibility', type: 'text' }],
       },
     ],
   },
@@ -206,6 +192,10 @@ const templates = [
       {
         key: 'referenceContact', label: 'Future reference contact', type: 'text', required: false,
         source: 'manual', group: 'Offboarding Details', order: 44,
+      },
+      {
+        key: 'farewellContactDetails', label: 'Farewell contact details (name / phone / email)', type: 'text', required: true,
+        source: 'manual', group: 'Offboarding Details', order: 45,
       },
     ],
   },

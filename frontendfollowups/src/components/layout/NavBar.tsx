@@ -15,11 +15,13 @@ export function NavBar() {
   const { user, signOut } = useAuth()
 
   return (
-    <header className="border-b-2 border-foreground bg-background">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-6">
-          <span className="text-lg font-black tracking-widest uppercase">Followups</span>
-          <nav className="flex gap-4">
+    <header className="sticky top-0 z-45 border-b border-border bg-card/80 backdrop-blur-md shadow-sm">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
+        <div className="flex items-center gap-8">
+          <span className="text-lg font-extrabold tracking-tight text-foreground select-none">
+            Followups
+          </span>
+          <nav className="flex gap-2">
             {LINKS.map((link) => (
               <NavLink
                 key={link.to}
@@ -27,8 +29,8 @@ export function NavBar() {
                 end={link.end}
                 className={({ isActive }) =>
                   cn(
-                    'text-xs font-bold tracking-widest uppercase text-muted-foreground hover:text-foreground',
-                    isActive && 'text-foreground underline underline-offset-4'
+                    'text-xs font-bold tracking-wider uppercase px-3 py-1.5 rounded-lg transition-all text-muted-foreground hover:text-foreground hover:bg-secondary/50',
+                    isActive && 'text-primary bg-primary/10 hover:bg-primary/15 hover:text-primary'
                   )
                 }
               >
@@ -38,8 +40,8 @@ export function NavBar() {
           </nav>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground uppercase">
-            {user?.username} ({user?.role})
+          <span className="text-xs font-semibold text-muted-foreground bg-secondary/80 px-3 py-1.5 rounded-full uppercase tracking-wider">
+            {user?.username} • {user?.role}
           </span>
           <Button variant="ghost" size="icon" onClick={signOut}>
             <LogOut className="size-4" />

@@ -10,9 +10,10 @@ import { WizardShell } from '@/components/wizard/WizardShell'
 import { TemplateSelectStep } from '@/components/wizard/TemplateSelectStep'
 import { FieldRenderer } from '@/components/wizard/FieldRenderer'
 import { SalaryComponentsEditor } from '@/components/wizard/SalaryComponentsEditor'
+import { ResponsibilitiesEditor } from '@/components/wizard/ResponsibilitiesEditor'
 import { ReviewGenerateStep } from '@/components/wizard/ReviewGenerateStep'
 import { buildStepSchema } from '@/lib/dynamicFieldSchema'
-import { getByPath } from '@/lib/utils'
+import { getByPath, setByPath } from '@/lib/utils'
 import { useEmployee, useUpdateEmployee } from '@/hooks/useEmployees'
 import { useTemplates } from '@/hooks/useTemplates'
 import { useGenerateDocuments } from '@/hooks/useDocuments'
@@ -43,6 +44,8 @@ export default function EmployeeWizardPage() {
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
   const [salaryComponents, setSalaryComponents] = useState<SalaryComponent[]>([])
   const [salaryError, setSalaryError] = useState<string | undefined>()
+  const [responsibilities, setResponsibilities] = useState<string[]>([''])
+  const [responsibilitiesError, setResponsibilitiesError] = useState<string | undefined>()
   const [stepIndex, setStepIndex] = useState(0)
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({})
   const [results, setResults] = useState<GenerateResult[] | null>(null)
@@ -81,6 +84,14 @@ export default function EmployeeWizardPage() {
     [selectedTemplateIds, templates]
   )
 
+  const needsResponsibilities = useMemo(
+    () =>
+      selectedTemplateIds.some((templateId) =>
+        templates.find((t) => t._id === templateId)?.loops.some((l) => l.key === 'responsibilities')
+      ),
+    [selectedTemplateIds, templates]
+  )
+
   // Backfill blanks from the employee record whenever the set of relevant
   // fields changes (e.g. admin selects another template) — never overwrites
   // something the admin already typed in this session.
@@ -115,13 +126,19 @@ export default function EmployeeWizardPage() {
     'Documents',
     ...groups.map(([name]) => name),
     ...(needsSalaryComponents ? ['Salary Structure'] : []),
+    ...(needsResponsibilities ? ['Responsibilities'] : []),
     'Review',
   ]
   const totalSteps = stepLabels.length
   const isTemplateStep = stepIndex === 0
   const isReviewStep = stepIndex === totalSteps - 1
-  const isSalaryStep = needsSalaryComponents && stepIndex === totalSteps - 2
-  const currentGroupFields = !isTemplateStep && !isReviewStep && !isSalaryStep ? groups[stepIndex - 1][1] : []
+  const isResponsibilitiesStep = needsResponsibilities && stepIndex === totalSteps - 2
+  const isSalaryStep =
+    needsSalaryComponents && stepIndex === totalSteps - 2 - (needsResponsibilities ? 1 : 0)
+  const currentGroupFields =
+    !isTemplateStep && !isReviewStep && !isSalaryStep && !isResponsibilitiesStep
+      ? groups[stepIndex - 1][1]
+      : []
 
   if (employeeLoading || templatesLoading || !employeeData) {
     return (
@@ -145,6 +162,7 @@ export default function EmployeeWizardPage() {
   const goToStep = (index: number) => {
     setStepErrors({})
     setSalaryError(undefined)
+    setResponsibilitiesError(undefined)
     setStepIndex(Math.max(0, Math.min(totalSteps - 1, index)))
   }
 
@@ -180,6 +198,18 @@ export default function EmployeeWizardPage() {
       return
     }
 
+    if (isResponsibilitiesStep) {
+      // Blank rows are dropped rather than rejected — an admin who added an
+      // extra row and changed their mind shouldn't be blocked from moving on.
+      const nonEmpty = responsibilities.map((r) => r.trim()).filter(Boolean)
+      if (nonEmpty.length === 0) {
+        setResponsibilitiesError('Add at least one new responsibility')
+        return
+      }
+      goToStep(stepIndex + 1)
+      return
+    }
+
     const schema = buildStepSchema(currentGroupFields)
     const subset = Object.fromEntries(currentGroupFields.map((f) => [f.key, fieldValues[f.key] ?? '']))
     const result = schema.safeParse(subset)
@@ -192,10 +222,10 @@ export default function EmployeeWizardPage() {
       return
     }
 
-    const employeeSourcedUpdates: Record<string, string> = {}
+    const employeeSourcedUpdates: Record<string, unknown> = {}
     for (const field of currentGroupFields) {
       if (field.source === 'employee') {
-        employeeSourcedUpdates[field.mapsTo || field.key] = fieldValues[field.key] ?? ''
+        setByPath(employeeSourcedUpdates, field.mapsTo || field.key, fieldValues[field.key] ?? '')
       }
     }
 
@@ -213,9 +243,12 @@ export default function EmployeeWizardPage() {
 
   const handleGenerate = async () => {
     setResults(null)
-    const overrides: Record<string, string> = {}
+    const overrides: Record<string, unknown> = {}
     for (const field of unionFields) {
       if (field.source === 'manual') overrides[field.key] = fieldValues[field.key] ?? ''
+    }
+    if (needsResponsibilities) {
+      overrides.responsibilities = responsibilities.map((r) => r.trim()).filter(Boolean)
     }
 
     try {
@@ -285,7 +318,7 @@ export default function EmployeeWizardPage() {
                   />
                 )}
 
-                {!isTemplateStep && !isReviewStep && !isSalaryStep && (
+                {!isTemplateStep && !isReviewStep && !isSalaryStep && !isResponsibilitiesStep && (
                   <div className="grid gap-6">
                     {currentGroupFields.map((field) => (
                       <FieldRenderer
@@ -307,6 +340,14 @@ export default function EmployeeWizardPage() {
                   />
                 )}
 
+                {isResponsibilitiesStep && (
+                  <ResponsibilitiesEditor
+                    value={responsibilities}
+                    onChange={setResponsibilities}
+                    error={responsibilitiesError}
+                  />
+                )}
+
                 {isReviewStep && (
                   <ReviewGenerateStep
                     templates={templates.filter((t) => selectedTemplateIds.includes(t._id))}
@@ -315,6 +356,9 @@ export default function EmployeeWizardPage() {
                     isGenerating={generateDocuments.isPending}
                     results={results}
                     salaryComponents={needsSalaryComponents ? salaryComponents : undefined}
+                    responsibilities={
+                      needsResponsibilities ? responsibilities.map((r) => r.trim()).filter(Boolean) : undefined
+                    }
                   />
                 )}
               </motion.div>

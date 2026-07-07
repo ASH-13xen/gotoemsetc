@@ -11,7 +11,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-background">
       <NavBar />
       <main className="mx-auto max-w-6xl space-y-6 p-6">
-        <h1 className="text-3xl font-black tracking-tighter uppercase">Dashboard</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight text-foreground">Dashboard</h1>
 
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
