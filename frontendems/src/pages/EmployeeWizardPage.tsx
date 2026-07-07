@@ -159,16 +159,22 @@ export default function EmployeeWizardPage() {
     }
 
     if (isSalaryStep) {
-      const invalid = salaryComponents.length === 0 || salaryComponents.some((c) => !c.label.trim() || !c.monthlyAmount)
+      // Itemized breakup is optional — the letter's total CTC/monthly figures
+      // are already auto-filled from the employee's Annual CTC / Monthly Pay
+      // regardless, so this step only needs validating if something was
+      // actually entered (a half-filled row would render blank in the table).
+      const invalid = salaryComponents.some((c) => !c.label.trim() || !c.monthlyAmount)
       if (invalid) {
-        setSalaryError('Add at least one component with a label and a monthly amount')
+        setSalaryError('Every row needs both a label and a monthly amount — remove any you don\'t want to include')
         return
       }
-      try {
-        await updateEmployee.mutateAsync({ salaryComponents })
-      } catch {
-        toast.error('Could not save — check your connection and try again')
-        return
+      if (salaryComponents.length > 0) {
+        try {
+          await updateEmployee.mutateAsync({ salaryComponents })
+        } catch {
+          toast.error('Could not save — check your connection and try again')
+          return
+        }
       }
       goToStep(stepIndex + 1)
       return
@@ -271,11 +277,10 @@ export default function EmployeeWizardPage() {
                     templates={templates}
                     selectedIds={selectedTemplateIds}
                     onToggle={(templateId) =>
-                      setSelectedTemplateIds((prev) =>
-                        prev.includes(templateId)
-                          ? prev.filter((x) => x !== templateId)
-                          : [...prev, templateId]
-                      )
+                      // Single-select: choosing a template replaces whatever
+                      // was picked before — only one document is generated
+                      // per wizard run. Clicking the selected one deselects it.
+                      setSelectedTemplateIds((prev) => (prev.includes(templateId) ? [] : [templateId]))
                     }
                   />
                 )}

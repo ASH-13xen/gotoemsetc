@@ -1,15 +1,19 @@
+import { useState } from 'react'
 import { toast } from 'sonner'
-import { Download, FolderOpen, Trash2 } from 'lucide-react'
+import { Eye, FolderOpen, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useConfig } from '@/hooks/useConfig'
 import { useDeleteUploadedDocument, useUploadedDocuments } from '@/hooks/useUploadRequests'
+import { DocumentPreviewDialog } from '@/components/documents/DocumentPreviewDialog'
+import type { UploadedDocument } from '@/api/uploadRequests.api'
 
 export function UploadedDocumentsList({ employeeId }: { employeeId: string }) {
   const { data, isLoading } = useUploadedDocuments(employeeId)
   const { data: config } = useConfig()
   const deleteDoc = useDeleteUploadedDocument(employeeId)
+  const [previewDoc, setPreviewDoc] = useState<UploadedDocument | null>(null)
 
   const documents = data?.uploadedDocuments ?? []
   const labelFor = (key: string) => config?.docTypes.find((d) => d.key === key)?.label ?? key
@@ -32,11 +36,9 @@ export function UploadedDocumentsList({ employeeId }: { employeeId: string }) {
             <div key={doc._id} className="flex items-center justify-between gap-4 rounded-lg border p-3">
               <span className="text-sm font-medium">{labelFor(doc.docType)}</span>
               <div className="flex items-center gap-2">
-                <Button asChild variant="outline" size="sm">
-                  <a href={doc.url} target="_blank" rel="noreferrer">
-                    <Download className="size-3.5" />
-                    View
-                  </a>
+                <Button variant="outline" size="sm" onClick={() => setPreviewDoc(doc)}>
+                  <Eye className="size-3.5" />
+                  Preview
                 </Button>
                 <Button
                   variant="ghost"
@@ -55,6 +57,12 @@ export function UploadedDocumentsList({ employeeId }: { employeeId: string }) {
           ))
         )}
       </CardContent>
+
+      <DocumentPreviewDialog
+        doc={previewDoc}
+        label={previewDoc ? labelFor(previewDoc.docType) : ''}
+        onClose={() => setPreviewDoc(null)}
+      />
     </Card>
   )
 }

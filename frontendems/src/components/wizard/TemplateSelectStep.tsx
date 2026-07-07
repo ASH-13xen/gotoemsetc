@@ -1,4 +1,4 @@
-import { Check, FileText } from 'lucide-react'
+import { FileText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { DocumentTemplate } from '@/api/templates.api'
 
@@ -12,7 +12,7 @@ export function TemplateSelectStep({ templates, selectedIds, onToggle }: Templat
   return (
     <div className="grid gap-3">
       <p className="text-sm text-muted-foreground">
-        Choose which documents to generate. You'll only be asked for the fields these need.
+        Choose which document to generate. One at a time — you'll only be asked for the fields it needs.
       </p>
       {templates.map((template) => {
         const selected = selectedIds.includes(template._id)
@@ -20,6 +20,8 @@ export function TemplateSelectStep({ templates, selectedIds, onToggle }: Templat
           <button
             key={template._id}
             type="button"
+            role="radio"
+            aria-checked={selected}
             onClick={() => onToggle(template._id)}
             className={cn(
               'flex items-start gap-3 rounded-xl border p-4 text-left transition-colors',
@@ -28,11 +30,11 @@ export function TemplateSelectStep({ templates, selectedIds, onToggle }: Templat
           >
             <span
               className={cn(
-                'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border',
-                selected ? 'border-primary bg-primary text-primary-foreground' : 'border-input'
+                'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border',
+                selected ? 'border-primary' : 'border-input'
               )}
             >
-              {selected && <Check className="size-3.5" />}
+              {selected && <span className="size-2.5 rounded-full bg-primary" />}
             </span>
             <span className="flex-1">
               <span className="flex items-center gap-2 font-medium">

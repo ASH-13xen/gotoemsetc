@@ -73,10 +73,17 @@ function formatCurrencyInWords(value) {
   return `Rupees ${numberToIndianWords(num)} Only`;
 }
 
-// Salary breakup is stored as monthly amounts on the employee; annual CTC and
-// the monthly gross are always derived from it rather than entered separately,
-// so the letter and the itemized table can never disagree with each other.
+// Prefers the employee's directly-entered Annual CTC / Monthly Pay (the
+// Compensation & Identification fields) — this is what lets appointment
+// letters etc. auto-fill without requiring the itemized salary breakup step.
+// Falls back to summing salaryComponents for employees who only have that
+// filled in, so older records still generate correctly.
 function computeSalaryTotals(employee) {
+  if (employee.ctcAnnual) {
+    const annualCTC = Number(employee.ctcAnnual) || 0;
+    const monthlyGross = employee.monthlyPay ? Number(employee.monthlyPay) : annualCTC / 12;
+    return { monthlyGross, annualCTC };
+  }
   const components = Array.isArray(employee.salaryComponents) ? employee.salaryComponents : [];
   const monthlyGross = components.reduce((sum, c) => sum + (Number(c.monthlyAmount) || 0), 0);
   return { monthlyGross, annualCTC: monthlyGross * 12 };
