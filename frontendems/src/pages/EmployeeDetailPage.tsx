@@ -20,6 +20,8 @@ import { GeneratedDocumentsList } from '@/components/documents/GeneratedDocument
 import { UploadedDocumentsList } from '@/components/documents/UploadedDocumentsList'
 import { RequestDocumentsModal } from '@/components/uploadRequests/RequestDocumentsModal'
 import { CredentialsDialog } from '@/components/employees/CredentialsDialog'
+import { GenerateSalarySlipDialog } from '@/components/salary/GenerateSalarySlipDialog'
+import { SalarySlipsList } from '@/components/salary/SalarySlipsList'
 import { RequestHistoryTable } from '@/components/uploadRequests/RequestHistoryTable'
 import { ActivityTimeline } from '@/components/employees/ActivityTimeline'
 import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummaryCard'
@@ -44,6 +46,10 @@ type FormValues = {
   monthlyPay: string
   panNumber: string
   aadharNumber: string
+  bankName: string
+  bankAccountNumber: string
+  bankIFSC: string
+  payDate: string
   extraDetails: { key: string; value: string }[]
 }
 
@@ -72,6 +78,10 @@ function toFormValues(employee: Employee): FormValues {
     monthlyPay: employee.monthlyPay != null ? String(employee.monthlyPay) : '',
     panNumber: employee.panNumber ?? '',
     aadharNumber: employee.aadharNumber ?? '',
+    bankName: employee.bankName ?? '',
+    bankAccountNumber: employee.bankAccountNumber ?? '',
+    bankIFSC: employee.bankIFSC ?? '',
+    payDate: employee.payDate != null ? String(employee.payDate) : '',
     extraDetails: (employee.extraDetails ?? []).map((d) => ({ key: d.key, value: d.value ?? '' })),
   }
 }
@@ -114,6 +124,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         ...values,
         ctcAnnual: values.ctcAnnual ? Number(values.ctcAnnual) : undefined,
         monthlyPay: values.monthlyPay ? Number(values.monthlyPay) : undefined,
+        payDate: values.payDate ? Number(values.payDate) : undefined,
         dateOfJoining: values.dateOfJoining || undefined,
         address: values.address ? { line1: values.address } : undefined,
         extraDetails: values.extraDetails?.filter((d) => d.key.trim().length > 0),
@@ -197,6 +208,20 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   <div className="bg-purple-800 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-[100px]">
                     <span className="text-xs font-black tracking-widest opacity-80 uppercase">PLATFORM ACCESS</span>
                     <span className="text-2xl font-extrabold uppercase tracking-wide">ADD CREDENTIALS</span>
+                  </div>
+                }
+              />
+            )}
+
+            {/* Generate Salary Slip — admin-only */}
+            {isAdmin && (
+              <GenerateSalarySlipDialog
+                employeeId={employeeId}
+                employeeName={`${employee.firstName} ${employee.lastName ?? ''}`}
+                trigger={
+                  <div className="bg-emerald-800 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-[100px]">
+                    <span className="text-xs font-black tracking-widest opacity-80 uppercase">PAYROLL</span>
+                    <span className="text-2xl font-extrabold uppercase tracking-wide">GENERATE SALARY SLIP</span>
                   </div>
                 }
               />
@@ -330,6 +355,22 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   <Label htmlFor="aadharNumber" className="text-xs font-black uppercase tracking-widest text-neutral-400">AADHAR NUMBER</Label>
                   <Input id="aadharNumber" {...register('aadharNumber')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
                 </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="bankName" className="text-xs font-black uppercase tracking-widest text-neutral-400">BANK NAME</Label>
+                  <Input id="bankName" {...register('bankName')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="bankAccountNumber" className="text-xs font-black uppercase tracking-widest text-neutral-400">BANK A/C NUMBER</Label>
+                  <Input id="bankAccountNumber" {...register('bankAccountNumber')} className="bg-neutral-900 border-white text-white rounded-none" />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="bankIFSC" className="text-xs font-black uppercase tracking-widest text-neutral-400">IFSC CODE</Label>
+                  <Input id="bankIFSC" {...register('bankIFSC')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="payDate" className="text-xs font-black uppercase tracking-widest text-neutral-400">PAY DATE (DAY OF MONTH)</Label>
+                  <Input id="payDate" type="number" min="1" max="31" {...register('payDate')} className="bg-neutral-900 border-white text-white rounded-none" />
+                </div>
               </div>
             </div>
           )}
@@ -401,6 +442,9 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
 
         <div className="mt-8 grid gap-8">
           <AttendanceSummaryCard employeeId={employeeId} />
+          {isAdmin && (
+            <SalarySlipsList employeeId={employeeId} employeeName={`${employee.firstName} ${employee.lastName ?? ''}`} />
+          )}
           <GeneratedDocumentsList employeeId={employeeId} />
           <UploadedDocumentsList employeeId={employeeId} />
           <RequestHistoryTable employeeId={employeeId} />

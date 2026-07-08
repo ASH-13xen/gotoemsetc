@@ -13,8 +13,17 @@ export function useAttendance(employeeId: string | undefined, month: number, yea
 export function useMarkAttendance(employeeId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ date, status, notes }: { date: string; status: AttendanceStatus; notes?: string }) =>
-      attendanceApi.markAttendance(employeeId, date, status, notes),
+    mutationFn: ({
+      date,
+      status,
+      overtimeHours,
+      notes,
+    }: {
+      date: string
+      status?: AttendanceStatus
+      overtimeHours?: number
+      notes?: string
+    }) => attendanceApi.markAttendance(employeeId, date, { status, overtimeHours, notes }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendance', employeeId] })
     },

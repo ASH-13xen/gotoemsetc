@@ -10,6 +10,10 @@ const uploadedDocumentValidator = require('../validators/uploadedDocument.valida
 const uploadedDocumentController = require('../controllers/uploadedDocument.controller');
 const attendanceValidator = require('../validators/attendance.validator');
 const attendanceController = require('../controllers/attendance.controller');
+const salarySlipValidator = require('../validators/salarySlip.validator');
+const salarySlipController = require('../controllers/salarySlip.controller');
+const { requireRole } = require('../middlewares/auth.middleware');
+const { USER_ROLES } = require('../config/constants');
 
 const router = Router();
 
@@ -50,5 +54,18 @@ router.get('/:id/activity', validate(employeeValidator.getOrDelete), employeeCon
 
 router.post('/:id/attendance', validate(attendanceValidator.mark), attendanceController.mark);
 router.get('/:id/attendance', validate(attendanceValidator.listForEmployee), attendanceController.listForEmployee);
+
+router.post(
+  '/:id/salary-slips/generate',
+  requireRole(USER_ROLES.ADMIN),
+  validate(salarySlipValidator.generate),
+  salarySlipController.generate
+);
+router.get(
+  '/:id/salary-slips',
+  requireRole(USER_ROLES.ADMIN),
+  validate(salarySlipValidator.listForEmployee),
+  salarySlipController.listForEmployee
+);
 
 module.exports = router;

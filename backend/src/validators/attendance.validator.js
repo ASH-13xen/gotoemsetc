@@ -6,11 +6,16 @@ const dateStringSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be i
 
 const mark = {
   params: idParam,
-  body: z.object({
-    date: dateStringSchema,
-    status: z.enum(Object.values(ATTENDANCE_STATUS)),
-    notes: z.string().optional(),
-  }),
+  body: z
+    .object({
+      date: dateStringSchema,
+      status: z.enum(Object.values(ATTENDANCE_STATUS)).optional(),
+      overtimeHours: z.coerce.number().min(0).optional(),
+      notes: z.string().optional(),
+    })
+    .refine((data) => data.status !== undefined || data.overtimeHours !== undefined, {
+      message: 'At least one of status or overtimeHours is required',
+    }),
 };
 
 const listForEmployee = {

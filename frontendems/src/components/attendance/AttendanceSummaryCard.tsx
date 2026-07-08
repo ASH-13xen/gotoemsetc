@@ -16,9 +16,11 @@ export function AttendanceSummaryCard({ employeeId }: { employeeId: string }) {
   const records = data?.records ?? []
 
   const counts = records.reduce<Partial<Record<AttendanceStatus, number>>>((acc, r) => {
+    if (!r.status) return acc
     acc[r.status] = (acc[r.status] ?? 0) + 1
     return acc
   }, {})
+  const totalOvertimeHours = records.reduce((sum, r) => sum + (r.overtimeHours || 0), 0)
 
   const monthLabel = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 
@@ -54,6 +56,12 @@ export function AttendanceSummaryCard({ employeeId }: { employeeId: string }) {
                 <p className="mt-2 text-xs font-black uppercase tracking-widest">{cfg.label}</p>
               </div>
             ))}
+          {totalOvertimeHours > 0 && (
+            <div className="border-2 border-neutral-500 bg-neutral-900 p-4 text-neutral-300">
+              <p className="text-3xl font-black leading-none tracking-tighter">{totalOvertimeHours}h</p>
+              <p className="mt-2 text-xs font-black uppercase tracking-widest">Overtime</p>
+            </div>
+          )}
         </div>
       )}
     </div>

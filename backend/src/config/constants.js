@@ -21,14 +21,16 @@ module.exports = {
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   ],
+  // Short codes match how they're printed on the salary slip and the
+  // attendance calendar — P/O/H/L/SL/W are the only marks; a day off
+  // (Sunday or an admin-marked Holiday) needs no status at all.
   ATTENDANCE_STATUS: {
-    PRESENT: 'present',
-    ABSENT: 'absent',
-    HALF_DAY: 'half_day',
-    LEAVE: 'leave',
-    WORK_FROM_HOME: 'work_from_home',
-    SHORT_DAY: 'short_day',
-    EARLY_LEAVE: 'early_leave',
+    PRESENT: 'P',
+    PAID_LEAVE: 'O',
+    HALF_DAY: 'H',
+    LATE: 'L',
+    SHORT_LEAVE: 'SL',
+    WORK_FROM_HOME: 'W',
   },
   APPLICANT_STATUS: { APPLIED: 'applied', HIRED: 'hired', REJECTED: 'rejected' },
   CLIENT_STATUS: { LEAD: 'lead', ONBOARDED: 'onboarded', OFFBOARDED: 'offboarded' },

@@ -19,6 +19,8 @@ const quotationRoutes = require('./quotation.routes');
 const teamRoutes = require('./team.routes');
 const taskRoutes = require('./task.routes');
 const pipelineLogRoutes = require('./pipelineLog.routes');
+const holidayRoutes = require('./holiday.routes');
+const salarySlipRoutes = require('./salarySlip.routes');
 const userRoutes = require('./user.routes');
 const auditLogRoutes = require('./auditLog.routes');
 
@@ -49,6 +51,8 @@ router.use('/quotations', quotationRoutes);
 router.use('/teams', teamRoutes);
 router.use('/tasks', taskRoutes);
 router.use('/pipeline-log', pipelineLogRoutes);
+router.use('/holidays', holidayRoutes);
+router.use('/salary-slips', salarySlipRoutes);
 router.use('/users', requireRole(USER_ROLES.ADMIN), userRoutes);
 router.use('/audit-log', requireRole(USER_ROLES.ADMIN), auditLogRoutes);
 

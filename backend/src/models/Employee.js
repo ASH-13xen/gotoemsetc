@@ -55,6 +55,10 @@ const employeeSchema = new Schema(
     salaryComponents: [salaryComponentSchema],
     bankAccountNumber: String,
     bankIFSC: String,
+    bankName: String,
+    // Day of month (1-31) salary is normally paid — combined with a salary
+    // slip's target month/year at generation time to print the actual date.
+    payDate: Number,
     panNumber: String,
     aadharNumber: String,
     extraDetails: [extraDetailSchema],

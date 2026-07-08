@@ -1,10 +1,14 @@
 const AttendanceRecord = require('../models/AttendanceRecord');
 
-function upsertForDate(employeeId, date, status, isBackdated, notes) {
+// A plain-object update only $sets keys that are actually present — passing
+// `status`/`overtimeHours` as `undefined` when the caller didn't provide them
+// leaves whatever was already stored untouched (e.g. setting OT hours on a
+// day that already has a status doesn't clear that status, and vice versa).
+function upsertForDate(employeeId, date, { status, overtimeHours, notes }, isBackdated) {
   return AttendanceRecord.findOneAndUpdate(
     { employee: employeeId, date },
-    { status, isBackdated, notes },
-    { upsert: true, returnDocument: 'after', runValidators: true }
+    { status, overtimeHours, isBackdated, notes },
+    { upsert: true, returnDocument: 'after', runValidators: true, setDefaultsOnInsert: true }
   );
 }
 

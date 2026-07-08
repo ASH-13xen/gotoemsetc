@@ -44,6 +44,8 @@ export interface Employee {
   salaryComponents?: SalaryComponent[]
   bankAccountNumber?: string
   bankIFSC?: string
+  bankName?: string
+  payDate?: number
   panNumber?: string
   aadharNumber?: string
   extraDetails?: ExtraDetail[]

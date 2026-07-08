@@ -1,19 +1,13 @@
 import { apiClient } from './client'
 
-export type AttendanceStatus =
-  | 'present'
-  | 'absent'
-  | 'half_day'
-  | 'leave'
-  | 'work_from_home'
-  | 'short_day'
-  | 'early_leave'
+export type AttendanceStatus = 'P' | 'O' | 'H' | 'L' | 'SL' | 'W'
 
 export interface AttendanceRecord {
   _id: string
   employee: string
   date: string
-  status: AttendanceStatus
+  status?: AttendanceStatus
+  overtimeHours: number
   isBackdated: boolean
   notes?: string
 }
@@ -21,13 +15,11 @@ export interface AttendanceRecord {
 export async function markAttendance(
   employeeId: string,
   date: string,
-  status: AttendanceStatus,
-  notes?: string
+  input: { status?: AttendanceStatus; overtimeHours?: number; notes?: string }
 ): Promise<{ record: AttendanceRecord }> {
   const { data } = await apiClient.post(`/employees/${employeeId}/attendance`, {
     date,
-    status,
-    notes,
+    ...input,
   })
   return data
 }
