@@ -1,11 +1,19 @@
 const { Schema, model } = require('mongoose');
 
-// Coordinates are stored as page-relative fractions (0-1, measured from the
-// top-left corner) rather than PDF points — this lets the frontend mapper UI
-// calibrate positions by clicking on a rendered canvas of any size/zoom, and
-// the backend converts to pdf-lib's bottom-left point space only at stamp time.
+// Coordinates and size are stored as page-relative fractions (0-1, xPct/yPct
+// measured from the top-left corner) rather than PDF points — this lets the
+// frontend mapper UI calibrate a real resizable box by dragging on a
+// rendered canvas of any size/zoom, and the backend converts to pdf-lib's
+// bottom-left point space only at stamp time, fitting/centering whatever it
+// draws inside the box rather than stamping at a bare point.
 const positionSchema = new Schema(
-  { page: { type: Number, required: true }, xPct: { type: Number, required: true }, yPct: { type: Number, required: true } },
+  {
+    page: { type: Number, required: true },
+    xPct: { type: Number, required: true },
+    yPct: { type: Number, required: true },
+    widthPct: { type: Number, required: true },
+    heightPct: { type: Number, required: true },
+  },
   { _id: false }
 );
 

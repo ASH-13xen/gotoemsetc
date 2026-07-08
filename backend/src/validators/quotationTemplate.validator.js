@@ -6,6 +6,8 @@ const positionSchema = z.object({
   page: z.coerce.number().int().min(0),
   xPct: z.coerce.number().min(0).max(1),
   yPct: z.coerce.number().min(0).max(1),
+  widthPct: z.coerce.number().min(0).max(1),
+  heightPct: z.coerce.number().min(0).max(1),
 });
 
 const getOrPdf = { params: idParam };

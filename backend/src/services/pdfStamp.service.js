@@ -19,36 +19,68 @@ async function getPageCount(pdfFilename) {
   return pdfDoc.getPageCount();
 }
 
-// position is {page, xPct, yPct} — xPct/yPct are fractions (0-1) from the
-// top-left of the page, matching how the frontend mapper captures clicks.
-function toPagePoint(page, position) {
-  const { width, height } = page.getSize();
-  return { x: position.xPct * width, y: height - position.yPct * height };
+// position is {page, xPct, yPct, widthPct, heightPct} — all fractions (0-1)
+// of the page, xPct/yPct measured from the top-left, matching how the
+// frontend mapper's drag-to-draw box is captured. Converts to pdf-lib's
+// bottom-left point space, returning the box's bottom-left corner plus size
+// so drawing helpers can fit/center content inside it rather than stamping
+// at a bare point.
+function toPageBox(page, position) {
+  const { width: pageWidth, height: pageHeight } = page.getSize();
+  const width = position.widthPct * pageWidth;
+  const height = position.heightPct * pageHeight;
+  const x = position.xPct * pageWidth;
+  const y = pageHeight - (position.yPct + position.heightPct) * pageHeight;
+  return { x, y, width, height };
 }
 
-function drawFieldText(page, font, text, position, { size = 11, color = rgb(0, 0, 0) } = {}) {
+const TEXT_PADDING = 3;
+const MIN_FONT_SIZE = 6;
+
+// Auto-fits text inside the box: starts from a size derived from the box's
+// height and shrinks until it fits the box's width, so the same field looks
+// right whether it's a short "$500" or a long client name. Left-aligned
+// with a small padding, vertically centered in the box.
+function drawFieldText(page, font, text, position, { color = rgb(0, 0, 0) } = {}) {
   if (!text) return;
-  const { x, y } = toPagePoint(page, position);
-  page.drawText(String(text), { x, y, size, font, color });
+  const box = toPageBox(page, position);
+  const str = String(text);
+  const maxSize = Math.max(MIN_FONT_SIZE, box.height * 0.7);
+  const maxTextWidth = Math.max(0, box.width - TEXT_PADDING * 2);
+
+  let size = maxSize;
+  while (size > MIN_FONT_SIZE && font.widthOfTextAtSize(str, size) > maxTextWidth) {
+    size -= 0.5;
+  }
+
+  const x = box.x + TEXT_PADDING;
+  const y = box.y + (box.height - size) / 2 + size * 0.15; // nudge for font baseline
+  page.drawText(str, { x, y, size, font, color });
 }
 
-function drawCheckmark(page, font, position, { size = 12 } = {}) {
-  const { x, y } = toPagePoint(page, position);
+// Sizes the "X" to fill most of the box (whichever dimension is tighter),
+// centered both horizontally and vertically.
+function drawCheckmark(page, font, position) {
+  const box = toPageBox(page, position);
+  const size = Math.max(MIN_FONT_SIZE, Math.min(box.width, box.height) * 0.8);
+  const textWidth = font.widthOfTextAtSize('X', size);
+  const x = box.x + (box.width - textWidth) / 2;
+  const y = box.y + (box.height - size) / 2 + size * 0.15;
   page.drawText('X', { x, y, size, font, color: rgb(0, 0, 0) });
 }
 
-// Draws a signature PNG anchored so its top-left corner sits at the
-// calibrated position, scaled down to fit within a fixed box while keeping
-// its aspect ratio (signatures are rarely the same shape as the box).
-async function drawSignatureImage(pdfDoc, page, position, pngBuffer, { maxWidth = 130, maxHeight = 45 } = {}) {
+// Scales the signature PNG to fit within the box (preserving aspect ratio,
+// never upscaling past its native size) and centers it both horizontally
+// and vertically within the box.
+async function drawSignatureImage(pdfDoc, page, position, pngBuffer) {
+  const box = toPageBox(page, position);
   const pngImage = await pdfDoc.embedPng(pngBuffer);
-  const scale = Math.min(maxWidth / pngImage.width, maxHeight / pngImage.height, 1);
+  const scale = Math.min(box.width / pngImage.width, box.height / pngImage.height, 1);
   const width = pngImage.width * scale;
   const height = pngImage.height * scale;
-  const { width: pageWidth, height: pageHeight } = page.getSize();
-  const x = position.xPct * pageWidth;
-  const topY = pageHeight - position.yPct * pageHeight;
-  page.drawImage(pngImage, { x, y: topY - height, width, height });
+  const x = box.x + (box.width - width) / 2;
+  const y = box.y + (box.height - height) / 2;
+  page.drawImage(pngImage, { x, y, width, height });
 }
 
 // Builds the initial quotation PDF: client name / brand name / date filled

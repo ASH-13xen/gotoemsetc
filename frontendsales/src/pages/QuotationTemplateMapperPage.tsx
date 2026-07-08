@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Loader2, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PdfPageCanvas } from '@/components/quotationTemplates/PdfPageCanvas'
+import type { PdfBox, PdfFieldBox } from '@/components/quotationTemplates/PdfPageCanvas'
 import { quotationTemplatePdfUrl } from '@/api/quotationTemplates.api'
 import type { QuotationTemplateFields } from '@/api/quotationTemplates.api'
 import { useQuotationTemplate, useUpdateQuotationTemplateFields } from '@/hooks/useQuotationTemplates'
@@ -41,22 +42,41 @@ export default function QuotationTemplateMapperPage() {
   const mapperFields = getMapperFields(template)
   const pdfUrl = quotationTemplatePdfUrl(template._id)
 
-  const markersForPage = mapperFields
+  const boxesForPage: PdfFieldBox[] = mapperFields
     .map((field) => {
       const position = getFieldPosition(fields, field.key)
       if (!position || position.page !== currentPage - 1) return null
-      return { xPct: position.xPct, yPct: position.yPct, label: field.label, colorClass: field.colorClass }
+      return {
+        key: field.key,
+        xPct: position.xPct,
+        yPct: position.yPct,
+        widthPct: position.widthPct,
+        heightPct: position.heightPct,
+        label: field.label,
+        colorClass: field.colorClass,
+      }
     })
-    .filter((m): m is NonNullable<typeof m> => m !== null)
+    .filter((b): b is NonNullable<typeof b> => b !== null)
 
-  const handlePick = (xPct: number, yPct: number) => {
+  const handleCommit = (box: PdfBox) => {
     if (!activeFieldKey) return
-    const nextFields = setFieldPosition(fields, activeFieldKey, { page: currentPage - 1, xPct, yPct }, template.planOptions.length)
+    const isFirstPlacement = !getFieldPosition(fields, activeFieldKey)
+    const nextFields = setFieldPosition(
+      fields,
+      activeFieldKey,
+      { page: currentPage - 1, ...box },
+      template.planOptions.length
+    )
     setFields(nextFields)
 
-    const currentIndex = mapperFields.findIndex((f) => f.key === activeFieldKey)
-    const nextUnplaced = mapperFields.slice(currentIndex + 1).find((f) => !getFieldPosition(nextFields, f.key))
-    setActiveFieldKey(nextUnplaced?.key ?? null)
+    // Auto-advance only right after drawing a brand new box — once it
+    // exists, keep it active so the admin can keep dragging/resizing it
+    // without being bounced to the next field on every adjustment.
+    if (isFirstPlacement) {
+      const currentIndex = mapperFields.findIndex((f) => f.key === activeFieldKey)
+      const nextUnplaced = mapperFields.slice(currentIndex + 1).find((f) => !getFieldPosition(nextFields, f.key))
+      setActiveFieldKey(nextUnplaced?.key ?? null)
+    }
   }
 
   const handleSave = () => {
@@ -97,7 +117,7 @@ export default function QuotationTemplateMapperPage() {
           {/* FIELD LIST */}
           <div className="space-y-2 bg-card border border-border rounded-xl p-4 shadow-sm">
             <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground">
-              Click a field, then click its spot on the PDF
+              Click a field, then drag on the PDF to draw its box
             </p>
             {mapperFields.map((field) => {
               const position = getFieldPosition(fields, field.key)
@@ -153,14 +173,16 @@ export default function QuotationTemplateMapperPage() {
               <PdfPageCanvas
                 pdfUrl={pdfUrl}
                 pageNumber={currentPage}
-                markers={markersForPage}
-                onPick={handlePick}
-                pickCursor={Boolean(activeFieldKey)}
+                boxes={boxesForPage}
+                activeKey={activeFieldKey}
+                onCommit={handleCommit}
               />
             </div>
             {activeFieldKey && (
               <p className="border border-primary bg-primary/10 p-3 rounded-lg text-xs font-semibold text-foreground">
-                Click on the PDF above to place: {mapperFields.find((f) => f.key === activeFieldKey)?.label}
+                {getFieldPosition(fields, activeFieldKey)
+                  ? `Drag the box or its corner handle to adjust: ${mapperFields.find((f) => f.key === activeFieldKey)?.label}`
+                  : `Drag on the PDF above to draw a box for: ${mapperFields.find((f) => f.key === activeFieldKey)?.label}`}
               </p>
             )}
           </div>

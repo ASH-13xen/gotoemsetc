@@ -11,6 +11,8 @@ export interface FieldPosition {
   page: number
   xPct: number
   yPct: number
+  widthPct: number
+  heightPct: number
 }
 
 export interface QuotationTemplateFields {
