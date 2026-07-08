@@ -1,6 +1,8 @@
 import { apiClient } from './client'
 import type { QuotationTemplate } from './quotationTemplates.api'
 
+const API_BASE_URL = apiClient.defaults.baseURL ?? '/api'
+
 export type QuotationStatus = 'draft' | 'shared' | 'signed' | 'superseded'
 
 export interface FileRef {
@@ -50,7 +52,7 @@ export async function adminSignQuotation(
 }
 
 export function quotationFileUrl(quotationId: string, variant: 'draft' | 'admin-signed' | 'final'): string {
-  return `/api/quotations/${quotationId}/file/${variant}`
+  return `${API_BASE_URL}/quotations/${quotationId}/file/${variant}`
 }
 
 // --- Public (client-facing, token-gated) ---
@@ -69,7 +71,7 @@ export async function getPublicQuotation(token: string): Promise<PublicQuotation
 }
 
 export function publicQuotationFileUrl(token: string): string {
-  return `/api/public/quotations/${token}/file`
+  return `${API_BASE_URL}/public/quotations/${token}/file`
 }
 
 export async function signPublicQuotation(token: string, signatureDataUrl: string): Promise<void> {

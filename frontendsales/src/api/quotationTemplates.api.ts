@@ -1,5 +1,7 @@
 import { apiClient } from './client'
 
+const API_BASE_URL = apiClient.defaults.baseURL ?? '/api'
+
 export type PlanType = 'duration' | 'quantity' | 'fixed'
 
 export interface PlanOption {
@@ -62,5 +64,5 @@ export async function updateQuotationTemplateFields(
 }
 
 export function quotationTemplatePdfUrl(id: string): string {
-  return `/api/quotation-templates/${id}/pdf`
+  return `${API_BASE_URL}/quotation-templates/${id}/pdf`
 }
