@@ -24,7 +24,6 @@ export function NavBar() {
               <NavLink
                 key={link.to}
                 to={link.to}
-                end={link.end}
                 className={({ isActive }) =>
                   cn(
                     'text-xs font-bold tracking-wider uppercase px-3 py-1.5 rounded-lg transition-all text-muted-foreground hover:text-foreground hover:bg-secondary/50',

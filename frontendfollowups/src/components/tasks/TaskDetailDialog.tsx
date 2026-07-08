@@ -32,7 +32,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { PIPELINE_STAGES } from '@/api/tasks.api'
 import type { Task, TaskPriority, TaskStage, TaskStatus } from '@/api/tasks.api'
 
-function canMessage(task: Task, userId: string | undefined, role: string | undefined, employeeLink: string | null | undefined) {
+function canMessage(task: Task, role: string | undefined, employeeLink: string | null | undefined) {
   if (role === 'admin') return true
   if (!employeeLink) return false
   return task.assigneeEmployees.some((e) => e._id === employeeLink)
@@ -58,7 +58,7 @@ export function TaskDetailDialog({ task, onClose }: { task: Task | null; onClose
 
   if (!task) return null
 
-  const allowMessage = canMessage(task, user?.id, user?.role, user?.employeeLink)
+  const allowMessage = canMessage(task, user?.role, user?.employeeLink)
 
   const onStatusChange = (status: TaskStatus) => {
     if (status === 'done') {
