@@ -39,7 +39,8 @@ export function useUpdateTask(id: string) {
 export function useUpdateTaskStatus() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: TaskStatus }) => tasksApi.updateTaskStatus(id, status),
+    mutationFn: ({ id, status, summary }: { id: string; status: TaskStatus; summary?: string }) =>
+      tasksApi.updateTaskStatus(id, status, summary),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: TASKS_KEY }),
   })
 }
@@ -77,10 +78,10 @@ export function useRemoveAttachment() {
   })
 }
 
-export function useStartPipelineCycle() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (clientId: string) => tasksApi.startPipelineCycle(clientId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: TASKS_KEY }),
+export function useDueSummary(clientIds: string[]) {
+  return useQuery({
+    queryKey: [...TASKS_KEY, 'due-summary', clientIds],
+    queryFn: () => tasksApi.getDueSummary(clientIds),
+    enabled: clientIds.length > 0,
   })
 }

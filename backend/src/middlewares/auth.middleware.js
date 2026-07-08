@@ -11,7 +11,12 @@ function verifyToken(req, res, next) {
 
   try {
     const payload = jwt.verify(token, env.jwtSecret);
-    req.user = { id: payload.sub, username: payload.username, role: payload.role };
+    req.user = {
+      id: payload.sub,
+      username: payload.username,
+      role: payload.role,
+      employeeLink: payload.employeeLink || null,
+    };
     next();
   } catch {
     next(ApiError.unauthorized('Invalid or expired token'));

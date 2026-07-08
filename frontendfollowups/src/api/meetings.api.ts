@@ -11,14 +11,17 @@ export interface MeetingAttendee {
 export interface Meeting {
   _id: string
   client: string
-  mom: string
+  topic: string
+  agenda?: string
+  mom?: string
   meetingDate: string
   attendees: MeetingAttendee[]
   createdAt: string
 }
 
 export interface CreateMeetingInput {
-  mom: string
+  topic: string
+  agenda?: string
   meetingDate: string
   attendees?: string[]
 }
@@ -33,5 +36,14 @@ export async function createMeeting(
   input: CreateMeetingInput
 ): Promise<{ meeting: Meeting }> {
   const { data } = await apiClient.post(`/clients/${clientId}/meetings`, input)
+  return data
+}
+
+export async function updateMeetingMinutes(
+  clientId: string,
+  meetingId: string,
+  mom: string
+): Promise<{ meeting: Meeting }> {
+  const { data } = await apiClient.patch(`/clients/${clientId}/meetings/${meetingId}`, { mom })
   return data
 }

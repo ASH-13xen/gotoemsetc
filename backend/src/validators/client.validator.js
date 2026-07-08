@@ -26,6 +26,7 @@ const update = {
     brandName: z.string().min(1).optional(),
     dateRegistered: z.coerce.date().optional(),
     status: statusEnum.optional(),
+    assignedTeam: z.string().min(1).nullable().optional(),
   }),
 };
 

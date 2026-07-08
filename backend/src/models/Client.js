@@ -23,6 +23,9 @@ const clientSchema = new Schema(
       default: CLIENT_STATUS.LEAD,
     },
     currentQuotation: { type: Schema.Types.ObjectId, ref: 'Quotation' },
+    // Set from the Followups section — surfaces the assigned team's leader
+    // wherever this client is displayed. Optional and ignored by frontendsales.
+    assignedTeam: { type: Schema.Types.ObjectId, ref: 'Team' },
     isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }

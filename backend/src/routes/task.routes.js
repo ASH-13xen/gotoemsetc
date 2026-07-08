@@ -8,7 +8,7 @@ const router = Router();
 
 router.get('/', validate(taskValidator.list), taskController.list);
 router.post('/', validate(taskValidator.create), taskController.create);
-router.post('/pipeline/start', validate(taskValidator.startPipeline), taskController.startPipelineCycle);
+router.get('/due-summary', taskController.dueSummary);
 router.get('/:id', validate(taskValidator.getOrDelete), taskController.getById);
 router.patch('/:id', validate(taskValidator.update), taskController.update);
 router.patch('/:id/status', validate(taskValidator.updateStatus), taskController.updateStatus);

@@ -27,10 +27,14 @@ const taskSchema = new Schema(
     title: { type: String, required: true, trim: true },
     description: { type: String, trim: true },
 
-    // Optional — internal/ad-hoc tickets have no client.
-    client: { type: Schema.Types.ObjectId, ref: 'Client', index: true },
+    client: { type: Schema.Types.ObjectId, ref: 'Client', required: true, index: true },
 
     stage: { type: String, enum: Object.values(TASK_STAGE), default: TASK_STAGE.CUSTOM },
+    // Only set (and only meaningful) when stage === 'custom' — the free-text
+    // label typed by the user, which groups this task's Pipeline copy under
+    // an "Others" bucket instead of one of the 7 fixed stage rows.
+    customLabel: { type: String, trim: true },
+
     status: { type: String, enum: Object.values(TASK_STATUS), default: TASK_STATUS.TODO },
     priority: { type: String, enum: Object.values(TASK_PRIORITY), default: TASK_PRIORITY.MEDIUM },
     dueDate: Date,
@@ -38,14 +42,8 @@ const taskSchema = new Schema(
     assigneeEmployees: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
     assigneeTeam: { type: Schema.Types.ObjectId, ref: 'Team' },
 
-    // Generic prerequisite links — used to gate the Calendar stage on the
-    // three parallel content-production tasks being done.
-    dependsOn: [{ type: Schema.Types.ObjectId, ref: 'Task' }],
-    autoUnlock: { type: Boolean, default: false },
-
-    // Increments per client each time it loops through the fixed pipeline, so
-    // repeated cycles for the same client don't collide.
-    cycle: { type: Number, default: 1 },
+    // Required when status is set to 'done' — a short close-out note.
+    summary: { type: String, trim: true },
 
     comments: [commentSchema],
     attachments: [attachmentSchema],
@@ -56,7 +54,7 @@ const taskSchema = new Schema(
   { timestamps: true }
 );
 
-taskSchema.index({ client: 1, cycle: 1, stage: 1 });
+taskSchema.index({ client: 1, stage: 1 });
 taskSchema.index({ status: 1, dueDate: 1 });
 taskSchema.index({ assigneeEmployees: 1 });
 

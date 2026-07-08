@@ -17,3 +17,12 @@ export function useCreateMeeting(clientId: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['meetings', clientId] }),
   })
 }
+
+export function useUpdateMeetingMinutes(clientId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ meetingId, mom }: { meetingId: string; mom: string }) =>
+      meetingsApi.updateMeetingMinutes(clientId, meetingId, mom),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['meetings', clientId] }),
+  })
+}

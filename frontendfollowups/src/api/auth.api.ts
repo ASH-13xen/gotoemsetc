@@ -4,6 +4,7 @@ export interface AuthUser {
   id: string
   username: string
   role: 'admin' | 'worker'
+  employeeLink?: string | null
 }
 
 export interface LoginInput {

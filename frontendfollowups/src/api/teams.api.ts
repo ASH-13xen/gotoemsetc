@@ -6,7 +6,7 @@ export interface Team {
   name: string
   description?: string
   members: MeetingAttendee[]
-  isStanding: boolean
+  leader?: MeetingAttendee
   createdAt: string
   updatedAt: string
 }
@@ -15,14 +15,14 @@ export interface CreateTeamInput {
   name: string
   description?: string
   members?: string[]
-  isStanding?: boolean
+  leader?: string
 }
 
 export interface UpdateTeamInput {
   name?: string
   description?: string
   members?: string[]
-  isStanding?: boolean
+  leader?: string | null
 }
 
 export async function listTeams(): Promise<{ teams: Team[] }> {

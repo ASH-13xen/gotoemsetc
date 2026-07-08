@@ -11,6 +11,12 @@ export interface Contact {
   createdAt: string
 }
 
+export interface AssignedTeam {
+  _id: string
+  name: string
+  leader?: { _id: string; firstName: string; lastName?: string }
+}
+
 export interface SalesClient {
   _id: string
   clientName: string
@@ -19,6 +25,7 @@ export interface SalesClient {
   contacts: Contact[]
   status: ClientStatus
   currentQuotation?: string
+  assignedTeam?: AssignedTeam
   createdAt: string
   updatedAt: string
 }
@@ -77,5 +84,10 @@ export async function removeContact(id: string, contactId: string): Promise<{ cl
 
 export async function offboardClient(id: string): Promise<{ client: SalesClient }> {
   const { data } = await apiClient.post(`/clients/${id}/offboard`)
+  return data
+}
+
+export async function assignClientTeam(id: string, teamId: string | null): Promise<{ client: SalesClient }> {
+  const { data } = await apiClient.patch(`/clients/${id}`, { assignedTeam: teamId })
   return data
 }

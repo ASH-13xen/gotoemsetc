@@ -1,9 +1,8 @@
 const ApiError = require('../utils/ApiError');
-const { TASK_STAGE, TASK_STATUS } = require('../config/constants');
+const { TASK_STAGE, TASK_STATUS, USER_ROLES } = require('../config/constants');
 const taskRepository = require('../repositories/task.repository');
+const pipelineLogRepository = require('../repositories/pipelineLog.repository');
 const cloudinaryUpload = require('../services/cloudinaryUpload.service');
-
-const PARALLEL_STAGES = [TASK_STAGE.POST_CREATION, TASK_STAGE.SHOOT, TASK_STAGE.EDIT_DESIGN];
 
 async function listTasks(params) {
   return taskRepository.list(params);
@@ -15,110 +14,61 @@ async function getTask(id) {
   return task;
 }
 
+// Every labeled task (fixed stage or custom-with-a-label) gets exactly one
+// mirrored row in the client's Pipeline tab, kept in sync as the task
+// changes — see PipelineLogEntry's upsert-by-sourceTask semantics.
+async function syncPipelineCopy(task, loggedById) {
+  if (task.stage === TASK_STAGE.CUSTOM && !task.customLabel) return;
+  await pipelineLogRepository.upsertForTask(task, loggedById);
+}
+
 async function createTask(data, createdBy) {
-  return taskRepository.create({ ...data, createdBy });
+  const task = await taskRepository.create({ ...data, createdBy });
+  await syncPipelineCopy(task, createdBy);
+  return task;
 }
 
 async function updateTask(id, data) {
   const task = await taskRepository.updateById(id, data);
   if (!task) throw ApiError.notFound('Task not found');
+  await syncPipelineCopy(task, task.createdBy);
   return task;
 }
 
 async function deleteTask(id) {
   const task = await taskRepository.softDeleteById(id);
   if (!task) throw ApiError.notFound('Task not found');
+  await pipelineLogRepository.removeForTask(id);
   return task;
 }
 
-// Drives the fixed client pipeline: Plan of Action -> (Post / Shoot / Edit-
-// Design in parallel) -> Calendar (unlocked only once all three are done) ->
-// Report. Internal/ad-hoc tasks (no client, or stage CUSTOM) never trigger this.
-async function maybeAdvancePipeline(task) {
-  if (!task.client || task.stage === TASK_STAGE.CUSTOM) return;
-
-  if (task.stage === TASK_STAGE.PLAN_OF_ACTION) {
-    const siblings = await Promise.all(
-      PARALLEL_STAGES.map((stage) =>
-        taskRepository.create({
-          title: `${stage.replace('_', ' ')} — cycle ${task.cycle}`,
-          client: task.client,
-          stage,
-          cycle: task.cycle,
-          status: TASK_STATUS.TODO,
-        })
-      )
-    );
-    await taskRepository.create({
-      title: `Calendar — cycle ${task.cycle}`,
-      client: task.client,
-      stage: TASK_STAGE.CALENDAR,
-      cycle: task.cycle,
-      status: TASK_STATUS.BLOCKED,
-      autoUnlock: true,
-      dependsOn: siblings.map((s) => s._id),
-    });
-    return;
+async function updateStatus(id, status, summary) {
+  if (status === TASK_STATUS.DONE && !summary) {
+    throw ApiError.badRequest('A summary is required to mark a task as done');
   }
-
-  if (PARALLEL_STAGES.includes(task.stage)) {
-    const siblings = await taskRepository.findSiblings({
-      client: task.client,
-      cycle: task.cycle,
-      stages: PARALLEL_STAGES,
-    });
-    const allDone = siblings.length === PARALLEL_STAGES.length && siblings.every((s) => s.status === TASK_STATUS.DONE);
-    if (!allDone) return;
-
-    const calendarTask = await taskRepository.findOneByClientCycleStage({
-      client: task.client,
-      cycle: task.cycle,
-      stage: TASK_STAGE.CALENDAR,
-    });
-    if (calendarTask && calendarTask.status === TASK_STATUS.BLOCKED) {
-      await taskRepository.updateById(calendarTask._id, { status: TASK_STATUS.TODO });
-    }
-    return;
-  }
-
-  if (task.stage === TASK_STAGE.CALENDAR) {
-    await taskRepository.create({
-      title: `Report — cycle ${task.cycle}`,
-      client: task.client,
-      stage: TASK_STAGE.REPORT,
-      cycle: task.cycle,
-      status: TASK_STATUS.TODO,
-    });
-  }
-
-  // stage === REPORT: cycle complete. Auto-starting the next cycle is a
-  // backlog item, not built now.
-}
-
-async function updateStatus(id, status) {
-  const task = await taskRepository.updateById(id, { status });
-  if (!task) throw ApiError.notFound('Task not found');
-  if (status === TASK_STATUS.DONE) {
-    await maybeAdvancePipeline(task);
-  }
-  return task;
-}
-
-async function startPipelineCycle(clientId) {
-  const cycle = await taskRepository.nextCycleNumber(clientId);
-  return taskRepository.create({
-    title: `Plan of Action — cycle ${cycle}`,
-    client: clientId,
-    stage: TASK_STAGE.PLAN_OF_ACTION,
-    cycle,
-    status: TASK_STATUS.TODO,
-  });
-}
-
-async function addComment(id, author, body) {
-  const task = await taskRepository.pushComment(id, { author, body });
+  const patch = { status };
+  if (status === TASK_STATUS.DONE) patch.summary = summary;
+  const task = await taskRepository.updateById(id, patch);
   if (!task) throw ApiError.notFound('Task not found');
   return task;
+}
+
+// Anyone who can log in can view a task; only the admin or one of the
+// task's assigned employees may post a message on it.
+function canMessage(task, user) {
+  if (user.role === USER_ROLES.ADMIN) return true;
+  if (!user.employeeLink) return false;
+  return task.assigneeEmployees.some((e) => e._id.toString() === user.employeeLink);
+}
+
+async function addComment(id, user, body) {
+  const task = await taskRepository.findById(id);
+  if (!task) throw ApiError.notFound('Task not found');
+  if (!canMessage(task, user)) {
+    throw ApiError.forbidden('Only admins and this task\'s assignees can post messages');
+  }
+  const updated = await taskRepository.pushComment(id, { author: user.id, body });
+  return updated;
 }
 
 async function addAttachment(id, file, uploadedBy) {
@@ -147,6 +97,10 @@ async function removeAttachment(id, attachmentId) {
   return taskRepository.pullAttachment(id, attachmentId);
 }
 
+async function nextDueForClients(clientIds) {
+  return taskRepository.findNextDueForClients(clientIds);
+}
+
 module.exports = {
   listTasks,
   getTask,
@@ -154,8 +108,9 @@ module.exports = {
   updateTask,
   deleteTask,
   updateStatus,
-  startPipelineCycle,
+  canMessage,
   addComment,
   addAttachment,
   removeAttachment,
+  nextDueForClients,
 };

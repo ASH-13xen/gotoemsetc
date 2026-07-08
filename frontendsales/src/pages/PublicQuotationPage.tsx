@@ -12,11 +12,11 @@ import { getPublicQuotation, publicQuotationFileUrl, signPublicQuotation } from 
 
 function CenteredMessage({ icon, title, description }: { icon: React.ReactNode; title: string; description?: string }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black p-4 text-white">
-      <div className="flex max-w-sm flex-col items-center gap-4 border-2 border-white p-8 text-center">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
+      <div className="flex max-w-sm flex-col items-center gap-4 bg-card border border-border rounded-2xl p-8 text-center shadow-sm">
         {icon}
-        <h1 className="text-xl font-black tracking-wider uppercase">{title}</h1>
-        {description && <p className="text-sm font-bold tracking-widest text-neutral-400 uppercase">{description}</p>}
+        <h1 className="text-xl font-bold tracking-tight text-foreground">{title}</h1>
+        {description && <p className="text-sm font-semibold tracking-wide text-muted-foreground">{description}</p>}
       </div>
     </div>
   )
@@ -55,7 +55,7 @@ export default function PublicQuotationPage() {
   })
 
   if (quotationQuery.isLoading) {
-    return <CenteredMessage icon={<Loader2 className="size-8 animate-spin text-neutral-400" />} title="LOADING…" />
+    return <CenteredMessage icon={<Loader2 className="size-8 animate-spin text-primary" />} title="LOADING…" />
   }
 
   if (quotationQuery.isError) {
@@ -77,34 +77,34 @@ export default function PublicQuotationPage() {
   const isSigned = quotation.status === 'signed'
 
   return (
-    <div className="min-h-screen bg-black p-6 text-white">
+    <div className="min-h-screen bg-background p-6 text-foreground">
       <main className="mx-auto max-w-3xl space-y-6">
-        <div className="flex items-center justify-center gap-2 text-neutral-400">
-          <Building2 className="size-5" />
-          <span className="text-xs font-black tracking-widest uppercase">{quotation.companyLabel}</span>
+        <div className="flex items-center justify-center gap-2 text-muted-foreground">
+          <Building2 className="size-5 text-primary" />
+          <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">{quotation.companyLabel}</span>
         </div>
 
-        <div className="border-2 border-white bg-black p-8 space-y-6">
-          <div className="border-b-2 border-white pb-4">
-            <h1 className="text-2xl font-black tracking-widest text-white uppercase">{quotation.templateTitle}</h1>
-            <p className="mt-2 text-sm font-bold tracking-wide text-neutral-400 uppercase">
+        <div className="bg-card border border-border rounded-2xl p-8 space-y-6 shadow-sm">
+          <div className="border-b border-border pb-4">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">{quotation.templateTitle}</h1>
+            <p className="mt-2 text-sm font-semibold tracking-wide text-muted-foreground">
               {quotation.clientName} — {quotation.brandName}
             </p>
           </div>
 
-          <div className="border-2 border-neutral-800">
+          <div className="border border-border rounded-xl overflow-hidden shadow-inner bg-white">
             <iframe title="Quotation PDF" src={publicQuotationFileUrl(token)} className="h-[70vh] w-full bg-white" />
           </div>
 
           {isSigned ? (
-            <div className="flex flex-col items-center gap-3 border-2 border-emerald-500 bg-emerald-950/30 p-6 text-center">
-              <CheckCircle2 className="size-8 text-emerald-400" />
-              <p className="text-sm font-black tracking-widest text-emerald-400 uppercase">
+            <div className="flex flex-col items-center gap-3 border border-emerald-500/20 bg-emerald-500/10 p-6 text-center rounded-xl">
+              <CheckCircle2 className="size-8 text-emerald-600" />
+              <p className="text-sm font-semibold tracking-wider text-emerald-700 uppercase">
                 You've signed this quotation
               </p>
               <Button
                 variant="outline"
-                className="border-emerald-500 text-emerald-400 hover:bg-emerald-500 hover:text-black"
+                className="border-emerald-500/30 text-emerald-700 hover:bg-emerald-600 hover:text-white"
                 onClick={() => triggerDownload(publicQuotationFileUrl(token), 'quotation-signed.pdf')}
               >
                 <Download className="size-4" />
@@ -113,7 +113,7 @@ export default function PublicQuotationPage() {
             </div>
           ) : (
             <Button
-              className="h-14 w-full bg-primary text-lg font-extrabold tracking-widest text-white uppercase hover:opacity-90"
+              className="h-12 w-full bg-primary text-base font-semibold tracking-wide text-primary-foreground hover:opacity-95 rounded-xl shadow-sm hover:shadow active:scale-[0.99] transition-all"
               onClick={() => setSignOpen(true)}
             >
               <PenLine className="size-5" />
@@ -124,9 +124,9 @@ export default function PublicQuotationPage() {
       </main>
 
       <Dialog open={signOpen} onOpenChange={setSignOpen}>
-        <DialogContent className="rounded-none border-2 border-white bg-black text-white">
+        <DialogContent className="rounded-2xl border border-border bg-card text-foreground shadow-xl">
           <DialogHeader>
-            <DialogTitle className="tracking-widest uppercase">Sign This Quotation</DialogTitle>
+            <DialogTitle className="tracking-tight text-foreground font-bold">Sign This Quotation</DialogTitle>
           </DialogHeader>
           <SignaturePad
             onConfirm={(dataUrl) => signMutation.mutate(dataUrl)}

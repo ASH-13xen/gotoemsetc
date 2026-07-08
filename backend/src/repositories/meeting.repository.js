@@ -14,12 +14,11 @@ function findById(id) {
   return Meeting.findById(id).populate('attendees', 'firstName lastName designation employeeCode');
 }
 
-function listUpcoming(from, limit = 10) {
-  return Meeting.find({ meetingDate: { $gte: from } })
-    .sort({ meetingDate: 1 })
-    .limit(limit)
-    .populate('client', 'clientName brandName')
-    .populate('attendees', 'firstName lastName designation employeeCode');
+function updateById(id, data) {
+  return Meeting.findByIdAndUpdate(id, data, { new: true, runValidators: true }).populate(
+    'attendees',
+    'firstName lastName designation employeeCode'
+  );
 }
 
-module.exports = { create, listByClient, findById, listUpcoming };
+module.exports = { create, listByClient, findById, updateById };

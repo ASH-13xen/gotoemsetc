@@ -37,9 +37,10 @@ module.exports = {
   USER_ROLES: { ADMIN: 'admin', WORKER: 'worker' },
   TASK_STAGE: {
     PLAN_OF_ACTION: 'plan_of_action',
-    POST_CREATION: 'post_creation',
+    POST: 'post',
     SHOOT: 'shoot',
-    EDIT_DESIGN: 'edit_design',
+    EDIT: 'edit',
+    DESIGN: 'design',
     CALENDAR: 'calendar',
     REPORT: 'report',
     CUSTOM: 'custom',

@@ -5,9 +5,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 
 const LINKS = [
-  { to: '/', label: 'Dashboard', end: true },
   { to: '/clients', label: 'Clients' },
-  { to: '/tasks', label: 'Tasks' },
   { to: '/teams', label: 'Teams' },
 ]
 

@@ -15,9 +15,16 @@ async function login(username, password) {
   const matches = await bcrypt.compare(password, user.passwordHash);
   if (!matches) throw ApiError.unauthorized('Invalid credentials');
 
-  const token = jwt.sign({ sub: user._id.toString(), username: user.username, role: user.role }, env.jwtSecret, {
-    expiresIn: env.jwtExpiresIn,
-  });
+  const token = jwt.sign(
+    {
+      sub: user._id.toString(),
+      username: user.username,
+      role: user.role,
+      employeeLink: user.employeeLink ? user.employeeLink.toString() : null,
+    },
+    env.jwtSecret,
+    { expiresIn: env.jwtExpiresIn }
+  );
 
   return { token, user: toPublicUser(user) };
 }

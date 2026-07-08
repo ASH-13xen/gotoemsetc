@@ -25,7 +25,7 @@ const update = asyncHandler(async (req, res) => {
 });
 
 const updateStatus = asyncHandler(async (req, res) => {
-  const task = await taskService.updateStatus(req.params.id, req.body.status);
+  const task = await taskService.updateStatus(req.params.id, req.body.status, req.body.summary);
   req.auditContext = {
     action: 'task.updateStatus',
     resourceType: 'Task',
@@ -42,7 +42,7 @@ const remove = asyncHandler(async (req, res) => {
 });
 
 const addComment = asyncHandler(async (req, res) => {
-  const task = await taskService.addComment(req.params.id, req.user.id, req.body.body);
+  const task = await taskService.addComment(req.params.id, req.user, req.body.body);
   req.auditContext = { action: 'task.comment', resourceType: 'Task', resourceId: task._id };
   res.status(201).json({ task });
 });
@@ -70,15 +70,13 @@ const removeAttachment = asyncHandler(async (req, res) => {
   res.json({ task });
 });
 
-const startPipelineCycle = asyncHandler(async (req, res) => {
-  const task = await taskService.startPipelineCycle(req.body.clientId);
-  req.auditContext = {
-    action: 'task.startPipelineCycle',
-    resourceType: 'Task',
-    resourceId: task._id,
-    metadata: { client: req.body.clientId },
-  };
-  res.status(201).json({ task });
+const dueSummary = asyncHandler(async (req, res) => {
+  const clientIds = String(req.query.clients || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const items = await taskService.nextDueForClients(clientIds);
+  res.json({ items });
 });
 
 module.exports = {
@@ -91,5 +89,5 @@ module.exports = {
   addComment,
   uploadAttachment,
   removeAttachment,
-  startPipelineCycle,
+  dueSummary,
 };

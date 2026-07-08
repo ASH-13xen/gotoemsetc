@@ -17,4 +17,14 @@ const listForClient = asyncHandler(async (req, res) => {
   res.json({ meetings });
 });
 
-module.exports = { create, listForClient };
+const updateMinutes = asyncHandler(async (req, res) => {
+  const meeting = await meetingService.updateMinutes(req.params.meetingId, req.body.mom);
+  req.auditContext = {
+    action: 'meeting.updateMinutes',
+    resourceType: 'Meeting',
+    resourceId: meeting._id,
+  };
+  res.json({ meeting });
+});
+
+module.exports = { create, listForClient, updateMinutes };

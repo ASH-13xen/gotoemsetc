@@ -3,10 +3,9 @@ import { toast } from 'sonner'
 import { Loader2, Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -16,93 +15,123 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { EmployeePicker } from '@/components/teams/EmployeePicker'
 import { useCreateTask } from '@/hooks/useTasks'
 import { useTeams } from '@/hooks/useTeams'
-import type { TaskPriority } from '@/api/tasks.api'
+import { PIPELINE_STAGES } from '@/api/tasks.api'
+import type { TaskPriority, TaskStage } from '@/api/tasks.api'
 
-interface CreateTaskDialogProps {
-  clientId?: string
-}
+const CUSTOM_STAGE = 'custom' as const
+const NO_TEAM = '__none__'
 
-export function CreateTaskDialog({ clientId }: CreateTaskDialogProps) {
+export function CreateTaskDialog({ clientId }: { clientId: string }) {
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [stage, setStage] = useState<TaskStage>('plan_of_action')
+  const [customLabel, setCustomLabel] = useState('')
   const [priority, setPriority] = useState<TaskPriority>('medium')
   const [dueDate, setDueDate] = useState('')
-  const [assigneeIds, setAssigneeIds] = useState<string[]>([])
-  const [assigneeTeam, setAssigneeTeam] = useState<string>('')
+  const [assigneeTeam, setAssigneeTeam] = useState(NO_TEAM)
+  const [assigneeEmployees, setAssigneeEmployees] = useState<string[]>([])
 
   const createTask = useCreateTask()
   const { data: teamsData } = useTeams()
+  const teams = teamsData?.teams ?? []
 
-  function reset() {
+  const reset = () => {
     setTitle('')
     setDescription('')
+    setStage('plan_of_action')
+    setCustomLabel('')
     setPriority('medium')
     setDueDate('')
-    setAssigneeIds([])
-    setAssigneeTeam('')
+    setAssigneeTeam(NO_TEAM)
+    setAssigneeEmployees([])
   }
 
-  function onSubmit() {
+  const onSubmit = () => {
     if (!title.trim()) {
       toast.error('Title is required')
       return
     }
+    if (stage === CUSTOM_STAGE && !customLabel.trim()) {
+      toast.error('Enter a label for this custom stage')
+      return
+    }
     createTask.mutate(
       {
-        title,
-        description: description || undefined,
+        title: title.trim(),
+        description: description.trim() || undefined,
         client: clientId,
+        stage,
+        customLabel: stage === CUSTOM_STAGE ? customLabel.trim() : undefined,
         priority,
-        dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
-        assigneeEmployees: assigneeIds,
-        assigneeTeam: assigneeTeam || undefined,
+        dueDate: dueDate || undefined,
+        assigneeTeam: assigneeTeam === NO_TEAM ? undefined : assigneeTeam,
+        assigneeEmployees,
       },
       {
         onSuccess: () => {
           toast.success('Task created')
-          reset()
           setOpen(false)
+          reset()
         },
-        onError: () => toast.error('Could not create task'),
+        onError: () => toast.error('Could not create the task'),
       }
     )
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next)
-        if (!next) reset()
-      }}
-    >
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm">
           <Plus className="size-4" />
           New Task
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle className="uppercase tracking-widest">New Task</DialogTitle>
+          <DialogTitle>New task</DialogTitle>
           <DialogDescription>
-            {clientId ? 'Ad-hoc task for this client.' : 'Internal task, not tied to a client.'}
+            Label it with one of the 7 pipeline stages to auto-copy it into the Pipeline tab, or choose Custom.
           </DialogDescription>
         </DialogHeader>
+
         <div className="grid gap-4">
           <div className="grid gap-1.5">
-            <Label>Title</Label>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
+            <Label htmlFor="task-title">Title</Label>
+            <Input id="task-title" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
           <div className="grid gap-1.5">
-            <Label>Description</Label>
-            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} />
+            <Label htmlFor="task-description">Description (optional)</Label>
+            <Textarea id="task-description" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
+
           <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-1.5">
+              <Label>Label</Label>
+              <Select value={stage} onValueChange={(v) => setStage(v as TaskStage)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PIPELINE_STAGES.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={CUSTOM_STAGE}>Custom…</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid gap-1.5">
               <Label>Priority</Label>
               <Select value={priority} onValueChange={(v) => setPriority(v as TaskPriority)}>
@@ -117,20 +146,34 @@ export function CreateTaskDialog({ clientId }: CreateTaskDialogProps) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-1.5">
-              <Label>Due Date</Label>
-              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-            </div>
           </div>
+
+          {stage === CUSTOM_STAGE && (
+            <div className="grid gap-1.5">
+              <Label htmlFor="task-custom-label">Custom label</Label>
+              <Input
+                id="task-custom-label"
+                value={customLabel}
+                onChange={(e) => setCustomLabel(e.target.value)}
+                placeholder="e.g. Client Feedback"
+              />
+            </div>
+          )}
+
           <div className="grid gap-1.5">
-            <Label>Assign to Team</Label>
-            <Select value={assigneeTeam || '__none__'} onValueChange={(v) => setAssigneeTeam(v === '__none__' ? '' : v)}>
+            <Label htmlFor="task-due">Due date (optional)</Label>
+            <Input id="task-due" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label>Assign to team (optional)</Label>
+            <Select value={assigneeTeam} onValueChange={setAssigneeTeam}>
               <SelectTrigger>
-                <SelectValue placeholder="No team" />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">No team</SelectItem>
-                {(teamsData?.teams ?? []).map((team) => (
+                <SelectItem value={NO_TEAM}>No team</SelectItem>
+                {teams.map((team) => (
                   <SelectItem key={team._id} value={team._id}>
                     {team.name}
                   </SelectItem>
@@ -138,15 +181,17 @@ export function CreateTaskDialog({ clientId }: CreateTaskDialogProps) {
               </SelectContent>
             </Select>
           </div>
+
           <div className="grid gap-1.5">
-            <Label>Assign to Employees</Label>
-            <EmployeePicker selectedIds={assigneeIds} onChange={setAssigneeIds} />
+            <Label>Assign to employees</Label>
+            <EmployeePicker selectedIds={assigneeEmployees} onChange={setAssigneeEmployees} />
           </div>
         </div>
+
         <DialogFooter>
-          <Button onClick={onSubmit} disabled={createTask.isPending}>
+          <Button type="button" onClick={onSubmit} disabled={createTask.isPending}>
             {createTask.isPending && <Loader2 className="size-4 animate-spin" />}
-            Save Task
+            Create Task
           </Button>
         </DialogFooter>
       </DialogContent>

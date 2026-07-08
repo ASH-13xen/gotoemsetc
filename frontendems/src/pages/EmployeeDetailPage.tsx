@@ -19,6 +19,7 @@ import { StatusBadge } from '@/components/employees/StatusBadge'
 import { GeneratedDocumentsList } from '@/components/documents/GeneratedDocumentsList'
 import { UploadedDocumentsList } from '@/components/documents/UploadedDocumentsList'
 import { RequestDocumentsModal } from '@/components/uploadRequests/RequestDocumentsModal'
+import { CredentialsDialog } from '@/components/employees/CredentialsDialog'
 import { RequestHistoryTable } from '@/components/uploadRequests/RequestHistoryTable'
 import { ActivityTimeline } from '@/components/employees/ActivityTimeline'
 import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummaryCard'
@@ -186,6 +187,20 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 </div>
               }
             />
+
+            {/* Add/Manage Credentials — admin-only */}
+            {isAdmin && (
+              <CredentialsDialog
+                employeeId={employeeId}
+                employeeName={`${employee.firstName} ${employee.lastName ?? ''}`}
+                trigger={
+                  <div className="bg-purple-800 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-[100px]">
+                    <span className="text-xs font-black tracking-widest opacity-80 uppercase">PLATFORM ACCESS</span>
+                    <span className="text-2xl font-extrabold uppercase tracking-wide">ADD CREDENTIALS</span>
+                  </div>
+                }
+              />
+            )}
           </div>
         </div>
 

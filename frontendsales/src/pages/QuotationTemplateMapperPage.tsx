@@ -71,20 +71,20 @@ export default function QuotationTemplateMapperPage() {
   const allPlaced = mapperFields.every((f) => Boolean(getFieldPosition(fields, f.key)))
 
   return (
-    <div className="min-h-screen bg-black p-6 text-white">
+    <div className="min-h-screen bg-background p-6 text-foreground">
       <main className="mx-auto max-w-6xl space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-2 border-white bg-black p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 bg-card border border-border rounded-xl p-6 shadow-sm">
           <div>
             <button
               onClick={() => navigate('/quotation-templates')}
-              className="text-xs font-black tracking-widest text-neutral-500 uppercase hover:text-white"
+              className="text-xs font-bold tracking-wide text-muted-foreground hover:text-foreground transition-colors"
             >
               ← Back to Templates
             </button>
-            <h1 className="mt-1 text-3xl font-black tracking-tighter text-white uppercase">{template.title}</h1>
+            <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-foreground">{template.title}</h1>
           </div>
           <Button
-            className="bg-primary text-white hover:opacity-90"
+            className="bg-primary text-primary-foreground hover:opacity-95"
             onClick={handleSave}
             disabled={updateFields.isPending}
           >
@@ -95,8 +95,8 @@ export default function QuotationTemplateMapperPage() {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
           {/* FIELD LIST */}
-          <div className="space-y-2 border-2 border-white bg-black p-4">
-            <p className="mb-2 text-xs font-black tracking-widest text-neutral-400 uppercase">
+          <div className="space-y-2 bg-card border border-border rounded-xl p-4 shadow-sm">
+            <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground">
               Click a field, then click its spot on the PDF
             </p>
             {mapperFields.map((field) => {
@@ -106,16 +106,16 @@ export default function QuotationTemplateMapperPage() {
                 <button
                   key={field.key}
                   onClick={() => setActiveFieldKey(field.key)}
-                  className={`flex w-full items-center justify-between gap-2 border-2 p-3 text-left transition-colors ${
-                    isActive ? 'border-primary bg-primary/20' : 'border-neutral-800 hover:border-neutral-600'
+                  className={`flex w-full items-center justify-between gap-2 border p-3 rounded-lg text-left transition-all ${
+                    isActive ? 'border-primary bg-primary/10 shadow-sm' : 'border-border bg-card hover:bg-secondary/40'
                   }`}
                 >
-                  <span className="flex items-center gap-2 text-xs font-bold tracking-wide text-white uppercase">
+                  <span className="flex items-center gap-2 text-xs font-semibold text-foreground">
                     <MapPin className={`size-3.5 shrink-0 ${field.colorClass}`} />
                     {field.label}
                   </span>
                   {position && (
-                    <span className="shrink-0 text-[10px] font-bold tracking-widest text-neutral-500 uppercase">
+                    <span className="shrink-0 text-[10px] font-bold tracking-wider text-muted-foreground">
                       p{position.page + 1}
                     </span>
                   )}
@@ -126,7 +126,7 @@ export default function QuotationTemplateMapperPage() {
 
           {/* PDF VIEWER */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between border-2 border-white bg-black p-3">
+            <div className="flex items-center justify-between bg-card border border-border rounded-xl p-3 shadow-sm">
               <Button
                 variant="outline"
                 size="sm"
@@ -136,7 +136,7 @@ export default function QuotationTemplateMapperPage() {
                 <ChevronLeft className="size-4" />
                 PREV
               </Button>
-              <span className="text-xs font-black tracking-widest text-white uppercase">
+              <span className="text-xs font-semibold text-foreground uppercase tracking-wider">
                 Page {currentPage} of {template.pageCount}
               </span>
               <Button
@@ -149,7 +149,7 @@ export default function QuotationTemplateMapperPage() {
                 <ChevronRight className="size-4" />
               </Button>
             </div>
-            <div className="overflow-auto">
+            <div className="overflow-auto border border-border rounded-xl bg-white p-2">
               <PdfPageCanvas
                 pdfUrl={pdfUrl}
                 pageNumber={currentPage}
@@ -159,7 +159,7 @@ export default function QuotationTemplateMapperPage() {
               />
             </div>
             {activeFieldKey && (
-              <p className="border-2 border-primary bg-primary/10 p-3 text-xs font-bold tracking-widest text-white uppercase">
+              <p className="border border-primary bg-primary/10 p-3 rounded-lg text-xs font-semibold text-foreground">
                 Click on the PDF above to place: {mapperFields.find((f) => f.key === activeFieldKey)?.label}
               </p>
             )}

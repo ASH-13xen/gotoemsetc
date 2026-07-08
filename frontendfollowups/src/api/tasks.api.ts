@@ -1,14 +1,17 @@
 import { apiClient } from './client'
 import type { MeetingAttendee } from './meetings.api'
 
-export type TaskStage =
-  | 'plan_of_action'
-  | 'post_creation'
-  | 'shoot'
-  | 'edit_design'
-  | 'calendar'
-  | 'report'
-  | 'custom'
+export type TaskStage = 'plan_of_action' | 'post' | 'shoot' | 'edit' | 'design' | 'calendar' | 'report' | 'custom'
+
+export const PIPELINE_STAGES: { value: TaskStage; label: string }[] = [
+  { value: 'plan_of_action', label: 'Plan of Action' },
+  { value: 'post', label: 'Post' },
+  { value: 'shoot', label: 'Shoot' },
+  { value: 'edit', label: 'Edit' },
+  { value: 'design', label: 'Design' },
+  { value: 'calendar', label: 'Calendar' },
+  { value: 'report', label: 'Report' },
+]
 
 export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done'
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
@@ -22,6 +25,7 @@ export interface TaskCommentAuthor {
   _id: string
   username: string
   role: 'admin' | 'worker'
+  employeeLink?: string
 }
 
 export interface TaskComment {
@@ -52,16 +56,15 @@ export interface Task {
   _id: string
   title: string
   description?: string
-  client?: TaskClient
+  client: TaskClient
   stage: TaskStage
+  customLabel?: string
   status: TaskStatus
   priority: TaskPriority
   dueDate?: string
   assigneeEmployees: MeetingAttendee[]
   assigneeTeam?: TaskAssigneeTeam
-  dependsOn: string[]
-  autoUnlock: boolean
-  cycle: number
+  summary?: string
   comments: TaskComment[]
   attachments: TaskAttachment[]
   createdAt: string
@@ -89,8 +92,9 @@ export interface ListTasksResponse {
 export interface CreateTaskInput {
   title: string
   description?: string
-  client?: string
+  client: string
   stage?: TaskStage
+  customLabel?: string
   priority?: TaskPriority
   dueDate?: string
   assigneeEmployees?: string[]
@@ -98,6 +102,13 @@ export interface CreateTaskInput {
 }
 
 export type UpdateTaskInput = Partial<Omit<CreateTaskInput, 'client'>>
+
+export interface DueSummaryItem {
+  _id: string
+  title: string
+  priority: TaskPriority
+  dueDate: string
+}
 
 export async function listTasks(params: ListTasksParams): Promise<ListTasksResponse> {
   const { data } = await apiClient.get('/tasks', { params })
@@ -119,8 +130,12 @@ export async function updateTask(id: string, input: UpdateTaskInput): Promise<{ 
   return data
 }
 
-export async function updateTaskStatus(id: string, status: TaskStatus): Promise<{ task: Task }> {
-  const { data } = await apiClient.patch(`/tasks/${id}/status`, { status })
+export async function updateTaskStatus(
+  id: string,
+  status: TaskStatus,
+  summary?: string
+): Promise<{ task: Task }> {
+  const { data } = await apiClient.patch(`/tasks/${id}/status`, { status, summary })
   return data
 }
 
@@ -145,7 +160,7 @@ export async function removeAttachment(id: string, attachmentId: string): Promis
   return data
 }
 
-export async function startPipelineCycle(clientId: string): Promise<{ task: Task }> {
-  const { data } = await apiClient.post('/tasks/pipeline/start', { clientId })
+export async function getDueSummary(clientIds: string[]): Promise<{ items: DueSummaryItem[] }> {
+  const { data } = await apiClient.get('/tasks/due-summary', { params: { clients: clientIds.join(',') } })
   return data
 }

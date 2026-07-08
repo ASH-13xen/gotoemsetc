@@ -12,8 +12,9 @@ const create = {
   body: z.object({
     title: z.string().min(1),
     description: z.string().optional(),
-    client: z.string().min(1).optional(),
+    client: z.string().min(1),
     stage: stageEnum.optional(),
+    customLabel: z.string().optional(),
     status: statusEnum.optional(),
     priority: priorityEnum.optional(),
     dueDate: z.coerce.date().optional(),
@@ -28,6 +29,7 @@ const update = {
     title: z.string().min(1).optional(),
     description: z.string().optional(),
     stage: stageEnum.optional(),
+    customLabel: z.string().optional(),
     priority: priorityEnum.optional(),
     dueDate: z.coerce.date().optional(),
     assigneeEmployees: z.array(z.string().min(1)).optional(),
@@ -37,7 +39,11 @@ const update = {
 
 const updateStatus = {
   params: idParam,
-  body: z.object({ status: statusEnum }),
+  body: z.object({
+    status: statusEnum,
+    // Required by the service when status is 'done', optional otherwise.
+    summary: z.string().optional(),
+  }),
 };
 
 const getOrDelete = { params: idParam };
@@ -62,8 +68,4 @@ const comment = {
 
 const removeAttachment = { params: attachmentParam };
 
-const startPipeline = {
-  body: z.object({ clientId: z.string().min(1) }),
-};
-
-module.exports = { create, update, updateStatus, getOrDelete, list, comment, removeAttachment, startPipeline };
+module.exports = { create, update, updateStatus, getOrDelete, list, comment, removeAttachment };

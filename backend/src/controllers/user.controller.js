@@ -11,4 +11,24 @@ const getById = asyncHandler(async (req, res) => {
   res.json({ user });
 });
 
-module.exports = { list, getById };
+const getForEmployee = asyncHandler(async (req, res) => {
+  const credential = await userService.getCredentialForEmployee(req.params.employeeId);
+  res.json({ credential });
+});
+
+const createForEmployee = asyncHandler(async (req, res) => {
+  const credential = await userService.createCredential(req.params.employeeId, req.body);
+  res.status(201).json({ credential });
+});
+
+const updateCredential = asyncHandler(async (req, res) => {
+  const credential = await userService.updateCredential(req.params.id, req.body);
+  res.json({ credential });
+});
+
+const removeCredential = asyncHandler(async (req, res) => {
+  const credential = await userService.deleteCredential(req.params.id);
+  res.json({ credential });
+});
+
+module.exports = { list, getById, getForEmployee, createForEmployee, updateCredential, removeCredential };

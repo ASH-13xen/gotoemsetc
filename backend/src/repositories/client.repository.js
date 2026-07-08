@@ -1,5 +1,11 @@
 const Client = require('../models/Client');
 
+const POPULATE_TEAM = {
+  path: 'assignedTeam',
+  select: 'name leader',
+  populate: { path: 'leader', select: 'firstName lastName' },
+};
+
 function listQuery({ search, status }) {
   const query = { isDeleted: false };
   if (status) query.status = status;
@@ -15,7 +21,7 @@ async function list({ search, status, page = 1, limit = 20 }) {
   const skip = (page - 1) * limit;
 
   const [items, total] = await Promise.all([
-    Client.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Client.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).populate(POPULATE_TEAM),
     Client.countDocuments(query),
   ]);
 
@@ -23,7 +29,7 @@ async function list({ search, status, page = 1, limit = 20 }) {
 }
 
 function findById(id) {
-  return Client.findOne({ _id: id, isDeleted: false });
+  return Client.findOne({ _id: id, isDeleted: false }).populate(POPULATE_TEAM);
 }
 
 function create(data) {
@@ -34,7 +40,7 @@ function updateById(id, data) {
   return Client.findOneAndUpdate({ _id: id, isDeleted: false }, data, {
     returnDocument: 'after',
     runValidators: true,
-  });
+  }).populate(POPULATE_TEAM);
 }
 
 function addContact(id, contact) {

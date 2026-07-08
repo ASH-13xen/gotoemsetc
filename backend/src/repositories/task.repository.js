@@ -1,10 +1,11 @@
+const mongoose = require('mongoose');
 const Task = require('../models/Task');
 
 const POPULATE_ASSIGNEES = [
   { path: 'client', select: 'clientName brandName' },
   { path: 'assigneeEmployees', select: 'firstName lastName designation employeeCode' },
-  { path: 'assigneeTeam', select: 'name members' },
-  { path: 'comments.author', select: 'username role' },
+  { path: 'assigneeTeam', select: 'name leader members' },
+  { path: 'comments.author', select: 'username role employeeLink' },
 ];
 
 function listQuery({ client, stage, status, assignee, priority, search }) {
@@ -49,51 +50,28 @@ function softDeleteById(id) {
   return Task.findOneAndUpdate({ _id: id, isDeleted: false }, { isDeleted: true }, { returnDocument: 'after' });
 }
 
-function findSiblings({ client, cycle, stages }) {
-  return Task.find({ client, cycle, stage: { $in: stages }, isDeleted: false });
-}
-
-function findOneByClientCycleStage({ client, cycle, stage }) {
-  return Task.findOne({ client, cycle, stage, isDeleted: false });
-}
-
-function findOverdue(limit = 20) {
-  return Task.find({ isDeleted: false, status: { $ne: 'done' }, dueDate: { $lt: new Date() } })
-    .sort({ dueDate: 1 })
-    .limit(limit)
-    .populate('client', 'clientName brandName')
-    .populate('assigneeEmployees', 'firstName lastName');
-}
-
-function countByClientStage() {
+// One soonest non-done, due-dated task per client — powers the Clients list's
+// "task if any due, priority and due date" summary.
+async function findNextDueForClients(clientIds) {
   return Task.aggregate([
-    { $match: { isDeleted: false, client: { $ne: null }, stage: { $ne: 'custom' } } },
-    { $sort: { cycle: -1, createdAt: -1 } },
-    { $group: { _id: '$client', latestStage: { $first: '$stage' }, latestStatus: { $first: '$status' } } },
     {
-      $lookup: {
-        from: 'clients',
-        localField: '_id',
-        foreignField: '_id',
-        as: 'client',
+      $match: {
+        isDeleted: false,
+        client: { $in: clientIds.map((id) => new mongoose.Types.ObjectId(id)) },
+        status: { $ne: 'done' },
+        dueDate: { $ne: null },
       },
     },
-    { $unwind: '$client' },
+    { $sort: { dueDate: 1 } },
     {
-      $project: {
-        _id: 1,
-        latestStage: 1,
-        latestStatus: 1,
-        clientName: '$client.clientName',
-        brandName: '$client.brandName',
+      $group: {
+        _id: '$client',
+        title: { $first: '$title' },
+        priority: { $first: '$priority' },
+        dueDate: { $first: '$dueDate' },
       },
     },
   ]);
-}
-
-async function nextCycleNumber(client) {
-  const latest = await Task.findOne({ client, isDeleted: false }).sort({ cycle: -1 }).select('cycle');
-  return latest ? latest.cycle + 1 : 1;
 }
 
 function pushComment(id, comment) {
@@ -126,12 +104,8 @@ module.exports = {
   create,
   updateById,
   softDeleteById,
-  findSiblings,
-  findOneByClientCycleStage,
-  nextCycleNumber,
+  findNextDueForClients,
   pushComment,
   pushAttachment,
   pullAttachment,
-  findOverdue,
-  countByClientStage,
 };

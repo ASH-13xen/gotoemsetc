@@ -26,6 +26,11 @@ router.post('/:id/offboard', validate(clientValidator.getOrDelete), clientContro
 
 router.post('/:id/meetings', validate(meetingValidator.create), meetingController.create);
 router.get('/:id/meetings', validate(meetingValidator.listForClient), meetingController.listForClient);
+router.patch(
+  '/:id/meetings/:meetingId',
+  validate(meetingValidator.updateMinutes),
+  meetingController.updateMinutes
+);
 
 router.get('/:id/quotations', validate(quotationValidator.listForClient), quotationController.listForClient);
 router.post('/:id/quotations', validate(quotationValidator.generate), quotationController.generate);

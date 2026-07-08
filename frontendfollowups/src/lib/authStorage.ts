@@ -5,6 +5,7 @@ export interface StoredUser {
   id: string
   username: string
   role: 'admin' | 'worker'
+  employeeLink?: string | null
 }
 
 export function getToken(): string | null {

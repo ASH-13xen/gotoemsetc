@@ -54,3 +54,14 @@ export function useOffboardClient(clientId: string) {
     },
   })
 }
+
+export function useAssignClientTeam(clientId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (teamId: string | null) => clientsApi.assignClientTeam(clientId, teamId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...CLIENTS_KEY, clientId] })
+      queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
+    },
+  })
+}

@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { CheckCircle2, CircleAlert, FileText } from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
 import { useQuotationTemplates } from '@/hooks/useQuotationTemplates'
 
 export default function QuotationTemplatesPage() {
@@ -8,14 +9,14 @@ export default function QuotationTemplatesPage() {
   const { data: templates, isLoading } = useQuotationTemplates()
 
   return (
-    <div className="min-h-screen bg-black p-6 text-white">
+    <div className="min-h-screen bg-background p-6 text-foreground">
       <main className="mx-auto max-w-6xl space-y-8">
-        <div className="border-2 border-white bg-black p-8">
-          <span className="text-xs font-black tracking-widest text-neutral-400 uppercase">Admin Setup</span>
-          <h1 className="text-5xl font-black tracking-tighter text-white uppercase md:text-6xl">
+        <div className="bg-card border border-border rounded-2xl p-8 shadow-sm">
+          <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">Admin Setup</span>
+          <h1 className="text-3xl font-extrabold tracking-tight text-foreground md:text-4xl">
             Quotation Templates
           </h1>
-          <p className="mt-2 max-w-2xl text-sm font-bold tracking-wide text-neutral-400 uppercase">
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
             Each of these 8 PDFs has a genuinely different layout. Calibrate where client name, brand
             name, plan checkboxes, and signatures land on each one before it can be used to generate a
             real quotation.
@@ -25,7 +26,7 @@ export default function QuotationTemplatesPage() {
         {isLoading ? (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-24 w-full bg-neutral-800" />
+              <Skeleton key={i} className="h-24 w-full bg-muted/40 rounded-xl" />
             ))}
           </div>
         ) : (
@@ -34,27 +35,27 @@ export default function QuotationTemplatesPage() {
               <div
                 key={template._id}
                 onClick={() => navigate(`/quotation-templates/${template._id}`)}
-                className="flex cursor-pointer items-start justify-between gap-3 border-2 border-white bg-black p-6 transition-colors hover:bg-neutral-900"
+                className="flex cursor-pointer items-start justify-between gap-3 bg-card border border-border rounded-xl p-6 shadow-sm hover:shadow hover:bg-secondary/40 transition-all duration-300"
               >
                 <div className="flex items-start gap-3">
-                  <FileText className="mt-1 size-5 shrink-0 text-neutral-400" />
+                  <FileText className="mt-1 size-5 shrink-0 text-primary" />
                   <div>
-                    <p className="text-lg font-black tracking-wide text-white uppercase">{template.title}</p>
-                    <p className="text-xs font-bold tracking-widest text-neutral-500 uppercase">
+                    <p className="text-lg font-bold tracking-wide text-foreground">{template.title}</p>
+                    <p className="text-xs font-medium text-muted-foreground">
                       {template.companyLabel} · {template.pageCount} page{template.pageCount > 1 ? 's' : ''}
                     </p>
                   </div>
                 </div>
                 {template.isConfigured ? (
-                  <span className="inline-flex shrink-0 items-center gap-1 border-2 border-emerald-500 bg-emerald-950/40 px-2 py-1 text-xs font-bold tracking-widest text-emerald-400 uppercase">
+                  <Badge variant="success" className="shrink-0">
                     <CheckCircle2 className="size-3.5" />
                     Configured
-                  </span>
+                  </Badge>
                 ) : (
-                  <span className="inline-flex shrink-0 items-center gap-1 border-2 border-amber-500 bg-amber-950/40 px-2 py-1 text-xs font-bold tracking-widest text-amber-400 uppercase">
+                  <Badge variant="warning" className="shrink-0">
                     <CircleAlert className="size-3.5" />
                     Needs Setup
-                  </span>
+                  </Badge>
                 )}
               </div>
             ))}
