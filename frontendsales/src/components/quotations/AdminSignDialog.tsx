@@ -11,9 +11,10 @@ import { useAdminSignQuotation } from '@/hooks/useQuotations'
 interface AdminSignDialogProps {
   clientId: string
   quotationId: string
+  canSign: boolean
 }
 
-export function AdminSignDialog({ clientId, quotationId }: AdminSignDialogProps) {
+export function AdminSignDialog({ clientId, quotationId, canSign }: AdminSignDialogProps) {
   const [open, setOpen] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const adminSign = useAdminSignQuotation(clientId)
@@ -34,6 +35,8 @@ export function AdminSignDialog({ clientId, quotationId }: AdminSignDialogProps)
     toast.success('Link copied to clipboard')
   }
 
+  if (!canSign && !open) return null
+
   return (
     <Dialog
       open={open}
@@ -42,10 +45,12 @@ export function AdminSignDialog({ clientId, quotationId }: AdminSignDialogProps)
         if (!next) setShareUrl(null)
       }}
     >
-      <Button className="bg-primary text-white hover:opacity-90" onClick={() => setOpen(true)}>
-        <PenLine className="size-4" />
-        Sign & Share
-      </Button>
+      {canSign && (
+        <Button className="bg-primary text-white hover:opacity-90" onClick={() => setOpen(true)}>
+          <PenLine className="size-4" />
+          Sign & Share
+        </Button>
+      )}
       <DialogContent className="rounded-none border-2 border-white bg-black text-white">
         {shareUrl ? (
           <>

@@ -55,6 +55,19 @@ export function quotationFileUrl(quotationId: string, variant: 'draft' | 'admin-
   return `${API_BASE_URL}/quotations/${quotationId}/file/${variant}`
 }
 
+// This route is admin-gated (needs the Bearer token), so a plain <a href>
+// can't be used — a bare browser navigation never attaches the Authorization
+// header and just gets a 401 JSON body back. Fetch it as a blob through the
+// authenticated axios instance instead and open that in a new tab.
+export async function openQuotationFile(
+  quotationId: string,
+  variant: 'draft' | 'admin-signed' | 'final'
+): Promise<void> {
+  const { data } = await apiClient.get(`/quotations/${quotationId}/file/${variant}`, { responseType: 'blob' })
+  const url = window.URL.createObjectURL(data)
+  window.open(url, '_blank', 'noreferrer')
+}
+
 // --- Public (client-facing, token-gated) ---
 
 export interface PublicQuotation {

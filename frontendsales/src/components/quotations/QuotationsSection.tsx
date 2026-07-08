@@ -1,10 +1,11 @@
+import { toast } from 'sonner'
 import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { GenerateQuotationDialog } from './GenerateQuotationDialog'
 import { AdminSignDialog } from './AdminSignDialog'
 import { useQuotations } from '@/hooks/useQuotations'
-import { quotationFileUrl } from '@/api/quotations.api'
+import { openQuotationFile } from '@/api/quotations.api'
 import type { Quotation, QuotationStatus } from '@/api/quotations.api'
 
 const STATUS_STYLES: Record<QuotationStatus, string> = {
@@ -43,13 +44,17 @@ function QuotationRow({ clientId, quotation }: { clientId: string; quotation: Qu
         </p>
       </div>
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" asChild>
-          <a href={quotationFileUrl(quotation._id, downloadVariant)} target="_blank" rel="noreferrer">
-            <Download className="size-3.5" />
-            {quotation.status === 'signed' ? 'FINAL PDF' : 'PREVIEW'}
-          </a>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            openQuotationFile(quotation._id, downloadVariant).catch(() => toast.error('Could not open quotation file'))
+          }}
+        >
+          <Download className="size-3.5" />
+          {quotation.status === 'signed' ? 'FINAL PDF' : 'PREVIEW'}
         </Button>
-        {quotation.status === 'draft' && <AdminSignDialog clientId={clientId} quotationId={quotation._id} />}
+        <AdminSignDialog clientId={clientId} quotationId={quotation._id} canSign={quotation.status === 'draft'} />
       </div>
     </div>
   )
