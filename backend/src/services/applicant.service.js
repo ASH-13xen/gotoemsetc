@@ -10,6 +10,7 @@ const emailService = require('./email.service');
 const whatsappService = require('./whatsapp.service');
 const { applicantHiredEmail, formatDateOnly } = require('../templates/email/applicantHired');
 const { applicantRejectedEmail } = require('../templates/email/applicantRejected');
+const logger = require('../utils/logger');
 
 async function listApplicants(params) {
   return applicantRepository.list(params);
@@ -104,27 +105,10 @@ async function hireApplicant(id, { selectionNotes, decisionDate, startDate }) {
     applicantName: `${applicant.firstName} ${applicant.lastName || ''}`.trim(),
   });
 
-  if (updatedApplicant.email) {
-    const { subject, html } = applicantHiredEmail({ applicant: updatedApplicant, startDate, selectionNotes });
-    await emailService.sendEmail({ to: updatedApplicant.email, subject, html });
-  }
-  if (updatedApplicant.phone) {
-    await whatsappService.sendTemplateMessage({
-      to: updatedApplicant.phone,
-      templateName: 'applicant_hired',
-      components: [
-        {
-          type: 'body',
-          parameters: [
-            { type: 'text', text: `${updatedApplicant.firstName} ${updatedApplicant.lastName || ''}`.trim() },
-            { type: 'text', text: updatedApplicant.positionAppliedFor || 'the role' },
-            { type: 'text', text: formatDateOnly(startDate) },
-            { type: 'text', text: selectionNotes },
-          ],
-        },
-      ],
-    });
-  }
+  // Fire-and-forget — see scheduleInterview in interview.service.js for why.
+  sendHiredMessages(updatedApplicant, { startDate, selectionNotes }).catch((err) =>
+    logger.error({ err }, 'sendHiredMessages failed')
+  );
 
   return { applicant: updatedApplicant, employee };
 }
@@ -140,28 +124,59 @@ async function rejectApplicant(id, { rejectionReason, decisionDate }) {
     decisionDate,
   });
 
-  if (updatedApplicant.email) {
-    const { subject, html } = applicantRejectedEmail({ applicant: updatedApplicant, rejectionReason });
-    await emailService.sendEmail({ to: updatedApplicant.email, subject, html });
+  // Fire-and-forget — see scheduleInterview in interview.service.js for why.
+  sendRejectedMessages(updatedApplicant, rejectionReason).catch((err) =>
+    logger.error({ err }, 'sendRejectedMessages failed')
+  );
+
+  return updatedApplicant;
+}
+
+async function sendHiredMessages(applicant, { startDate, selectionNotes }) {
+  if (applicant.email) {
+    const { subject, html } = applicantHiredEmail({ applicant, startDate, selectionNotes });
+    await emailService.sendEmail({ to: applicant.email, subject, html });
   }
-  if (updatedApplicant.phone) {
+  if (applicant.phone) {
     await whatsappService.sendTemplateMessage({
-      to: updatedApplicant.phone,
+      to: applicant.phone,
+      templateName: 'applicant_hired',
+      components: [
+        {
+          type: 'body',
+          parameters: [
+            { type: 'text', text: `${applicant.firstName} ${applicant.lastName || ''}`.trim() },
+            { type: 'text', text: applicant.positionAppliedFor || 'the role' },
+            { type: 'text', text: formatDateOnly(startDate) },
+            { type: 'text', text: selectionNotes },
+          ],
+        },
+      ],
+    });
+  }
+}
+
+async function sendRejectedMessages(applicant, rejectionReason) {
+  if (applicant.email) {
+    const { subject, html } = applicantRejectedEmail({ applicant, rejectionReason });
+    await emailService.sendEmail({ to: applicant.email, subject, html });
+  }
+  if (applicant.phone) {
+    await whatsappService.sendTemplateMessage({
+      to: applicant.phone,
       templateName: 'application_status_update',
       components: [
         {
           type: 'body',
           parameters: [
-            { type: 'text', text: `${updatedApplicant.firstName} ${updatedApplicant.lastName || ''}`.trim() },
-            { type: 'text', text: updatedApplicant.positionAppliedFor || 'the role' },
+            { type: 'text', text: `${applicant.firstName} ${applicant.lastName || ''}`.trim() },
+            { type: 'text', text: applicant.positionAppliedFor || 'the role' },
             { type: 'text', text: rejectionReason },
           ],
         },
       ],
     });
   }
-
-  return updatedApplicant;
 }
 
 module.exports = {

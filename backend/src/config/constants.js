@@ -64,6 +64,10 @@ module.exports = {
     'HR Executive',
   ],
   INTERVIEW_STATUS: { SCHEDULED: 'scheduled', COMPLETED: 'completed', CANCELLED: 'cancelled' },
+  // Per-channel delivery status for the schedule/reschedule email + WhatsApp
+  // notifications — tracked separately since they're sent independently and
+  // finish at different times in the background after the request returns.
+  DELIVERY_STATUS: { PENDING: 'pending', SENT: 'sent', FAILED: 'failed', SKIPPED: 'skipped' },
   NOTIFICATION_TYPES: { INTERVIEW_SCHEDULED: 'interview_scheduled', INTERVIEW_REMINDER: 'interview_reminder' },
   CLIENT_STATUS: { LEAD: 'lead', ONBOARDED: 'onboarded', OFFBOARDED: 'offboarded' },
   QUOTATION_STATUS: { DRAFT: 'draft', SHARED: 'shared', SIGNED: 'signed', SUPERSEDED: 'superseded' },

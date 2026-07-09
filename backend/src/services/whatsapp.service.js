@@ -13,15 +13,28 @@ function normalizeNumber(raw) {
   return digits;
 }
 
+// Meta's error responses are JSON like { error: { message, code, ... } } —
+// pull the human-readable message out for callers that persist it (e.g.
+// interview.service.js's per-channel delivery status), falling back to the
+// raw body if it's not in that shape.
+function extractErrorMessage(rawBody) {
+  try {
+    const parsed = JSON.parse(rawBody);
+    return parsed?.error?.message || rawBody;
+  } catch {
+    return rawBody;
+  }
+}
+
 async function sendTemplateMessage({ to, templateName, languageCode = 'en', components = [] }) {
   const toNumber = normalizeNumber(to);
   if (!env.whatsappConfigured) {
     logger.warn({ to, templateName }, 'WhatsApp Cloud API is not configured — skipping send');
-    return false;
+    return { success: false, error: 'WhatsApp Cloud API is not configured' };
   }
   if (!toNumber) {
     logger.warn({ to, templateName }, 'No WhatsApp number to send to — skipping send');
-    return false;
+    return { success: false, error: 'No WhatsApp number on file' };
   }
 
   try {
@@ -47,13 +60,13 @@ async function sendTemplateMessage({ to, templateName, languageCode = 'en', comp
     if (!res.ok) {
       const body = await res.text().catch(() => '');
       logger.error({ status: res.status, body, to: toNumber, templateName }, 'WhatsApp send failed');
-      return false;
+      return { success: false, error: extractErrorMessage(body) };
     }
 
-    return true;
+    return { success: true };
   } catch (err) {
     logger.error({ err, to: toNumber, templateName }, 'WhatsApp send threw');
-    return false;
+    return { success: false, error: err.message };
   }
 }
 

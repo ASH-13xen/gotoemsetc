@@ -53,11 +53,16 @@ Gmail SMTP has a sending cap (~500/day on a regular account) — plenty for a re
    WHATSAPP_PHONE_NUMBER_ID=xxxxxxxx
    WHATSAPP_API_VERSION=v21.0
    ```
-5. **Create the three message templates** — Meta requires every business-initiated template to be pre-approved before it can be sent (WhatsApp → Message Templates → Create Template, category **Utility**). Use exactly these names (the code references them by name) and this body text, with the variable count matching:
+5. **Create the four message templates** — Meta requires every business-initiated template to be pre-approved before it can be sent (WhatsApp → Message Templates → Create Template, category **Utility**). Use exactly these names (the code references them by name) and this body text, with the variable count matching:
 
    **Template name:** `interview_scheduled`
    ```
    Hi {{1}}, thank you for applying for {{2}}. We'd like to invite you for an interview, scheduled for {{3}}. We look forward to speaking with you!
+   ```
+
+   **Template name:** `interview_rescheduled`
+   ```
+   Hi {{1}}, your interview for {{2}} has been rescheduled. The new date and time is {{3}}. We apologize for any inconvenience and look forward to speaking with you then.
    ```
 
    **Template name:** `applicant_hired`
@@ -69,6 +74,8 @@ Gmail SMTP has a sending cap (~500/day on a regular account) — plenty for a re
    ```
    Hi {{1}}, thank you for applying for {{2}} and for interviewing with us. After careful consideration, we won't be moving forward at this time. Feedback: {{3}}. We wish you the best in your search.
    ```
+
+   Sample values for `interview_rescheduled`: `{{1}}` → `Priya Sharma`, `{{2}}` → `Video Editor`, `{{3}}` → `15 July 2026, 4:00 PM`.
 
    Submit each for review — approval is usually a few minutes to a day. Sends will silently fail (logged on the backend, but never block hiring/rejecting/scheduling) until a template is approved.
 

@@ -20,11 +20,13 @@ function getTransporter() {
 
 // Best-effort, like activity.service.js — a messaging failure (bad
 // credentials, SMTP outage) must never block the hire/reject/schedule
-// action it's attached to. Callers get a boolean, not a throw.
+// action it's attached to. Callers get { success, error }, never a throw —
+// the error string is surfaced so callers that track per-channel delivery
+// status (interview.service.js) can persist why it failed.
 async function sendEmail({ to, subject, html }) {
   if (!env.smtpConfigured) {
     logger.warn({ to, subject }, 'SMTP is not configured — skipping email send');
-    return false;
+    return { success: false, error: 'SMTP is not configured' };
   }
 
   try {
@@ -34,10 +36,10 @@ async function sendEmail({ to, subject, html }) {
       subject,
       html,
     });
-    return true;
+    return { success: true };
   } catch (err) {
     logger.error({ err: err.message, to, subject }, 'SMTP email send failed');
-    return false;
+    return { success: false, error: err.message };
   }
 }
 

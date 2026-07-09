@@ -59,6 +59,13 @@ export interface Applicant {
   createdAt: string
 }
 
+export type DeliveryStatus = 'pending' | 'sent' | 'failed' | 'skipped'
+
+export interface DeliveryResult {
+  status: DeliveryStatus
+  error?: string
+}
+
 export interface Interview {
   _id: string
   applicant: string
@@ -66,6 +73,8 @@ export interface Interview {
   scheduledAt: string
   status: 'scheduled' | 'completed' | 'cancelled'
   notes?: string
+  email?: DeliveryResult
+  whatsapp?: DeliveryResult
 }
 
 export interface ListApplicantsParams {
