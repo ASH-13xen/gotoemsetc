@@ -1,11 +1,16 @@
 const env = require('../config/env');
 const logger = require('../utils/logger');
 
-// Best-effort, same convention as email.service.js. `to` should be a
-// WhatsApp-reachable phone number; digits only, with country code (no `+`,
-// spaces or dashes) is what Meta's Cloud API expects.
+// Best-effort, same convention as email.service.js. Meta's Cloud API expects
+// digits only, with country code, no `+`/spaces/dashes. The recruitment form
+// only collects a bare 10-digit Indian mobile number (no country code
+// prompt), so a 10-digit result is assumed to be Indian and gets `91`
+// prepended — without this Meta silently rejects the number as "not in
+// allowed list" rather than actually delivering to it.
 function normalizeNumber(raw) {
-  return String(raw || '').replace(/[^\d]/g, '');
+  const digits = String(raw || '').replace(/[^\d]/g, '');
+  if (digits.length === 10) return `91${digits}`;
+  return digits;
 }
 
 async function sendTemplateMessage({ to, templateName, languageCode = 'en', components = [] }) {

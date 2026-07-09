@@ -1,39 +1,42 @@
+const nodemailer = require('nodemailer');
 const env = require('../config/env');
 const logger = require('../utils/logger');
 
-// Best-effort, like activity.service.js — a messaging failure (bad key,
-// Resend outage, unverified domain) must never block the hire/reject/
-// schedule action it's attached to. Callers get a boolean, not a throw.
+// Lazily built and cached — a fresh transporter per send would work too, but
+// nodemailer's transporter pools/reuses the SMTP connection, which matters
+// once this is sending more than one message a minute.
+let transporter = null;
+function getTransporter() {
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      host: env.smtp.host,
+      port: env.smtp.port,
+      secure: env.smtp.port === 465,
+      auth: { user: env.smtp.user, pass: env.smtp.pass },
+    });
+  }
+  return transporter;
+}
+
+// Best-effort, like activity.service.js — a messaging failure (bad
+// credentials, SMTP outage) must never block the hire/reject/schedule
+// action it's attached to. Callers get a boolean, not a throw.
 async function sendEmail({ to, subject, html }) {
-  if (!env.emailConfigured) {
-    logger.warn({ to, subject }, 'Resend is not configured — skipping email send');
+  if (!env.smtpConfigured) {
+    logger.warn({ to, subject }, 'SMTP is not configured — skipping email send');
     return false;
   }
 
   try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${env.resend.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: env.resend.fromEmail,
-        to: [to],
-        subject,
-        html,
-      }),
+    await getTransporter().sendMail({
+      from: env.smtp.from || env.smtp.user,
+      to,
+      subject,
+      html,
     });
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      logger.error({ status: res.status, body, to, subject }, 'Resend email send failed');
-      return false;
-    }
-
     return true;
   } catch (err) {
-    logger.error({ err, to, subject }, 'Resend email send threw');
+    logger.error({ err: err.message, to, subject }, 'SMTP email send failed');
     return false;
   }
 }

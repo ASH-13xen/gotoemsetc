@@ -20,17 +20,25 @@ Everything below is a one-time setup you do outside the codebase. Once done, fil
 
 If a question's title in the form is ever edited, update the matching entry in the `TITLE_TO_FIELD` map in `onFormSubmit.gs` (Script editor → save) or that answer will stop reaching the backend (it fails soft — the rest of the submission still comes through).
 
-## 2. Email — Resend
+## 2. Email — Gmail SMTP
 
-1. Sign up at resend.com.
-2. Add and verify a sending domain (Resend walks you through adding a few DNS records — takes a few minutes to propagate). Until a domain is verified you can only send to your own account's email for testing.
-3. Create an API key (Resend dashboard → API Keys).
-4. Fill in `backend/.env`:
+Sends through a real Gmail account using an **App Password** (not your normal Gmail password — Google blocks plain-password SMTP login).
+
+1. The Google account you're sending from must have **2-Step Verification** turned on (myaccount.google.com/security → 2-Step Verification). App Passwords aren't offered until this is enabled.
+2. Go to **myaccount.google.com/apppasswords**.
+3. Create a new app password — App: **Mail**, Device: **Other (Custom name)**, name it e.g. "EMS Backend". Click **Generate**.
+4. Copy the 16-character password shown (spaces don't matter — you can paste it with or without them).
+5. Fill in `backend/.env`:
    ```
-   RESEND_API_KEY=re_xxxxxxxx
-   RESEND_FROM_EMAIL=Recruitment <recruitment@yourdomain.com>
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=465
+   SMTP_USER=youraddress@gmail.com
+   SMTP_PASS=the16charapppassword
+   SMTP_FROM=Recruitment <youraddress@gmail.com>
    COMPANY_NAME=Your Company Name
    ```
+
+Gmail SMTP has a sending cap (~500/day on a regular account) — plenty for a recruitment pipeline, but worth knowing if volume ever grows.
 
 ## 3. WhatsApp — Meta Cloud API
 
@@ -67,8 +75,11 @@ If a question's title in the form is ever edited, update the matching entry in t
 ## Full `.env` checklist
 
 ```
-RESEND_API_KEY=
-RESEND_FROM_EMAIL=
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=
 COMPANY_NAME=
 
 WHATSAPP_ACCESS_TOKEN=
