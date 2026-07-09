@@ -22,19 +22,32 @@ const AVAILABILITY_MAP = {
   '60 days notice period': '60_days',
 };
 
+// A checkbox-type form question (multi-select) comes back from Apps Script
+// as an array rather than a single string — every schema field here is a
+// plain string, so any array-valued answer is joined rather than left to
+// crash Mongoose's cast on write. Applies regardless of whether the live
+// form's question type matches what it was originally described as, since
+// that's exactly the kind of drift this mapper is meant to absorb.
+function toText(raw) {
+  if (Array.isArray(raw)) return raw.join(', ');
+  return raw;
+}
+
 function normalizeLookup(map, raw) {
-  if (!raw) return undefined;
-  const key = String(raw).trim().toLowerCase();
-  return map[key] || raw;
+  const text = toText(raw);
+  if (!text) return undefined;
+  const key = String(text).trim().toLowerCase();
+  return map[key] || text;
 }
 
 function toBoolean(raw) {
-  if (raw === undefined || raw === null || raw === '') return undefined;
-  return String(raw).trim().toLowerCase() === 'yes';
+  const text = toText(raw);
+  if (text === undefined || text === null || text === '') return undefined;
+  return String(text).trim().toLowerCase() === 'yes';
 }
 
 function splitName(fullName) {
-  const trimmed = String(fullName || '').trim();
+  const trimmed = String(toText(fullName) || '').trim();
   const [firstName, ...rest] = trimmed.split(/\s+/);
   return { firstName: firstName || trimmed, lastName: rest.join(' ') };
 }
@@ -58,22 +71,22 @@ function mapGoogleFormPayload(payload) {
   const applicantData = {
     firstName,
     lastName,
-    email: payload.email,
-    phone: payload.whatsappNumber,
-    instagramId: payload.instagramId && payload.instagramId.trim() ? payload.instagramId.trim() : 'NA',
+    email: toText(payload.email),
+    phone: toText(payload.whatsappNumber),
+    instagramId: toText(payload.instagramId) && toText(payload.instagramId).trim() ? toText(payload.instagramId).trim() : 'NA',
     experienceLevel: normalizeLookup(EXPERIENCE_MAP, payload.experienceLevel),
     hasLaptop: toBoolean(payload.hasLaptop),
     willingToRelocate: toBoolean(payload.willingToRelocate),
-    positionAppliedFor: payload.positionAppliedFor,
+    positionAppliedFor: toText(payload.positionAppliedFor),
     availability: normalizeLookup(AVAILABILITY_MAP, payload.availability),
-    howDidYouFindUs: payload.howDidYouFindUs,
-    whyJoinCompany: payload.whyJoinCompany,
-    workStylePreference: payload.workStylePreference
-      ? String(payload.workStylePreference).trim().toLowerCase()
+    howDidYouFindUs: toText(payload.howDidYouFindUs),
+    whyJoinCompany: toText(payload.whyJoinCompany),
+    workStylePreference: toText(payload.workStylePreference)
+      ? String(toText(payload.workStylePreference)).trim().toLowerCase()
       : undefined,
-    whyHireYou: payload.whyHireYou,
-    currentSalary: payload.currentSalary,
-    expectedSalary: payload.expectedSalary,
+    whyHireYou: toText(payload.whyHireYou),
+    currentSalary: toText(payload.currentSalary),
+    expectedSalary: toText(payload.expectedSalary),
     dateApplied: new Date(),
     source: APPLICANT_SOURCE.GOOGLE_FORM,
     googleFormResponseId: payload.googleFormResponseId,
