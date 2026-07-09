@@ -22,7 +22,18 @@ app.use(
     origin: [env.frontendUrl, env.salesFrontendUrl, env.followupsFrontendUrl, env.allFrontendUrl],
   })
 );
-app.use(express.json({ limit: '5mb' }));
+
+// The Google Form webhook sends resumes as base64 inside the JSON body,
+// comfortably past the 5mb default — needs its own parser instance with a
+// higher limit, applied only to that path (a second express.json() call
+// further down the chain would find the stream already consumed and reset
+// req.body to {}, so this has to be the *only* parser that path hits).
+const GOOGLE_FORM_WEBHOOK_PATH = '/api/public/applicants/google-form';
+app.use((req, res, next) => {
+  const limit = req.path === GOOGLE_FORM_WEBHOOK_PATH ? '20mb' : '5mb';
+  express.json({ limit })(req, res, next);
+});
+
 app.use(pinoHttp({ logger }));
 
 app.use('/api', routes);

@@ -31,8 +31,15 @@ export function useCreateApplicant() {
 export function useHireApplicant(id: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ selectionNotes, decisionDate }: { selectionNotes: string; decisionDate: string }) =>
-      applicantsApi.hireApplicant(id, selectionNotes, decisionDate),
+    mutationFn: ({
+      selectionNotes,
+      decisionDate,
+      startDate,
+    }: {
+      selectionNotes: string
+      decisionDate: string
+      startDate: string
+    }) => applicantsApi.hireApplicant(id, selectionNotes, decisionDate, startDate),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: APPLICANTS_KEY })
       queryClient.invalidateQueries({ queryKey: ['employees'] })
@@ -53,6 +60,23 @@ export function useDeleteApplicant() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => applicantsApi.deleteApplicant(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: APPLICANTS_KEY }),
+  })
+}
+
+export function useScheduleInterview(applicantId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ scheduledAt, notes }: { scheduledAt: string; notes?: string }) =>
+      applicantsApi.scheduleInterview(applicantId, scheduledAt, notes),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: APPLICANTS_KEY }),
+  })
+}
+
+export function useCancelInterview(applicantId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (interviewId: string) => applicantsApi.cancelInterview(applicantId, interviewId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: APPLICANTS_KEY }),
   })
 }

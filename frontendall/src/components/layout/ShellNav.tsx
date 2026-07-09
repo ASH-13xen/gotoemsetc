@@ -3,6 +3,7 @@ import { LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
+import { NotificationBell } from './NotificationBell'
 
 export function ShellNav() {
   const { user, signOut } = useAuth()
@@ -41,6 +42,7 @@ export function ShellNav() {
           </nav>
         </div>
         <div className="flex items-center gap-3">
+          <NotificationBell />
           <span className="text-xs font-semibold text-muted-foreground bg-secondary/80 px-3 py-1.5 rounded-full uppercase tracking-wider">
             {user?.username} • {user?.role}
           </span>

@@ -1,5 +1,6 @@
 const asyncHandler = require('../utils/asyncHandler');
 const applicantService = require('../services/applicant.service');
+const interviewService = require('../services/interview.service');
 
 const list = asyncHandler(async (req, res) => {
   const result = await applicantService.listApplicants(req.query);
@@ -8,11 +9,11 @@ const list = asyncHandler(async (req, res) => {
 
 const getById = asyncHandler(async (req, res) => {
   const applicant = await applicantService.getApplicant(req.params.id);
-  res.json({ applicant });
+  res.json(applicant);
 });
 
 const create = asyncHandler(async (req, res) => {
-  const applicant = await applicantService.createApplicant(req.body, req.file);
+  const applicant = await applicantService.createApplicant(req.body, req.files || []);
   res.status(201).json({ applicant });
 });
 
@@ -36,4 +37,31 @@ const reject = asyncHandler(async (req, res) => {
   res.json({ applicant });
 });
 
-module.exports = { list, getById, create, update, remove, hire, reject };
+const scheduleInterview = asyncHandler(async (req, res) => {
+  const { applicant, interview } = await interviewService.scheduleInterview(
+    req.params.id,
+    req.body,
+    req.user
+  );
+  res.status(201).json({ applicant, interview });
+});
+
+const cancelInterview = asyncHandler(async (req, res) => {
+  const { applicant, interview } = await interviewService.cancelInterview(
+    req.params.id,
+    req.params.interviewId
+  );
+  res.json({ applicant, interview });
+});
+
+module.exports = {
+  list,
+  getById,
+  create,
+  update,
+  remove,
+  hire,
+  reject,
+  scheduleInterview,
+  cancelInterview,
+};

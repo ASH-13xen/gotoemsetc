@@ -33,6 +33,7 @@ const employeeSchema = new Schema(
     lastName: { type: String, trim: true },
     personalEmail: { type: String, trim: true, lowercase: true },
     phone: { type: String, trim: true },
+    instagramId: { type: String, trim: true },
     address: addressSchema,
     dob: Date,
     gender: String,

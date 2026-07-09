@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { USER_ROLES } = require('../config/constants');
 
 function findByUsername(username) {
   return User.findOne({ username: username.toLowerCase(), isActive: true }).select('+passwordHash');
@@ -30,4 +31,17 @@ function list() {
   return User.find({ isActive: true }).sort({ username: 1 });
 }
 
-module.exports = { findByUsername, findById, findByEmployeeId, findByIdAny, create, updateById, list };
+function findAdmins() {
+  return User.find({ role: USER_ROLES.ADMIN, isActive: true });
+}
+
+module.exports = {
+  findByUsername,
+  findById,
+  findByEmployeeId,
+  findByIdAny,
+  create,
+  updateById,
+  list,
+  findAdmins,
+};

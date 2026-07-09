@@ -1,0 +1,90 @@
+# Recruitment pipeline — external service setup
+
+Everything below is a one-time setup you do outside the codebase. Once done, fill in `backend/.env` with the values noted at each step, then restart the backend.
+
+## 1. Google Form → backend webhook
+
+1. Pick (or generate) a random secret string — anything works, e.g. run `openssl rand -hex 24` or just mash the keyboard for 32+ characters. Put it in `backend/.env` as `GOOGLE_FORM_WEBHOOK_SECRET`.
+2. Open your recruitment Google Form → the **⋮** menu (top right) → **Script editor**. This opens Apps Script already bound to the form.
+3. Delete any starter code, then paste the contents of `onFormSubmit.gs` (next to this file) in.
+4. Edit the `CONFIG` object at the top:
+   - `BACKEND_URL`: your deployed backend's URL + `/api/public/applicants/google-form` (e.g. `https://ems-api.yourdomain.com/api/public/applicants/google-form`). For local testing this needs to be a URL Google's servers can reach — a plain `localhost` won't work, use a tunnel (ngrok etc.) or test against your deployed backend.
+   - `WEBHOOK_SECRET`: the exact same string you put in `GOOGLE_FORM_WEBHOOK_SECRET`.
+5. Save the script (the file icon, or Ctrl/Cmd+S). Give the project a name if asked (e.g. "Applicant intake webhook").
+6. In the left sidebar, click the clock icon (**Triggers**) → **+ Add Trigger** (bottom right):
+   - Function to run: `onFormSubmit`
+   - Event source: `From form`
+   - Event type: `On form submit`
+   - Save. The first save will prompt a Google OAuth consent screen ("This app isn't verified") — since it's your own script on your own form, click **Advanced → Go to (project name) → Allow**.
+7. Submit a test response on the live form and check **Executions** (the ▷-in-a-circle icon in the sidebar) to confirm it ran without errors, and check the applicant shows up in the EMS Applicants pipeline.
+
+If a question's title in the form is ever edited, update the matching entry in the `TITLE_TO_FIELD` map in `onFormSubmit.gs` (Script editor → save) or that answer will stop reaching the backend (it fails soft — the rest of the submission still comes through).
+
+## 2. Email — Resend
+
+1. Sign up at resend.com.
+2. Add and verify a sending domain (Resend walks you through adding a few DNS records — takes a few minutes to propagate). Until a domain is verified you can only send to your own account's email for testing.
+3. Create an API key (Resend dashboard → API Keys).
+4. Fill in `backend/.env`:
+   ```
+   RESEND_API_KEY=re_xxxxxxxx
+   RESEND_FROM_EMAIL=Recruitment <recruitment@yourdomain.com>
+   COMPANY_NAME=Your Company Name
+   ```
+
+## 3. WhatsApp — Meta Cloud API
+
+1. Create a Meta Developer app at developers.facebook.com (App type: **Business**).
+2. Add the **WhatsApp** product to the app. Meta gives you a test phone number for free to start.
+3. From the WhatsApp → API Setup page, grab:
+   - A **temporary access token** (24h — for testing) or generate a permanent one via a System User in Meta Business Suite for production.
+   - The **Phone number ID** shown on that same page.
+4. Fill in `backend/.env`:
+   ```
+   WHATSAPP_ACCESS_TOKEN=xxxxxxxx
+   WHATSAPP_PHONE_NUMBER_ID=xxxxxxxx
+   WHATSAPP_API_VERSION=v21.0
+   ```
+5. **Create the three message templates** — Meta requires every business-initiated template to be pre-approved before it can be sent (WhatsApp → Message Templates → Create Template, category **Utility**). Use exactly these names (the code references them by name) and this body text, with the variable count matching:
+
+   **Template name:** `interview_scheduled`
+   ```
+   Hi {{1}}, thank you for applying for {{2}}. We'd like to invite you for an interview, scheduled for {{3}}. We look forward to speaking with you!
+   ```
+
+   **Template name:** `applicant_hired`
+   ```
+   Congratulations {{1}}! We're delighted to offer you the position of {{2}}. Your start date is {{3}}. Why we chose you: {{4}}. Welcome to the team!
+   ```
+
+   **Template name:** `application_status_update`
+   ```
+   Hi {{1}}, thank you for applying for {{2}} and for interviewing with us. After careful consideration, we won't be moving forward at this time. Feedback: {{3}}. We wish you the best in your search.
+   ```
+
+   Submit each for review — approval is usually a few minutes to a day. Sends will silently fail (logged on the backend, but never block hiring/rejecting/scheduling) until a template is approved.
+
+## Full `.env` checklist
+
+```
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
+COMPANY_NAME=
+
+WHATSAPP_ACCESS_TOKEN=
+WHATSAPP_PHONE_NUMBER_ID=
+WHATSAPP_API_VERSION=v21.0
+
+GOOGLE_FORM_WEBHOOK_SECRET=
+```
+
+## One-off migration (existing applicants only)
+
+If you already have applicants in the database from before this change, run this once after deploying:
+
+```
+cd backend
+npm run migrate:applicant-v2
+```
+
+This updates old `applied` statuses to `pending` and moves the old single `resume` field into the new `resumes` array. Safe to run even if there's nothing to migrate.

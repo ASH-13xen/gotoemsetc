@@ -31,6 +31,10 @@ function findById(id) {
   return Applicant.findOne({ _id: id, isDeleted: false });
 }
 
+function findByGoogleFormResponseId(googleFormResponseId) {
+  return Applicant.findOne({ googleFormResponseId });
+}
+
 function create(data) {
   return Applicant.create(data);
 }
@@ -50,4 +54,11 @@ function softDeleteById(id) {
   );
 }
 
-module.exports = { list, findById, create, updateById, softDeleteById };
+module.exports = {
+  list,
+  findById,
+  findByGoogleFormResponseId,
+  create,
+  updateById,
+  softDeleteById,
+};

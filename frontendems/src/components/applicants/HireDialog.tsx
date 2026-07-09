@@ -26,6 +26,7 @@ export function HireDialog({ applicantId, trigger }: { applicantId: string; trig
   const [open, setOpen] = useState(false)
   const [selectionNotes, setSelectionNotes] = useState('')
   const [decisionDate, setDecisionDate] = useState(todayValue())
+  const [startDate, setStartDate] = useState(todayValue())
   const navigate = useNavigate()
   const hireApplicant = useHireApplicant(applicantId)
 
@@ -34,8 +35,12 @@ export function HireDialog({ applicantId, trigger }: { applicantId: string; trig
       toast.error('Please note why this applicant was selected')
       return
     }
+    if (!startDate) {
+      toast.error('Please enter a start date')
+      return
+    }
     hireApplicant.mutate(
-      { selectionNotes, decisionDate },
+      { selectionNotes, decisionDate, startDate },
       {
         onSuccess: ({ employee }) => {
           toast.success('Applicant hired — continue filling their employee details')
@@ -83,6 +88,18 @@ export function HireDialog({ applicantId, trigger }: { applicantId: string; trig
               value={decisionDate}
               onChange={(e) => setDecisionDate(e.target.value)}
             />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="startDate">Start date</Label>
+            <Input
+              id="startDate"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Sent to the applicant in the hire confirmation, and saved as their employee start date.
+            </p>
           </div>
         </div>
         <DialogFooter>

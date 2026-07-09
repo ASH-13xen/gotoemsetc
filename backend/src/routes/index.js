@@ -23,6 +23,7 @@ const holidayRoutes = require('./holiday.routes');
 const salarySlipRoutes = require('./salarySlip.routes');
 const userRoutes = require('./user.routes');
 const auditLogRoutes = require('./auditLog.routes');
+const notificationRoutes = require('./notification.routes');
 
 const router = Router();
 
@@ -53,6 +54,7 @@ router.use('/tasks', taskRoutes);
 router.use('/pipeline-log', pipelineLogRoutes);
 router.use('/holidays', holidayRoutes);
 router.use('/salary-slips', salarySlipRoutes);
+router.use('/notifications', notificationRoutes);
 router.use('/users', requireRole(USER_ROLES.ADMIN), userRoutes);
 router.use('/audit-log', requireRole(USER_ROLES.ADMIN), auditLogRoutes);
 

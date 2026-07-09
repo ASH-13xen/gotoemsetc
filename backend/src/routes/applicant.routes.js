@@ -2,6 +2,7 @@ const { Router } = require('express');
 const validate = require('../middlewares/validate.middleware');
 const resumeUpload = require('../middlewares/resumeUpload.middleware');
 const applicantValidator = require('../validators/applicant.validator');
+const interviewValidator = require('../validators/interview.validator');
 const applicantController = require('../controllers/applicant.controller');
 
 const router = Router();
@@ -9,7 +10,7 @@ const router = Router();
 router.get('/', validate(applicantValidator.list), applicantController.list);
 router.post(
   '/',
-  resumeUpload.single('resume'),
+  resumeUpload.array('resumes', 5),
   validate(applicantValidator.create),
   applicantController.create
 );
@@ -18,5 +19,15 @@ router.patch('/:id', validate(applicantValidator.update), applicantController.up
 router.delete('/:id', validate(applicantValidator.getOrDelete), applicantController.remove);
 router.post('/:id/hire', validate(applicantValidator.hire), applicantController.hire);
 router.post('/:id/reject', validate(applicantValidator.reject), applicantController.reject);
+router.post(
+  '/:id/interviews',
+  validate(interviewValidator.schedule),
+  applicantController.scheduleInterview
+);
+router.post(
+  '/:id/interviews/:interviewId/cancel',
+  validate(interviewValidator.cancel),
+  applicantController.cancelInterview
+);
 
 module.exports = router;
