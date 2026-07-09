@@ -25,6 +25,17 @@ function errorHandler(err, req, res, next) {
     return res.status(400).json({ message: `Invalid id: ${err.value}` });
   }
 
+  // Schema validation failures (bad enum value, missing required field) are
+  // a client-data problem, not a server fault — surface the field-level
+  // detail instead of a bare 500, which is otherwise the only signal you get
+  // back from something like the Google Form webhook.
+  if (err.name === 'ValidationError' && err.errors) {
+    const details = Object.fromEntries(
+      Object.entries(err.errors).map(([field, fieldErr]) => [field, fieldErr.message])
+    );
+    return res.status(400).json({ message: 'Validation failed', details });
+  }
+
   // A unique-index violation (e.g. duplicate Team name, User username) is a
   // client mistake, not a server fault, so it's a 409 rather than a 500.
   if (err.code === 11000) {

@@ -1,11 +1,5 @@
 const { Schema, model } = require('mongoose');
-const {
-  APPLICANT_STATUS,
-  APPLICANT_SOURCE,
-  EXPERIENCE_LEVELS,
-  AVAILABILITY_OPTIONS,
-  WORK_STYLE_OPTIONS,
-} = require('../config/constants');
+const { APPLICANT_STATUS, APPLICANT_SOURCE } = require('../config/constants');
 
 const resumeSchema = new Schema(
   { url: String, publicId: String, originalFilename: String },
@@ -21,16 +15,22 @@ const applicantSchema = new Schema(
     // collects, and it's what interview/hire/reject messages are sent to.
     phone: { type: String, trim: true },
     instagramId: { type: String, trim: true, default: 'NA' },
-    experienceLevel: { type: String, enum: EXPERIENCE_LEVELS },
+    // experienceLevel/availability/workStylePreference are intentionally
+    // *not* enum-restricted here (unlike the zod validator on the manual-add
+    // form, which does constrain them via a dropdown) — the Google Form
+    // webhook maps free-text answers onto these compact codes on a
+    // best-effort basis, and a wording drift on the live form must never
+    // hard-fail the whole applicant creation over one unmapped field.
+    experienceLevel: { type: String, trim: true },
     hasLaptop: { type: Boolean },
     // Covers "are you from Raipur, or willing to relocate" — true means
     // they're local or have agreed to relocate.
     willingToRelocate: { type: Boolean },
     positionAppliedFor: { type: String, trim: true },
-    availability: { type: String, enum: AVAILABILITY_OPTIONS },
+    availability: { type: String, trim: true },
     howDidYouFindUs: { type: String, trim: true },
     whyJoinCompany: { type: String, trim: true },
-    workStylePreference: { type: String, enum: WORK_STYLE_OPTIONS },
+    workStylePreference: { type: String, trim: true },
     whyHireYou: { type: String, trim: true },
     currentSalary: { type: String, trim: true },
     expectedSalary: { type: String, trim: true },
