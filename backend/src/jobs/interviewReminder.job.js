@@ -46,11 +46,17 @@ async function sendDueReminders() {
   logger.info({ count: dueInterviews.length }, 'Sent interview reminder notifications');
 }
 
-// 8am server time, daily.
+// 2pm IST, daily — pinned to Asia/Kolkata explicitly rather than relying on
+// the server's local time (Render runs in UTC), so this stays 2pm regardless
+// of where it's deployed.
 function start() {
-  cron.schedule('0 8 * * *', () => {
-    sendDueReminders().catch((err) => logger.error({ err }, 'Interview reminder job failed'));
-  });
+  cron.schedule(
+    '0 14 * * *',
+    () => {
+      sendDueReminders().catch((err) => logger.error({ err }, 'Interview reminder job failed'));
+    },
+    { timezone: 'Asia/Kolkata' }
+  );
 }
 
 module.exports = { start, sendDueReminders };

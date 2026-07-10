@@ -25,8 +25,15 @@ const extraDetailSchema = new Schema(
   { _id: false }
 );
 
+const resumeSchema = new Schema(
+  { url: String, publicId: String, originalFilename: String },
+  { _id: false }
+);
+
 const employeeSchema = new Schema(
   {
+    // Numeric-looking string, starting at 1001 — see
+    // scripts/seedEmployeeCounter.js and employee.service.js.
     employeeCode: { type: String, unique: true, sparse: true },
 
     firstName: { type: String, required: true, trim: true },
@@ -34,14 +41,20 @@ const employeeSchema = new Schema(
     personalEmail: { type: String, trim: true, lowercase: true },
     phone: { type: String, trim: true },
     instagramId: { type: String, trim: true },
-    address: addressSchema,
+    permanentAddress: addressSchema,
+    localAddress: addressSchema,
     dob: Date,
+    bloodGroup: { type: String, trim: true },
     gender: String,
     fatherName: String,
 
     designation: { type: String, required: true, trim: true },
     department: String,
     dateOfJoining: Date,
+    // Set when this record is created by hiring an applicant — the date the
+    // hire decision was made, distinct from dateOfJoining (their actual
+    // start date, which may be weeks later).
+    dateOfHiring: Date,
     employmentType: {
       type: String,
       enum: ['full-time', 'part-time', 'contract', 'intern'],
@@ -64,6 +77,12 @@ const employeeSchema = new Schema(
     aadharNumber: String,
     extraDetails: [extraDetailSchema],
 
+    // Onboarding checklist — plain manual checkboxes, ticked off by HR.
+    biometricVerificationAdded: { type: Boolean, default: false },
+    companyLoginAdded: { type: Boolean, default: false },
+    officePhoneAdded: { type: Boolean, default: false },
+    personalPhoneAdded: { type: Boolean, default: false },
+
     status: {
       type: String,
       enum: Object.values(EMPLOYEE_STATUS),
@@ -73,6 +92,26 @@ const employeeSchema = new Schema(
 
     // Set when this employee record was auto-created by hiring an applicant.
     sourceApplicant: { type: Schema.Types.ObjectId, ref: 'Applicant' },
+
+    // Everything below is carried over from the Applicant record at hire
+    // time (see applicant.service.js#hireApplicant) — kept on the Employee
+    // itself rather than only reachable via sourceApplicant, so the original
+    // application context survives even if the Applicant record is ever
+    // pruned.
+    experienceLevel: { type: String, trim: true },
+    hasLaptop: { type: Boolean },
+    willingToRelocate: { type: Boolean },
+    availability: { type: String, trim: true },
+    howDidYouFindUs: { type: String, trim: true },
+    whyJoinCompany: { type: String, trim: true },
+    workStylePreference: { type: String, trim: true },
+    whyHireYou: { type: String, trim: true },
+    currentSalary: { type: String, trim: true },
+    expectedSalary: { type: String, trim: true },
+    resumes: [resumeSchema],
+    // Why they were selected — filled in on the Hire dialog in Applicants,
+    // copied here so it's visible on the employee record too.
+    selectionNotes: String,
   },
   { timestamps: true }
 );

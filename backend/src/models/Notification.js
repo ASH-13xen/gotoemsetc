@@ -9,6 +9,7 @@ const notificationSchema = new Schema(
     message: { type: String, required: true, trim: true },
     applicant: { type: Schema.Types.ObjectId, ref: 'Applicant' },
     interview: { type: Schema.Types.ObjectId, ref: 'Interview' },
+    employee: { type: Schema.Types.ObjectId, ref: 'Employee' },
     isRead: { type: Boolean, default: false },
   },
   { timestamps: true }

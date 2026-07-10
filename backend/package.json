@@ -8,7 +8,8 @@
     "dev": "nodemon src/server.js",
     "seed:templates": "node scripts/seedTemplates.js",
     "seed:users": "node scripts/seedUsers.js",
-    "migrate:applicant-v2": "node scripts/migrateApplicantSchemaV2.js"
+    "migrate:applicant-v2": "node scripts/migrateApplicantSchemaV2.js",
+    "seed:employee-counter": "node scripts/seedEmployeeCounter.js"
   },
   "keywords": [],
   "author": "",
@@ -27,7 +28,6 @@
     "mongoose": "^9.7.3",
     "multer": "^2.2.0",
     "node-cron": "^3.0.3",
-    "nodemailer": "^6.10.1",
     "pdf-lib": "^1.17.1",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",

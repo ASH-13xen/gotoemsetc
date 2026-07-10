@@ -20,25 +20,25 @@ Everything below is a one-time setup you do outside the codebase. Once done, fil
 
 If a question's title in the form is ever edited, update the matching entry in the `TITLE_TO_FIELD` map in `onFormSubmit.gs` (Script editor → save) or that answer will stop reaching the backend (it fails soft — the rest of the submission still comes through).
 
-## 2. Email — Gmail SMTP
+## 2. Email — Resend
 
-Sends through a real Gmail account using an **App Password** (not your normal Gmail password — Google blocks plain-password SMTP login).
+Sends over plain HTTPS to Resend's API — deliberately *not* SMTP, since Render (and most PaaS hosts) block outbound SMTP ports platform-wide to combat spam abuse. An HTTPS API call never hits that block, which is why this is the reliable option for a deployed backend (Gmail SMTP was tried first and does time out from Render, even with correct credentials — confirmed by testing).
 
-1. The Google account you're sending from must have **2-Step Verification** turned on (myaccount.google.com/security → 2-Step Verification). App Passwords aren't offered until this is enabled.
-2. Go to **myaccount.google.com/apppasswords**.
-3. Create a new app password — App: **Mail**, Device: **Other (Custom name)**, name it e.g. "EMS Backend". Click **Generate**.
-4. Copy the 16-character password shown (spaces don't matter — you can paste it with or without them).
-5. Fill in `backend/.env`:
+**To start testing today, no domain needed:**
+1. Sign up at resend.com.
+2. Create an API key (dashboard → API Keys).
+3. Fill in `backend/.env`:
    ```
-   SMTP_HOST=smtp.gmail.com
-   SMTP_PORT=465
-   SMTP_USER=youraddress@gmail.com
-   SMTP_PASS=the16charapppassword
-   SMTP_FROM=Recruitment <youraddress@gmail.com>
+   RESEND_API_KEY=re_xxxxxxxx
+   RESEND_FROM_EMAIL=Recruitment <onboarding@resend.com>
    COMPANY_NAME=Your Company Name
    ```
+   `onboarding@resend.com` is Resend's built-in sandbox sender — works immediately, no setup. **Limitation**: in this mode Resend will only actually deliver to the email address you signed up to Resend with — fine for testing the integration end-to-end, not for real applicants yet.
 
-Gmail SMTP has a sending cap (~500/day on a regular account) — plenty for a recruitment pipeline, but worth knowing if volume ever grows.
+**When ready for real applicants, verify a domain:**
+1. resend.com → **Domains** → **Add Domain**.
+2. Add the few DNS records it gives you (TXT/MX) wherever your domain's DNS is managed — takes minutes to a few hours to propagate.
+3. Once it shows verified, change `RESEND_FROM_EMAIL` to something like `Recruitment <recruitment@yourdomain.com>` — nothing else changes, same API key, same code.
 
 ## 3. WhatsApp — Meta Cloud API
 
@@ -82,11 +82,8 @@ Gmail SMTP has a sending cap (~500/day on a regular account) — plenty for a re
 ## Full `.env` checklist
 
 ```
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_USER=
-SMTP_PASS=
-SMTP_FROM=
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=Recruitment <onboarding@resend.com>
 COMPANY_NAME=
 
 WHATSAPP_ACCESS_TOKEN=

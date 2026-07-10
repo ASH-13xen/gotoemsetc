@@ -1,7 +1,10 @@
 import { apiClient } from './client'
+import type { Availability, ExperienceLevel, Resume, WorkStyle } from './applicants.api'
 
 export type EmploymentType = 'full-time' | 'part-time' | 'contract' | 'intern'
 export type EmployeeStatus = 'draft' | 'active' | 'offboarded'
+
+export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const
 
 export interface Address {
   line1?: string
@@ -29,13 +32,17 @@ export interface Employee {
   lastName?: string
   personalEmail?: string
   phone?: string
-  address?: Address
+  instagramId?: string
+  permanentAddress?: Address
+  localAddress?: Address
   dob?: string
+  bloodGroup?: string
   gender?: string
   fatherName?: string
   designation: string
   department?: string
   dateOfJoining?: string
+  dateOfHiring?: string
   employmentType: EmploymentType
   reportingManager?: string
   workLocation?: string
@@ -49,6 +56,28 @@ export interface Employee {
   panNumber?: string
   aadharNumber?: string
   extraDetails?: ExtraDetail[]
+
+  biometricVerificationAdded?: boolean
+  companyLoginAdded?: boolean
+  officePhoneAdded?: boolean
+  personalPhoneAdded?: boolean
+
+  // Carried over from the application at hire time — present only on
+  // employees created by hiring an applicant (sourceApplicant set).
+  sourceApplicant?: string
+  experienceLevel?: ExperienceLevel
+  hasLaptop?: boolean
+  willingToRelocate?: boolean
+  availability?: Availability
+  howDidYouFindUs?: string
+  whyJoinCompany?: string
+  workStylePreference?: WorkStyle
+  whyHireYou?: string
+  currentSalary?: string
+  expectedSalary?: string
+  resumes?: Resume[]
+  selectionNotes?: string
+
   status: EmployeeStatus
   createdAt: string
   updatedAt: string

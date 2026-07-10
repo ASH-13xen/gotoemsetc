@@ -90,6 +90,21 @@ async function hireApplicant(id, { selectionNotes, decisionDate, startDate }) {
     instagramId: applicant.instagramId,
     designation: applicant.positionAppliedFor || 'TBD',
     dateOfJoining: startDate,
+    dateOfHiring: decisionDate,
+    // Everything below is carried over from the application so it isn't
+    // only reachable via sourceApplicant — see Employee.js for why.
+    experienceLevel: applicant.experienceLevel,
+    hasLaptop: applicant.hasLaptop,
+    willingToRelocate: applicant.willingToRelocate,
+    availability: applicant.availability,
+    howDidYouFindUs: applicant.howDidYouFindUs,
+    whyJoinCompany: applicant.whyJoinCompany,
+    workStylePreference: applicant.workStylePreference,
+    whyHireYou: applicant.whyHireYou,
+    currentSalary: applicant.currentSalary,
+    expectedSalary: applicant.expectedSalary,
+    resumes: applicant.resumes,
+    selectionNotes,
   });
   await employeeRepository.updateById(employee._id, { sourceApplicant: applicant._id });
 

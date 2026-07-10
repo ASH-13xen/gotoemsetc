@@ -13,10 +13,23 @@ async function getEmployee(id) {
   return employee;
 }
 
+// Every new employee starts with these two placeholder rows in Extra
+// Details — HR fills the actual values in manually once the company
+// mailbox is set up, rather than leaving the section empty with no hint
+// that it's still outstanding.
+const DEFAULT_EXTRA_DETAILS = [
+  { key: 'COMPANY MAIL ID', value: '' },
+  { key: 'COMPANY MAIL PASSWORD', value: '' },
+];
+
 async function createEmployee(data) {
+  // Plain incrementing number, starting at 1001 — see
+  // scripts/seedEmployeeCounter.js, which seeds the counter to 1000 so the
+  // first call here returns 1001.
   const seq = await counterRepository.nextSequence('employeeCode');
-  const employeeCode = `EMS-${String(seq).padStart(4, '0')}`;
-  const employee = await employeeRepository.create({ ...data, employeeCode });
+  const employeeCode = String(seq);
+  const extraDetails = data.extraDetails?.length ? data.extraDetails : DEFAULT_EXTRA_DETAILS;
+  const employee = await employeeRepository.create({ ...data, employeeCode, extraDetails });
   await activityService.log(employee._id, 'EMPLOYEE_CREATED', { employeeCode });
   return employee;
 }

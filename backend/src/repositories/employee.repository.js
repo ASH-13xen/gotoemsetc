@@ -1,4 +1,5 @@
 const Employee = require('../models/Employee');
+const { EMPLOYEE_STATUS } = require('../config/constants');
 
 function listQuery({ search, status }) {
   const query = { isDeleted: false };
@@ -36,6 +37,14 @@ function count() {
   return Employee.countDocuments({ isDeleted: false });
 }
 
+// Unpaginated — used by the birthday reminder cron job, which needs to scan
+// every active employee with a recorded date of birth once a day. Excludes
+// offboarded (and draft) employees on purpose — no birthday pings for
+// someone who no longer works here.
+function listAllWithDob() {
+  return Employee.find({ isDeleted: false, status: EMPLOYEE_STATUS.ACTIVE, dob: { $ne: null } });
+}
+
 function create(data) {
   return Employee.create(data);
 }
@@ -55,4 +64,4 @@ function softDeleteById(id) {
   );
 }
 
-module.exports = { list, findById, create, updateById, softDeleteById, count };
+module.exports = { list, findById, create, updateById, softDeleteById, count, listAllWithDob };

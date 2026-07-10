@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const { BLOOD_GROUPS } = require('../config/constants');
 
 const addressSchema = z
   .object({
@@ -29,14 +30,18 @@ const mutableFields = {
   lastName: z.string().optional(),
   personalEmail: z.string().email().optional().or(z.literal('')),
   phone: z.string().optional(),
-  address: addressSchema.optional(),
+  instagramId: z.string().optional(),
+  permanentAddress: addressSchema.optional(),
+  localAddress: addressSchema.optional(),
   dob: z.coerce.date().optional(),
+  bloodGroup: z.enum(BLOOD_GROUPS).optional(),
   gender: z.string().optional(),
   fatherName: z.string().optional(),
 
   designation: z.string().min(1),
   department: z.string().optional(),
   dateOfJoining: z.coerce.date().optional(),
+  dateOfHiring: z.coerce.date().optional(),
   employmentType: employmentTypeEnum.optional(),
   reportingManager: z.string().optional(),
   workLocation: z.string().optional(),
@@ -51,6 +56,26 @@ const mutableFields = {
   aadharNumber: z.string().optional(),
   extraDetails: z.array(extraDetailSchema).optional(),
 
+  // Onboarding checklist.
+  biometricVerificationAdded: z.boolean().optional(),
+  companyLoginAdded: z.boolean().optional(),
+  officePhoneAdded: z.boolean().optional(),
+  personalPhoneAdded: z.boolean().optional(),
+
+  // Carried over from the application at hire time — editable here too in
+  // case HR needs to correct something after the fact.
+  experienceLevel: z.string().optional(),
+  hasLaptop: z.boolean().optional(),
+  willingToRelocate: z.boolean().optional(),
+  availability: z.string().optional(),
+  howDidYouFindUs: z.string().optional(),
+  whyJoinCompany: z.string().optional(),
+  workStylePreference: z.string().optional(),
+  whyHireYou: z.string().optional(),
+  currentSalary: z.string().optional(),
+  expectedSalary: z.string().optional(),
+  selectionNotes: z.string().optional(),
+
   status: statusEnum.optional(),
 };
 
@@ -62,13 +87,17 @@ const create = {
     lastName: true,
     personalEmail: true,
     phone: true,
-    address: true,
+    instagramId: true,
+    permanentAddress: true,
+    localAddress: true,
     dob: true,
+    bloodGroup: true,
     gender: true,
     fatherName: true,
     designation: true,
     department: true,
     dateOfJoining: true,
+    dateOfHiring: true,
     employmentType: true,
     reportingManager: true,
     workLocation: true,
@@ -81,6 +110,10 @@ const create = {
     panNumber: true,
     aadharNumber: true,
     extraDetails: true,
+    biometricVerificationAdded: true,
+    companyLoginAdded: true,
+    officePhoneAdded: true,
+    personalPhoneAdded: true,
   }),
 };
 

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Controller, useFieldArray, useForm } from 'react-hook-form'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -27,19 +28,33 @@ import { ActivityTimeline } from '@/components/employees/ActivityTimeline'
 import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummaryCard'
 import { useAuth } from '@/hooks/useAuth'
 import { useDeleteEmployee, useEmployee, useUpdateEmployee } from '@/hooks/useEmployees'
-import type { Employee, EmployeeStatus, EmploymentType } from '@/api/employees.api'
+import { BLOOD_GROUPS, type Address, type Employee, type EmployeeStatus, type EmploymentType } from '@/api/employees.api'
+
+type AddressForm = {
+  line1: string
+  line2: string
+  city: string
+  state: string
+  pincode: string
+  country: string
+}
 
 type FormValues = {
   firstName: string
   lastName: string
   personalEmail: string
   phone: string
-  address: string
+  instagramId: string
+  permanentAddress: AddressForm
+  localAddress: AddressForm
+  dob: string
+  bloodGroup: string
   designation: string
   department: string
   reportingManager: string
   workLocation: string
   dateOfJoining: string
+  dateOfHiring: string
   employmentType: EmploymentType
   status: EmployeeStatus
   ctcAnnual: string
@@ -50,6 +65,10 @@ type FormValues = {
   bankAccountNumber: string
   bankIFSC: string
   payDate: string
+  biometricVerificationAdded: boolean
+  companyLoginAdded: boolean
+  officePhoneAdded: boolean
+  personalPhoneAdded: boolean
   extraDetails: { key: string; value: string }[]
 }
 
@@ -60,18 +79,38 @@ function toDateInputValue(value: string | undefined): string {
   return date.toISOString().slice(0, 10)
 }
 
+function toAddressForm(address: Address | undefined): AddressForm {
+  return {
+    line1: address?.line1 ?? '',
+    line2: address?.line2 ?? '',
+    city: address?.city ?? '',
+    state: address?.state ?? '',
+    pincode: address?.pincode ?? '',
+    country: address?.country ?? '',
+  }
+}
+
+function addressesEqual(a: AddressForm, b: AddressForm): boolean {
+  return a.line1 === b.line1 && a.line2 === b.line2 && a.city === b.city && a.state === b.state && a.pincode === b.pincode && a.country === b.country
+}
+
 function toFormValues(employee: Employee): FormValues {
   return {
     firstName: employee.firstName ?? '',
     lastName: employee.lastName ?? '',
     personalEmail: employee.personalEmail ?? '',
     phone: employee.phone ?? '',
-    address: employee.address?.line1 ?? '',
+    instagramId: employee.instagramId ?? '',
+    permanentAddress: toAddressForm(employee.permanentAddress),
+    localAddress: toAddressForm(employee.localAddress),
+    dob: toDateInputValue(employee.dob),
+    bloodGroup: employee.bloodGroup ?? '',
     designation: employee.designation ?? '',
     department: employee.department ?? '',
     reportingManager: employee.reportingManager ?? '',
     workLocation: employee.workLocation ?? '',
     dateOfJoining: toDateInputValue(employee.dateOfJoining),
+    dateOfHiring: toDateInputValue(employee.dateOfHiring),
     employmentType: employee.employmentType ?? 'full-time',
     status: employee.status ?? 'draft',
     ctcAnnual: employee.ctcAnnual != null ? String(employee.ctcAnnual) : '',
@@ -82,8 +121,43 @@ function toFormValues(employee: Employee): FormValues {
     bankAccountNumber: employee.bankAccountNumber ?? '',
     bankIFSC: employee.bankIFSC ?? '',
     payDate: employee.payDate != null ? String(employee.payDate) : '',
+    biometricVerificationAdded: employee.biometricVerificationAdded ?? false,
+    companyLoginAdded: employee.companyLoginAdded ?? false,
+    officePhoneAdded: employee.officePhoneAdded ?? false,
+    personalPhoneAdded: employee.personalPhoneAdded ?? false,
     extraDetails: (employee.extraDetails ?? []).map((d) => ({ key: d.key, value: d.value ?? '' })),
   }
+}
+
+function Field({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="border-b-2 border-neutral-900 pb-3">
+      <p className="text-xs font-black uppercase tracking-widest text-neutral-400">{label}</p>
+      <p className="text-base font-bold text-white mt-1 uppercase tracking-wide">{value || '—'}</p>
+    </div>
+  )
+}
+
+function CheckboxRow({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string
+  checked: boolean
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <label className="flex items-center gap-3 cursor-pointer select-none">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="size-5 shrink-0 border-2 border-white bg-neutral-900 accent-emerald-500 cursor-pointer"
+      />
+      <span className="text-sm font-bold uppercase tracking-wide text-white">{label}</span>
+    </label>
+  )
 }
 
 export default function EmployeeDetailPage() {
@@ -113,10 +187,20 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   const updateEmployee = useUpdateEmployee(employeeId)
   const deleteEmployee = useDeleteEmployee()
 
-  const { register, handleSubmit, control } = useForm<FormValues>({
+  const { register, handleSubmit, control, watch, setValue } = useForm<FormValues>({
     defaultValues: toFormValues(employee),
   })
   const extraDetails = useFieldArray({ control, name: 'extraDetails' })
+
+  const permanentAddress = watch('permanentAddress')
+  const [sameAsPermanent, setSameAsPermanent] = useState(() => addressesEqual(toFormValues(employee).permanentAddress, toFormValues(employee).localAddress))
+
+  const onToggleSameAsPermanent = (checked: boolean) => {
+    setSameAsPermanent(checked)
+    if (checked) {
+      setValue('localAddress', permanentAddress)
+    }
+  }
 
   const onSubmit = (values: FormValues) => {
     updateEmployee.mutate(
@@ -125,8 +209,11 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         ctcAnnual: values.ctcAnnual ? Number(values.ctcAnnual) : undefined,
         monthlyPay: values.monthlyPay ? Number(values.monthlyPay) : undefined,
         payDate: values.payDate ? Number(values.payDate) : undefined,
+        dob: values.dob || undefined,
         dateOfJoining: values.dateOfJoining || undefined,
-        address: values.address ? { line1: values.address } : undefined,
+        dateOfHiring: values.dateOfHiring || undefined,
+        permanentAddress: values.permanentAddress,
+        localAddress: sameAsPermanent ? values.permanentAddress : values.localAddress,
         extraDetails: values.extraDetails?.filter((d) => d.key.trim().length > 0),
       },
       {
@@ -153,7 +240,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         {/* HERO DETAIL HEADER */}
         <div className="grid grid-cols-1 md:grid-cols-3 border-2 border-white bg-black">
           {/* Identity Tile */}
-          <div className="md:col-span-2 border-b-2 md:border-b-0 md:border-r-2 border-white p-8 flex flex-col justify-between min-h-[220px]">
+          <div className="md:col-span-2 border-b-2 md:border-b-0 md:border-r-2 border-white p-8 flex flex-col justify-between min-h-55">
             <div className="flex flex-col gap-2">
               <span className="text-xs font-black tracking-widest text-neutral-400 uppercase">EMPLOYEE PROFILE</span>
               <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tighter text-white">
@@ -171,7 +258,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
             {/* Back Button */}
             <div
               onClick={() => navigate('/')}
-              className="bg-primary text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-[100px]"
+              className="bg-primary text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-25"
             >
               <span className="text-xs font-black tracking-widest opacity-80 uppercase">NAVIGATION</span>
               <span className="text-2xl font-extrabold uppercase tracking-wide">BACK TO PORTAL</span>
@@ -180,7 +267,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
             {/* Generate Documents */}
             <div
               onClick={() => navigate(`/employees/${employeeId}/wizard`)}
-              className="bg-blue-700 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-[100px]"
+              className="bg-blue-700 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-25"
             >
               <span className="text-xs font-black tracking-widest opacity-80 uppercase">DOCUMENT SYSTEM</span>
               <span className="text-2xl font-extrabold uppercase tracking-wide">GENERATE DOCS</span>
@@ -191,7 +278,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
               employeeId={employeeId}
               trigger={
                 <div
-                  className="bg-neutral-800 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-[100px]"
+                  className="bg-neutral-800 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-25"
                 >
                   <span className="text-xs font-black tracking-widest opacity-80 uppercase">HR COLLECTION</span>
                   <span className="text-2xl font-extrabold uppercase tracking-wide">REQUEST FILES</span>
@@ -205,7 +292,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 employeeId={employeeId}
                 employeeName={`${employee.firstName} ${employee.lastName ?? ''}`}
                 trigger={
-                  <div className="bg-purple-800 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-[100px]">
+                  <div className="bg-purple-800 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-25">
                     <span className="text-xs font-black tracking-widest opacity-80 uppercase">PLATFORM ACCESS</span>
                     <span className="text-2xl font-extrabold uppercase tracking-wide">ADD CREDENTIALS</span>
                   </div>
@@ -219,7 +306,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 employeeId={employeeId}
                 employeeName={`${employee.firstName} ${employee.lastName ?? ''}`}
                 trigger={
-                  <div className="bg-emerald-800 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-[100px]">
+                  <div className="bg-emerald-800 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-25">
                     <span className="text-xs font-black tracking-widest opacity-80 uppercase">PAYROLL</span>
                     <span className="text-2xl font-extrabold uppercase tracking-wide">GENERATE SALARY SLIP</span>
                   </div>
@@ -255,8 +342,33 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   <Input id="phone" {...register('phone')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="address" className="text-xs font-black uppercase tracking-widest text-neutral-400">ADDRESS</Label>
-                  <Textarea id="address" {...register('address')} className="bg-neutral-900 border-white text-white rounded-none" />
+                  <Label htmlFor="instagramId" className="text-xs font-black uppercase tracking-widest text-neutral-400">INSTAGRAM ID</Label>
+                  <Input id="instagramId" {...register('instagramId')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="dob" className="text-xs font-black uppercase tracking-widest text-neutral-400">DATE OF BIRTH</Label>
+                    <Input id="dob" type="date" {...register('dob')} className="bg-neutral-900 border-white text-white rounded-none" />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs font-black uppercase tracking-widest text-neutral-400">BLOOD GROUP</Label>
+                    <Controller
+                      control={control}
+                      name="bloodGroup"
+                      render={({ field }) => (
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger className="bg-neutral-900 border-white text-white rounded-none">
+                            <SelectValue placeholder="SELECT" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-black border-white text-white rounded-none">
+                            {BLOOD_GROUPS.map((bg) => (
+                              <SelectItem key={bg} value={bg}>{bg}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -283,9 +395,15 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   <Label htmlFor="workLocation" className="text-xs font-black uppercase tracking-widest text-neutral-400">WORK LOCATION</Label>
                   <Input id="workLocation" {...register('workLocation')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
                 </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="dateOfJoining" className="text-xs font-black uppercase tracking-widest text-neutral-400">DATE OF JOINING</Label>
-                  <Input id="dateOfJoining" type="date" {...register('dateOfJoining')} className="bg-neutral-900 border-white text-white rounded-none" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="dateOfHiring" className="text-xs font-black uppercase tracking-widest text-neutral-400">DATE OF HIRING</Label>
+                    <Input id="dateOfHiring" type="date" {...register('dateOfHiring')} className="bg-neutral-900 border-white text-white rounded-none" />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="dateOfJoining" className="text-xs font-black uppercase tracking-widest text-neutral-400">DATE OF JOINING</Label>
+                    <Input id="dateOfJoining" type="date" {...register('dateOfJoining')} className="bg-neutral-900 border-white text-white rounded-none" />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-1.5">
@@ -329,6 +447,125 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Addresses */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="border-2 border-white bg-black p-6 space-y-4">
+              <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-white pb-3 text-white">
+                PERMANENT ADDRESS
+              </h2>
+              <div className="grid grid-cols-1 gap-4">
+                <Textarea {...register('permanentAddress.line1')} placeholder="ADDRESS LINE 1" className="bg-neutral-900 border-white text-white rounded-none" />
+                <Input {...register('permanentAddress.line2')} placeholder="ADDRESS LINE 2" className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                <div className="grid grid-cols-2 gap-4">
+                  <Input {...register('permanentAddress.city')} placeholder="CITY" className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Input {...register('permanentAddress.state')} placeholder="STATE" className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <Input {...register('permanentAddress.pincode')} placeholder="PINCODE" className="bg-neutral-900 border-white text-white rounded-none" />
+                  <Input {...register('permanentAddress.country')} placeholder="COUNTRY" className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                </div>
+              </div>
+            </div>
+
+            <div className="border-2 border-white bg-black p-6 space-y-4">
+              <div className="flex items-center justify-between border-b-2 border-white pb-3 flex-wrap gap-2">
+                <h2 className="text-2xl font-black uppercase tracking-widest text-white">
+                  LOCAL ADDRESS
+                </h2>
+                <CheckboxRow
+                  label="SAME AS PERMANENT?"
+                  checked={sameAsPermanent}
+                  onChange={onToggleSameAsPermanent}
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                <Textarea
+                  {...register('localAddress.line1')}
+                  placeholder="ADDRESS LINE 1"
+                  disabled={sameAsPermanent}
+                  value={sameAsPermanent ? permanentAddress?.line1 : undefined}
+                  className="bg-neutral-900 border-white text-white rounded-none disabled:opacity-50"
+                />
+                <Input
+                  {...register('localAddress.line2')}
+                  placeholder="ADDRESS LINE 2"
+                  disabled={sameAsPermanent}
+                  value={sameAsPermanent ? permanentAddress?.line2 : undefined}
+                  className="bg-neutral-900 border-white text-white rounded-none uppercase disabled:opacity-50"
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    {...register('localAddress.city')}
+                    placeholder="CITY"
+                    disabled={sameAsPermanent}
+                    value={sameAsPermanent ? permanentAddress?.city : undefined}
+                    className="bg-neutral-900 border-white text-white rounded-none uppercase disabled:opacity-50"
+                  />
+                  <Input
+                    {...register('localAddress.state')}
+                    placeholder="STATE"
+                    disabled={sameAsPermanent}
+                    value={sameAsPermanent ? permanentAddress?.state : undefined}
+                    className="bg-neutral-900 border-white text-white rounded-none uppercase disabled:opacity-50"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <Input
+                    {...register('localAddress.pincode')}
+                    placeholder="PINCODE"
+                    disabled={sameAsPermanent}
+                    value={sameAsPermanent ? permanentAddress?.pincode : undefined}
+                    className="bg-neutral-900 border-white text-white rounded-none disabled:opacity-50"
+                  />
+                  <Input
+                    {...register('localAddress.country')}
+                    placeholder="COUNTRY"
+                    disabled={sameAsPermanent}
+                    value={sameAsPermanent ? permanentAddress?.country : undefined}
+                    className="bg-neutral-900 border-white text-white rounded-none uppercase disabled:opacity-50"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Onboarding Checklist */}
+          <div className="border-2 border-white bg-black p-6 space-y-6">
+            <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-white pb-3 text-white">
+              ONBOARDING CHECKLIST
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Controller
+                control={control}
+                name="biometricVerificationAdded"
+                render={({ field }) => (
+                  <CheckboxRow label="BIOMETRIC VERIFICATION ADDED" checked={field.value} onChange={field.onChange} />
+                )}
+              />
+              <Controller
+                control={control}
+                name="companyLoginAdded"
+                render={({ field }) => (
+                  <CheckboxRow label={`GOTOFRIEND_${employee.employeeCode} LOG IN?`} checked={field.value} onChange={field.onChange} />
+                )}
+              />
+              <Controller
+                control={control}
+                name="officePhoneAdded"
+                render={({ field }) => (
+                  <CheckboxRow label="GOTO OFFICE PHONE NUMBER ADDED?" checked={field.value} onChange={field.onChange} />
+                )}
+              />
+              <Controller
+                control={control}
+                name="personalPhoneAdded"
+                render={({ field }) => (
+                  <CheckboxRow label="GOTO PERSONAL PHONE NUMBER ADDED?" checked={field.value} onChange={field.onChange} />
+                )}
+              />
             </div>
           </div>
 
@@ -439,6 +676,48 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
             </Button>
           </div>
         </form>
+
+        {/* Recruitment Details — carried over from the application, only present on employees hired through the pipeline */}
+        {employee.sourceApplicant && (
+          <div className="border-2 border-white bg-black p-6 space-y-6">
+            <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-white pb-3 text-white">
+              RECRUITMENT DETAILS
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Field label="Experience" value={employee.experienceLevel} />
+              <Field label="Availability at application" value={employee.availability} />
+              <Field label="Own laptop?" value={employee.hasLaptop === undefined ? undefined : employee.hasLaptop ? 'Yes' : 'No'} />
+              <Field label="Was willing to relocate?" value={employee.willingToRelocate === undefined ? undefined : employee.willingToRelocate ? 'Yes' : 'No'} />
+              <Field label="How they found us" value={employee.howDidYouFindUs} />
+              <Field label="Work style preference" value={employee.workStylePreference} />
+              <Field label="Salary at time of application" value={employee.currentSalary} />
+              <Field label="Expected salary" value={employee.expectedSalary} />
+            </div>
+            <div className="grid grid-cols-1 gap-6">
+              <Field label="Why they wanted to join" value={employee.whyJoinCompany} />
+              <Field label="Why they were hired" value={employee.whyHireYou} />
+              <Field label="Why they were selected" value={employee.selectionNotes} />
+            </div>
+            {employee.resumes && employee.resumes.length > 0 && (
+              <div className="pt-2">
+                <p className="text-xs font-black uppercase tracking-widest text-neutral-400 mb-2">RESUME FILE(S)</p>
+                <div className="flex flex-wrap gap-3">
+                  {employee.resumes.map((resume, i) => (
+                    <a
+                      key={i}
+                      href={resume.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex h-12 items-center gap-2 border-2 border-white bg-transparent px-4 font-bold uppercase tracking-wider text-white hover:bg-white hover:text-black transition-colors"
+                    >
+                      {resume.originalFilename || `RESUME ${i + 1}`}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mt-8 grid gap-8">
           <AttendanceSummaryCard employeeId={employeeId} />

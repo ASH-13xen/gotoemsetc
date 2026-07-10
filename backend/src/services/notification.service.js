@@ -5,13 +5,13 @@ const logger = require('../utils/logger');
 // Best-effort, same convention as activity.service.js — a failure to write
 // an in-app notification must never break the interview/hire/reject action
 // that triggered it.
-async function createForUsers(userIds, { type, title, message, applicant, interview }) {
+async function createForUsers(userIds, { type, title, message, applicant, interview, employee }) {
   const uniqueIds = [...new Set(userIds.map((id) => id.toString()))];
   if (uniqueIds.length === 0) return;
 
   try {
     await notificationRepository.createMany(
-      uniqueIds.map((recipient) => ({ recipient, type, title, message, applicant, interview }))
+      uniqueIds.map((recipient) => ({ recipient, type, title, message, applicant, interview, employee }))
     );
   } catch (err) {
     logger.error({ err, type, userIds: uniqueIds }, 'Failed to create notifications');

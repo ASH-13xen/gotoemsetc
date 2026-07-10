@@ -1,6 +1,10 @@
 import { apiClient } from './client'
 
-export type NotificationType = 'interview_scheduled' | 'interview_reminder'
+export type NotificationType =
+  | 'interview_scheduled'
+  | 'interview_reminder'
+  | 'birthday_upcoming'
+  | 'birthday_today'
 
 export interface AppNotification {
   _id: string
@@ -9,6 +13,7 @@ export interface AppNotification {
   message: string
   applicant?: string
   interview?: string
+  employee?: string
   isRead: boolean
   createdAt: string
 }

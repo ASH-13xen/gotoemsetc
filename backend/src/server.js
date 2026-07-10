@@ -3,10 +3,12 @@ const env = require('./config/env');
 const connectDb = require('./config/db');
 const logger = require('./utils/logger');
 const interviewReminderJob = require('./jobs/interviewReminder.job');
+const birthdayReminderJob = require('./jobs/birthdayReminder.job');
 
 async function main() {
   await connectDb();
   interviewReminderJob.start();
+  birthdayReminderJob.start();
   app.listen(env.port, () => {
     logger.info(`EMS backend listening on port ${env.port}`);
   });
