@@ -53,17 +53,7 @@ Sends over plain HTTPS to Resend's API — deliberately *not* SMTP, since Render
    WHATSAPP_PHONE_NUMBER_ID=xxxxxxxx
    WHATSAPP_API_VERSION=v21.0
    ```
-5. **Create the four message templates** — Meta requires every business-initiated template to be pre-approved before it can be sent (WhatsApp → Message Templates → Create Template, category **Utility**). Use exactly these names (the code references them by name) and this body text, with the variable count matching:
-
-   **Template name:** `interview_scheduled`
-   ```
-   Hi {{1}}, thank you for applying for {{2}}. We'd like to invite you for an interview, scheduled for {{3}}. We look forward to speaking with you!
-   ```
-
-   **Template name:** `interview_rescheduled`
-   ```
-   Hi {{1}}, your interview for {{2}} has been rescheduled. The new date and time is {{3}}. We apologize for any inconvenience and look forward to speaking with you then.
-   ```
+5. **Create these two message templates** — Meta requires every business-initiated template to be pre-approved before it can be sent (WhatsApp → Message Templates → Create Template, category **Utility**). Use exactly these names (the code references them by name) and this body text, with the variable count matching:
 
    **Template name:** `applicant_hired`
    ```
@@ -75,9 +65,9 @@ Sends over plain HTTPS to Resend's API — deliberately *not* SMTP, since Render
    Hi {{1}}, thank you for applying for {{2}} and for interviewing with us. After careful consideration, we won't be moving forward at this time. Feedback: {{3}}. We wish you the best in your search.
    ```
 
-   Sample values for `interview_rescheduled`: `{{1}}` → `Priya Sharma`, `{{2}}` → `Video Editor`, `{{3}}` → `15 July 2026, 4:00 PM`.
+   Submit each for review — approval is usually a few minutes to a day. Sends will silently fail (logged on the backend, but never block hiring/rejecting) until a template is approved.
 
-   Submit each for review — approval is usually a few minutes to a day. Sends will silently fail (logged on the backend, but never block hiring/rejecting/scheduling) until a template is approved.
+   Only the **hire** and **reject** decisions send automatically through this API — interview scheduling/rescheduling and document requests use manual "Send Email"/"Send WhatsApp" buttons instead (they open your own Gmail/WhatsApp prefilled, no template approval needed). If you previously created `interview_scheduled` or `interview_rescheduled` templates in WhatsApp Manager, they're no longer used by the code and can be deleted.
 
 ## Full `.env` checklist
 

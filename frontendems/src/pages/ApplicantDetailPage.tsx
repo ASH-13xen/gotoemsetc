@@ -1,14 +1,17 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { Download, FileText, Loader2, CheckCircle2, XCircle, MinusCircle } from 'lucide-react'
+import { Download, FileText } from 'lucide-react'
 
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApplicantStatusBadge } from '@/components/applicants/ApplicantStatusBadge'
 import { HireDialog } from '@/components/applicants/HireDialog'
 import { RejectDialog } from '@/components/applicants/RejectDialog'
 import { ScheduleInterviewDialog } from '@/components/applicants/ScheduleInterviewDialog'
+import { ManualSendButtons } from '@/components/common/ManualSendButtons'
+import { buildGmailComposeUrl, buildWhatsappUrl } from '@/lib/manualSend'
 import { useApplicant } from '@/hooks/useApplicants'
-import type { DeliveryResult } from '@/api/applicants.api'
+import { useConfig } from '@/hooks/useConfig'
+import type { Applicant, Interview } from '@/api/applicants.api'
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
@@ -19,24 +22,21 @@ function Field({ label, value }: { label: string; value?: string | null }) {
   )
 }
 
-const DELIVERY_CONFIG = {
-  pending: { label: 'Sending…', icon: Loader2, className: 'text-amber-400 animate-spin' },
-  sent: { label: 'Sent', icon: CheckCircle2, className: 'text-emerald-400' },
-  failed: { label: 'Failed', icon: XCircle, className: 'text-red-400' },
-  skipped: { label: 'Skipped', icon: MinusCircle, className: 'text-neutral-500' },
-} as const
+function InterviewSendButtons({ applicant, interview }: { applicant: Applicant; interview: Interview }) {
+  const { data: config } = useConfig()
+  const companyName = config?.companyName ?? 'us'
+  const name = `${applicant.firstName} ${applicant.lastName || ''}`.trim()
+  const position = applicant.positionAppliedFor || 'the role'
+  const when = new Date(interview.scheduledAt).toLocaleString()
 
-function DeliveryStatusRow({ channel, result }: { channel: string; result?: DeliveryResult }) {
-  const config = DELIVERY_CONFIG[result?.status ?? 'pending']
-  const Icon = config.icon
+  const emailBody = `Hi ${name},\n\nYour interview for ${position} is scheduled for ${when}. We look forward to speaking with you.\n\nThanks,\n${companyName} HR`
+  const whatsappText = `Hi ${name}, your interview for ${position} is scheduled for ${when}. We look forward to speaking with you!`
+
   return (
-    <div className="flex items-center justify-between border-b-2 border-neutral-900 pb-3">
-      <span className="text-xs font-black uppercase tracking-widest text-neutral-400">{channel}</span>
-      <div className="flex items-center gap-2" title={result?.error}>
-        <Icon className={`size-4 ${config.className}`} />
-        <span className="text-sm font-bold uppercase text-white">{config.label}</span>
-      </div>
-    </div>
+    <ManualSendButtons
+      emailHref={applicant.email ? buildGmailComposeUrl(applicant.email, `Interview scheduled — ${position}`, emailBody) : undefined}
+      whatsappHref={applicant.phone ? buildWhatsappUrl(applicant.phone, whatsappText) : undefined}
+    />
   )
 }
 
@@ -179,9 +179,11 @@ export default function ApplicantDetailPage() {
               />
               <Field label="Notes" value={activeInterview.notes} />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-              <DeliveryStatusRow channel="Email" result={activeInterview.email} />
-              <DeliveryStatusRow channel="WhatsApp" result={activeInterview.whatsapp} />
+            <div className="pt-2">
+              <p className="text-xs font-black uppercase tracking-widest text-neutral-400 mb-2">
+                NOTIFY THE APPLICANT
+              </p>
+              <InterviewSendButtons applicant={applicant} interview={activeInterview} />
             </div>
           </div>
         )}

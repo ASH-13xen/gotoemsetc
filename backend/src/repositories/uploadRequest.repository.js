@@ -5,8 +5,8 @@ function create(data) {
   return UploadRequest.create(data);
 }
 
-function findByTokenHash(tokenHash) {
-  return UploadRequest.findOne({ tokenHash });
+function findByToken(token) {
+  return UploadRequest.findOne({ token });
 }
 
 function findById(id) {
@@ -27,4 +27,4 @@ function countPending() {
   });
 }
 
-module.exports = { create, findByTokenHash, findById, listByEmployee, updateStatus, countPending };
+module.exports = { create, findByToken, findById, listByEmployee, updateStatus, countPending };

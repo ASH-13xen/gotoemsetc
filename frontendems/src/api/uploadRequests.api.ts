@@ -10,6 +10,9 @@ export interface UploadRequest {
   expiresAt: string
   fulfilledAt?: string
   createdAt: string
+  // Reconstructed server-side from the (plainly stored) token — present on
+  // every request, active or not; the frontend decides when to show it.
+  link: string
 }
 
 export interface UploadedDocument {
@@ -28,7 +31,7 @@ export async function createUploadRequest(
   employeeId: string,
   requestedDocTypes: string[],
   expiresInHours?: number
-): Promise<{ uploadRequest: UploadRequest; link: string }> {
+): Promise<{ uploadRequest: UploadRequest }> {
   const { data } = await apiClient.post(`/employees/${employeeId}/upload-requests`, {
     requestedDocTypes,
     expiresInHours,

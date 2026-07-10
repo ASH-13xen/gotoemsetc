@@ -8,30 +8,25 @@ const uploadedDocumentRepository = require('../repositories/uploadedDocument.rep
 const cloudinaryUploadService = require('./cloudinaryUpload.service');
 const activityService = require('./activity.service');
 
-function hashToken(rawToken) {
-  return crypto.createHash('sha256').update(rawToken).digest('hex');
-}
-
 async function createRequest(employeeId, { requestedDocTypes, expiresInHours }) {
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) throw ApiError.notFound('Employee not found');
 
-  const rawToken = crypto.randomBytes(32).toString('hex');
+  const token = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(
     Date.now() + (expiresInHours || DEFAULT_UPLOAD_REQUEST_EXPIRY_HOURS) * 60 * 60 * 1000
   );
 
   const uploadRequest = await uploadRequestRepository.create({
     employee: employee._id,
-    tokenHash: hashToken(rawToken),
+    token,
     requestedDocTypes,
     expiresAt,
   });
 
   await activityService.log(employee._id, 'UPLOAD_REQUEST_CREATED', { requestedDocTypes });
 
-  // Only ever returned once, at creation time — never stored or retrievable again.
-  return { uploadRequest, rawToken };
+  return { uploadRequest };
 }
 
 async function listForEmployee(employeeId) {
@@ -48,7 +43,7 @@ async function revoke(id) {
 // Re-validated on every public request, not just at link creation, so a
 // revoke or expiry takes effect immediately.
 async function resolveToken(rawToken) {
-  const uploadRequest = await uploadRequestRepository.findByTokenHash(hashToken(rawToken));
+  const uploadRequest = await uploadRequestRepository.findByToken(rawToken);
   if (!uploadRequest) throw ApiError.notFound('This link is invalid.');
   if (uploadRequest.status === UPLOAD_REQUEST_STATUS.REVOKED) {
     throw ApiError.forbidden('This link has been revoked.');

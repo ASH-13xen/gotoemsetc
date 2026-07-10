@@ -3,7 +3,7 @@ const { NOTIFICATION_TYPES } = require('../config/constants');
 const interviewRepository = require('../repositories/interview.repository');
 const userRepository = require('../repositories/user.repository');
 const notificationService = require('../services/notification.service');
-const { formatDateTime } = require('../templates/email/interviewScheduled');
+const { formatDateTime } = require('../utils/dateFormat');
 const logger = require('../utils/logger');
 
 function todayRange() {

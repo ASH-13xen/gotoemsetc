@@ -1,13 +1,5 @@
 const { Schema, model } = require('mongoose');
-const { INTERVIEW_STATUS, DELIVERY_STATUS } = require('../config/constants');
-
-const deliverySchema = new Schema(
-  {
-    status: { type: String, enum: Object.values(DELIVERY_STATUS), default: DELIVERY_STATUS.PENDING },
-    error: { type: String },
-  },
-  { _id: false }
-);
+const { INTERVIEW_STATUS } = require('../config/constants');
 
 const interviewSchema = new Schema(
   {
@@ -22,12 +14,6 @@ const interviewSchema = new Schema(
     notes: { type: String, trim: true },
     // Guards the daily reminder cron from sending the same reminder twice.
     reminderSentAt: { type: Date },
-
-    // Reset to `pending` on every schedule/reschedule, then flipped to
-    // sent/failed/skipped once the (backgrounded) email/WhatsApp send
-    // resolves — see interview.service.js.
-    email: { type: deliverySchema, default: () => ({}) },
-    whatsapp: { type: deliverySchema, default: () => ({}) },
   },
   { timestamps: true }
 );

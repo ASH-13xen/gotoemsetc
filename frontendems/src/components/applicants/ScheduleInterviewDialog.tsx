@@ -47,7 +47,7 @@ export function ScheduleInterviewDialog({
       { scheduledAt: new Date(scheduledAt).toISOString(), notes: notes || undefined },
       {
         onSuccess: () => {
-          toast.success(isReschedule ? 'Interview rescheduled' : 'Interview scheduled — the applicant has been notified')
+          toast.success(isReschedule ? 'Interview rescheduled' : 'Interview scheduled')
           setOpen(false)
         },
         onError: () => toast.error('Could not schedule the interview'),
@@ -69,7 +69,8 @@ export function ScheduleInterviewDialog({
         <DialogHeader>
           <DialogTitle>{isReschedule ? 'Reschedule interview' : 'Schedule an interview'}</DialogTitle>
           <DialogDescription>
-            The applicant gets a WhatsApp + email confirmation, and admins get an in-app notification.
+            Admins get an in-app notification. Once saved, use the Send Email/Send WhatsApp
+            buttons on the applicant's page to notify them yourself.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">

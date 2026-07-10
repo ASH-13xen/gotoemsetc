@@ -8,6 +8,7 @@ export interface DocType {
 export interface AppConfig {
   docTypes: DocType[]
   emailEnabled: boolean
+  companyName: string
 }
 
 export async function getConfig(): Promise<AppConfig> {

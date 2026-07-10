@@ -65,10 +65,6 @@ module.exports = {
   ],
   INTERVIEW_STATUS: { SCHEDULED: 'scheduled', COMPLETED: 'completed', CANCELLED: 'cancelled' },
   BLOOD_GROUPS: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'],
-  // Per-channel delivery status for the schedule/reschedule email + WhatsApp
-  // notifications — tracked separately since they're sent independently and
-  // finish at different times in the background after the request returns.
-  DELIVERY_STATUS: { PENDING: 'pending', SENT: 'sent', FAILED: 'failed', SKIPPED: 'skipped' },
   NOTIFICATION_TYPES: {
     INTERVIEW_SCHEDULED: 'interview_scheduled',
     INTERVIEW_REMINDER: 'interview_reminder',

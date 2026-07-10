@@ -276,6 +276,9 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
             {/* Request Documents */}
             <RequestDocumentsModal
               employeeId={employeeId}
+              employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
+              employeeEmail={employee.personalEmail}
+              employeePhone={employee.phone}
               trigger={
                 <div
                   className="bg-neutral-800 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-25"
@@ -726,7 +729,12 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
           )}
           <GeneratedDocumentsList employeeId={employeeId} />
           <UploadedDocumentsList employeeId={employeeId} />
-          <RequestHistoryTable employeeId={employeeId} />
+          <RequestHistoryTable
+            employeeId={employeeId}
+            employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
+            employeeEmail={employee.personalEmail}
+            employeePhone={employee.phone}
+          />
           <ActivityTimeline employeeId={employeeId} />
         </div>
       </main>

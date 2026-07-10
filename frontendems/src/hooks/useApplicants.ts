@@ -17,15 +17,6 @@ export function useApplicant(id: string | undefined) {
     queryKey: [...APPLICANTS_KEY, id],
     queryFn: () => applicantsApi.getApplicant(id as string),
     enabled: Boolean(id),
-    // The schedule/reschedule email + WhatsApp sends resolve in the
-    // background after the request returns — poll briefly while either
-    // channel is still `pending` so the status badges update live instead
-    // of needing a manual refresh.
-    refetchInterval: (query) => {
-      const interview = query.state.data?.activeInterview
-      const stillPending = interview?.email?.status === 'pending' || interview?.whatsapp?.status === 'pending'
-      return stillPending ? 2500 : false
-    },
   })
 }
 

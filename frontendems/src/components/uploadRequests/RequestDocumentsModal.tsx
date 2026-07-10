@@ -23,8 +23,22 @@ import {
 import { cn } from '@/lib/utils'
 import { useConfig } from '@/hooks/useConfig'
 import { useCreateUploadRequest } from '@/hooks/useUploadRequests'
+import { ManualSendButtons } from '@/components/common/ManualSendButtons'
+import { buildGmailComposeUrl, buildWhatsappUrl } from '@/lib/manualSend'
 
-export function RequestDocumentsModal({ employeeId, trigger }: { employeeId: string; trigger?: React.ReactNode }) {
+export function RequestDocumentsModal({
+  employeeId,
+  employeeName,
+  employeeEmail,
+  employeePhone,
+  trigger,
+}: {
+  employeeId: string
+  employeeName: string
+  employeeEmail?: string
+  employeePhone?: string
+  trigger?: React.ReactNode
+}) {
   const [open, setOpen] = useState(false)
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [expiresInHours, setExpiresInHours] = useState('72')
@@ -49,11 +63,22 @@ export function RequestDocumentsModal({ employeeId, trigger }: { employeeId: str
     createUploadRequest.mutate(
       { requestedDocTypes: selectedTypes, expiresInHours: Number(expiresInHours) },
       {
-        onSuccess: ({ link: newLink }) => setLink(newLink),
+        onSuccess: ({ uploadRequest }) => setLink(uploadRequest.link),
         onError: () => toast.error('Could not create the request'),
       }
     )
   }
+
+  const docLabels = selectedTypes
+    .map((key) => config?.docTypes.find((d) => d.key === key)?.label ?? key)
+    .join(', ')
+  const companyName = config?.companyName ?? 'us'
+  const emailBody = link
+    ? `Hi ${employeeName},\n\nPlease upload the following documents using the secure link below:\n${docLabels}\n\n${link}\n\nThanks,\n${companyName} HR`
+    : ''
+  const whatsappText = link
+    ? `Hi ${employeeName}, please upload the following documents using this secure link: ${docLabels}\n${link}`
+    : ''
 
   const onCopy = async () => {
     if (!link) return
@@ -154,9 +179,13 @@ export function RequestDocumentsModal({ employeeId, trigger }: { employeeId: str
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Share this link with the employee (WhatsApp, email, etc.). It only works for the
-              documents selected above and expires automatically.
+              Share this link with the employee. It only works for the documents selected above
+              and expires automatically.
             </p>
+            <ManualSendButtons
+              emailHref={employeeEmail ? buildGmailComposeUrl(employeeEmail, `Document Request — ${companyName}`, emailBody) : undefined}
+              whatsappHref={employeePhone ? buildWhatsappUrl(employeePhone, whatsappText) : undefined}
+            />
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(false)}>
                 Done
