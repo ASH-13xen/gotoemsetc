@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Loader2, UserCheck } from 'lucide-react'
 
@@ -27,7 +26,6 @@ export function HireDialog({ applicantId, trigger }: { applicantId: string; trig
   const [selectionNotes, setSelectionNotes] = useState('')
   const [decisionDate, setDecisionDate] = useState(todayValue())
   const [startDate, setStartDate] = useState(todayValue())
-  const navigate = useNavigate()
   const hireApplicant = useHireApplicant(applicantId)
 
   const onSubmit = () => {
@@ -42,10 +40,9 @@ export function HireDialog({ applicantId, trigger }: { applicantId: string; trig
     hireApplicant.mutate(
       { selectionNotes, decisionDate, startDate },
       {
-        onSuccess: ({ employee }) => {
-          toast.success('Applicant hired — continue filling their employee details')
+        onSuccess: () => {
+          toast.success('Applicant hired — use the Send buttons below to let them know')
           setOpen(false)
-          navigate(`/employees/${employee._id}/wizard`)
         },
         onError: () => toast.error('Could not hire applicant'),
       }
@@ -66,8 +63,8 @@ export function HireDialog({ applicantId, trigger }: { applicantId: string; trig
         <DialogHeader>
           <DialogTitle>Hire this applicant</DialogTitle>
           <DialogDescription>
-            This creates their employee record and takes you straight into generating their
-            onboarding documents.
+            This creates their employee record. You'll then get Send Email/Send WhatsApp buttons
+            to let them know yourself, with this reason included.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
@@ -98,7 +95,7 @@ export function HireDialog({ applicantId, trigger }: { applicantId: string; trig
               onChange={(e) => setStartDate(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Sent to the applicant in the hire confirmation, and saved as their employee start date.
+              Included in the hire message you send them, and saved as their employee start date.
             </p>
           </div>
         </div>

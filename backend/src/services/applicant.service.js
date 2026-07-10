@@ -6,11 +6,6 @@ const employeeRepository = require('../repositories/employee.repository');
 const employeeService = require('./employee.service');
 const cloudinaryUploadService = require('./cloudinaryUpload.service');
 const activityService = require('./activity.service');
-const emailService = require('./email.service');
-const whatsappService = require('./whatsapp.service');
-const { applicantHiredEmail, formatDateOnly } = require('../templates/email/applicantHired');
-const { applicantRejectedEmail } = require('../templates/email/applicantRejected');
-const logger = require('../utils/logger');
 
 async function listApplicants(params) {
   return applicantRepository.list(params);
@@ -77,6 +72,8 @@ function assertReadyForDecision(applicant) {
 // Hiring creates a real Employee record pre-filled from the application, so
 // the admin drops straight into the same onboarding/document-generation flow
 // used for any other employee — no separate "recruit onboarding" feature.
+// Telling the applicant is a manual step handled entirely by the frontend
+// (Send Email/Send WhatsApp buttons) — nothing here contacts them.
 async function hireApplicant(id, { selectionNotes, decisionDate, startDate }) {
   const applicant = await applicantRepository.findById(id);
   if (!applicant) throw ApiError.notFound('Applicant not found');
@@ -120,11 +117,6 @@ async function hireApplicant(id, { selectionNotes, decisionDate, startDate }) {
     applicantName: `${applicant.firstName} ${applicant.lastName || ''}`.trim(),
   });
 
-  // Fire-and-forget — see scheduleInterview in interview.service.js for why.
-  sendHiredMessages(updatedApplicant, { startDate, selectionNotes }).catch((err) =>
-    logger.error({ err }, 'sendHiredMessages failed')
-  );
-
   return { applicant: updatedApplicant, employee };
 }
 
@@ -139,59 +131,7 @@ async function rejectApplicant(id, { rejectionReason, decisionDate }) {
     decisionDate,
   });
 
-  // Fire-and-forget — see scheduleInterview in interview.service.js for why.
-  sendRejectedMessages(updatedApplicant, rejectionReason).catch((err) =>
-    logger.error({ err }, 'sendRejectedMessages failed')
-  );
-
   return updatedApplicant;
-}
-
-async function sendHiredMessages(applicant, { startDate, selectionNotes }) {
-  if (applicant.email) {
-    const { subject, html } = applicantHiredEmail({ applicant, startDate, selectionNotes });
-    await emailService.sendEmail({ to: applicant.email, subject, html });
-  }
-  if (applicant.phone) {
-    await whatsappService.sendTemplateMessage({
-      to: applicant.phone,
-      templateName: 'applicant_hired',
-      components: [
-        {
-          type: 'body',
-          parameters: [
-            { type: 'text', text: `${applicant.firstName} ${applicant.lastName || ''}`.trim() },
-            { type: 'text', text: applicant.positionAppliedFor || 'the role' },
-            { type: 'text', text: formatDateOnly(startDate) },
-            { type: 'text', text: selectionNotes },
-          ],
-        },
-      ],
-    });
-  }
-}
-
-async function sendRejectedMessages(applicant, rejectionReason) {
-  if (applicant.email) {
-    const { subject, html } = applicantRejectedEmail({ applicant, rejectionReason });
-    await emailService.sendEmail({ to: applicant.email, subject, html });
-  }
-  if (applicant.phone) {
-    await whatsappService.sendTemplateMessage({
-      to: applicant.phone,
-      templateName: 'application_status_update',
-      components: [
-        {
-          type: 'body',
-          parameters: [
-            { type: 'text', text: `${applicant.firstName} ${applicant.lastName || ''}`.trim() },
-            { type: 'text', text: applicant.positionAppliedFor || 'the role' },
-            { type: 'text', text: rejectionReason },
-          ],
-        },
-      ],
-    });
-  }
 }
 
 module.exports = {

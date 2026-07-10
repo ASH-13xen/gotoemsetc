@@ -26,7 +26,7 @@ async function notifySchedulers(applicant, interview, actingUserId) {
   });
 }
 
-async function scheduleInterview(applicantId, { scheduledAt, notes }, actingUser) {
+async function scheduleInterview(applicantId, { scheduledAt, meetingType, location, meetingLink, notes }, actingUser) {
   const applicant = await applicantRepository.findById(applicantId);
   if (!applicant) throw ApiError.notFound('Applicant not found');
   if ([APPLICANT_STATUS.HIRED, APPLICANT_STATUS.REJECTED].includes(applicant.status)) {
@@ -38,15 +38,22 @@ async function scheduleInterview(applicantId, { scheduledAt, notes }, actingUser
   const interview = existing
     ? await interviewRepository.updateById(existing._id, {
         scheduledAt,
+        meetingType,
+        location,
+        meetingLink,
         notes,
         status: INTERVIEW_STATUS.SCHEDULED,
         reminderSentAt: null,
         scheduledBy: actingUser.id,
+        rescheduledAt: new Date(),
       })
     : await interviewRepository.create({
         applicant: applicantId,
         scheduledBy: actingUser.id,
         scheduledAt,
+        meetingType,
+        location,
+        meetingLink,
         notes,
       });
 

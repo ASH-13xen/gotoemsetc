@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as applicantsApi from '@/api/applicants.api'
-import type { CreateApplicantInput, ListApplicantsParams } from '@/api/applicants.api'
+import type { CreateApplicantInput, ListApplicantsParams, ScheduleInterviewInput } from '@/api/applicants.api'
 
 const APPLICANTS_KEY = ['applicants']
 
@@ -67,8 +67,7 @@ export function useDeleteApplicant() {
 export function useScheduleInterview(applicantId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ scheduledAt, notes }: { scheduledAt: string; notes?: string }) =>
-      applicantsApi.scheduleInterview(applicantId, scheduledAt, notes),
+    mutationFn: (input: ScheduleInterviewInput) => applicantsApi.scheduleInterview(applicantId, input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: APPLICANTS_KEY }),
   })
 }

@@ -10,31 +10,88 @@ import { ScheduleInterviewDialog } from '@/components/applicants/ScheduleIntervi
 import { ManualSendButtons } from '@/components/common/ManualSendButtons'
 import { buildGmailComposeUrl, buildWhatsappUrl } from '@/lib/manualSend'
 import { useApplicant } from '@/hooks/useApplicants'
+import { useEmployee } from '@/hooks/useEmployees'
 import { useConfig } from '@/hooks/useConfig'
 import type { Applicant, Interview } from '@/api/applicants.api'
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="border-b-2 border-neutral-900 pb-3">
-      <p className="text-xs font-black uppercase tracking-widest text-neutral-400">{label}</p>
-      <p className="text-lg font-bold text-white mt-1 uppercase tracking-wide">{value || '—'}</p>
+    <div className="border-b-2 border-neutral-200 pb-3">
+      <p className="text-xs font-black uppercase tracking-widest text-neutral-500">{label}</p>
+      <p className="text-lg font-bold text-neutral-900 mt-1 uppercase tracking-wide">{value || '—'}</p>
     </div>
   )
 }
 
+// Covers all 4 combinations (online/offline × scheduled/rescheduled) off
+// two booleans rather than 4 separate hardcoded templates — same content,
+// less duplication to keep in sync.
 function InterviewSendButtons({ applicant, interview }: { applicant: Applicant; interview: Interview }) {
   const { data: config } = useConfig()
   const companyName = config?.companyName ?? 'us'
   const name = `${applicant.firstName} ${applicant.lastName || ''}`.trim()
   const position = applicant.positionAppliedFor || 'the role'
   const when = new Date(interview.scheduledAt).toLocaleString()
+  const isReschedule = Boolean(interview.rescheduledAt)
+  const isOnline = interview.meetingType === 'online'
 
-  const emailBody = `Hi ${name},\n\nYour interview for ${position} is scheduled for ${when}. We look forward to speaking with you.\n\nThanks,\n${companyName} HR`
-  const whatsappText = `Hi ${name}, your interview for ${position} is scheduled for ${when}. We look forward to speaking with you!`
+  const verb = isReschedule ? 'has been rescheduled to' : 'is scheduled for'
+  const modeDetail = isOnline
+    ? interview.meetingLink
+      ? ` Join here: ${interview.meetingLink}`
+      : ' This will be an online interview — the link will follow separately.'
+    : interview.location
+      ? ` Location: ${interview.location}`
+      : ' This will be an in-person interview.'
+
+  const emailBody = `Hi ${name},\n\nYour ${isOnline ? 'online' : 'in-person'} interview for ${position} ${verb} ${when}.${modeDetail}\n\nWe look forward to speaking with you.\n\nThanks,\n${companyName} HR`
+  const whatsappText = `Hi ${name}, your ${isOnline ? 'online' : 'in-person'} interview for ${position} ${verb} ${when}.${modeDetail}`
+  const subject = `Interview ${isReschedule ? 'rescheduled' : 'scheduled'} — ${position}`
 
   return (
     <ManualSendButtons
-      emailHref={applicant.email ? buildGmailComposeUrl(applicant.email, `Interview scheduled — ${position}`, emailBody) : undefined}
+      emailHref={applicant.email ? buildGmailComposeUrl(applicant.email, subject, emailBody) : undefined}
+      whatsappHref={applicant.phone ? buildWhatsappUrl(applicant.phone, whatsappText) : undefined}
+    />
+  )
+}
+
+function HireSendButtons({ applicant }: { applicant: Applicant }) {
+  const { data: config } = useConfig()
+  const { data: employeeData } = useEmployee(applicant.linkedEmployee)
+  const companyName = config?.companyName ?? 'us'
+  const name = `${applicant.firstName} ${applicant.lastName || ''}`.trim()
+  const position = applicant.positionAppliedFor || 'the role'
+  const startDate = employeeData?.employee.dateOfJoining
+    ? new Date(employeeData.employee.dateOfJoining).toLocaleDateString()
+    : undefined
+  const reason = applicant.selectionNotes || ''
+  const startDetail = startDate ? ` Your start date is ${startDate}.` : ''
+
+  const emailBody = `Hi ${name},\n\nCongratulations! We're delighted to offer you the position of ${position}.${startDetail} Why we chose you: ${reason}\n\nWelcome to the team!\n\nThanks,\n${companyName} HR`
+  const whatsappText = `Congratulations ${name}! We're delighted to offer you the position of ${position}.${startDetail} Why we chose you: ${reason}. Welcome to the team!`
+
+  return (
+    <ManualSendButtons
+      emailHref={applicant.email ? buildGmailComposeUrl(applicant.email, `You're hired — ${companyName}`, emailBody) : undefined}
+      whatsappHref={applicant.phone ? buildWhatsappUrl(applicant.phone, whatsappText) : undefined}
+    />
+  )
+}
+
+function RejectSendButtons({ applicant }: { applicant: Applicant }) {
+  const { data: config } = useConfig()
+  const companyName = config?.companyName ?? 'us'
+  const name = `${applicant.firstName} ${applicant.lastName || ''}`.trim()
+  const position = applicant.positionAppliedFor || 'the role'
+  const reason = applicant.rejectionReason || ''
+
+  const emailBody = `Hi ${name},\n\nThank you for applying for ${position} and for interviewing with us. After careful consideration, we won't be moving forward at this time.\n\nFeedback: ${reason}\n\nWe wish you the best in your search.\n\nThanks,\n${companyName} HR`
+  const whatsappText = `Hi ${name}, thank you for applying for ${position} and for interviewing with us. After careful consideration, we won't be moving forward at this time. Feedback: ${reason}. We wish you the best in your search.`
+
+  return (
+    <ManualSendButtons
+      emailHref={applicant.email ? buildGmailComposeUrl(applicant.email, `Update on your application — ${position}`, emailBody) : undefined}
       whatsappHref={applicant.phone ? buildWhatsappUrl(applicant.phone, whatsappText) : undefined}
     />
   )
@@ -64,9 +121,9 @@ export default function ApplicantDetailPage() {
 
   if (isLoading || !data) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4 p-6 bg-black">
-        <Skeleton className="h-12 w-48 bg-neutral-800 rounded-none" />
-        <Skeleton className="h-64 w-full bg-neutral-800 rounded-none" />
+      <div className="mx-auto max-w-2xl space-y-4 p-6 bg-white">
+        <Skeleton className="h-12 w-48 bg-neutral-200 rounded-none" />
+        <Skeleton className="h-64 w-full bg-neutral-200 rounded-none" />
       </div>
     )
   }
@@ -76,18 +133,18 @@ export default function ApplicantDetailPage() {
   const canReview = applicant.status === 'interview_scheduled' && interviewHasPassed
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
+    <div className="min-h-screen bg-white text-neutral-900 p-6">
       <main className="mx-auto max-w-3xl space-y-8">
         {/* HERO HEADER */}
-        <div className="grid grid-cols-1 md:grid-cols-3 border-2 border-white bg-black">
+        <div className="grid grid-cols-1 md:grid-cols-3 border-2 border-neutral-900 bg-white">
           {/* Identity Tile */}
-          <div className="md:col-span-2 border-b-2 md:border-b-0 md:border-r-2 border-white p-8 flex flex-col justify-between min-h-55">
+          <div className="md:col-span-2 border-b-2 md:border-b-0 md:border-r-2 border-neutral-900 p-8 flex flex-col justify-between min-h-55">
             <div className="flex flex-col gap-2">
-              <span className="text-xs font-black tracking-widest text-neutral-400 uppercase">APPLICANT PROFILE</span>
-              <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter text-white">
+              <span className="text-xs font-black tracking-widest text-neutral-500 uppercase">APPLICANT PROFILE</span>
+              <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter text-neutral-900">
                 {applicant.firstName} {applicant.lastName}
               </h1>
-              <p className="text-sm font-bold text-neutral-400 mt-1 uppercase tracking-widest">
+              <p className="text-sm font-bold text-neutral-500 mt-1 uppercase tracking-widest">
                 {applicant.positionAppliedFor || 'NO POSITION SPECIFIED'}
               </p>
             </div>
@@ -97,7 +154,7 @@ export default function ApplicantDetailPage() {
           </div>
 
           {/* Action Tiles */}
-          <div className="grid grid-cols-1 divide-y-2 divide-white">
+          <div className="grid grid-cols-1 divide-y-2 divide-neutral-900">
             {/* Back Button */}
             <div
               onClick={() => navigate('/applicants')}
@@ -168,8 +225,8 @@ export default function ApplicantDetailPage() {
         </div>
 
         {activeInterview && applicant.status === 'interview_scheduled' && (
-          <div className="border-2 border-white bg-black p-6 space-y-4">
-            <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-white pb-3 text-white">
+          <div className="border-2 border-neutral-900 bg-white p-6 space-y-4">
+            <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-neutral-900 pb-3 text-neutral-900">
               INTERVIEW
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -177,10 +234,16 @@ export default function ApplicantDetailPage() {
                 label={interviewHasPassed ? 'Was scheduled for' : 'Scheduled for'}
                 value={new Date(activeInterview.scheduledAt).toLocaleString()}
               />
+              <Field label="Type" value={activeInterview.meetingType === 'online' ? 'Online' : 'Offline (in-person)'} />
+              {activeInterview.meetingType === 'online' ? (
+                <Field label="Meeting link" value={activeInterview.meetingLink} />
+              ) : (
+                <Field label="Location" value={activeInterview.location} />
+              )}
               <Field label="Notes" value={activeInterview.notes} />
             </div>
             <div className="pt-2">
-              <p className="text-xs font-black uppercase tracking-widest text-neutral-400 mb-2">
+              <p className="text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">
                 NOTIFY THE APPLICANT
               </p>
               <InterviewSendButtons applicant={applicant} interview={activeInterview} />
@@ -189,8 +252,8 @@ export default function ApplicantDetailPage() {
         )}
 
         {/* DETAILS SECTION */}
-        <div className="border-2 border-white bg-black p-6 space-y-6">
-          <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-white pb-3 text-white">
+        <div className="border-2 border-neutral-900 bg-white p-6 space-y-6">
+          <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-neutral-900 pb-3 text-neutral-900">
             APPLICANT DETAILS
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -226,7 +289,7 @@ export default function ApplicantDetailPage() {
           </div>
 
           <div className="pt-4">
-            <p className="text-xs font-black uppercase tracking-widest text-neutral-400 mb-2">RESUME FILE(S)</p>
+            <p className="text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">RESUME FILE(S)</p>
             {applicant.resumes && applicant.resumes.length > 0 ? (
               <div className="flex flex-wrap gap-3">
                 {applicant.resumes.map((resume, i) => (
@@ -235,7 +298,7 @@ export default function ApplicantDetailPage() {
                     href={resume.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex h-14 items-center gap-2 border-2 border-white bg-transparent px-6 font-bold uppercase tracking-wider text-white hover:bg-white hover:text-black transition-colors"
+                    className="inline-flex h-14 items-center gap-2 border-2 border-neutral-900 bg-transparent px-6 font-bold uppercase tracking-wider text-neutral-900 hover:bg-neutral-900 hover:text-white transition-colors"
                   >
                     <Download className="size-4" />
                     {resume.originalFilename || `DOWNLOAD RESUME ${i + 1}`}
@@ -252,8 +315,8 @@ export default function ApplicantDetailPage() {
         </div>
 
         {applicant.status === 'hired' && (
-          <div className="border-2 border-white bg-black p-6 space-y-6">
-            <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-white pb-3 text-white">
+          <div className="border-2 border-neutral-900 bg-white p-6 space-y-6">
+            <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-neutral-900 pb-3 text-neutral-900">
               HIRE DETAILS
             </h2>
             <div className="grid grid-cols-1 gap-6">
@@ -265,18 +328,24 @@ export default function ApplicantDetailPage() {
               {applicant.linkedEmployee && (
                 <button
                   onClick={() => navigate(`/employees/${applicant.linkedEmployee}`)}
-                  className="w-full md:w-fit h-14 border-2 border-white bg-primary text-white px-6 font-bold uppercase tracking-wider hover:opacity-90 transition-opacity"
+                  className="w-full md:w-fit h-14 border-2 border-neutral-900 bg-primary text-white px-6 font-bold uppercase tracking-wider hover:opacity-90 transition-opacity"
                 >
                   VIEW EMPLOYEE RECORD
                 </button>
               )}
             </div>
+            <div className="pt-2">
+              <p className="text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">
+                NOTIFY THE APPLICANT
+              </p>
+              <HireSendButtons applicant={applicant} />
+            </div>
           </div>
         )}
 
         {applicant.status === 'rejected' && (
-          <div className="border-2 border-white bg-black p-6 space-y-6">
-            <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-white pb-3 text-white">
+          <div className="border-2 border-neutral-900 bg-white p-6 space-y-6">
+            <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-neutral-900 pb-3 text-neutral-900">
               REJECTION DETAILS
             </h2>
             <div className="grid grid-cols-1 gap-6">
@@ -285,6 +354,12 @@ export default function ApplicantDetailPage() {
                 value={applicant.decisionDate ? new Date(applicant.decisionDate).toLocaleDateString() : undefined}
               />
               <Field label="Reason" value={applicant.rejectionReason} />
+            </div>
+            <div className="pt-2">
+              <p className="text-xs font-black uppercase tracking-widest text-neutral-500 mb-2">
+                NOTIFY THE APPLICANT
+              </p>
+              <RejectSendButtons applicant={applicant} />
             </div>
           </div>
         )}

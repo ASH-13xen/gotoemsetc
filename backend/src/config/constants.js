@@ -64,6 +64,7 @@ module.exports = {
     'HR Executive',
   ],
   INTERVIEW_STATUS: { SCHEDULED: 'scheduled', COMPLETED: 'completed', CANCELLED: 'cancelled' },
+  MEETING_TYPE: { ONLINE: 'online', OFFLINE: 'offline' },
   BLOOD_GROUPS: ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'],
   NOTIFICATION_TYPES: {
     INTERVIEW_SCHEDULED: 'interview_scheduled',

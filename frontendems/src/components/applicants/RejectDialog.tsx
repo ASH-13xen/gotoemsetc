@@ -58,7 +58,8 @@ export function RejectDialog({ applicantId, trigger }: { applicantId: string; tr
         <DialogHeader>
           <DialogTitle>Reject this applicant</DialogTitle>
           <DialogDescription>
-            They'll stay on record as rejected, along with your reason.
+            They'll stay on record as rejected, along with your reason. You'll then get Send
+            Email/Send WhatsApp buttons to let them know yourself.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">

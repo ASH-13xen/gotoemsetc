@@ -59,13 +59,19 @@ export interface Applicant {
   createdAt: string
 }
 
+export type MeetingType = 'online' | 'offline'
+
 export interface Interview {
   _id: string
   applicant: string
   scheduledBy: string
   scheduledAt: string
+  meetingType: MeetingType
+  location?: string
+  meetingLink?: string
   status: 'scheduled' | 'completed' | 'cancelled'
   notes?: string
+  rescheduledAt?: string
 }
 
 export interface ListApplicantsParams {
@@ -152,12 +158,19 @@ export async function deleteApplicant(id: string): Promise<void> {
   await apiClient.delete(`/applicants/${id}`)
 }
 
+export interface ScheduleInterviewInput {
+  scheduledAt: string
+  meetingType: MeetingType
+  location?: string
+  meetingLink?: string
+  notes?: string
+}
+
 export async function scheduleInterview(
   applicantId: string,
-  scheduledAt: string,
-  notes?: string
+  input: ScheduleInterviewInput
 ): Promise<{ applicant: Applicant; interview: Interview }> {
-  const { data } = await apiClient.post(`/applicants/${applicantId}/interviews`, { scheduledAt, notes })
+  const { data } = await apiClient.post(`/applicants/${applicantId}/interviews`, input)
   return data
 }
 

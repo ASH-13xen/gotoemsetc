@@ -42,17 +42,6 @@ const env = {
 
   companyName: process.env.COMPANY_NAME || 'Our Company',
 
-  resend: {
-    apiKey: process.env.RESEND_API_KEY || '',
-    fromEmail: process.env.RESEND_FROM_EMAIL || '',
-  },
-
-  whatsapp: {
-    accessToken: process.env.WHATSAPP_ACCESS_TOKEN || '',
-    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
-    apiVersion: process.env.WHATSAPP_API_VERSION || 'v21.0',
-  },
-
   googleForm: {
     webhookSecret: process.env.GOOGLE_FORM_WEBHOOK_SECRET || '',
   },
@@ -63,9 +52,5 @@ env.cloudinaryConfigured = Boolean(
 );
 
 env.smtpConfigured = Boolean(env.smtp.host && env.smtp.port && env.smtp.user && env.smtp.pass);
-
-env.emailConfigured = Boolean(env.resend.apiKey && env.resend.fromEmail);
-
-env.whatsappConfigured = Boolean(env.whatsapp.accessToken && env.whatsapp.phoneNumberId);
 
 module.exports = env;

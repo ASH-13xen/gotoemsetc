@@ -15,7 +15,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useScheduleInterview } from '@/hooks/useApplicants'
+import type { MeetingType } from '@/api/applicants.api'
 
 function defaultValue() {
   const inHourFromNow = new Date(Date.now() + 60 * 60 * 1000)
@@ -35,6 +43,9 @@ export function ScheduleInterviewDialog({
 }) {
   const [open, setOpen] = useState(false)
   const [scheduledAt, setScheduledAt] = useState(defaultValue())
+  const [meetingType, setMeetingType] = useState<MeetingType>('online')
+  const [location, setLocation] = useState('')
+  const [meetingLink, setMeetingLink] = useState('')
   const [notes, setNotes] = useState('')
   const scheduleInterview = useScheduleInterview(applicantId)
 
@@ -44,7 +55,13 @@ export function ScheduleInterviewDialog({
       return
     }
     scheduleInterview.mutate(
-      { scheduledAt: new Date(scheduledAt).toISOString(), notes: notes || undefined },
+      {
+        scheduledAt: new Date(scheduledAt).toISOString(),
+        meetingType,
+        location: meetingType === 'offline' ? location || undefined : undefined,
+        meetingLink: meetingType === 'online' ? meetingLink || undefined : undefined,
+        notes: notes || undefined,
+      },
       {
         onSuccess: () => {
           toast.success(isReschedule ? 'Interview rescheduled' : 'Interview scheduled')
@@ -84,12 +101,45 @@ export function ScheduleInterviewDialog({
             />
           </div>
           <div className="grid gap-1.5">
+            <Label>Meeting type</Label>
+            <Select value={meetingType} onValueChange={(v) => setMeetingType(v as MeetingType)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="online">Online</SelectItem>
+                <SelectItem value="offline">Offline (in-person)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {meetingType === 'online' ? (
+            <div className="grid gap-1.5">
+              <Label htmlFor="meetingLink">Meeting link (optional)</Label>
+              <Input
+                id="meetingLink"
+                value={meetingLink}
+                onChange={(e) => setMeetingLink(e.target.value)}
+                placeholder="https://meet.google.com/…"
+              />
+            </div>
+          ) : (
+            <div className="grid gap-1.5">
+              <Label htmlFor="location">Location (optional)</Label>
+              <Input
+                id="location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="Office address…"
+              />
+            </div>
+          )}
+          <div className="grid gap-1.5">
             <Label htmlFor="notes">Notes (internal, optional)</Label>
             <Textarea
               id="notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Panel, meeting link, anything worth remembering…"
+              placeholder="Panel, interviewer, anything worth remembering…"
             />
           </div>
         </div>
