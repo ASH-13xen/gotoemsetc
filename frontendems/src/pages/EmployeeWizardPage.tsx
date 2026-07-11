@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Card } from '@/components/ui/card'
 import { WizardShell } from '@/components/wizard/WizardShell'
 import { TemplateSelectStep } from '@/components/wizard/TemplateSelectStep'
 import { FieldRenderer } from '@/components/wizard/FieldRenderer'
@@ -142,9 +143,9 @@ export default function EmployeeWizardPage() {
 
   if (employeeLoading || templatesLoading || !employeeData) {
     return (
-      <div className="mx-auto max-w-2xl space-y-4 p-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-96 w-full" />
+      <div className="mx-auto max-w-3xl space-y-4 py-4 bg-transparent">
+        <Skeleton className="h-8 w-48 bg-secondary/40 rounded-xl" />
+        <Skeleton className="h-96 w-full bg-secondary/40 rounded-xl" />
       </div>
     )
   }
@@ -268,34 +269,34 @@ export default function EmployeeWizardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
+    <div className="space-y-8 py-4">
       <main className="mx-auto max-w-3xl space-y-8">
         {/* HERO HEADER */}
-        <div className="grid grid-cols-1 md:grid-cols-3 border-2 border-white bg-black">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 bg-transparent">
           {/* Identity Tile */}
-          <div className="md:col-span-2 border-b-2 md:border-b-0 md:border-r-2 border-white p-8 flex flex-col justify-between min-h-[160px]">
+          <Card className="md:col-span-2 p-8 flex flex-col justify-between min-h-[160px]">
             <div>
-              <span className="text-xs font-black tracking-widest text-neutral-400 uppercase">DOCUMENT GENERATION WIZARD</span>
-              <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tighter text-white">
+              <span className="text-xs font-bold tracking-widest text-muted-foreground uppercase">DOCUMENT GENERATION WIZARD</span>
+              <h1 className="text-4xl md:text-5xl font-extrabold uppercase tracking-tighter text-foreground">
                 GENERATE DOCS
               </h1>
             </div>
-            <p className="text-sm font-bold text-neutral-400 mt-2 uppercase tracking-widest">
+            <p className="text-sm font-semibold text-muted-foreground mt-2 uppercase tracking-widest">
               {employee?.firstName} {employee?.lastName}
             </p>
-          </div>
-
+          </Card>
+ 
           {/* Action Navigation Tile */}
           <div
             onClick={() => navigate(`/employees/${id}`)}
-            className="bg-primary text-white p-8 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-[160px]"
+            className="bg-primary/10 text-primary p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
           >
-            <span className="text-xs font-black tracking-widest opacity-80 uppercase">NAVIGATION</span>
-            <span className="text-3xl font-extrabold uppercase tracking-wide">BACK TO PROFILE</span>
+            <span className="text-[10px] font-bold tracking-widest text-primary/70 uppercase">NAVIGATION</span>
+            <span className="text-2xl font-extrabold uppercase tracking-wide">BACK TO PROFILE</span>
           </div>
         </div>
-
-        <div className="border-2 border-white bg-black p-6">
+ 
+        <Card className="p-6">
           <WizardShell stepLabels={stepLabels} currentStep={stepIndex} onStepClick={goToStep}>
             <AnimatePresence mode="wait">
               <motion.div
@@ -364,7 +365,7 @@ export default function EmployeeWizardPage() {
               </motion.div>
             </AnimatePresence>
           </WizardShell>
-        </div>
+        </Card>
 
         {!isReviewStep && (
           <div className="grid grid-cols-2 gap-4">
@@ -372,14 +373,14 @@ export default function EmployeeWizardPage() {
               variant="outline"
               onClick={() => goToStep(stepIndex - 1)}
               disabled={stepIndex === 0}
-              className="h-16 text-lg font-black tracking-widest rounded-none border-2 border-white text-white hover:bg-white hover:text-black uppercase"
+              className="h-12 text-sm font-semibold rounded-xl uppercase tracking-wider"
             >
               BACK
             </Button>
             <Button
               onClick={handleNext}
               disabled={updateEmployee.isPending}
-              className="bg-primary h-16 text-lg font-black tracking-widest rounded-none hover:opacity-90 border-none text-white uppercase"
+              className="bg-primary text-primary-foreground h-12 text-sm font-semibold rounded-xl uppercase tracking-wider hover:brightness-105 hover:-translate-y-0.5 transition-all shadow-button border-0 cursor-pointer"
             >
               {updateEmployee.isPending ? (
                 <Loader2 className="size-5 animate-spin text-white" />

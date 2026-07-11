@@ -105,9 +105,9 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
   }
 
   return (
-    <div className="border-2 border-white bg-black">
-      <div className="flex items-center justify-between border-b-2 border-white p-6">
-        <h3 className="text-lg font-black uppercase tracking-widest text-white">Calendar</h3>
+    <div className="bg-card/90 backdrop-blur-md rounded-2xl shadow-diffuse border-0 overflow-hidden">
+      <div className="flex items-center justify-between border-b border-border/15 p-6 bg-card">
+        <h3 className="text-lg font-bold uppercase tracking-widest text-foreground">Calendar</h3>
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
@@ -119,7 +119,7 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
           >
             <ChevronLeft className="size-4" />
           </Button>
-          <span className="min-w-36 text-center text-sm font-black uppercase tracking-widest text-white">
+          <span className="min-w-36 text-center text-sm font-bold uppercase tracking-widest text-foreground">
             {monthDate.toLocaleDateString('en-US', {
               month: 'long',
               year: 'numeric',
@@ -177,13 +177,13 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                         type="button"
                         disabled={isFuture}
                         className={cn(
-                          'relative flex aspect-square flex-col items-center justify-center border-2 text-sm font-bold transition-colors',
+                          'relative flex aspect-square flex-col items-center justify-center border text-sm font-bold transition-all duration-200 rounded-xl',
                           isFuture
-                            ? 'cursor-not-allowed border-neutral-900 bg-black text-neutral-700'
-                            : 'border-neutral-800 bg-black text-white hover:border-white',
-                          !config && isOffDay && 'border-neutral-700 bg-neutral-900 text-neutral-500',
+                            ? 'cursor-not-allowed border-secondary bg-secondary/20 text-muted-foreground'
+                            : 'border-border/30 bg-secondary/50 text-foreground hover:border-primary/50 hover:bg-secondary/85 hover:-translate-y-0.5',
+                          !config && isOffDay && 'border-secondary/50 bg-secondary/35 text-muted-foreground/60',
                           config && config.cell,
-                          dateKey === today && 'ring-2 ring-primary ring-offset-2 ring-offset-black'
+                          dateKey === today && 'ring-2 ring-primary ring-offset-2 ring-offset-background'
                         )}
                       >
                         <span>{dayNum}</span>
@@ -198,9 +198,9 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                         )}
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-64 rounded-none border-2 border-white bg-black p-4 text-white">
+                    <PopoverContent className="w-64 rounded-2xl border-0 bg-card p-4 shadow-xl text-foreground">
                       <div className="grid gap-3">
-                        <p className="text-sm font-black uppercase tracking-widest text-white">
+                        <p className="text-sm font-bold uppercase tracking-widest text-foreground">
                           {new Date(dateKey).toLocaleDateString('en-US', {
                             day: 'numeric',
                             month: 'long',
@@ -217,10 +217,10 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                           </p>
                         )}
                         <Select value={pendingStatus} onValueChange={setPendingStatus}>
-                          <SelectTrigger className="w-full border-2 border-white bg-black text-white">
+                          <SelectTrigger className="w-full">
                             <SelectValue />
                           </SelectTrigger>
-                          <SelectContent className="border-2 border-white bg-black text-white">
+                          <SelectContent>
                             <SelectItem value={NO_STATUS}>— No status —</SelectItem>
                             {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
                               <SelectItem key={key} value={key}>
@@ -240,12 +240,12 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                             step="0.5"
                             value={pendingOvertimeHours}
                             onChange={(e) => setPendingOvertimeHours(e.target.value)}
-                            className="border-2 border-white bg-black text-white rounded-none"
+                            className="rounded-xl"
                           />
                         </div>
                         <Button
                           size="sm"
-                          className="bg-emerald-600 text-white hover:bg-emerald-500"
+                          className="bg-emerald-600 text-white hover:bg-emerald-500 rounded-xl"
                           onClick={() => onSave(dateKey)}
                           disabled={markAttendance.isPending}
                         >
@@ -255,6 +255,7 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                           <Button
                             size="sm"
                             variant="outline"
+                            className="rounded-xl"
                             onClick={() => onToggleHoliday(dateKey)}
                             disabled={createHoliday.isPending || deleteHoliday.isPending}
                           >

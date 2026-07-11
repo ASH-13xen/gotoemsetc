@@ -8,7 +8,7 @@ import { AuthProvider } from '@/context/AuthContext'
 import { RequireAuth } from '@/components/auth/RequireAuth'
 import { RequireRole } from '@/components/auth/RequireRole'
 import LoginPage from '@/pages/LoginPage'
-import ShellHomePage from '@/pages/ShellHomePage'
+import DashboardPage from '@/pages/DashboardPage'
 import AuditLogPage from '@/pages/AuditLogPage'
 import { ShellLayout } from '@/components/layout/ShellLayout'
 
@@ -38,8 +38,8 @@ export default function App() {
                 path="/"
                 element={
                   <RequireAuth>
-                    <ShellLayout section="Home">
-                      <ShellHomePage />
+                    <ShellLayout section="Dashboard">
+                      <DashboardPage />
                     </ShellLayout>
                   </RequireAuth>
                 }

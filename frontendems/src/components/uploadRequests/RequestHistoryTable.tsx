@@ -52,19 +52,19 @@ function RequestRow({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border p-3">
+    <div className="flex flex-col gap-3 rounded-xl bg-secondary/30 p-4 border border-border/5">
       <div className="flex items-center justify-between gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 text-sm">
-            <Badge variant={STATUS_VARIANT[req.status]}>{req.status.replace('_', ' ')}</Badge>
-            <span>{docLabels}</span>
+            <Badge variant={STATUS_VARIANT[req.status]} className="rounded-lg">{req.status.replace('_', ' ')}</Badge>
+            <span className="font-semibold text-foreground">{docLabels}</span>
           </div>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground mt-0.5">
             Expires {new Date(req.expiresAt).toLocaleString()}
           </span>
         </div>
         {(req.status === 'pending' || req.status === 'partially_fulfilled') && (
-          <Button variant="ghost" size="sm" onClick={onRevoke} disabled={revokePending}>
+          <Button variant="ghost" size="sm" className="rounded-xl text-muted-foreground hover:text-destructive" onClick={onRevoke} disabled={revokePending}>
             <Ban className="size-3.5" />
             Revoke
           </Button>
@@ -72,9 +72,9 @@ function RequestRow({
       </div>
       {isActive && (
         <>
-          <div className="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 p-2">
-            <code className="min-w-0 flex-1 truncate text-xs">{req.link}</code>
-            <Button size="sm" variant="outline" onClick={onCopy}>
+          <div className="flex min-w-0 items-center gap-2 rounded-xl border border-border/10 bg-secondary/50 p-2">
+            <code className="min-w-0 flex-1 truncate text-xs font-mono pl-2 text-foreground/80">{req.link}</code>
+            <Button size="sm" variant="outline" className="rounded-lg" onClick={onCopy}>
               {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
               Copy
             </Button>
@@ -127,9 +127,9 @@ export function RequestHistoryTable({
       </CardHeader>
       <CardContent className="grid gap-2">
         {isLoading ? (
-          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-12 w-full bg-secondary/40 rounded-xl" />
         ) : requests.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No requests sent yet.</p>
+          <p className="text-sm text-muted-foreground p-2">No requests sent yet.</p>
         ) : (
           requests.map((req) => (
             <RequestRow

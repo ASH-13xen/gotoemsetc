@@ -36,25 +36,25 @@ export function SalarySlipsList({ employeeId, employeeName }: { employeeId: stri
       </CardHeader>
       <CardContent className="grid gap-2">
         {isLoading ? (
-          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-12 w-full bg-secondary/40 rounded-xl" />
         ) : slips.length === 0 ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <p className="flex items-center gap-2 text-sm text-muted-foreground p-2">
             <FileText className="size-4" />
             No salary slips generated yet.
           </p>
         ) : (
           slips.map((slip) => (
-            <div key={slip._id} className="flex items-center justify-between gap-4 rounded-lg border p-3">
+            <div key={slip._id} className="flex items-center justify-between gap-4 rounded-xl bg-secondary/30 p-4 border border-border/5">
               <span className="flex flex-col text-sm">
-                <span className="font-medium">
+                <span className="font-semibold text-foreground">
                   {MONTH_NAMES[slip.month - 1]} {slip.year}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground mt-0.5">
                   Net Payable: {formatCurrency(slip.netPayable)} · through{' '}
                   {new Date(slip.cutoffDate).toLocaleDateString()}
                 </span>
               </span>
-              <Button variant="outline" size="sm" onClick={() => onDownload(slip._id, slip.month, slip.year)}>
+              <Button variant="outline" size="sm" className="rounded-xl" onClick={() => onDownload(slip._id, slip.month, slip.year)}>
                 <Download className="size-3.5" />
                 Download
               </Button>

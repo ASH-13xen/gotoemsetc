@@ -41,23 +41,21 @@ export default function DashboardPage() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<EmployeeStatus | 'all'>('all')
   const debouncedSearch = useDebouncedValue(search, 350)
-
   const { data, isLoading } = useEmployees({
     search: debouncedSearch || undefined,
     status: status === 'all' ? undefined : status,
     limit: 50,
   })
+  const employees = data?.items ?? []
   const { data: stats } = useDashboardStats()
 
-  const employees = data?.items ?? []
-
   return (
-    <div className="min-h-screen bg-background text-foreground p-6">
+    <div className="space-y-8 py-4">
       <main className="mx-auto max-w-6xl space-y-8">
         {/* HERO HEADER */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-transparent">
           {/* Logo/Branding Tile */}
-          <div className="md:col-span-2 bg-card border border-border p-8 rounded-2xl flex flex-col justify-between min-h-[180px] shadow-sm">
+          <div className="md:col-span-2 bg-card/90 backdrop-blur-md p-8 rounded-2xl flex flex-col justify-between min-h-[180px] shadow-diffuse hover:-translate-y-0.5 transition-all duration-300">
             <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">EMPLOYEE MANAGEMENT SYSTEM</span>
             <h1 className="text-5xl font-extrabold tracking-tight text-foreground select-none">
               EMS
@@ -117,7 +115,7 @@ export default function DashboardPage() {
         </motion.div>
 
         {/* FILTERS & CONTROLS */}
-        <div className="bg-card border border-border rounded-xl p-5 grid grid-cols-1 md:grid-cols-3 gap-4 shadow-sm">
+        <div className="bg-card/90 backdrop-blur-md rounded-2xl p-5 grid grid-cols-1 md:grid-cols-3 gap-4 shadow-diffuse border-0">
           <div className="md:col-span-2 relative flex items-center">
             <Search className="pointer-events-none absolute left-4 size-5 text-muted-foreground/60 z-10" />
             <Input
@@ -143,7 +141,7 @@ export default function DashboardPage() {
         </div>
 
         {/* EMPLOYEES GRID TABLE */}
-        <div className="bg-card border border-border rounded-xl overflow-x-auto shadow-sm">
+        <div className="bg-card/90 backdrop-blur-md rounded-2xl overflow-hidden shadow-diffuse border-0">
           {isLoading ? (
             <div className="space-y-4 p-6">
               {Array.from({ length: 5 }).map((_, i) => (
@@ -159,8 +157,8 @@ export default function DashboardPage() {
               </p>
             </div>
           ) : (
-            <Table className="border-collapse w-full">
-              <TableHeader className="bg-muted/30 border-b border-border">
+            <Table className="w-full">
+              <TableHeader className="bg-secondary/40 border-0">
                 <TableRow className="hover:bg-transparent">
                   <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">CODE</TableHead>
                   <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">NAME</TableHead>
@@ -169,7 +167,7 @@ export default function DashboardPage() {
                   <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">STATUS</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody className="divide-y divide-border/60">
+              <TableBody className="border-0">
                 {employees.map((employee) => (
                   <TableRow
                     key={employee._id}

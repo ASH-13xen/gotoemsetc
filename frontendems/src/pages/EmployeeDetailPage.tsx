@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Card } from '@/components/ui/card'
 import {
   Select,
   SelectContent,
@@ -131,9 +132,9 @@ function toFormValues(employee: Employee): FormValues {
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="border-b-2 border-neutral-900 pb-3">
-      <p className="text-xs font-black uppercase tracking-widest text-neutral-400">{label}</p>
-      <p className="text-base font-bold text-white mt-1 uppercase tracking-wide">{value || '—'}</p>
+    <div className="border-b border-border/40 pb-3">
+      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
+      <p className="text-base font-bold text-foreground mt-1 uppercase tracking-wide">{value || '—'}</p>
     </div>
   )
 }
@@ -166,9 +167,9 @@ export default function EmployeeDetailPage() {
 
   if (isLoading || !data) {
     return (
-      <div className="mx-auto max-w-3xl space-y-4 p-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
+      <div className="mx-auto max-w-3xl space-y-4 py-4 bg-transparent">
+        <Skeleton className="h-8 w-48 bg-secondary/40 rounded-xl" />
+        <Skeleton className="h-64 w-full bg-secondary/40 rounded-xl" />
       </div>
     )
   }
@@ -235,41 +236,41 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
+    <div className="space-y-8 py-4">
       <main className="mx-auto max-w-4xl space-y-8">
         {/* HERO DETAIL HEADER */}
-        <div className="grid grid-cols-1 md:grid-cols-3 border-2 border-white bg-black">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 bg-transparent">
           {/* Identity Tile */}
-          <div className="md:col-span-2 border-b-2 md:border-b-0 md:border-r-2 border-white p-8 flex flex-col justify-between min-h-55">
+          <Card className="md:col-span-2 p-8 flex flex-col justify-between min-h-[220px]">
             <div className="flex flex-col gap-2">
-              <span className="text-xs font-black tracking-widest text-neutral-400 uppercase">EMPLOYEE PROFILE</span>
-              <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tighter text-white">
+              <span className="text-xs font-bold tracking-widest text-muted-foreground uppercase">EMPLOYEE PROFILE</span>
+              <h1 className="text-4xl md:text-6xl font-extrabold uppercase tracking-tighter text-foreground">
                 {employee.firstName} {employee.lastName}
               </h1>
-              <p className="font-mono text-base font-bold text-neutral-400 mt-1 uppercase tracking-wider">{employee.employeeCode}</p>
+              <p className="font-mono text-base font-semibold text-muted-foreground mt-1 uppercase tracking-wider">{employee.employeeCode}</p>
             </div>
             <div className="mt-4 flex gap-2">
               <StatusBadge status={employee.status} />
             </div>
-          </div>
+          </Card>
 
           {/* Action Tiles */}
-          <div className="grid grid-cols-1 divide-y-2 divide-white">
+          <div className="flex flex-col gap-4">
             {/* Back Button */}
             <div
               onClick={() => navigate('/')}
-              className="bg-primary text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-25"
+              className="bg-primary/10 text-primary p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
             >
-              <span className="text-xs font-black tracking-widest opacity-80 uppercase">NAVIGATION</span>
+              <span className="text-[10px] font-bold tracking-widest text-primary/70 uppercase">NAVIGATION</span>
               <span className="text-2xl font-extrabold uppercase tracking-wide">BACK TO PORTAL</span>
             </div>
 
             {/* Generate Documents */}
             <div
               onClick={() => navigate(`/employees/${employeeId}/wizard`)}
-              className="bg-blue-700 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-25"
+              className="bg-secondary text-secondary-foreground p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
             >
-              <span className="text-xs font-black tracking-widest opacity-80 uppercase">DOCUMENT SYSTEM</span>
+              <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">DOCUMENT SYSTEM</span>
               <span className="text-2xl font-extrabold uppercase tracking-wide">GENERATE DOCS</span>
             </div>
 
@@ -281,9 +282,9 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
               employeePhone={employee.phone}
               trigger={
                 <div
-                  className="bg-neutral-800 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-25"
+                  className="bg-secondary text-secondary-foreground p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
                 >
-                  <span className="text-xs font-black tracking-widest opacity-80 uppercase">HR COLLECTION</span>
+                  <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">HR COLLECTION</span>
                   <span className="text-2xl font-extrabold uppercase tracking-wide">REQUEST FILES</span>
                 </div>
               }
@@ -295,8 +296,8 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 employeeId={employeeId}
                 employeeName={`${employee.firstName} ${employee.lastName ?? ''}`}
                 trigger={
-                  <div className="bg-purple-800 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-25">
-                    <span className="text-xs font-black tracking-widest opacity-80 uppercase">PLATFORM ACCESS</span>
+                  <div className="bg-purple-500/10 text-purple-700 p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]">
+                    <span className="text-[10px] font-bold tracking-widest text-purple-700/70 uppercase">PLATFORM ACCESS</span>
                     <span className="text-2xl font-extrabold uppercase tracking-wide">ADD CREDENTIALS</span>
                   </div>
                 }
@@ -309,8 +310,8 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 employeeId={employeeId}
                 employeeName={`${employee.firstName} ${employee.lastName ?? ''}`}
                 trigger={
-                  <div className="bg-emerald-800 text-white p-6 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-25">
-                    <span className="text-xs font-black tracking-widest opacity-80 uppercase">PAYROLL</span>
+                  <div className="bg-emerald-500/10 text-emerald-700 p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]">
+                    <span className="text-[10px] font-bold tracking-widest text-emerald-700/70 uppercase">PAYROLL</span>
                     <span className="text-2xl font-extrabold uppercase tracking-wide">GENERATE SALARY SLIP</span>
                   </div>
                 }
@@ -323,47 +324,47 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Personal Details */}
-            <div className="border-2 border-white bg-black p-6 space-y-6">
-              <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-white pb-3 text-white">
+            <Card className="p-6 space-y-6">
+              <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
                 PERSONAL DETAILS
               </h2>
               <div className="grid grid-cols-1 gap-4">
                 <div className="grid gap-1.5">
-                  <Label htmlFor="firstName" className="text-xs font-black uppercase tracking-widest text-neutral-400">FIRST NAME</Label>
-                  <Input id="firstName" {...register('firstName', { required: true })} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Label htmlFor="firstName" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">FIRST NAME</Label>
+                  <Input id="firstName" {...register('firstName', { required: true })} className="uppercase" />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="lastName" className="text-xs font-black uppercase tracking-widest text-neutral-400">LAST NAME</Label>
-                  <Input id="lastName" {...register('lastName')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Label htmlFor="lastName" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">LAST NAME</Label>
+                  <Input id="lastName" {...register('lastName')} className="uppercase" />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="personalEmail" className="text-xs font-black uppercase tracking-widest text-neutral-400">PERSONAL EMAIL</Label>
-                  <Input id="personalEmail" type="email" {...register('personalEmail')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Label htmlFor="personalEmail" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">PERSONAL EMAIL</Label>
+                  <Input id="personalEmail" type="email" {...register('personalEmail')} className="uppercase" />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="phone" className="text-xs font-black uppercase tracking-widest text-neutral-400">PHONE</Label>
-                  <Input id="phone" {...register('phone')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Label htmlFor="phone" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">PHONE</Label>
+                  <Input id="phone" {...register('phone')} className="uppercase" />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="instagramId" className="text-xs font-black uppercase tracking-widest text-neutral-400">INSTAGRAM ID</Label>
-                  <Input id="instagramId" {...register('instagramId')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Label htmlFor="instagramId" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">INSTAGRAM ID</Label>
+                  <Input id="instagramId" {...register('instagramId')} className="uppercase" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-1.5">
-                    <Label htmlFor="dob" className="text-xs font-black uppercase tracking-widest text-neutral-400">DATE OF BIRTH</Label>
-                    <Input id="dob" type="date" {...register('dob')} className="bg-neutral-900 border-white text-white rounded-none" />
+                    <Label htmlFor="dob" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">DATE OF BIRTH</Label>
+                    <Input id="dob" type="date" {...register('dob')} />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label className="text-xs font-black uppercase tracking-widest text-neutral-400">BLOOD GROUP</Label>
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">BLOOD GROUP</Label>
                     <Controller
                       control={control}
                       name="bloodGroup"
                       render={({ field }) => (
                         <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="bg-neutral-900 border-white text-white rounded-none">
+                          <SelectTrigger>
                             <SelectValue placeholder="SELECT" />
                           </SelectTrigger>
-                          <SelectContent className="bg-black border-white text-white rounded-none">
+                          <SelectContent>
                             {BLOOD_GROUPS.map((bg) => (
                               <SelectItem key={bg} value={bg}>{bg}</SelectItem>
                             ))}
@@ -374,52 +375,52 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   </div>
                 </div>
               </div>
-            </div>
+            </Card>
 
             {/* Employment */}
-            <div className="border-2 border-white bg-black p-6 space-y-6">
-              <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-white pb-3 text-white">
+            <Card className="p-6 space-y-6">
+              <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
                 EMPLOYMENT
               </h2>
               <div className="grid grid-cols-1 gap-4">
                 <div className="grid gap-1.5">
-                  <Label htmlFor="designation" className="text-xs font-black uppercase tracking-widest text-neutral-400">DESIGNATION</Label>
-                  <Input id="designation" {...register('designation', { required: true })} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Label htmlFor="designation" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">DESIGNATION</Label>
+                  <Input id="designation" {...register('designation', { required: true })} className="uppercase" />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="department" className="text-xs font-black uppercase tracking-widest text-neutral-400">DEPARTMENT</Label>
-                  <Input id="department" {...register('department')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Label htmlFor="department" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">DEPARTMENT</Label>
+                  <Input id="department" {...register('department')} className="uppercase" />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="reportingManager" className="text-xs font-black uppercase tracking-widest text-neutral-400">REPORTING MANAGER</Label>
-                  <Input id="reportingManager" {...register('reportingManager')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Label htmlFor="reportingManager" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">REPORTING MANAGER</Label>
+                  <Input id="reportingManager" {...register('reportingManager')} className="uppercase" />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="workLocation" className="text-xs font-black uppercase tracking-widest text-neutral-400">WORK LOCATION</Label>
-                  <Input id="workLocation" {...register('workLocation')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Label htmlFor="workLocation" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">WORK LOCATION</Label>
+                  <Input id="workLocation" {...register('workLocation')} className="uppercase" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-1.5">
-                    <Label htmlFor="dateOfHiring" className="text-xs font-black uppercase tracking-widest text-neutral-400">DATE OF HIRING</Label>
-                    <Input id="dateOfHiring" type="date" {...register('dateOfHiring')} className="bg-neutral-900 border-white text-white rounded-none" />
+                    <Label htmlFor="dateOfHiring" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">DATE OF HIRING</Label>
+                    <Input id="dateOfHiring" type="date" {...register('dateOfHiring')} />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label htmlFor="dateOfJoining" className="text-xs font-black uppercase tracking-widest text-neutral-400">DATE OF JOINING</Label>
-                    <Input id="dateOfJoining" type="date" {...register('dateOfJoining')} className="bg-neutral-900 border-white text-white rounded-none" />
+                    <Label htmlFor="dateOfJoining" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">DATE OF JOINING</Label>
+                    <Input id="dateOfJoining" type="date" {...register('dateOfJoining')} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-1.5">
-                    <Label className="text-xs font-black uppercase tracking-widest text-neutral-400">EMPLOYMENT TYPE</Label>
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">EMPLOYMENT TYPE</Label>
                     <Controller
                       control={control}
                       name="employmentType"
                       render={({ field }) => (
                         <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="bg-neutral-900 border-white text-white rounded-none">
+                          <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
-                          <SelectContent className="bg-black border-white text-white rounded-none">
+                          <SelectContent>
                             <SelectItem value="full-time">FULL-TIME</SelectItem>
                             <SelectItem value="part-time">PART-TIME</SelectItem>
                             <SelectItem value="contract">CONTRACT</SelectItem>
@@ -430,16 +431,16 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                     />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label className="text-xs font-black uppercase tracking-widest text-neutral-400">STATUS</Label>
+                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">STATUS</Label>
                     <Controller
                       control={control}
                       name="status"
                       render={({ field }) => (
                         <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="bg-neutral-900 border-white text-white rounded-none">
+                          <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
-                          <SelectContent className="bg-black border-white text-white rounded-none">
+                          <SelectContent>
                             <SelectItem value="draft">DRAFT</SelectItem>
                             <SelectItem value="active">ACTIVE</SelectItem>
                             <SelectItem value="offboarded">OFFBOARDED</SelectItem>
@@ -450,32 +451,32 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   </div>
                 </div>
               </div>
-            </div>
+            </Card>
           </div>
 
           {/* Addresses */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="border-2 border-white bg-black p-6 space-y-4">
-              <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-white pb-3 text-white">
+            <Card className="p-6 space-y-4">
+              <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
                 PERMANENT ADDRESS
               </h2>
               <div className="grid grid-cols-1 gap-4">
-                <Textarea {...register('permanentAddress.line1')} placeholder="ADDRESS LINE 1" className="bg-neutral-900 border-white text-white rounded-none" />
-                <Input {...register('permanentAddress.line2')} placeholder="ADDRESS LINE 2" className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                <Textarea {...register('permanentAddress.line1')} placeholder="ADDRESS LINE 1" />
+                <Input {...register('permanentAddress.line2')} placeholder="ADDRESS LINE 2" className="uppercase" />
                 <div className="grid grid-cols-2 gap-4">
-                  <Input {...register('permanentAddress.city')} placeholder="CITY" className="bg-neutral-900 border-white text-white rounded-none uppercase" />
-                  <Input {...register('permanentAddress.state')} placeholder="STATE" className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Input {...register('permanentAddress.city')} placeholder="CITY" className="uppercase" />
+                  <Input {...register('permanentAddress.state')} placeholder="STATE" className="uppercase" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <Input {...register('permanentAddress.pincode')} placeholder="PINCODE" className="bg-neutral-900 border-white text-white rounded-none" />
-                  <Input {...register('permanentAddress.country')} placeholder="COUNTRY" className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Input {...register('permanentAddress.pincode')} placeholder="PINCODE" />
+                  <Input {...register('permanentAddress.country')} placeholder="COUNTRY" className="uppercase" />
                 </div>
               </div>
-            </div>
+            </Card>
 
-            <div className="border-2 border-white bg-black p-6 space-y-4">
-              <div className="flex items-center justify-between border-b-2 border-white pb-3 flex-wrap gap-2">
-                <h2 className="text-2xl font-black uppercase tracking-widest text-white">
+            <Card className="p-6 space-y-4">
+              <div className="flex items-center justify-between border-b border-border/15 pb-3 flex-wrap gap-2">
+                <h2 className="text-2xl font-bold uppercase tracking-widest text-foreground">
                   LOCAL ADDRESS
                 </h2>
                 <CheckboxRow
@@ -490,14 +491,14 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   placeholder="ADDRESS LINE 1"
                   disabled={sameAsPermanent}
                   value={sameAsPermanent ? permanentAddress?.line1 : undefined}
-                  className="bg-neutral-900 border-white text-white rounded-none disabled:opacity-50"
+                  className="disabled:opacity-50"
                 />
                 <Input
                   {...register('localAddress.line2')}
                   placeholder="ADDRESS LINE 2"
                   disabled={sameAsPermanent}
                   value={sameAsPermanent ? permanentAddress?.line2 : undefined}
-                  className="bg-neutral-900 border-white text-white rounded-none uppercase disabled:opacity-50"
+                  className="uppercase disabled:opacity-50"
                 />
                 <div className="grid grid-cols-2 gap-4">
                   <Input
@@ -505,14 +506,14 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                     placeholder="CITY"
                     disabled={sameAsPermanent}
                     value={sameAsPermanent ? permanentAddress?.city : undefined}
-                    className="bg-neutral-900 border-white text-white rounded-none uppercase disabled:opacity-50"
+                    className="uppercase disabled:opacity-50"
                   />
                   <Input
                     {...register('localAddress.state')}
                     placeholder="STATE"
                     disabled={sameAsPermanent}
                     value={sameAsPermanent ? permanentAddress?.state : undefined}
-                    className="bg-neutral-900 border-white text-white rounded-none uppercase disabled:opacity-50"
+                    className="uppercase disabled:opacity-50"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -521,23 +522,23 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                     placeholder="PINCODE"
                     disabled={sameAsPermanent}
                     value={sameAsPermanent ? permanentAddress?.pincode : undefined}
-                    className="bg-neutral-900 border-white text-white rounded-none disabled:opacity-50"
+                    className="disabled:opacity-50"
                   />
                   <Input
                     {...register('localAddress.country')}
                     placeholder="COUNTRY"
                     disabled={sameAsPermanent}
                     value={sameAsPermanent ? permanentAddress?.country : undefined}
-                    className="bg-neutral-900 border-white text-white rounded-none uppercase disabled:opacity-50"
+                    className="uppercase disabled:opacity-50"
                   />
                 </div>
               </div>
-            </div>
+            </Card>
           </div>
 
           {/* Onboarding Checklist */}
-          <div className="border-2 border-white bg-black p-6 space-y-6">
-            <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-white pb-3 text-white">
+          <Card className="p-6 space-y-6">
+            <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
               ONBOARDING CHECKLIST
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -570,59 +571,59 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 )}
               />
             </div>
-          </div>
+          </Card>
 
           {/* Compensation & IDs — admin-only */}
           {isAdmin && (
-            <div className="border-2 border-white bg-black p-6 space-y-6">
-              <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-white pb-3 text-white">
+            <Card className="p-6 space-y-6">
+              <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
                 COMPENSATION & IDENTIFICATION
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="grid gap-1.5">
-                  <Label htmlFor="ctcAnnual" className="text-xs font-black uppercase tracking-widest text-neutral-400">ANNUAL CTC</Label>
-                  <Input id="ctcAnnual" type="number" {...register('ctcAnnual')} className="bg-neutral-900 border-white text-white rounded-none" />
+                  <Label htmlFor="ctcAnnual" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">ANNUAL CTC</Label>
+                  <Input id="ctcAnnual" type="number" {...register('ctcAnnual')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="monthlyPay" className="text-xs font-black uppercase tracking-widest text-neutral-400">MONTHLY PAY</Label>
-                  <Input id="monthlyPay" type="number" {...register('monthlyPay')} className="bg-neutral-900 border-white text-white rounded-none" />
+                  <Label htmlFor="monthlyPay" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">MONTHLY PAY</Label>
+                  <Input id="monthlyPay" type="number" {...register('monthlyPay')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="panNumber" className="text-xs font-black uppercase tracking-widest text-neutral-400">PAN NUMBER</Label>
-                  <Input id="panNumber" {...register('panNumber')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Label htmlFor="panNumber" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">PAN NUMBER</Label>
+                  <Input id="panNumber" {...register('panNumber')} className="uppercase" />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="aadharNumber" className="text-xs font-black uppercase tracking-widest text-neutral-400">AADHAR NUMBER</Label>
-                  <Input id="aadharNumber" {...register('aadharNumber')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Label htmlFor="aadharNumber" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">AADHAR NUMBER</Label>
+                  <Input id="aadharNumber" {...register('aadharNumber')} className="uppercase" />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="bankName" className="text-xs font-black uppercase tracking-widest text-neutral-400">BANK NAME</Label>
-                  <Input id="bankName" {...register('bankName')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Label htmlFor="bankName" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">BANK NAME</Label>
+                  <Input id="bankName" {...register('bankName')} className="uppercase" />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="bankAccountNumber" className="text-xs font-black uppercase tracking-widest text-neutral-400">BANK A/C NUMBER</Label>
-                  <Input id="bankAccountNumber" {...register('bankAccountNumber')} className="bg-neutral-900 border-white text-white rounded-none" />
+                  <Label htmlFor="bankAccountNumber" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">BANK A/C NUMBER</Label>
+                  <Input id="bankAccountNumber" {...register('bankAccountNumber')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="bankIFSC" className="text-xs font-black uppercase tracking-widest text-neutral-400">IFSC CODE</Label>
-                  <Input id="bankIFSC" {...register('bankIFSC')} className="bg-neutral-900 border-white text-white rounded-none uppercase" />
+                  <Label htmlFor="bankIFSC" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">IFSC CODE</Label>
+                  <Input id="bankIFSC" {...register('bankIFSC')} className="uppercase" />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="payDate" className="text-xs font-black uppercase tracking-widest text-neutral-400">PAY DATE (DAY OF MONTH)</Label>
-                  <Input id="payDate" type="number" min="1" max="31" {...register('payDate')} className="bg-neutral-900 border-white text-white rounded-none" />
+                  <Label htmlFor="payDate" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">PAY DATE (DAY OF MONTH)</Label>
+                  <Input id="payDate" type="number" min="1" max="31" {...register('payDate')} />
                 </div>
               </div>
-            </div>
+            </Card>
           )}
 
           {/* Extra Details — freeform key/value pairs, like Render's env vars */}
-          <div className="border-2 border-white bg-black p-6 space-y-6">
-            <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-white pb-3 text-white">
+          <Card className="p-6 space-y-6">
+            <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
               EXTRA DETAILS
             </h2>
             <div className="space-y-3">
               {extraDetails.fields.length === 0 && (
-                <p className="text-xs font-bold uppercase tracking-widest text-neutral-500">
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                   No extra details yet. Add anything that doesn't have its own field below.
                 </p>
               )}
@@ -631,17 +632,18 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   <Input
                     placeholder="KEY"
                     {...register(`extraDetails.${index}.key` as const)}
-                    className="flex-1 bg-neutral-900 border-white font-mono text-white rounded-none uppercase placeholder:text-neutral-600"
+                    className="flex-1 font-mono uppercase"
                   />
                   <Input
                     placeholder="VALUE"
                     {...register(`extraDetails.${index}.value` as const)}
-                    className="flex-1 bg-neutral-900 border-white font-mono text-white rounded-none placeholder:text-neutral-600"
+                    className="flex-1 font-mono"
                   />
                   <Button
                     type="button"
+                    variant="ghost"
                     onClick={() => extraDetails.remove(index)}
-                    className="h-12 w-12 shrink-0 bg-neutral-900 border-2 border-white text-white hover:bg-red-600 hover:border-red-600 rounded-none p-0"
+                    className="h-10 w-10 shrink-0 text-muted-foreground hover:text-destructive rounded-xl p-0"
                   >
                     <Trash2 className="size-4" />
                   </Button>
@@ -650,20 +652,21 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
             </div>
             <Button
               type="button"
+              variant="outline"
               onClick={() => extraDetails.append({ key: '', value: '' })}
-              className="bg-neutral-900 border-2 border-white text-white hover:bg-neutral-800 rounded-none uppercase tracking-widest font-bold"
+              className="rounded-xl uppercase tracking-widest font-bold"
             >
               <Plus className="size-4" />
               Add Variable
             </Button>
-          </div>
+          </Card>
 
           {/* Form Action Buttons */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Button
               type="submit"
               disabled={updateEmployee.isPending}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xl font-extrabold h-16 rounded-none tracking-widest border-none"
+              className="bg-emerald-500/10 text-emerald-700 text-lg font-bold h-14 rounded-xl tracking-wider border-0 hover:bg-emerald-500/25 transition-all cursor-pointer shadow-none"
             >
               {updateEmployee.isPending && <Loader2 className="size-5 animate-spin" />}
               SAVE PROFILE CHANGES
@@ -672,7 +675,8 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
               type="button"
               onClick={onDelete}
               disabled={deleteEmployee.isPending}
-              className="bg-red-600 hover:bg-red-500 text-white text-xl font-extrabold h-16 rounded-none tracking-widest border-none"
+              variant="ghost"
+              className="text-destructive hover:bg-destructive/10 text-lg font-bold h-14 rounded-xl tracking-wider cursor-pointer"
             >
               {deleteEmployee.isPending && <Loader2 className="size-5 animate-spin" />}
               DELETE PROFILE
@@ -682,8 +686,8 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
 
         {/* Recruitment Details — carried over from the application, only present on employees hired through the pipeline */}
         {employee.sourceApplicant && (
-          <div className="border-2 border-white bg-black p-6 space-y-6">
-            <h2 className="text-2xl font-black uppercase tracking-widest border-b-2 border-white pb-3 text-white">
+          <Card className="p-6 space-y-6">
+            <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
               RECRUITMENT DETAILS
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -703,7 +707,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
             </div>
             {employee.resumes && employee.resumes.length > 0 && (
               <div className="pt-2">
-                <p className="text-xs font-black uppercase tracking-widest text-neutral-400 mb-2">RESUME FILE(S)</p>
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">RESUME FILE(S)</p>
                 <div className="flex flex-wrap gap-3">
                   {employee.resumes.map((resume, i) => (
                     <a
@@ -711,7 +715,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                       href={resume.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex h-12 items-center gap-2 border-2 border-white bg-transparent px-4 font-bold uppercase tracking-wider text-white hover:bg-white hover:text-black transition-colors"
+                      className="inline-flex h-10 items-center gap-2 rounded-xl bg-secondary/50 px-4 text-sm font-semibold uppercase tracking-wider text-foreground hover:bg-secondary transition-all"
                     >
                       {resume.originalFilename || `RESUME ${i + 1}`}
                     </a>
@@ -719,7 +723,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 </div>
               </div>
             )}
-          </div>
+          </Card>
         )}
 
         <div className="mt-8 grid gap-8">

@@ -11,11 +11,11 @@ import { getPublicUploadStatus, uploadPublicDocuments } from '@/api/publicUpload
 
 function CenteredMessage({ icon, title, description }: { icon: React.ReactNode; title: string; description?: string }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black p-4 text-white">
-      <div className="flex max-w-sm flex-col items-center gap-4 text-center border-2 border-white p-8">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
+      <div className="flex max-w-sm flex-col items-center gap-4 text-center bg-card rounded-2xl shadow-diffuse border border-border/10 p-8">
         {icon}
-        <h1 className="text-xl font-black uppercase tracking-wider">{title}</h1>
-        {description && <p className="text-sm font-bold text-neutral-400 uppercase tracking-widest">{description}</p>}
+        <h1 className="text-xl font-bold uppercase tracking-wider text-foreground">{title}</h1>
+        {description && <p className="text-sm font-semibold text-muted-foreground uppercase tracking-widest">{description}</p>}
       </div>
     </div>
   )
@@ -74,38 +74,38 @@ export default function PublicUploadPage() {
   const hasSelection = Object.keys(selectedFiles).length > 0
 
   return (
-    <div className="min-h-screen bg-black text-white p-6 flex flex-col items-center justify-center">
+    <div className="min-h-screen bg-background text-foreground p-6 flex flex-col items-center justify-center">
       <div className="w-full max-w-md space-y-6">
-        <div className="flex items-center justify-center gap-2 text-neutral-400">
+        <div className="flex items-center justify-center gap-2 text-muted-foreground">
           <Building2 className="size-5" />
-          <span className="text-xs font-black uppercase tracking-widest">EMS SECURE COLLECTION</span>
+          <span className="text-xs font-bold uppercase tracking-widest">EMS SECURE COLLECTION</span>
         </div>
         
-        <div className="border-2 border-white bg-black p-8 space-y-6">
-          <div className="border-b-2 border-white pb-4">
-            <h1 className="text-2xl font-black uppercase tracking-widest text-white">UPLOAD REQUEST</h1>
-            <p className="mt-2 text-sm font-bold text-neutral-400 uppercase tracking-wide">
+        <div className="bg-card rounded-2xl shadow-diffuse border border-border/10 p-8 space-y-6">
+          <div className="border-b border-border/15 pb-4">
+            <h1 className="text-2xl font-bold uppercase tracking-widest text-foreground">UPLOAD REQUEST</h1>
+            <p className="mt-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
               Hi {status.employeeName}, please upload the requested documents.
             </p>
           </div>
-
+ 
           <div className="space-y-4">
             {status.requestedDocTypes.map((docType) => {
               const uploaded = isUploaded(docType)
               return (
-                <div key={docType} className="border-2 border-neutral-800 p-4 bg-neutral-950/20">
+                <div key={docType} className="bg-secondary/40 rounded-xl p-4 border border-border/5">
                   <div className="mb-3 flex items-center justify-between gap-2">
-                    <span className="text-sm font-black uppercase tracking-wider text-white">{labelFor(docType)}</span>
+                    <span className="text-sm font-bold uppercase tracking-wider text-foreground">{labelFor(docType)}</span>
                     {uploaded && (
-                      <span className="inline-flex items-center gap-1 border-2 border-emerald-500 bg-emerald-950/40 px-2 py-0.5 text-xs font-bold uppercase tracking-widest text-emerald-400">
-                        <CheckCircle2 className="size-3.5" />
+                      <span className="inline-flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 rounded-lg">
+                        <CheckCircle2 className="size-3" />
                         SUBMITTED
                       </span>
                     )}
                   </div>
-                  <label className="flex h-16 cursor-pointer items-center justify-center gap-2 border-2 border-dashed border-white bg-neutral-900 hover:bg-neutral-800 transition-colors rounded-none p-4">
-                    <UploadCloud className="size-5 shrink-0 text-neutral-400" />
-                    <span className="truncate text-sm font-bold uppercase tracking-wider text-white select-none">
+                  <label className="flex h-14 cursor-pointer items-center justify-center gap-2 border border-dashed border-muted-foreground/30 bg-card hover:bg-secondary/50 transition-colors rounded-xl p-4">
+                    <UploadCloud className="size-5 shrink-0 text-muted-foreground" />
+                    <span className="truncate text-sm font-semibold uppercase tracking-wider text-foreground select-none">
                       {selectedFiles[docType]?.name ?? (uploaded ? 'REPLACE FILE…' : 'CHOOSE FILE…')}
                     </span>
                     <input
@@ -123,9 +123,9 @@ export default function PublicUploadPage() {
               )
             })}
           </div>
-
+ 
           <Button
-            className="w-full bg-primary hover:opacity-90 text-white font-extrabold text-lg h-14 rounded-none border-none tracking-widest uppercase mt-4"
+            className="w-full bg-primary text-primary-foreground font-bold text-base h-12 rounded-xl hover:brightness-105 transition-all shadow-button mt-4 border-0 cursor-pointer"
             disabled={!hasSelection || uploadMutation.isPending}
             onClick={() => uploadMutation.mutate()}
           >

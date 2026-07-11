@@ -131,19 +131,19 @@ export function RequestDocumentsModal({
                         )
                       }
                       className={cn(
-                        'flex items-center gap-2 rounded-md border px-3 py-2 text-left text-sm',
-                        selected ? 'border-primary bg-accent/50' : 'hover:bg-muted/50'
+                        'flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition-all',
+                        selected ? 'border-primary bg-primary/5 text-primary' : 'hover:bg-muted/50 border-border/40'
                       )}
                     >
                       <span
                         className={cn(
-                          'flex size-4 shrink-0 items-center justify-center rounded border',
+                          'flex size-4 shrink-0 items-center justify-center rounded-md border',
                           selected ? 'border-primary bg-primary text-primary-foreground' : 'border-input'
                         )}
                       >
                         {selected && <Check className="size-3" />}
                       </span>
-                      <span className="min-w-0 truncate">{docType.label}</span>
+                      <span className="min-w-0 truncate font-medium">{docType.label}</span>
                     </button>
                   )
                 })}
@@ -152,7 +152,7 @@ export function RequestDocumentsModal({
             <div className="grid gap-1.5">
               <Label>Link expires in</Label>
               <Select value={expiresInHours} onValueChange={setExpiresInHours}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full rounded-xl">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -163,17 +163,17 @@ export function RequestDocumentsModal({
                 </SelectContent>
               </Select>
             </div>
-            <DialogFooter>
-              <Button onClick={onSubmit} disabled={createUploadRequest.isPending}>
+            <DialogFooter className="mt-2">
+              <Button onClick={onSubmit} className="rounded-xl" disabled={createUploadRequest.isPending}>
                 Create link
               </Button>
             </DialogFooter>
           </div>
         ) : (
           <div className="grid gap-4">
-            <div className="flex min-w-0 items-center gap-2 rounded-md border bg-muted/40 p-3">
-              <code className="min-w-0 flex-1 truncate text-xs">{link}</code>
-              <Button size="sm" variant="outline" onClick={onCopy}>
+            <div className="flex min-w-0 items-center gap-2 rounded-xl border border-border/10 bg-secondary/50 p-3">
+              <code className="min-w-0 flex-1 truncate text-xs font-mono pl-2 text-foreground/80">{link}</code>
+              <Button size="sm" variant="outline" className="rounded-lg" onClick={onCopy}>
                 {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
                 Copy
               </Button>
@@ -186,8 +186,8 @@ export function RequestDocumentsModal({
               emailHref={employeeEmail ? buildGmailComposeUrl(employeeEmail, `Document Request — ${companyName}`, emailBody) : undefined}
               whatsappHref={employeePhone ? buildWhatsappUrl(employeePhone, whatsappText) : undefined}
             />
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setOpen(false)}>
+            <DialogFooter className="mt-2">
+              <Button variant="outline" className="rounded-xl" onClick={() => setOpen(false)}>
                 Done
               </Button>
             </DialogFooter>

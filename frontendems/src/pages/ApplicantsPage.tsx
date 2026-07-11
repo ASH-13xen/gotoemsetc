@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Search, Users2 } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
+import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -52,35 +53,35 @@ export default function ApplicantsPage() {
   const applicants = (data?.items ?? []).filter((a) => (tab === 'rejected' ? true : a.status !== 'rejected'))
 
   return (
-    <div className="min-h-screen bg-white text-neutral-900 p-6">
+    <div className="space-y-8 py-4">
       <main className="mx-auto max-w-6xl space-y-8">
         {/* HERO HEADER */}
-        <div className="grid grid-cols-1 md:grid-cols-3 border-2 border-neutral-900 bg-white">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {/* Logo/Branding Tile */}
-          <div className="md:col-span-2 border-b-2 md:border-b-0 md:border-r-2 border-neutral-900 p-8 flex flex-col justify-between min-h-45">
-            <span className="text-xs font-black tracking-widest text-neutral-500 uppercase">RECRUITMENT PIPELINE</span>
-            <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter text-neutral-900 select-none">
+          <Card className="md:col-span-2 p-8 flex flex-col justify-between min-h-[180px]">
+            <span className="text-xs font-bold tracking-widest text-muted-foreground uppercase">RECRUITMENT PIPELINE</span>
+            <h1 className="text-5xl md:text-7xl font-extrabold uppercase tracking-tighter text-foreground select-none">
               APPLICANTS
             </h1>
-          </div>
+          </Card>
 
           {/* Action Tiles */}
-          <div className="grid grid-cols-1 divide-y-2 divide-neutral-900">
+          <div className="flex flex-col gap-4">
             {/* Back to Portal */}
             <div
               onClick={() => navigate('/')}
-              className="bg-primary text-primary-foreground p-8 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-30"
+              className="bg-primary/10 text-primary p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
             >
-              <span className="text-xs font-black tracking-widest opacity-80 uppercase">NAVIGATION</span>
-              <span className="text-3xl font-extrabold uppercase tracking-wide">BACK TO PORTAL</span>
+              <span className="text-[10px] font-bold tracking-widest text-primary/70 uppercase">NAVIGATION</span>
+              <span className="text-2xl font-extrabold uppercase tracking-wide">BACK TO PORTAL</span>
             </div>
 
             {/* Add Applicant Tile */}
             <AddApplicantDialog
               trigger={
-                <div className="bg-emerald-600 text-white p-8 flex flex-col justify-between cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all min-h-30">
-                  <span className="text-xs font-black tracking-widest opacity-80 uppercase">INCOMING TALENT</span>
-                  <span className="text-3xl font-extrabold uppercase tracking-wide">ADD APPLICANT</span>
+                <div className="bg-emerald-500/10 text-emerald-700 p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]">
+                  <span className="text-[10px] font-bold tracking-widest text-emerald-700/70 uppercase">INCOMING TALENT</span>
+                  <span className="text-2xl font-extrabold uppercase tracking-wide">ADD APPLICANT</span>
                 </div>
               }
             />
@@ -88,12 +89,14 @@ export default function ApplicantsPage() {
         </div>
 
         {/* TABS */}
-        <div className="grid grid-cols-2 border-2 border-neutral-900 bg-white">
+        <div className="flex bg-secondary/40 p-1.5 rounded-2xl w-fit gap-1 shadow-sm">
           <button
             onClick={() => setTab('pipeline')}
             className={cn(
-              'p-4 text-center text-lg font-black uppercase tracking-widest transition-colors',
-              tab === 'pipeline' ? 'bg-neutral-900 text-white' : 'text-neutral-500 hover:text-neutral-900'
+              'px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wider transition-all duration-200',
+              tab === 'pipeline'
+                ? 'bg-card text-primary shadow-sm shadow-primary/5'
+                : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
             )}
           >
             Pipeline
@@ -101,8 +104,10 @@ export default function ApplicantsPage() {
           <button
             onClick={() => setTab('rejected')}
             className={cn(
-              'p-4 text-center text-lg font-black uppercase tracking-widest border-l-2 border-neutral-900 transition-colors',
-              tab === 'rejected' ? 'bg-neutral-900 text-white' : 'text-neutral-500 hover:text-neutral-900'
+              'px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wider transition-all duration-200',
+              tab === 'rejected'
+                ? 'bg-card text-primary shadow-sm shadow-primary/5'
+                : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
             )}
           >
             Rejected
@@ -110,12 +115,12 @@ export default function ApplicantsPage() {
         </div>
 
         {/* FILTERS & CONTROLS */}
-        <div className="border-2 border-neutral-900 bg-white p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-card rounded-2xl p-6 grid grid-cols-1 md:grid-cols-3 gap-4 border shadow-sm">
           <div className="md:col-span-2 relative flex items-center">
-            <Search className="pointer-events-none absolute left-4 size-5 text-neutral-500 z-10" />
+            <Search className="pointer-events-none absolute left-4 size-5 text-muted-foreground/60 z-10" />
             <Input
               placeholder="SEARCH BY NAME, POSITION..."
-              className="pl-12 h-14 text-lg border-2 border-neutral-900 bg-white text-neutral-900 focus:border-primary font-bold placeholder:text-neutral-400 rounded-none uppercase"
+              className="pl-12 h-12 text-base uppercase"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -123,10 +128,10 @@ export default function ApplicantsPage() {
           {tab === 'pipeline' && (
             <div className="relative">
               <Select value={status} onValueChange={(v) => setStatus(v as ApplicantStatus | 'all')}>
-                <SelectTrigger className="w-full h-14 text-lg border-2 border-neutral-900 bg-white text-neutral-900 focus:border-primary font-bold rounded-none uppercase">
+                <SelectTrigger className="w-full h-12 text-base uppercase">
                   <SelectValue placeholder="FILTER BY STATUS" />
                 </SelectTrigger>
-                <SelectContent className="border-2 border-neutral-900 bg-white text-neutral-900 rounded-none">
+                <SelectContent>
                   <SelectItem value="all">ALL STATUSES</SelectItem>
                   <SelectItem value="pending">PENDING</SelectItem>
                   <SelectItem value="interview_scheduled">INTERVIEW SCHEDULED</SelectItem>
@@ -138,11 +143,11 @@ export default function ApplicantsPage() {
         </div>
 
         {/* APPLICANTS GRID TABLE */}
-        <div className="border-2 border-neutral-900 bg-white overflow-x-auto">
+        <div className="bg-card rounded-2xl overflow-hidden border shadow-sm">
           {isLoading ? (
             <div className="space-y-4 p-6">
               {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full bg-neutral-200 rounded-none" />
+                <Skeleton key={i} className="h-12 w-full bg-secondary/40 rounded-xl" />
               ))}
             </div>
           ) : applicants.length === 0 ? (
@@ -158,29 +163,29 @@ export default function ApplicantsPage() {
               </p>
             </div>
           ) : (
-            <Table className="border-collapse w-full">
-              <TableHeader className="bg-neutral-100 border-b-2 border-neutral-900">
-                <TableRow className="border-none hover:bg-transparent">
-                  <TableHead className="text-neutral-900 font-black text-xs uppercase tracking-widest p-4">NAME</TableHead>
-                  <TableHead className="text-neutral-900 font-black text-xs uppercase tracking-widest p-4">POSITION</TableHead>
-                  <TableHead className="text-neutral-900 font-black text-xs uppercase tracking-widest p-4">DATE APPLIED</TableHead>
-                  <TableHead className="text-neutral-900 font-black text-xs uppercase tracking-widest p-4">STATUS</TableHead>
+            <Table className="w-full">
+              <TableHeader className="bg-secondary/40 border-0">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">NAME</TableHead>
+                  <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">POSITION</TableHead>
+                  <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">DATE APPLIED</TableHead>
+                  <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">STATUS</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody className="divide-y-2 divide-neutral-200">
+              <TableBody className="border-0">
                 {applicants.map((applicant) => (
                   <TableRow
                     key={applicant._id}
-                    className="cursor-pointer border-none hover:bg-neutral-100 transition-colors"
+                    className="cursor-pointer hover:bg-secondary/40 transition-colors"
                     onClick={() => navigate(`/applicants/${applicant._id}`)}
                   >
-                    <TableCell className="font-black text-base text-neutral-900 p-4 uppercase tracking-wider">
+                    <TableCell className="font-semibold text-base text-foreground p-4 uppercase tracking-wider">
                       {applicant.firstName} {applicant.lastName}
                     </TableCell>
-                    <TableCell className="text-sm text-neutral-600 p-4 font-bold uppercase">
+                    <TableCell className="text-sm text-foreground/80 p-4 font-medium uppercase">
                       {applicant.positionAppliedFor || '—'}
                     </TableCell>
-                    <TableCell className="font-mono text-sm text-neutral-500 p-4 font-bold">
+                    <TableCell className="font-mono text-sm text-muted-foreground p-4">
                       {new Date(applicant.dateApplied).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="p-4">

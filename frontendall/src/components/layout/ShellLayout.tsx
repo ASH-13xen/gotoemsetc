@@ -1,7 +1,7 @@
 import { type ReactNode, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { 
-  Home, 
+  LayoutDashboard, 
   Users, 
   DollarSign, 
   CalendarClock, 
@@ -19,7 +19,7 @@ export function ShellLayout({ children, section }: { children: ReactNode; sectio
   const [collapsed, setCollapsed] = useState(false)
 
   const links = [
-    { to: '/', label: 'Home', icon: Home, end: true },
+    { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
     { to: '/ems', label: 'EMS', icon: Users },
     { to: '/sales', label: 'Sales', icon: DollarSign },
     { to: '/followups', label: 'Followups', icon: CalendarClock },
