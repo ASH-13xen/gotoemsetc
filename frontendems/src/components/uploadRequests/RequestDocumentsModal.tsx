@@ -103,7 +103,7 @@ export function RequestDocumentsModal({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Request documents</DialogTitle>
           <DialogDescription>
@@ -116,7 +116,7 @@ export function RequestDocumentsModal({
           <div className="grid gap-4">
             <div className="grid gap-2">
               <Label>Documents to request</Label>
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {(config?.docTypes ?? []).map((docType) => {
                   const selected = selectedTypes.includes(docType.key)
                   return (
@@ -137,13 +137,13 @@ export function RequestDocumentsModal({
                     >
                       <span
                         className={cn(
-                          'flex size-4 items-center justify-center rounded border',
+                          'flex size-4 shrink-0 items-center justify-center rounded border',
                           selected ? 'border-primary bg-primary text-primary-foreground' : 'border-input'
                         )}
                       >
                         {selected && <Check className="size-3" />}
                       </span>
-                      {docType.label}
+                      <span className="min-w-0 truncate">{docType.label}</span>
                     </button>
                   )
                 })}

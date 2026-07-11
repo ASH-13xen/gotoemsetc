@@ -4,18 +4,18 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold tracking-wide transition-all duration-300 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 outline-none focus-visible:ring-2 focus-visible:ring-ring/50 shadow-sm hover:shadow active:scale-[0.98]",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-semibold tracking-wide transition-all duration-300 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 outline-none focus-visible:ring-4 focus-visible:ring-primary/10 shadow-sm active:scale-[0.96] hover:-translate-y-0.5",
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/95 border border-primary',
+        default: 'bg-gradient-to-r from-primary to-indigo-600 text-primary-foreground border-0 shadow-button hover:brightness-105',
         destructive:
-          'bg-destructive text-white hover:bg-destructive/95 border border-destructive',
+          'bg-destructive text-white hover:bg-destructive/95 border-0 shadow-md shadow-destructive/10',
         outline:
-          'border border-border bg-card text-foreground hover:bg-secondary hover:text-secondary-foreground',
+          'border-0 bg-secondary/80 text-foreground hover:bg-secondary hover:text-foreground',
         secondary:
-          'bg-secondary text-secondary-foreground hover:bg-secondary/90 border border-border',
-        ghost: 'hover:bg-accent hover:text-accent-foreground border border-transparent',
+          'bg-secondary text-secondary-foreground hover:bg-secondary/80 border-0',
+        ghost: 'hover:bg-secondary/70 hover:text-foreground border-0',
         link: 'text-primary underline-offset-4 hover:underline',
       },
       size: {

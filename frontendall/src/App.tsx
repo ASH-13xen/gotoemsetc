@@ -10,7 +10,7 @@ import { RequireRole } from '@/components/auth/RequireRole'
 import LoginPage from '@/pages/LoginPage'
 import ShellHomePage from '@/pages/ShellHomePage'
 import AuditLogPage from '@/pages/AuditLogPage'
-import { RemoteShellBar } from '@/components/layout/RemoteShellBar'
+import { ShellLayout } from '@/components/layout/ShellLayout'
 
 const RemoteEms = lazy(() => import('frontendems/App'))
 const RemoteSales = lazy(() => import('frontendsales/App'))
@@ -38,7 +38,9 @@ export default function App() {
                 path="/"
                 element={
                   <RequireAuth>
-                    <ShellHomePage />
+                    <ShellLayout section="Home">
+                      <ShellHomePage />
+                    </ShellLayout>
                   </RequireAuth>
                 }
               />
@@ -47,7 +49,9 @@ export default function App() {
                 element={
                   <RequireAuth>
                     <RequireRole role="admin">
-                      <AuditLogPage />
+                      <ShellLayout section="Audit Log">
+                        <AuditLogPage />
+                      </ShellLayout>
                     </RequireRole>
                   </RequireAuth>
                 }
@@ -56,10 +60,11 @@ export default function App() {
                 path="/ems/*"
                 element={
                   <RequireAuth>
-                    <RemoteShellBar section="EMS" />
-                    <Suspense fallback={<RemoteFallback />}>
-                      <RemoteEms basename="/ems" />
-                    </Suspense>
+                    <ShellLayout section="EMS">
+                      <Suspense fallback={<RemoteFallback />}>
+                        <RemoteEms basename="/ems" />
+                      </Suspense>
+                    </ShellLayout>
                   </RequireAuth>
                 }
               />
@@ -67,10 +72,11 @@ export default function App() {
                 path="/sales/*"
                 element={
                   <RequireAuth>
-                    <RemoteShellBar section="Sales" />
-                    <Suspense fallback={<RemoteFallback />}>
-                      <RemoteSales basename="/sales" />
-                    </Suspense>
+                    <ShellLayout section="Sales">
+                      <Suspense fallback={<RemoteFallback />}>
+                        <RemoteSales basename="/sales" />
+                      </Suspense>
+                    </ShellLayout>
                   </RequireAuth>
                 }
               />
@@ -78,10 +84,11 @@ export default function App() {
                 path="/followups/*"
                 element={
                   <RequireAuth>
-                    <RemoteShellBar section="Followups" />
-                    <Suspense fallback={<RemoteFallback />}>
-                      <RemoteFollowups basename="/followups" />
-                    </Suspense>
+                    <ShellLayout section="Followups">
+                      <Suspense fallback={<RemoteFallback />}>
+                        <RemoteFollowups basename="/followups" />
+                      </Suspense>
+                    </ShellLayout>
                   </RequireAuth>
                 }
               />
