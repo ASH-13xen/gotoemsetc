@@ -25,7 +25,6 @@ import { AddEmployeeDialog } from '@/components/employees/AddEmployeeDialog'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { useEmployees } from '@/hooks/useEmployees'
 import { useDashboardStats } from '@/hooks/useDashboardStats'
-import { useApplicants } from '@/hooks/useApplicants'
 import type { EmployeeStatus } from '@/api/employees.api'
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -49,11 +48,6 @@ export default function DashboardPage() {
   })
   const employees = data?.items ?? []
   const { data: stats } = useDashboardStats()
-
-  const { data: applicantsData } = useApplicants({ limit: 1 })
-  const { data: interviewApplicantsData } = useApplicants({ status: 'interview_scheduled', limit: 1 })
-  const totalApplicants = applicantsData?.total ?? 0
-  const upcomingInterviewsCount = interviewApplicantsData?.total ?? 0
 
   return (
     <div className="space-y-8 py-4">
@@ -107,12 +101,17 @@ export default function DashboardPage() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, ease: 'easeOut' }}
-          className="grid gap-6 grid-cols-2 md:grid-cols-4"
+          className="grid gap-6 sm:grid-cols-3"
         >
-          <StatCard label="Total applicants" value={totalApplicants} />
-          <StatCard label="Upcoming meetings" value={upcomingInterviewsCount} />
-          <StatCard label="Active employees" value={stats?.activeEmployees} />
-          <StatCard label="Offboarded employees" value={stats?.offboardedEmployees} />
+          <StatCard label="Total employees" value={stats?.totalEmployees} />
+          <StatCard
+            label="Pending document requests"
+            value={stats?.pendingUploadRequests}
+          />
+          <StatCard
+            label="Documents generated this month"
+            value={stats?.documentsGeneratedThisMonth}
+          />
         </motion.div>
 
         {/* FILTERS & CONTROLS */}

@@ -26,4 +26,6 @@ const listForEmployee = {
   }),
 };
 
-module.exports = { mark, listForEmployee };
+const getSummary = { params: idParam };
+
+module.exports = { mark, listForEmployee, getSummary };

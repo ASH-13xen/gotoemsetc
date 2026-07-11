@@ -2,14 +2,7 @@ const { numberToIndianWords } = require('./mergeData.service');
 const attendanceRepository = require('../repositories/attendance.repository');
 const holidayRepository = require('../repositories/holiday.repository');
 const { ATTENDANCE_STATUS } = require('../config/constants');
-
-function dateKey(date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function isSunday(date) {
-  return date.getUTCDay() === 0;
-}
+const { dateKey, isOffDay } = require('../utils/attendanceDays');
 
 // From 1st of the target month through the manually-selected cutoff date
 // (inclusive) — this is the period a slip covers, distinct from the full
@@ -27,10 +20,6 @@ async function computeAttendanceSummary(employeeId, year, month, cutoffDate) {
   const daysInCalendarMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const holidayDateKeys = new Set(holidays.map((h) => dateKey(h.date)));
 
-  function isOffDay(date) {
-    return isSunday(date) || holidayDateKeys.has(dateKey(date));
-  }
-
   const recordByDate = new Map(records.map((r) => [dateKey(r.date), r]));
 
   const counts = { P: 0, O: 0, H: 0, L: 0, SL: 0, W: 0 };
@@ -44,7 +33,7 @@ async function computeAttendanceSummary(employeeId, year, month, cutoffDate) {
   let unpaidAbsentDays = 0;
   for (let day = 1; day <= totalDaysInPeriod; day += 1) {
     const date = new Date(Date.UTC(year, month - 1, day));
-    const off = isOffDay(date);
+    const off = isOffDay(date, holidayDateKeys);
     if (off) {
       offDaysInPeriod += 1;
       continue;

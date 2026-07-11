@@ -149,14 +149,14 @@ function CheckboxRow({
   onChange: (checked: boolean) => void
 }) {
   return (
-    <label className="flex items-center gap-3 cursor-pointer select-none">
+    <label className="flex items-center gap-3 cursor-pointer select-none rounded-xl border border-border/40 bg-secondary/30 p-3 hover:bg-secondary/50 transition-colors">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="size-5 shrink-0 border-2 border-white bg-neutral-900 accent-emerald-500 cursor-pointer"
+        className="size-5 shrink-0 rounded border-border accent-primary cursor-pointer"
       />
-      <span className="text-sm font-bold uppercase tracking-wide text-white">{label}</span>
+      <span className="text-sm font-bold uppercase tracking-wide text-foreground">{label}</span>
     </label>
   )
 }

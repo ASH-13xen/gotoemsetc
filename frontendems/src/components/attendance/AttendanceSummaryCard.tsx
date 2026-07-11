@@ -1,69 +1,64 @@
 import { useNavigate } from 'react-router-dom'
 import { CalendarCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { useAttendance } from '@/hooks/useAttendance'
+import { useAttendanceSummary } from '@/hooks/useAttendance'
 import { STATUS_CONFIG } from './statusConfig'
 import type { AttendanceStatus } from '@/api/attendance.api'
 
-// Read-only "visibility" widget for the employee profile — actual marking
-// and history browsing happens in the centralized Attendance system.
+// Lifetime totals (from date of joining through today), not month-scoped —
+// distinct from the month-by-month calendar this sits alongside, which is
+// where day-by-day marking/browsing happens.
 export function AttendanceSummaryCard({ employeeId }: { employeeId: string }) {
   const navigate = useNavigate()
-  const now = new Date()
-  const { data, isLoading } = useAttendance(employeeId, now.getUTCMonth() + 1, now.getUTCFullYear())
-  const records = data?.records ?? []
-
-  const counts = records.reduce<Partial<Record<AttendanceStatus, number>>>((acc, r) => {
-    if (!r.status) return acc
-    acc[r.status] = (acc[r.status] ?? 0) + 1
-    return acc
-  }, {})
-  const totalOvertimeHours = records.reduce((sum, r) => sum + (r.overtimeHours || 0), 0)
-
-  const monthLabel = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+  const { data, isLoading } = useAttendanceSummary(employeeId)
+  const summary = data?.summary
 
   return (
-    <div className="border-2 border-white bg-black p-6 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b-2 border-white pb-3">
+    <Card className="p-6 space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black uppercase tracking-widest text-white">Attendance</h2>
-          <p className="mt-1 text-xs font-bold uppercase tracking-widest text-neutral-400">{monthLabel}</p>
+          <h2 className="text-lg font-bold text-foreground">Attendance</h2>
+          <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            {summary?.dateOfJoining
+              ? `Since ${new Date(summary.dateOfJoining).toLocaleDateString()} · as of ${new Date(summary.asOfDate).toLocaleDateString()}`
+              : 'No date of joining on file'}
+          </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => navigate(`/attendance/${employeeId}`)}
-        >
+        <Button variant="outline" className="rounded-xl" onClick={() => navigate(`/attendance/${employeeId}`)}>
           <CalendarCheck className="size-4" />
           View Full Attendance
         </Button>
       </div>
 
       {isLoading ? (
-        <Skeleton className="h-20 w-full bg-neutral-800" />
-      ) : records.length === 0 ? (
-        <p className="text-sm font-bold uppercase tracking-widest text-neutral-400">
-          No attendance marked yet this month.
+        <Skeleton className="h-20 w-full" />
+      ) : !summary?.dateOfJoining ? (
+        <p className="text-sm font-semibold text-muted-foreground">
+          Set a date of joining on this employee to start tracking attendance totals.
         </p>
       ) : (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {(Object.entries(STATUS_CONFIG) as [AttendanceStatus, (typeof STATUS_CONFIG)[AttendanceStatus]][])
-            .filter(([key]) => counts[key])
-            .map(([key, cfg]) => (
-              <div key={key} className={cn('border-2 p-4', cfg.solid)}>
-                <p className="text-3xl font-black leading-none tracking-tighter">{counts[key]}</p>
-                <p className="mt-2 text-xs font-black uppercase tracking-widest">{cfg.label}</p>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <div className="rounded-xl bg-primary/10 text-primary p-4">
+            <p className="text-3xl font-extrabold leading-none tracking-tight">{summary.totalWorkingDays}</p>
+            <p className="mt-2 text-xs font-bold uppercase tracking-widest">Working Days</p>
+          </div>
+          <div className="rounded-xl bg-secondary text-secondary-foreground p-4">
+            <p className="text-3xl font-extrabold leading-none tracking-tight">{summary.unmarkedDays}</p>
+            <p className="mt-2 text-xs font-bold uppercase tracking-widest">Unmarked</p>
+          </div>
+          {(Object.entries(STATUS_CONFIG) as [AttendanceStatus, (typeof STATUS_CONFIG)[AttendanceStatus]][]).map(
+            ([key, cfg]) => (
+              <div key={key} className={cn('rounded-xl p-4', cfg.solid)}>
+                <p className="text-3xl font-extrabold leading-none tracking-tight">{summary.counts[key] ?? 0}</p>
+                <p className="mt-2 text-xs font-bold uppercase tracking-widest">{cfg.label}</p>
               </div>
-            ))}
-          {totalOvertimeHours > 0 && (
-            <div className="border-2 border-neutral-500 bg-neutral-900 p-4 text-neutral-300">
-              <p className="text-3xl font-black leading-none tracking-tighter">{totalOvertimeHours}h</p>
-              <p className="mt-2 text-xs font-black uppercase tracking-widest">Overtime</p>
-            </div>
+            )
           )}
         </div>
       )}
-    </div>
+    </Card>
   )
 }

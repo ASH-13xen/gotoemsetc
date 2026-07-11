@@ -34,3 +34,18 @@ export async function listAttendance(
   })
   return data
 }
+
+// Lifetime (not month-scoped) — every working day from date of joining
+// through today, split into unmarked vs. each status.
+export interface AttendanceSummary {
+  dateOfJoining: string | null
+  asOfDate: string
+  totalWorkingDays: number
+  unmarkedDays: number
+  counts: Record<AttendanceStatus, number>
+}
+
+export async function getAttendanceSummary(employeeId: string): Promise<{ summary: AttendanceSummary }> {
+  const { data } = await apiClient.get(`/employees/${employeeId}/attendance/summary`)
+  return data
+}

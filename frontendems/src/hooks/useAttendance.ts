@@ -10,6 +10,14 @@ export function useAttendance(employeeId: string | undefined, month: number, yea
   })
 }
 
+export function useAttendanceSummary(employeeId: string | undefined) {
+  return useQuery({
+    queryKey: ['attendance-summary', employeeId],
+    queryFn: () => attendanceApi.getAttendanceSummary(employeeId as string),
+    enabled: Boolean(employeeId),
+  })
+}
+
 export function useMarkAttendance(employeeId: string) {
   const queryClient = useQueryClient()
   return useMutation({

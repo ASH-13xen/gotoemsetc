@@ -54,6 +54,7 @@ router.get('/:id/activity', validate(employeeValidator.getOrDelete), employeeCon
 
 router.post('/:id/attendance', validate(attendanceValidator.mark), attendanceController.mark);
 router.get('/:id/attendance', validate(attendanceValidator.listForEmployee), attendanceController.listForEmployee);
+router.get('/:id/attendance/summary', validate(attendanceValidator.getSummary), attendanceController.getSummary);
 
 router.post(
   '/:id/salary-slips/generate',

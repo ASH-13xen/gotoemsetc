@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AttendanceCalendar } from '@/components/attendance/AttendanceCalendar'
+import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummaryCard'
 import { useEmployee, useEmployees } from '@/hooks/useEmployees'
 import { cn } from '@/lib/utils'
 
@@ -129,6 +130,7 @@ export default function AttendancePage() {
                     View Profile
                   </Button>
                 </Card>
+                <AttendanceSummaryCard employeeId={employeeId} />
                 <AttendanceCalendar employeeId={employeeId} />
               </div>
             )}

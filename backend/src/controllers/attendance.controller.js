@@ -12,4 +12,9 @@ const listForEmployee = asyncHandler(async (req, res) => {
   res.json({ records });
 });
 
-module.exports = { mark, listForEmployee };
+const getSummary = asyncHandler(async (req, res) => {
+  const summary = await attendanceService.computeLifetimeSummary(req.params.id);
+  res.json({ summary });
+});
+
+module.exports = { mark, listForEmployee, getSummary };
