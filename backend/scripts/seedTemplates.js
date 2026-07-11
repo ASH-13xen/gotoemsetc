@@ -11,7 +11,10 @@ const employeeName = {
 };
 const employeeAddress = {
   key: 'employeeAddress', label: 'Employee address', type: 'textarea', required: true,
-  source: 'employee', mapsTo: 'address.line1', group: 'Personal', order: 2,
+  // Employee.address was split into permanentAddress/localAddress — this
+  // still only pulls one line (permanentAddress.line1), same as before the
+  // split; the full structured address isn't composed here.
+  source: 'employee', mapsTo: 'permanentAddress.line1', group: 'Personal', order: 2,
 };
 const todayDate = {
   key: 'todayDate', label: "Today's date", type: 'date', required: true,
