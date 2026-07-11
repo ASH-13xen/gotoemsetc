@@ -185,6 +185,7 @@ export function RequestDocumentsModal({
             <ManualSendButtons
               emailHref={employeeEmail ? buildGmailComposeUrl(employeeEmail, `Document Request — ${companyName}`, emailBody) : undefined}
               whatsappHref={employeePhone ? buildWhatsappUrl(employeePhone, whatsappText) : undefined}
+              storageKey={link ? `notified_modal_${link.split('/').pop()}` : undefined}
             />
             <DialogFooter className="mt-2">
               <Button variant="outline" className="rounded-xl" onClick={() => setOpen(false)}>

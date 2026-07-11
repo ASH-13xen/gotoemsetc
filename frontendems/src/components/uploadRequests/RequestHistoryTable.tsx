@@ -97,6 +97,7 @@ function RequestRow({
                   )
                 : undefined
             }
+            storageKey={`notified_doc_request_${req._id}`}
           />
         </>
       )}

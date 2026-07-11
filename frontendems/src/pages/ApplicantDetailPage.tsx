@@ -53,6 +53,7 @@ function InterviewSendButtons({ applicant, interview }: { applicant: Applicant; 
     <ManualSendButtons
       emailHref={applicant.email ? buildGmailComposeUrl(applicant.email, subject, emailBody) : undefined}
       whatsappHref={applicant.phone ? buildWhatsappUrl(applicant.phone, whatsappText) : undefined}
+      storageKey={`notified_interview_${applicant._id}`}
     />
   )
 }
@@ -76,6 +77,7 @@ function HireSendButtons({ applicant }: { applicant: Applicant }) {
     <ManualSendButtons
       emailHref={applicant.email ? buildGmailComposeUrl(applicant.email, `You're hired — ${companyName}`, emailBody) : undefined}
       whatsappHref={applicant.phone ? buildWhatsappUrl(applicant.phone, whatsappText) : undefined}
+      storageKey={`notified_hire_${applicant._id}`}
     />
   )
 }
@@ -94,6 +96,7 @@ function RejectSendButtons({ applicant }: { applicant: Applicant }) {
     <ManualSendButtons
       emailHref={applicant.email ? buildGmailComposeUrl(applicant.email, `Update on your application — ${position}`, emailBody) : undefined}
       whatsappHref={applicant.phone ? buildWhatsappUrl(applicant.phone, whatsappText) : undefined}
+      storageKey={`notified_reject_${applicant._id}`}
     />
   )
 }
