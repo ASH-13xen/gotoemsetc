@@ -6,6 +6,13 @@ const fileRefSchema = new Schema(
   { _id: false }
 );
 
+// Cloudinary's account-level security default blocks unauthenticated
+// delivery of PDF/ZIP raw files entirely (see localFileStorage.service.js)
+// — PDFs generated from HTML templates are stored on our own disk and
+// served through an authenticated route instead, so this needs a different
+// shape than the Cloudinary-backed `docx` field.
+const localFileRefSchema = new Schema({ filePath: String }, { _id: false });
+
 const generatedDocumentSchema = new Schema(
   {
     employee: { type: Schema.Types.ObjectId, ref: 'Employee', required: true, index: true },
@@ -13,7 +20,7 @@ const generatedDocumentSchema = new Schema(
     templateVersion: Number,
     mergeDataSnapshot: Schema.Types.Mixed,
     docx: fileRefSchema,
-    pdf: fileRefSchema,
+    pdf: localFileRefSchema,
     status: {
       type: String,
       enum: Object.values(GENERATED_DOCUMENT_STATUS),

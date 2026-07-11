@@ -24,4 +24,10 @@ function absolutePathFor(relativePath, namespace = 'quotations') {
   return path.join(STORAGE_ROOT, namespace, relativePath);
 }
 
-module.exports = { saveBuffer, readBuffer, absolutePathFor };
+// Best-effort — a missing file (already deleted, never written) shouldn't
+// block whatever record-deletion flow called this.
+function deleteFile(relativePath, namespace = 'quotations') {
+  return fs.unlink(absolutePathFor(relativePath, namespace)).catch(() => {});
+}
+
+module.exports = { saveBuffer, readBuffer, absolutePathFor, deleteFile };

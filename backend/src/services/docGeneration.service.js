@@ -10,7 +10,10 @@ const { buildMergeData } = require('./mergeData.service');
 const { renderDocx } = require('./docxRender.service');
 const { fillTemplate, renderPdfFromHtml } = require('./htmlRender.service');
 const cloudinaryUploadService = require('./cloudinaryUpload.service');
+const localFileStorage = require('./localFileStorage.service');
 const activityService = require('./activity.service');
+
+const GENERATED_PDF_NAMESPACE = 'generated-documents';
 
 async function generateDocx(employee, template, mergeData) {
   const templateBuffer = await fs.readFile(path.join(env.templatesDir, template.docxFilePath));
@@ -28,6 +31,11 @@ async function generateDocx(employee, template, mergeData) {
   return { docx: { url: upload.secure_url, publicId: upload.public_id, bytes: upload.bytes } };
 }
 
+// Stored on our own disk rather than Cloudinary — Cloudinary's account-level
+// security default blocks unauthenticated delivery of PDF/ZIP raw files
+// entirely (the same reason salary slips are stored this way; see
+// localFileStorage.service.js). Served back out through an authenticated
+// download route instead of a direct URL.
 async function generateHtmlPdf(employee, template, mergeData) {
   const templateHtml = await fs.readFile(
     path.join(env.templatesHtmlDir, template.htmlFilePath),
@@ -36,13 +44,10 @@ async function generateHtmlPdf(employee, template, mergeData) {
   const filledHtml = fillTemplate(templateHtml, mergeData);
   const pdfBuffer = await renderPdfFromHtml(filledHtml, env.templatesHtmlDir);
 
-  const upload = await cloudinaryUploadService.uploadBuffer(pdfBuffer, {
-    folder: `ems/employees/${employee._id}/generated`,
-    publicId: `${template.key}-${Date.now()}.pdf`,
-    resourceType: 'raw',
-  });
+  const relativePath = path.join(String(employee._id), `${template.key}-${Date.now()}.pdf`);
+  const filePath = await localFileStorage.saveBuffer(pdfBuffer, relativePath, GENERATED_PDF_NAMESPACE);
 
-  return { pdf: { url: upload.secure_url, publicId: upload.public_id, bytes: upload.bytes } };
+  return { pdf: { filePath } };
 }
 
 async function generateOne(employee, template, overrides) {

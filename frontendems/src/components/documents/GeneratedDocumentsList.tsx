@@ -4,12 +4,21 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDeleteDocument, useEmployeeDocuments } from '@/hooks/useDocuments'
+import { downloadGeneratedPdf } from '@/api/documents.api'
 
 export function GeneratedDocumentsList({ employeeId }: { employeeId: string }) {
   const { data, isLoading } = useEmployeeDocuments(employeeId)
   const deleteDocument = useDeleteDocument(employeeId)
 
   const documents = data?.documents ?? []
+
+  const onDownloadPdf = async (documentId: string, title: string) => {
+    try {
+      await downloadGeneratedPdf(documentId, `${title}.pdf`)
+    } catch {
+      toast.error('Could not download PDF')
+    }
+  }
 
   return (
     <Card>
@@ -48,11 +57,13 @@ export function GeneratedDocumentsList({ employeeId }: { employeeId: string }) {
                   </Button>
                 )}
                 {doc.pdf && (
-                  <Button asChild variant="outline" size="sm">
-                    <a href={doc.pdf.url} target="_blank" rel="noreferrer">
-                      <Download className="size-3.5" />
-                      pdf
-                    </a>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onDownloadPdf(doc._id, doc.template.title)}
+                  >
+                    <Download className="size-3.5" />
+                    pdf
                   </Button>
                 )}
                 <Button
