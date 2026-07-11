@@ -8,17 +8,17 @@ interface StatCardProps {
 
 export function StatCard({ label, value }: StatCardProps) {
   return (
-    <Card className="border-2 border-foreground bg-black p-6">
+    <Card className="bg-card/90 backdrop-blur-md p-6 rounded-2xl border border-border/10 shadow-diffuse hover:-translate-y-0.5 transition-all duration-300">
       <CardContent className="flex flex-col justify-between p-0">
         <div className="flex flex-col">
           {value === undefined ? (
-            <Skeleton className="h-16 w-20 bg-neutral-800" />
+            <Skeleton className="h-16 w-20 bg-secondary/40 rounded-xl" />
           ) : (
-            <p className="text-6xl font-black leading-none tracking-tighter text-white">
+            <p className="text-6xl font-extrabold leading-none tracking-tighter text-foreground">
               {value}
             </p>
           )}
-          <p className="mt-4 text-xs font-black uppercase tracking-widest text-muted-foreground">
+          <p className="mt-4 text-xs font-bold uppercase tracking-widest text-muted-foreground">
             {label}
           </p>
         </div>

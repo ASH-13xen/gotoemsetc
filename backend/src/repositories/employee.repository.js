@@ -37,6 +37,10 @@ function count() {
   return Employee.countDocuments({ isDeleted: false });
 }
 
+function countByStatus(status) {
+  return Employee.countDocuments({ isDeleted: false, status });
+}
+
 // Unpaginated — used by the birthday reminder cron job, which needs to scan
 // every active employee with a recorded date of birth once a day. Excludes
 // offboarded (and draft) employees on purpose — no birthday pings for
@@ -64,4 +68,4 @@ function softDeleteById(id) {
   );
 }
 
-module.exports = { list, findById, create, updateById, softDeleteById, count, listAllWithDob };
+module.exports = { list, findById, create, updateById, softDeleteById, count, countByStatus, listAllWithDob };

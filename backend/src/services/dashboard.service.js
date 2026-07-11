@@ -7,13 +7,15 @@ async function getStats() {
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
-  const [totalEmployees, pendingUploadRequests, documentsGeneratedThisMonth] = await Promise.all([
+  const [totalEmployees, pendingUploadRequests, documentsGeneratedThisMonth, activeEmployees, offboardedEmployees] = await Promise.all([
     employeeRepository.count(),
     uploadRequestRepository.countPending(),
     generatedDocumentRepository.countCompletedSince(startOfMonth),
+    employeeRepository.countByStatus('active'),
+    employeeRepository.countByStatus('offboarded'),
   ]);
 
-  return { totalEmployees, pendingUploadRequests, documentsGeneratedThisMonth };
+  return { totalEmployees, pendingUploadRequests, documentsGeneratedThisMonth, activeEmployees, offboardedEmployees };
 }
 
 module.exports = { getStats };

@@ -4,6 +4,8 @@ export interface DashboardStats {
   totalEmployees: number
   pendingUploadRequests: number
   documentsGeneratedThisMonth: number
+  activeEmployees: number
+  offboardedEmployees: number
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
