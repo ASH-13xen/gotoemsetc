@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Users2 } from 'lucide-react'
+import { Search, Users2, Copy, ClipboardList } from 'lucide-react'
+import { toast } from 'sonner'
 
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -86,6 +88,38 @@ export default function ApplicantsPage() {
               }
             />
           </div>
+        </div>
+
+        {/* GOOGLE FORM REFERENCE */}
+        <div className="flex flex-wrap items-center justify-between gap-4 bg-card rounded-2xl p-4 border shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <ClipboardList className="size-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">RESPONDER'S FORM LINK</p>
+              <a
+                href="https://docs.google.com/forms/d/e/1FAIpQLSfA1lvJ2yMgyCOgZYeJoPCidE6GcpzaIzCI3aoNxMOm2eie1w/viewform?usp=dialog"
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm font-semibold text-primary hover:underline"
+              >
+                Open Google Form
+              </a>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              await navigator.clipboard.writeText('https://docs.google.com/forms/d/e/1FAIpQLSfA1lvJ2yMgyCOgZYeJoPCidE6GcpzaIzCI3aoNxMOm2eie1w/viewform?usp=dialog')
+              toast.success('Google Form link copied!')
+            }}
+            className="rounded-xl flex items-center gap-1.5"
+          >
+            <Copy className="size-3.5" />
+            Copy Link
+          </Button>
         </div>
 
         {/* TABS */}
