@@ -16,6 +16,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@sparticuz/chromium": "^149.0.0",
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.10.0",
     "cors": "^2.8.6",
@@ -32,6 +33,7 @@
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
     "pizzip": "^3.2.0",
+    "puppeteer-core": "^25.3.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

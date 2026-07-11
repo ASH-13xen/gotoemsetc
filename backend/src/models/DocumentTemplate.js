@@ -45,7 +45,15 @@ const documentTemplateSchema = new Schema(
       enum: ['onboarding', 'compliance', 'policy', 'offboarding', 'other'],
       default: 'onboarding',
     },
-    docxFilePath: { type: String, required: true }, // relative path under templates/files/
+    // 'docx' fills a Word template via docxtemplater (legacy path); 'html'
+    // fills an HTML template and renders it to PDF via a headless browser
+    // (see htmlRender.service.js) — new templates should prefer 'html',
+    // since text sizing/wrapping is handled by real CSS instead of Word's
+    // layout engine plus a LibreOffice conversion step.
+    templateType: { type: String, enum: ['docx', 'html'], default: 'docx' },
+    // Exactly one of these is set, matching templateType.
+    docxFilePath: String, // relative path under templates/files/
+    htmlFilePath: String, // relative path under templates/html/
     version: { type: Number, default: 1 },
     isActive: { type: Boolean, default: true },
     // Controls display order in the "generate docs" wizard — lower first.

@@ -8,12 +8,11 @@ const documentTemplateRepository = require('../repositories/documentTemplate.rep
 const generatedDocumentRepository = require('../repositories/generatedDocument.repository');
 const { buildMergeData } = require('./mergeData.service');
 const { renderDocx } = require('./docxRender.service');
+const { fillTemplate, renderPdfFromHtml } = require('./htmlRender.service');
 const cloudinaryUploadService = require('./cloudinaryUpload.service');
 const activityService = require('./activity.service');
 
-async function generateOne(employee, template, overrides) {
-  const mergeData = buildMergeData(template, employee, overrides);
-
+async function generateDocx(employee, template, mergeData) {
   const templateBuffer = await fs.readFile(path.join(env.templatesDir, template.docxFilePath));
   const docxBuffer = renderDocx(templateBuffer, mergeData);
 
@@ -26,12 +25,40 @@ async function generateOne(employee, template, overrides) {
     resourceType: 'raw',
   });
 
+  return { docx: { url: upload.secure_url, publicId: upload.public_id, bytes: upload.bytes } };
+}
+
+async function generateHtmlPdf(employee, template, mergeData) {
+  const templateHtml = await fs.readFile(
+    path.join(env.templatesHtmlDir, template.htmlFilePath),
+    'utf8'
+  );
+  const filledHtml = fillTemplate(templateHtml, mergeData);
+  const pdfBuffer = await renderPdfFromHtml(filledHtml, env.templatesHtmlDir);
+
+  const upload = await cloudinaryUploadService.uploadBuffer(pdfBuffer, {
+    folder: `ems/employees/${employee._id}/generated`,
+    publicId: `${template.key}-${Date.now()}.pdf`,
+    resourceType: 'raw',
+  });
+
+  return { pdf: { url: upload.secure_url, publicId: upload.public_id, bytes: upload.bytes } };
+}
+
+async function generateOne(employee, template, overrides) {
+  const mergeData = buildMergeData(template, employee, overrides);
+
+  const fileFields =
+    template.templateType === 'html'
+      ? await generateHtmlPdf(employee, template, mergeData)
+      : await generateDocx(employee, template, mergeData);
+
   return generatedDocumentRepository.create({
     employee: employee._id,
     template: template._id,
     templateVersion: template.version,
     mergeDataSnapshot: mergeData,
-    docx: { url: upload.secure_url, publicId: upload.public_id, bytes: upload.bytes },
+    ...fileFields,
     status: 'completed',
   });
 }

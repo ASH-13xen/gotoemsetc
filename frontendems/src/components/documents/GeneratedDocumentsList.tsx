@@ -47,6 +47,14 @@ export function GeneratedDocumentsList({ employeeId }: { employeeId: string }) {
                     </a>
                   </Button>
                 )}
+                {doc.pdf && (
+                  <Button asChild variant="outline" size="sm">
+                    <a href={doc.pdf.url} target="_blank" rel="noreferrer">
+                      <Download className="size-3.5" />
+                      pdf
+                    </a>
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"

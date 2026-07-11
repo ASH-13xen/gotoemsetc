@@ -39,6 +39,7 @@ const env = {
   sofficePath: process.env.SOFFICE_PATH || '',
 
   templatesDir: path.join(__dirname, '..', '..', 'templates', 'files'),
+  templatesHtmlDir: path.join(__dirname, '..', '..', 'templates', 'html'),
 
   companyName: process.env.COMPANY_NAME || 'Our Company',
 

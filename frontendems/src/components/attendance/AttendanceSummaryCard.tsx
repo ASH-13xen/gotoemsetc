@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { CalendarCheck } from 'lucide-react'
+import { CalendarCheck, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -36,9 +36,12 @@ export function AttendanceSummaryCard({ employeeId }: { employeeId: string }) {
       {isLoading ? (
         <Skeleton className="h-20 w-full" />
       ) : !summary?.dateOfJoining ? (
-        <p className="text-sm font-semibold text-muted-foreground">
-          Set a date of joining on this employee to start tracking attendance totals.
-        </p>
+        <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-700">
+          <TriangleAlert className="size-5 shrink-0" />
+          <p className="text-sm font-bold">
+            Set a date of joining on this employee to start tracking attendance totals.
+          </p>
+        </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <div className="rounded-xl bg-primary/10 text-primary p-4">

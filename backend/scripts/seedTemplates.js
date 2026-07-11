@@ -74,7 +74,8 @@ const templates = [
     title: 'Letter of Appointment',
     description: 'Formal appointment letter with compensation structure, issued at onboarding.',
     category: 'onboarding',
-    docxFilePath: 'appointment-letter.docx',
+    templateType: 'html',
+    htmlFilePath: 'appointment-letter.html',
     fields: [
       employeeName, employeeAddress, designation, workLocation, jobDescription,
       dateOfJoining, annualCTC, annualCTCInWords, todayDate,
@@ -90,7 +91,8 @@ const templates = [
     title: 'Offer Letter',
     description: 'Extended to a candidate before they join, with compensation and key employment details.',
     category: 'onboarding',
-    docxFilePath: 'offer-letter.docx',
+    templateType: 'html',
+    htmlFilePath: 'offer-letter.html',
     fields: [
       employeeName, designation, department, dateOfJoining, employmentType,
       workLocation, jobDescription, annualCTC,
