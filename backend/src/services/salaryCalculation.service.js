@@ -6,6 +6,36 @@ const { dateKey, isOffDay } = require('../utils/attendanceDays');
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+function daysInMonth(year, monthIndex) {
+  return new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+}
+
+// The daily-rate denominator: the SMALLEST calendar month touched by the
+// period, not the period's own length. E.g. 15 June - 19 July divides by
+// min(30 days in June, 31 in July) = 30, not by the 35 days actually
+// spanned — this keeps the daily rate anchored to "a normal month" the way
+// a single full-month slip always was, rather than shrinking/inflating it
+// based on how long a custom range happens to be. For a range within one
+// calendar month this is just that month's day count, matching the
+// original single-month behavior exactly.
+function minDaysAcrossTouchedMonths(startDate, endDate) {
+  let year = startDate.getUTCFullYear();
+  let month = startDate.getUTCMonth();
+  const endYear = endDate.getUTCFullYear();
+  const endMonth = endDate.getUTCMonth();
+
+  let min = Infinity;
+  while (year < endYear || (year === endYear && month <= endMonth)) {
+    min = Math.min(min, daysInMonth(year, month));
+    month += 1;
+    if (month > 11) {
+      month = 0;
+      year += 1;
+    }
+  }
+  return min;
+}
+
 // Attendance is stored one record per calendar day, so any admin-picked
 // [startDate, endDate] range (inclusive, both UTC midnight) can be
 // summarized directly — nothing here is anchored to a calendar month.
@@ -49,6 +79,7 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
 
   return {
     totalDaysInPeriod,
+    dailyRateDivisor: minDaysAcrossTouchedMonths(startDate, endDate),
     workingDaysInPeriod,
     counts,
     daysWorkedTotal,
@@ -75,13 +106,14 @@ function computeSalary(employee, summary, manualInputs) {
   } = manualInputs;
 
   const basicMaster = employee.monthlyPay || (employee.ctcAnnual ? employee.ctcAnnual / 12 : 0) || 0;
-  // Prorated by the number of days actually in the selected period, rather
-  // than a fixed calendar month — this is what makes an arbitrary
-  // start/end range make sense as a pay basis (a 15-day period pays out
-  // basicMaster/15 per day worked, not basicMaster/30).
-  const dailyRate = summary.totalDaysInPeriod > 0 ? basicMaster / summary.totalDaysInPeriod : 0;
+  // See minDaysAcrossTouchedMonths — the smallest calendar month touched by
+  // the period, not the period's own length.
+  const dailyRate = summary.dailyRateDivisor > 0 ? basicMaster / summary.dailyRateDivisor : 0;
   const basicEarnings = dailyRate * summary.daysWorkedTotal;
 
+  // Overtime's hourly base stays on the same footing it always had —
+  // basicMaster spread over this period's actual working days, not the
+  // dailyRate above.
   const otMaster = summary.workingDaysInPeriod > 0 ? basicMaster / summary.workingDaysInPeriod / 8 : 0;
   const otEarnings = otMaster * summary.totalOvertimeHours;
 
