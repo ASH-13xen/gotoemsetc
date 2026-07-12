@@ -8,11 +8,19 @@ const uploadedDocumentRepository = require('../repositories/uploadedDocument.rep
 const cloudinaryUploadService = require('./cloudinaryUpload.service');
 const activityService = require('./activity.service');
 
+// 6-digit numeric — short enough to read out over a phone call or retype
+// from a WhatsApp message, delivered separately from (and required in
+// addition to) the link itself.
+function generateAccessCode() {
+  return String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+}
+
 async function createRequest(employeeId, { requestedDocTypes, expiresInHours }) {
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) throw ApiError.notFound('Employee not found');
 
   const token = crypto.randomBytes(32).toString('hex');
+  const accessCode = generateAccessCode();
   const expiresAt = new Date(
     Date.now() + (expiresInHours || DEFAULT_UPLOAD_REQUEST_EXPIRY_HOURS) * 60 * 60 * 1000
   );
@@ -20,6 +28,7 @@ async function createRequest(employeeId, { requestedDocTypes, expiresInHours }) 
   const uploadRequest = await uploadRequestRepository.create({
     employee: employee._id,
     token,
+    accessCode,
     requestedDocTypes,
     expiresAt,
   });
@@ -30,12 +39,14 @@ async function createRequest(employeeId, { requestedDocTypes, expiresInHours }) 
 }
 
 async function listForEmployee(employeeId) {
+  await uploadRequestRepository.clearExpiredAccessCodes(employeeId);
   return uploadRequestRepository.listByEmployee(employeeId);
 }
 
 async function revoke(id) {
   const uploadRequest = await uploadRequestRepository.updateStatus(id, UPLOAD_REQUEST_STATUS.REVOKED);
   if (!uploadRequest) throw ApiError.notFound('Upload request not found');
+  await uploadRequestRepository.clearAccessCode(id);
   await activityService.log(uploadRequest.employee, 'UPLOAD_REQUEST_REVOKED', {});
   return uploadRequest;
 }
@@ -49,13 +60,26 @@ async function resolveToken(rawToken) {
     throw ApiError.forbidden('This link has been revoked.');
   }
   if (uploadRequest.expiresAt.getTime() < Date.now()) {
+    if (uploadRequest.accessCode) await uploadRequestRepository.clearAccessCode(uploadRequest._id);
     throw ApiError.forbidden('This link has expired.');
   }
   return uploadRequest;
 }
 
-async function getPublicStatus(rawToken) {
+// The access code is the actual login step — resolveToken only proves the
+// link itself is still live. Both the status view and the upload itself
+// require this, so simply knowing/forwarding the link isn't enough on its
+// own to see or submit anything.
+async function verifyAccessCode(rawToken, code) {
   const uploadRequest = await resolveToken(rawToken);
+  if (!uploadRequest.accessCode || uploadRequest.accessCode !== code) {
+    throw ApiError.forbidden('Incorrect access code.');
+  }
+  return uploadRequest;
+}
+
+async function getPublicStatus(rawToken, code) {
+  const uploadRequest = await verifyAccessCode(rawToken, code);
   const employee = await employeeRepository.findById(uploadRequest.employee);
   const uploaded = await uploadedDocumentRepository.listByUploadRequest(uploadRequest._id);
 
@@ -68,8 +92,8 @@ async function getPublicStatus(rawToken) {
   };
 }
 
-async function attachDocuments(rawToken, files) {
-  const uploadRequest = await resolveToken(rawToken);
+async function attachDocuments(rawToken, code, files) {
+  const uploadRequest = await verifyAccessCode(rawToken, code);
 
   // Only accept files whose field name matches a doc type this request
   // actually asked for — keeps arbitrary strings from becoming docType values.
@@ -108,6 +132,7 @@ async function attachDocuments(rawToken, files) {
     allFulfilled ? UPLOAD_REQUEST_STATUS.FULFILLED : UPLOAD_REQUEST_STATUS.PARTIALLY_FULFILLED,
     allFulfilled ? { fulfilledAt: new Date() } : {}
   );
+  if (allFulfilled) await uploadRequestRepository.clearAccessCode(uploadRequest._id);
 
   await activityService.log(
     uploadRequest.employee,
@@ -134,6 +159,7 @@ module.exports = {
   createRequest,
   listForEmployee,
   revoke,
+  verifyAccessCode,
   getPublicStatus,
   attachDocuments,
   listUploadedForEmployee,

@@ -9,33 +9,25 @@ const generatedDocumentRepository = require('../repositories/generatedDocument.r
 const { buildMergeData } = require('./mergeData.service');
 const { renderDocx } = require('./docxRender.service');
 const { fillTemplate, renderPdfFromHtml } = require('./htmlRender.service');
-const cloudinaryUploadService = require('./cloudinaryUpload.service');
-const localFileStorage = require('./localFileStorage.service');
 const activityService = require('./activity.service');
 
-const GENERATED_PDF_NAMESPACE = 'generated-documents';
+const DOCX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const PDF_CONTENT_TYPE = 'application/pdf';
 
+// Generated files are stored as Buffers directly on the GeneratedDocument
+// record (see models/GeneratedDocument.js) rather than Cloudinary or local
+// disk — Cloudinary blocks unauthenticated delivery of raw/PDF files by
+// account-level default, and Render's free-tier disk doesn't survive a
+// redeploy. Mongo already persists everything else in this app.
 async function generateDocx(employee, template, mergeData) {
   const templateBuffer = await fs.readFile(path.join(env.templatesDir, template.docxFilePath));
   const docxBuffer = renderDocx(templateBuffer, mergeData);
 
-  const upload = await cloudinaryUploadService.uploadBuffer(docxBuffer, {
-    folder: `ems/employees/${employee._id}/generated`,
-    // Cloudinary's `raw` resource type does not infer a file extension the
-    // way `image`/`auto` do — without it, downloads show up as a generic
-    // untyped "File" instead of being recognized as a .docx.
-    publicId: `${template.key}-${Date.now()}.docx`,
-    resourceType: 'raw',
-  });
-
-  return { docx: { url: upload.secure_url, publicId: upload.public_id, bytes: upload.bytes } };
+  return {
+    docx: { data: docxBuffer, contentType: DOCX_CONTENT_TYPE, filename: `${template.key}.docx` },
+  };
 }
 
-// Stored on our own disk rather than Cloudinary — Cloudinary's account-level
-// security default blocks unauthenticated delivery of PDF/ZIP raw files
-// entirely (the same reason salary slips are stored this way; see
-// localFileStorage.service.js). Served back out through an authenticated
-// download route instead of a direct URL.
 async function generateHtmlPdf(employee, template, mergeData) {
   const templateHtml = await fs.readFile(
     path.join(env.templatesHtmlDir, template.htmlFilePath),
@@ -44,10 +36,9 @@ async function generateHtmlPdf(employee, template, mergeData) {
   const filledHtml = fillTemplate(templateHtml, mergeData);
   const pdfBuffer = await renderPdfFromHtml(filledHtml, env.templatesHtmlDir);
 
-  const relativePath = path.join(String(employee._id), `${template.key}-${Date.now()}.pdf`);
-  const filePath = await localFileStorage.saveBuffer(pdfBuffer, relativePath, GENERATED_PDF_NAMESPACE);
-
-  return { pdf: { filePath } };
+  return {
+    pdf: { data: pdfBuffer, contentType: PDF_CONTENT_TYPE, filename: `${template.key}.pdf` },
+  };
 }
 
 async function generateOne(employee, template, overrides) {

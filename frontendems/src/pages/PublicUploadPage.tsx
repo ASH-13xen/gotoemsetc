@@ -3,11 +3,18 @@ import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
 import { toast } from 'sonner'
-import { Building2, CheckCircle2, Loader2, ShieldAlert, UploadCloud } from 'lucide-react'
+import { Building2, CheckCircle2, KeyRound, Loader2, ShieldAlert, UploadCloud } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { useConfig } from '@/hooks/useConfig'
-import { getPublicUploadStatus, uploadPublicDocuments } from '@/api/publicUpload.api'
+import { getPublicUploadStatus, uploadPublicDocuments, verifyUploadAccessCode } from '@/api/publicUpload.api'
+
+function errorMessageFrom(error: unknown, fallback: string): string {
+  if (isAxiosError(error)) {
+    return (error.response?.data as { message?: string } | undefined)?.message || fallback
+  }
+  return fallback
+}
 
 function CenteredMessage({ icon, title, description }: { icon: React.ReactNode; title: string; description?: string }) {
   return (
@@ -26,23 +33,71 @@ export default function PublicUploadPage() {
   const queryClient = useQueryClient()
   const { data: config } = useConfig()
   const [selectedFiles, setSelectedFiles] = useState<Record<string, File>>({})
+  const [codeInput, setCodeInput] = useState('')
+  const [verifiedCode, setVerifiedCode] = useState<string | null>(null)
+
+  const verifyMutation = useMutation({
+    mutationFn: () => verifyUploadAccessCode(token as string, codeInput),
+    onSuccess: () => setVerifiedCode(codeInput),
+    onError: (error) => toast.error(errorMessageFrom(error, 'Incorrect access code')),
+  })
 
   const statusQuery = useQuery({
-    queryKey: ['publicUploadStatus', token],
-    queryFn: () => getPublicUploadStatus(token as string),
-    enabled: Boolean(token),
+    queryKey: ['publicUploadStatus', token, verifiedCode],
+    queryFn: () => getPublicUploadStatus(token as string, verifiedCode as string),
+    enabled: Boolean(token) && Boolean(verifiedCode),
     retry: false,
   })
 
   const uploadMutation = useMutation({
-    mutationFn: () => uploadPublicDocuments(token as string, selectedFiles),
+    mutationFn: () => uploadPublicDocuments(token as string, verifiedCode as string, selectedFiles),
     onSuccess: () => {
       toast.success('Documents submitted — thank you!')
       setSelectedFiles({})
-      queryClient.invalidateQueries({ queryKey: ['publicUploadStatus', token] })
+      queryClient.invalidateQueries({ queryKey: ['publicUploadStatus', token, verifiedCode] })
     },
     onError: () => toast.error('Could not upload — please check the files and try again'),
   })
+
+  if (!verifiedCode) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
+        <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-border/10 bg-card p-8 text-center shadow-diffuse">
+          <KeyRound className="size-8 text-muted-foreground" />
+          <h1 className="text-xl font-bold uppercase tracking-wider text-foreground">Enter access code</h1>
+          <p className="text-sm font-semibold text-muted-foreground uppercase tracking-widest">
+            HR sent you a 6-digit code separately from this link.
+          </p>
+          <form
+            className="w-full space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (codeInput.trim().length === 6) verifyMutation.mutate()
+            }}
+          >
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              autoFocus
+              value={codeInput}
+              onChange={(e) => setCodeInput(e.target.value.replace(/\D/g, ''))}
+              placeholder="000000"
+              className="w-full rounded-xl border border-border/20 bg-secondary/30 p-4 text-center text-2xl font-mono font-bold tracking-[0.5em] text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <Button
+              type="submit"
+              className="w-full bg-primary text-primary-foreground font-bold text-base h-12 rounded-xl hover:brightness-105 transition-all shadow-button border-0 cursor-pointer"
+              disabled={codeInput.trim().length !== 6 || verifyMutation.isPending}
+            >
+              {verifyMutation.isPending && <Loader2 className="size-5 animate-spin text-white" />}
+              CONTINUE
+            </Button>
+          </form>
+        </div>
+      </div>
+    )
+  }
 
   if (statusQuery.isLoading) {
     return (
@@ -54,13 +109,10 @@ export default function PublicUploadPage() {
   }
 
   if (statusQuery.isError) {
-    const message = isAxiosError(statusQuery.error)
-      ? (statusQuery.error.response?.data as { message?: string } | undefined)?.message
-      : undefined
     return (
       <CenteredMessage
         icon={<ShieldAlert className="size-8 text-destructive" />}
-        title={message || 'LINK IS INVALID.'}
+        title={errorMessageFrom(statusQuery.error, 'LINK IS INVALID.')}
         description="Please contact HR for a new link."
       />
     )

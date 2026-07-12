@@ -24,7 +24,24 @@ function escapeHtml(value) {
 function fillTemplate(html, data) {
   const missingTags = new Set();
 
-  const filled = html.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, key) => {
+  // Loop sections use the same {#loopKey}...{/loopKey} shape docxtemplater
+  // uses, so a template's loops[] data (see mergeData.service.js's
+  // buildLoopData — e.g. `responsibilities`) renders identically whichever
+  // pipeline the template is on. Resolved first so the inner {itemField}
+  // tags don't get caught by the flat single-tag pass below.
+  const withLoopsRendered = html.replace(/\{#(\w+)\}([\s\S]*?)\{\/\1\}/g, (_match, loopKey, inner) => {
+    const items = Array.isArray(data[loopKey]) ? data[loopKey] : [];
+    return items
+      .map((item) =>
+        inner.replace(/\{([a-zA-Z0-9_]+)\}/g, (itemMatch, itemKey) => {
+          if (!(itemKey in item) || item[itemKey] === undefined || item[itemKey] === null) return itemMatch;
+          return escapeHtml(item[itemKey]);
+        })
+      )
+      .join('');
+  });
+
+  const filled = withLoopsRendered.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, key) => {
     if (!(key in data) || data[key] === undefined || data[key] === null) {
       missingTags.add(key);
       return match;

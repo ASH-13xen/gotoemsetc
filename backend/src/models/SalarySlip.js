@@ -7,11 +7,11 @@ const fileRefSchema = new Schema({ filePath: { type: String, required: true } },
 const salarySlipSchema = new Schema(
   {
     employee: { type: Schema.Types.ObjectId, ref: 'Employee', required: true, index: true },
-    month: { type: Number, required: true, min: 1, max: 12 },
-    year: { type: Number, required: true },
-    // The manually-selected "as of" date payroll was run against — 1st of
-    // the month through this date is what "Total number of Days" covers.
-    cutoffDate: { type: Date, required: true },
+    // The pay period is a free-form date range rather than a calendar
+    // month — attendance is stored per-day, so any admin-picked range can
+    // be summarized without being anchored to month boundaries.
+    startDate: { type: Date, required: true },
+    endDate: { type: Date, required: true },
 
     // Manual inputs, taken at generation time.
     incomeTaxDeduction: { type: Number, default: 0 },
@@ -37,6 +37,7 @@ const salarySlipSchema = new Schema(
     totalDeductions: Number,
     totalReimbursements: Number,
     netPayable: Number,
+    netPayableWords: String,
 
     generatedFile: { type: fileRefSchema, required: true },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
@@ -44,6 +45,6 @@ const salarySlipSchema = new Schema(
   { timestamps: true }
 );
 
-salarySlipSchema.index({ employee: 1, year: -1, month: -1 });
+salarySlipSchema.index({ employee: 1, startDate: -1 });
 
 module.exports = model('SalarySlip', salarySlipSchema);

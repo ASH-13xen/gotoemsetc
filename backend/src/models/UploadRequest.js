@@ -8,6 +8,13 @@ const uploadRequestSchema = new Schema(
     // to be reconstructable later (shown in the employee's request history
     // until it expires), not just available once at creation time.
     token: { type: String, required: true, unique: true, index: true },
+    // A short one-time-entry code the employee must type on the upload page
+    // in addition to having the link — a second, separately-delivered
+    // secret, distinct from (and unrelated to) the platform credentials
+    // stored via "Add Credentials". Cleared once the request stops being
+    // active (expired/revoked/fulfilled) so it can't be reused or leaked
+    // from the database after the fact.
+    accessCode: { type: String, default: null },
     requestedDocTypes: [{ type: String, required: true }],
     status: {
       type: String,

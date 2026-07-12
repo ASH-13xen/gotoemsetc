@@ -731,7 +731,12 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
           {isAdmin && (
             <SalarySlipsList employeeId={employeeId} employeeName={`${employee.firstName} ${employee.lastName ?? ''}`} />
           )}
-          <GeneratedDocumentsList employeeId={employeeId} />
+          <GeneratedDocumentsList
+            employeeId={employeeId}
+            employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
+            employeeEmail={employee.personalEmail}
+            employeePhone={employee.phone}
+          />
           <UploadedDocumentsList employeeId={employeeId} />
           <RequestHistoryTable
             employeeId={employeeId}

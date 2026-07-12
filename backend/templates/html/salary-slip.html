@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Salary Slip</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Calibri, Arial, sans-serif;
+    color: #1a1a1a;
+    font-size: 9.5pt;
+    line-height: 1.45;
+    margin: 0;
+    padding: 0;
+  }
+  .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #1a1a1a; padding-bottom: 8pt; margin-bottom: 10pt; }
+  .header-company { font-size: 13pt; font-weight: 700; }
+  .header-address { font-size: 8pt; color: #555; margin-top: 2pt; }
+  .logo-header { height: 42pt; width: auto; }
+  h1 { font-size: 12pt; text-align: center; margin: 0 0 2pt; text-transform: uppercase; letter-spacing: 0.5px; }
+  h2 { font-size: 10pt; text-align: center; margin: 0 0 12pt; color: #555; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 10pt; }
+  table.info td { padding: 3pt 6pt; border: 1px solid #ccc; font-size: 9pt; }
+  table.info td.label { background: #f2f2f2; font-weight: 600; width: 22%; }
+  table.pay { font-size: 9pt; }
+  table.pay th { background: #eee; text-transform: uppercase; font-size: 8pt; letter-spacing: 0.5px; padding: 5pt 6pt; border: 1px solid #ccc; text-align: left; }
+  table.pay td { padding: 4pt 6pt; border: 1px solid #ccc; }
+  table.pay td.num { text-align: right; }
+  table.pay tr.total td { font-weight: 700; background: #f7f7f7; }
+  .pay-columns { display: flex; gap: 10pt; }
+  .pay-columns > div { flex: 1; }
+  .netpay { margin-top: 10pt; border: 1.5px solid #1a1a1a; border-radius: 4pt; padding: 10pt 14pt; }
+  .netpay-row { display: flex; justify-content: space-between; padding: 2pt 0; font-size: 9pt; }
+  .netpay-row.final { font-size: 12pt; font-weight: 700; border-top: 1px solid #999; margin-top: 4pt; padding-top: 6pt; }
+  .netpay-words { margin-top: 6pt; font-size: 8.5pt; font-style: italic; color: #444; }
+  .attendance-page { page-break-before: always; padding-top: 10pt; }
+  .attendance-title { font-size: 12pt; font-weight: 700; margin-bottom: 2pt; }
+  .attendance-subtitle { font-size: 9pt; color: #555; margin-bottom: 10pt; }
+  .weekday-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3pt; margin-bottom: 3pt; }
+  .weekday-row span { text-align: center; font-size: 8pt; font-weight: 700; color: #555; }
+  .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3pt; }
+  .cell { min-height: 44pt; border: 1px solid #ccc; border-radius: 3pt; padding: 3pt; font-size: 7.5pt; position: relative; }
+  .cell .daynum { font-size: 7.5pt; color: #555; }
+  .cell .statuscode { display: block; font-size: 12pt; font-weight: 700; margin-top: 4pt; }
+  .cell .ottext { display: block; font-size: 6pt; color: #444; position: absolute; bottom: 2pt; right: 3pt; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10pt; margin-top: 14pt; font-size: 8pt; }
+  .legend-item { display: flex; align-items: center; gap: 4pt; }
+  .legend-swatch { width: 9pt; height: 9pt; border-radius: 2pt; border: 1px solid #999; }
+  .summary-box { margin-top: 14pt; font-size: 8.5pt; }
+  .summary-box div { padding: 1.5pt 0; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="header-company">GO-TO Friend Pvt. Ltd.</div>
+      <div class="header-address">3rd Floor, H.R. Vertex, Plot No 76, Behind Apollo Pharmacy, Sector-3, Geetanjali colony, Raipur-492004</div>
+    </div>
+    <img src="assets/logo.png" class="logo-header" alt="GO-TO Friend" />
+  </div>
+
+  <h1>Payslip</h1>
+  <h2>For the period {periodLabel}</h2>
+
+  <table class="info">
+    <tr><td class="label">Employee Name</td><td>{employeeName}</td><td class="label">PAN</td><td>{panNumber}</td></tr>
+    <tr><td class="label">Designation</td><td>{designation}</td><td class="label">Bank Name</td><td>{bankName}</td></tr>
+    <tr><td class="label">Employee ID</td><td>{employeeCode}</td><td class="label">Bank A/C No.</td><td>{bankAccountNumber}</td></tr>
+    <tr><td class="label">Date of Joining</td><td>{dateOfJoiningFormatted}</td><td class="label">IFSC Code</td><td>{bankIFSC}</td></tr>
+    <tr><td class="label">Department</td><td>{department}</td><td class="label">UAN Number</td><td>NA</td></tr>
+    <tr><td class="label">Pay Date</td><td>{payDateFormatted}</td><td class="label">Days Worked</td><td>{daysWorked}</td></tr>
+    <tr><td class="label">Total Days in Period</td><td>{totalDaysInPeriod}</td><td class="label">Location</td><td>GO-TO Friend Pvt. Ltd., 3rd Floor, H.R. Vertex, Raipur</td></tr>
+  </table>
+
+  <div class="pay-columns">
+    <div>
+      <table class="pay">
+        <tr><th colspan="3">Earnings</th></tr>
+        <tr><td>Basic</td><td class="num">{basicMaster}</td><td class="num">{basicEarnings}</td></tr>
+        <tr><td>Overtime</td><td class="num">{otMaster}</td><td class="num">{otEarnings}</td></tr>
+        <tr><td>Compensation Off</td><td class="num">{compensationOff}</td><td class="num">{compensationOff}</td></tr>
+        <tr><td>Incentives</td><td class="num">{incentives}</td><td class="num">{incentives}</td></tr>
+        <tr><td>Travel Allowance</td><td class="num">{travelAllowance}</td><td class="num">{travelAllowance}</td></tr>
+        <tr><td>Other Earning 1</td><td class="num">{otherEarning1}</td><td class="num">{otherEarning1}</td></tr>
+        <tr class="total"><td colspan="2">Gross Earnings</td><td class="num">{grossEarnings}</td></tr>
+      </table>
+      <table class="pay">
+        <tr><th colspan="2">Reimbursements</th></tr>
+        <tr><td>Reimbursement 1</td><td class="num">{reimbursement1}</td></tr>
+        <tr><td>Reimbursement 2</td><td class="num">{reimbursement2}</td></tr>
+        <tr class="total"><td>Total Reimbursements</td><td class="num">{totalReimbursements}</td></tr>
+      </table>
+    </div>
+    <div>
+      <table class="pay">
+        <tr><th colspan="2">Deductions</th></tr>
+        <tr><td>Income Tax Deduction</td><td class="num">{incomeTaxDeduction}</td></tr>
+        <tr><td>Profession Tax</td><td class="num">{professionTax}</td></tr>
+        <tr><td>P.F.</td><td class="num">{pf}</td></tr>
+        <tr><td>Half Day Deductions</td><td class="num">{halfDayDeductions}</td></tr>
+        <tr><td>Unpaid Off Deductions</td><td class="num">{unpaidOffDeductions}</td></tr>
+        <tr><td>Other Deduction 3</td><td class="num">{otherDeduction3}</td></tr>
+        <tr class="total"><td>Total Deductions</td><td class="num">{totalDeductions}</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="netpay">
+    <div class="netpay-row"><span>Gross Earnings</span><span>{grossEarnings}</span></div>
+    <div class="netpay-row"><span>Total Deductions</span><span>{totalDeductions}</span></div>
+    <div class="netpay-row"><span>Total Reimbursements</span><span>{totalReimbursements}</span></div>
+    <div class="netpay-row final"><span>Total Net Payable</span><span>Rs. {netPayable}</span></div>
+    <div class="netpay-words">Total Net Payable (Amount in Words): {netPayableWords}</div>
+    <div class="netpay-words">**Total Net Payable = Gross Earnings - Total Deductions + Total Reimbursements</div>
+  </div>
+
+  <div class="attendance-page">
+    <div class="attendance-title">Attendance Summary</div>
+    <div class="attendance-subtitle">{employeeName} &mdash; {periodLabel} ({totalDaysInPeriod} days)</div>
+
+    <div class="weekday-row">
+      <span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span>
+    </div>
+    <div class="calendar-grid">{#attendanceDays}<div class="cell" style="background:{bg}"><span class="daynum">{dayNum}</span><span class="statuscode">{statusText}</span><span class="ottext">{otText}</span></div>{/attendanceDays}</div>
+
+    <div class="legend">
+      <div class="legend-item"><span class="legend-swatch" style="background:#cceecc"></span>P = Full Day Present</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#c7e0ff"></span>O = Paid Leave</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#fff2b3"></span>H = Half Day</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#ffd8a8"></span>L = Late</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#ffc7c7"></span>SL = Short Leave</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#e0d0ff"></span>W = Work From Home</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#d9d9d9"></span>Off Day (Sunday/Holiday)</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#ffb3b3"></span>Unpaid Absent</div>
+    </div>
+
+    <div class="summary-box">
+      <div><strong>Summary</strong></div>
+      <div>Full Day Present (P): {countP}</div>
+      <div>Paid Leave (O): {countO}</div>
+      <div>Half Day (H): {countH}</div>
+      <div>Late (L): {countL}</div>
+      <div>Short Leave (SL): {countSL}</div>
+      <div>Work From Home (W): {countW}</div>
+      <div>Total Overtime Hours: {totalOvertimeHours}</div>
+      <div>Working Days in Period: {workingDaysInPeriod}</div>
+      <div>Off Days (Sundays/Holidays): {offDaysInPeriod}</div>
+      <div>Unpaid Absent Days: {unpaidAbsentDays}</div>
+      <div>Days Worked (for pay): {daysWorked}</div>
+    </div>
+  </div>
+</body>
+</html>

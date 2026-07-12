@@ -25,6 +25,7 @@ import { useConfig } from '@/hooks/useConfig'
 import { useCreateUploadRequest } from '@/hooks/useUploadRequests'
 import { ManualSendButtons } from '@/components/common/ManualSendButtons'
 import { buildGmailComposeUrl, buildWhatsappUrl } from '@/lib/manualSend'
+import { buildDocumentRequestEmailBody, buildDocumentRequestWhatsappText } from '@/lib/documentRequestTemplates'
 
 export function RequestDocumentsModal({
   employeeId,
@@ -43,6 +44,7 @@ export function RequestDocumentsModal({
   const [selectedTypes, setSelectedTypes] = useState<string[]>([])
   const [expiresInHours, setExpiresInHours] = useState('72')
   const [link, setLink] = useState<string | null>(null)
+  const [accessCode, setAccessCode] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
   const { data: config } = useConfig()
@@ -52,6 +54,7 @@ export function RequestDocumentsModal({
     setSelectedTypes([])
     setExpiresInHours('72')
     setLink(null)
+    setAccessCode(null)
     setCopied(false)
   }
 
@@ -63,7 +66,10 @@ export function RequestDocumentsModal({
     createUploadRequest.mutate(
       { requestedDocTypes: selectedTypes, expiresInHours: Number(expiresInHours) },
       {
-        onSuccess: ({ uploadRequest }) => setLink(uploadRequest.link),
+        onSuccess: ({ uploadRequest }) => {
+          setLink(uploadRequest.link)
+          setAccessCode(uploadRequest.accessCode)
+        },
         onError: () => toast.error('Could not create the request'),
       }
     )
@@ -73,12 +79,10 @@ export function RequestDocumentsModal({
     .map((key) => config?.docTypes.find((d) => d.key === key)?.label ?? key)
     .join(', ')
   const companyName = config?.companyName ?? 'us'
-  const emailBody = link
-    ? `Hi ${employeeName},\n\nPlease upload the following documents using the secure link below:\n${docLabels}\n\n${link}\n\nThanks,\n${companyName} HR`
-    : ''
-  const whatsappText = link
-    ? `Hi ${employeeName}, please upload the following documents using this secure link: ${docLabels}\n${link}`
-    : ''
+  const emailBody =
+    link && accessCode ? buildDocumentRequestEmailBody(employeeName, docLabels, link, accessCode, companyName) : ''
+  const whatsappText =
+    link && accessCode ? buildDocumentRequestWhatsappText(employeeName, docLabels, link, accessCode) : ''
 
   const onCopy = async () => {
     if (!link) return
@@ -178,9 +182,18 @@ export function RequestDocumentsModal({
                 Copy
               </Button>
             </div>
+            {accessCode && (
+              <div className="flex items-center gap-2 rounded-xl border border-border/10 bg-secondary/50 p-3 text-sm">
+                <span className="font-semibold text-muted-foreground uppercase tracking-wide text-xs">Access code</span>
+                <code className="rounded-md bg-background px-2 py-0.5 font-mono font-semibold text-foreground">
+                  {accessCode}
+                </code>
+              </div>
+            )}
             <p className="text-xs text-muted-foreground">
-              Share this link with the employee. It only works for the documents selected above
-              and expires automatically.
+              Share this link with the employee. They'll also need the access code above to open
+              it — it's a separate one-time login, not related to any other stored credentials.
+              Both expire automatically.
             </p>
             <ManualSendButtons
               emailHref={employeeEmail ? buildGmailComposeUrl(employeeEmail, `Document Request — ${companyName}`, emailBody) : undefined}

@@ -10,6 +10,7 @@ import { RequireRole } from '@/components/auth/RequireRole'
 import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
 import AuditLogPage from '@/pages/AuditLogPage'
+import BirthdaysPage from '@/pages/BirthdaysPage'
 import { ShellLayout } from '@/components/layout/ShellLayout'
 
 const RemoteEms = lazy(() => import('frontendems/App'))
@@ -40,6 +41,16 @@ export default function App() {
                   <RequireAuth>
                     <ShellLayout section="Dashboard">
                       <DashboardPage />
+                    </ShellLayout>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/birthdays"
+                element={
+                  <RequireAuth>
+                    <ShellLayout section="Birthdays">
+                      <BirthdaysPage />
                     </ShellLayout>
                   </RequireAuth>
                 }

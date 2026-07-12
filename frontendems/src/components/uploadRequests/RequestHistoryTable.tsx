@@ -9,6 +9,7 @@ import { useRevokeUploadRequest, useUploadRequests } from '@/hooks/useUploadRequ
 import { useConfig } from '@/hooks/useConfig'
 import { ManualSendButtons } from '@/components/common/ManualSendButtons'
 import { buildGmailComposeUrl, buildWhatsappUrl } from '@/lib/manualSend'
+import { buildDocumentRequestEmailBody, buildDocumentRequestWhatsappText } from '@/lib/documentRequestTemplates'
 import type { UploadRequest, UploadRequestStatus } from '@/api/uploadRequests.api'
 
 const STATUS_VARIANT: Record<UploadRequestStatus, 'secondary' | 'success' | 'warning' | 'destructive'> = {
@@ -79,21 +80,30 @@ function RequestRow({
               Copy
             </Button>
           </div>
+          {req.accessCode && (
+            <div className="flex items-center gap-2 text-xs">
+              <span className="font-semibold text-muted-foreground uppercase tracking-wide">Access code</span>
+              <code className="rounded-md bg-secondary/50 px-2 py-0.5 font-mono font-semibold text-foreground">
+                {req.accessCode}
+              </code>
+              <span className="text-muted-foreground">— required on the upload page, separate from the link</span>
+            </div>
+          )}
           <ManualSendButtons
             emailHref={
-              employeeEmail
+              employeeEmail && req.accessCode
                 ? buildGmailComposeUrl(
                     employeeEmail,
                     `Document Request — ${companyName}`,
-                    `Hi ${employeeName},\n\nPlease upload the following documents using the secure link below:\n${docLabels}\n\n${req.link}\n\nThanks,\n${companyName} HR`
+                    buildDocumentRequestEmailBody(employeeName, docLabels, req.link, req.accessCode, companyName)
                   )
                 : undefined
             }
             whatsappHref={
-              employeePhone
+              employeePhone && req.accessCode
                 ? buildWhatsappUrl(
                     employeePhone,
-                    `Hi ${employeeName}, please upload the following documents using this secure link: ${docLabels}\n${req.link}`
+                    buildDocumentRequestWhatsappText(employeeName, docLabels, req.link, req.accessCode)
                   )
                 : undefined
             }

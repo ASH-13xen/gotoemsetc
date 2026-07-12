@@ -1,13 +1,14 @@
 import { type ReactNode, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { 
-  LayoutDashboard, 
-  Users, 
-  DollarSign, 
-  CalendarClock, 
-  ShieldAlert, 
-  LogOut, 
-  Menu, 
+import {
+  LayoutDashboard,
+  Users,
+  DollarSign,
+  CalendarClock,
+  Cake,
+  ShieldAlert,
+  LogOut,
+  Menu,
   ChevronLeft
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
@@ -23,6 +24,7 @@ export function ShellLayout({ children, section }: { children: ReactNode; sectio
     { to: '/ems', label: 'EMS', icon: Users },
     { to: '/sales', label: 'Sales', icon: DollarSign },
     { to: '/followups', label: 'Followups', icon: CalendarClock },
+    { to: '/birthdays', label: 'Birthdays', icon: Cake },
     ...(user?.role === 'admin' ? [{ to: '/audit-log', label: 'Audit Log', icon: ShieldAlert }] : []),
   ]
 

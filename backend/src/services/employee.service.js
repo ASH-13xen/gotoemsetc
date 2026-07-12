@@ -13,6 +13,20 @@ async function getEmployee(id) {
   return employee;
 }
 
+// Same active-employee-with-dob source the birthday reminder cron reads
+// from — reshaped down to just what a calendar view needs, not the full
+// employee document.
+async function listBirthdays() {
+  const employees = await employeeRepository.listAllWithDob();
+  return employees.map((e) => ({
+    _id: e._id,
+    firstName: e.firstName,
+    lastName: e.lastName,
+    employeeCode: e.employeeCode,
+    dob: e.dob,
+  }));
+}
+
 // Every new employee starts with these two placeholder rows in Extra
 // Details — HR fills the actual values in manually once the company
 // mailbox is set up, rather than leaving the section empty with no hint
@@ -48,4 +62,4 @@ async function deleteEmployee(id) {
   return employee;
 }
 
-module.exports = { listEmployees, getEmployee, createEmployee, updateEmployee, deleteEmployee };
+module.exports = { listEmployees, getEmployee, listBirthdays, createEmployee, updateEmployee, deleteEmployee };

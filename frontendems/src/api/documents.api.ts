@@ -1,17 +1,13 @@
 import { apiClient } from './client'
 
-export interface FileRef {
-  url: string
-  publicId: string
-  bytes: number
-}
-
-// PDFs generated from HTML templates are stored on our own disk (Cloudinary
-// blocks unauthenticated PDF delivery by default) and served through an
-// authenticated download route instead of a direct URL — so unlike `docx`,
-// this only tells the UI a PDF exists, not where to fetch it from directly.
-export interface LocalFileRef {
-  filePath: string
+// Generated files are stored as bytes on the backend (Mongo, not Cloudinary
+// or local disk — see backend/src/models/GeneratedDocument.js) and served
+// through an authenticated download route instead of a direct URL. The list
+// endpoint never sends the bytes themselves, just this metadata, so the UI
+// knows a file exists and what to call it.
+export interface FileMeta {
+  contentType: string
+  filename: string
 }
 
 export interface GeneratedDocument {
@@ -20,8 +16,8 @@ export interface GeneratedDocument {
   template: { _id: string; key: string; title: string; category: string }
   templateVersion: number
   mergeDataSnapshot?: Record<string, unknown>
-  docx?: FileRef
-  pdf?: LocalFileRef
+  docx?: FileMeta
+  pdf?: FileMeta
   status: 'completed' | 'failed'
   errorMessage?: string
   createdAt: string
@@ -60,11 +56,15 @@ export async function deleteDocument(id: string): Promise<void> {
 
 // The download route is admin-gated (needs the Bearer token), so a plain
 // <a href> can't be used — fetch it as a blob through the authenticated
-// axios instance and trigger the browser download manually (same pattern as
-// downloadSalarySlip).
-export async function downloadGeneratedPdf(documentId: string, filename: string): Promise<void> {
+// axios instance instead (same pattern as downloadSalarySlip).
+export async function fetchGeneratedFileBlob(documentId: string): Promise<Blob> {
   const { data } = await apiClient.get(`/documents/${documentId}/file`, { responseType: 'blob' })
-  const url = window.URL.createObjectURL(data)
+  return data
+}
+
+export async function downloadGeneratedFile(documentId: string, filename: string): Promise<void> {
+  const blob = await fetchGeneratedFileBlob(documentId)
+  const url = window.URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
   link.download = filename

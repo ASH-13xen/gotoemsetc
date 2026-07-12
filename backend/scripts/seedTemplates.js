@@ -109,15 +109,18 @@ const templates = [
     title: 'Code of Conduct',
     description: 'Workplace conduct policy acknowledgement.',
     category: 'compliance',
-    docxFilePath: 'code-of-conduct.docx',
+    templateType: 'html',
+    htmlFilePath: 'code-of-conduct.html',
     fields: [employeeName],
+    loops: [],
   },
   {
     key: 'nda',
     title: 'Non-Disclosure Agreement',
     description: 'Confidentiality agreement signed at onboarding.',
     category: 'compliance',
-    docxFilePath: 'nda.docx',
+    templateType: 'html',
+    htmlFilePath: 'nda.html',
     fields: [
       employeeName, employeeAddress,
       {
@@ -125,21 +128,25 @@ const templates = [
         source: 'manual', group: 'Agreement Details', order: 41,
       },
     ],
+    loops: [],
   },
   {
     key: 'hr-policies',
     title: 'HR Policies',
     description: 'General HR policy handbook acknowledgement.',
     category: 'policy',
-    docxFilePath: 'hr-policies.docx',
+    templateType: 'html',
+    htmlFilePath: 'hr-policies.html',
     fields: [employeeName],
+    loops: [],
   },
   {
     key: 'promotion-letter',
     title: 'Promotion Letter',
     description: 'Confirms a promotion, new designation, and revised compensation.',
     category: 'onboarding',
-    docxFilePath: 'promotion-letter.docx',
+    templateType: 'html',
+    htmlFilePath: 'promotion-letter.html',
     fields: [
       employeeName, designation, reportingManager, todayDate,
       {
@@ -178,7 +185,8 @@ const templates = [
     title: 'Offboarding Document',
     description: 'Checklist and instructions issued when an employee is leaving.',
     category: 'offboarding',
-    docxFilePath: 'offboarding-letter.docx',
+    templateType: 'html',
+    htmlFilePath: 'offboarding-letter.html',
     fields: [
       employeeName, designation, todayDate, lastWorkingDate,
       {
@@ -209,7 +217,8 @@ const templates = [
     title: 'Relieving Letter',
     description: 'Formally accepts resignation and confirms relieving date.',
     category: 'offboarding',
-    docxFilePath: 'relieving-letter.docx',
+    templateType: 'html',
+    htmlFilePath: 'relieving-letter.html',
     fields: [
       employeeName, employeeAddress, designation, department, todayDate, lastWorkingDate, tenureDuration,
       {
@@ -227,7 +236,8 @@ const templates = [
     title: 'Experience Letter',
     description: 'Service certificate and professional reference.',
     category: 'offboarding',
-    docxFilePath: 'experience-letter.docx',
+    templateType: 'html',
+    htmlFilePath: 'experience-letter.html',
     fields: [
       employeeName, designation, department, dateOfJoining, todayDate, lastWorkingDate, tenureDuration,
       {
@@ -249,7 +259,8 @@ const templates = [
     title: 'Full & Final Settlement Agreement',
     description: 'Separation and general release agreement with severance terms.',
     category: 'offboarding',
-    docxFilePath: 'fnf-settlement.docx',
+    templateType: 'html',
+    htmlFilePath: 'fnf-settlement.html',
     fields: [
       employeeName, todayDate,
       {
@@ -273,6 +284,36 @@ const templates = [
         source: 'manual', group: 'Settlement Details', order: 74,
       },
     ],
+  },
+  {
+    key: 'hardware-consent-form',
+    title: 'Hardware Usage & Consent Form',
+    description: 'Equipment issuance record and usage/liability consent for company hardware and SIM.',
+    category: 'compliance',
+    templateType: 'html',
+    htmlFilePath: 'hardware-consent-form.html',
+    fields: [employeeName, designation, department, todayDate],
+    loops: [],
+  },
+  {
+    key: 'work-for-hire',
+    title: 'Work For Hire Agreement',
+    description: 'Assigns ownership of creative work product (video/design/photo) to the company.',
+    category: 'compliance',
+    templateType: 'html',
+    htmlFilePath: 'work-for-hire.html',
+    fields: [employeeName, todayDate],
+    loops: [],
+  },
+  {
+    key: 'video-consent-form',
+    title: 'Video & Media Consent Agreement',
+    description: 'Consent for the company to film, photograph, and use an employee’s likeness.',
+    category: 'compliance',
+    templateType: 'html',
+    htmlFilePath: 'video-consent-form.html',
+    fields: [employeeName, todayDate],
+    loops: [],
   },
 ];
 

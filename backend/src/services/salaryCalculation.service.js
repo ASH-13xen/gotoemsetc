@@ -4,22 +4,19 @@ const holidayRepository = require('../repositories/holiday.repository');
 const { ATTENDANCE_STATUS } = require('../config/constants');
 const { dateKey, isOffDay } = require('../utils/attendanceDays');
 
-// From 1st of the target month through the manually-selected cutoff date
-// (inclusive) — this is the period a slip covers, distinct from the full
-// calendar month used only as the daily-rate denominator.
-async function computeAttendanceSummary(employeeId, year, month, cutoffDate) {
-  const from = new Date(Date.UTC(year, month - 1, 1));
-  const to = new Date(Date.UTC(year, month - 1, cutoffDate.getUTCDate()));
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+// Attendance is stored one record per calendar day, so any admin-picked
+// [startDate, endDate] range (inclusive, both UTC midnight) can be
+// summarized directly — nothing here is anchored to a calendar month.
+async function computeAttendanceSummary(employeeId, startDate, endDate) {
   const [records, holidays] = await Promise.all([
-    attendanceRepository.listForEmployee(employeeId, { from, to }),
-    holidayRepository.list({ from, to }),
+    attendanceRepository.listForEmployee(employeeId, { from: startDate, to: endDate }),
+    holidayRepository.list({ from: startDate, to: endDate }),
   ]);
 
-  const totalDaysInPeriod = to.getUTCDate();
-  const daysInCalendarMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const totalDaysInPeriod = Math.round((endDate.getTime() - startDate.getTime()) / MS_PER_DAY) + 1;
   const holidayDateKeys = new Set(holidays.map((h) => dateKey(h.date)));
-
   const recordByDate = new Map(records.map((r) => [dateKey(r.date), r]));
 
   const counts = { P: 0, O: 0, H: 0, L: 0, SL: 0, W: 0 };
@@ -31,8 +28,8 @@ async function computeAttendanceSummary(employeeId, year, month, cutoffDate) {
 
   let offDaysInPeriod = 0;
   let unpaidAbsentDays = 0;
-  for (let day = 1; day <= totalDaysInPeriod; day += 1) {
-    const date = new Date(Date.UTC(year, month - 1, day));
+  for (let i = 0; i < totalDaysInPeriod; i += 1) {
+    const date = new Date(startDate.getTime() + i * MS_PER_DAY);
     const off = isOffDay(date, holidayDateKeys);
     if (off) {
       offDaysInPeriod += 1;
@@ -52,7 +49,6 @@ async function computeAttendanceSummary(employeeId, year, month, cutoffDate) {
 
   return {
     totalDaysInPeriod,
-    daysInCalendarMonth,
     workingDaysInPeriod,
     counts,
     daysWorkedTotal,
@@ -79,7 +75,11 @@ function computeSalary(employee, summary, manualInputs) {
   } = manualInputs;
 
   const basicMaster = employee.monthlyPay || (employee.ctcAnnual ? employee.ctcAnnual / 12 : 0) || 0;
-  const dailyRate = summary.daysInCalendarMonth > 0 ? basicMaster / summary.daysInCalendarMonth : 0;
+  // Prorated by the number of days actually in the selected period, rather
+  // than a fixed calendar month — this is what makes an arbitrary
+  // start/end range make sense as a pay basis (a 15-day period pays out
+  // basicMaster/15 per day worked, not basicMaster/30).
+  const dailyRate = summary.totalDaysInPeriod > 0 ? basicMaster / summary.totalDaysInPeriod : 0;
   const basicEarnings = dailyRate * summary.daysWorkedTotal;
 
   const otMaster = summary.workingDaysInPeriod > 0 ? basicMaster / summary.workingDaysInPeriod / 8 : 0;

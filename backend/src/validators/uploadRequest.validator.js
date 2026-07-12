@@ -5,6 +5,7 @@ const DOC_TYPE_KEYS = DOC_TYPES.map((d) => d.key);
 
 const idParam = z.object({ id: z.string().min(1) });
 const tokenParam = z.object({ token: z.string().min(10) });
+const accessCode = z.string().length(6);
 
 const create = {
   params: idParam,
@@ -16,7 +17,10 @@ const create = {
 
 const listForEmployee = { params: idParam };
 const revoke = { params: idParam };
-const getPublicStatus = { params: tokenParam };
-const uploadDocuments = { params: tokenParam };
+const verifyCode = { params: tokenParam, body: z.object({ code: accessCode }) };
+const getPublicStatus = { params: tokenParam, query: z.object({ code: accessCode }) };
+// multipart body — fields land as strings on req.body alongside req.files,
+// so `code` is validated the same way a JSON body field would be.
+const uploadDocuments = { params: tokenParam, body: z.object({ code: accessCode }) };
 
-module.exports = { create, listForEmployee, revoke, getPublicStatus, uploadDocuments };
+module.exports = { create, listForEmployee, revoke, verifyCode, getPublicStatus, uploadDocuments };

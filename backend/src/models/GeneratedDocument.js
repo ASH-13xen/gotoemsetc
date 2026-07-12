@@ -1,17 +1,17 @@
 const { Schema, model } = require('mongoose');
 const { GENERATED_DOCUMENT_STATUS } = require('../config/constants');
 
-const fileRefSchema = new Schema(
-  { url: String, publicId: String, bytes: Number },
+// Generated files are stored as bytes directly on the document rather than
+// in Cloudinary or on local disk: Cloudinary blocks unauthenticated delivery
+// of PDF/raw files by account-level default, and Render's free-tier disk is
+// wiped on every redeploy/restart. Mongo is already the durable store for
+// everything else in this app, and these files are small (a few hundred KB).
+// `data` is excluded by default from list/detail reads (see
+// generatedDocument.repository.js) and only loaded for the download route.
+const fileSchema = new Schema(
+  { data: Buffer, contentType: String, filename: String },
   { _id: false }
 );
-
-// Cloudinary's account-level security default blocks unauthenticated
-// delivery of PDF/ZIP raw files entirely (see localFileStorage.service.js)
-// — PDFs generated from HTML templates are stored on our own disk and
-// served through an authenticated route instead, so this needs a different
-// shape than the Cloudinary-backed `docx` field.
-const localFileRefSchema = new Schema({ filePath: String }, { _id: false });
 
 const generatedDocumentSchema = new Schema(
   {
@@ -19,8 +19,8 @@ const generatedDocumentSchema = new Schema(
     template: { type: Schema.Types.ObjectId, ref: 'DocumentTemplate', required: true },
     templateVersion: Number,
     mergeDataSnapshot: Schema.Types.Mixed,
-    docx: fileRefSchema,
-    pdf: localFileRefSchema,
+    docx: fileSchema,
+    pdf: fileSchema,
     status: {
       type: String,
       enum: Object.values(GENERATED_DOCUMENT_STATUS),

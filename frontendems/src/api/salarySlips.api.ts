@@ -3,9 +3,8 @@ import { apiClient } from './client'
 export interface SalarySlip {
   _id: string
   employee: string
-  month: number
-  year: number
-  cutoffDate: string
+  startDate: string
+  endDate: string
   basicMaster: number
   basicEarnings: number
   otMaster: number
@@ -16,13 +15,13 @@ export interface SalarySlip {
   totalDeductions: number
   totalReimbursements: number
   netPayable: number
+  netPayableWords?: string
   createdAt: string
 }
 
 export interface GenerateSalarySlipInput {
-  month: number
-  year: number
-  cutoffDate: string
+  startDate: string
+  endDate: string
   incomeTaxDeduction?: number
   professionTax?: number
   pf?: number

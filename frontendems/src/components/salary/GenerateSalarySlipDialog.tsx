@@ -44,22 +44,27 @@ export function GenerateSalarySlipDialog({
   trigger: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
-  const [cutoffDate, setCutoffDate] = useState(todayInputValue())
+  const [startDate, setStartDate] = useState(todayInputValue())
+  const [endDate, setEndDate] = useState(todayInputValue())
   const [inputs, setInputs] = useState<Record<string, string>>({})
 
   const generateSlip = useGenerateSalarySlip(employeeId)
 
   const reset = () => {
-    setCutoffDate(todayInputValue())
+    setStartDate(todayInputValue())
+    setEndDate(todayInputValue())
     setInputs({})
   }
 
   const onSubmit = () => {
-    if (!cutoffDate) {
-      toast.error('Pick a cutoff date')
+    if (!startDate || !endDate) {
+      toast.error('Pick a start and end date')
       return
     }
-    const [year, month] = cutoffDate.split('-').map(Number)
+    if (endDate < startDate) {
+      toast.error('End date must be on or after the start date')
+      return
+    }
     const payload: Record<string, number> = {}
     for (const field of MANUAL_FIELDS) {
       const raw = inputs[field.key]
@@ -67,11 +72,11 @@ export function GenerateSalarySlipDialog({
     }
 
     generateSlip.mutate(
-      { month, year, cutoffDate, ...payload },
+      { startDate, endDate, ...payload },
       {
         onSuccess: async ({ slip }) => {
           toast.success('Salary slip generated')
-          await downloadSalarySlip(slip._id, `${employeeName}-${year}-${String(month).padStart(2, '0')}.pdf`)
+          await downloadSalarySlip(slip._id, `${employeeName}-${startDate}_to_${endDate}.pdf`)
           setOpen(false)
           reset()
         },
@@ -87,21 +92,35 @@ export function GenerateSalarySlipDialog({
         <DialogHeader>
           <DialogTitle>Generate Salary Slip</DialogTitle>
           <DialogDescription>
-            Days worked, overtime, and attendance-based deductions are computed automatically from 1st of the
-            month through the cutoff date below. Everything else defaults to 0 if left blank.
+            Days worked, overtime, and attendance-based deductions are computed automatically from the start
+            date through the end date below — any range works, it doesn't need to line up with a calendar
+            month. Everything else defaults to 0 if left blank.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4">
-          <div className="grid gap-1.5">
-            <Label htmlFor="cutoff-date">Cutoff Date (as of)</Label>
-            <Input
-              id="cutoff-date"
-              type="date"
-              max={todayInputValue()}
-              value={cutoffDate}
-              onChange={(e) => setCutoffDate(e.target.value)}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="slip-start-date">Start Date</Label>
+              <Input
+                id="slip-start-date"
+                type="date"
+                max={endDate || todayInputValue()}
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="slip-end-date">End Date</Label>
+              <Input
+                id="slip-end-date"
+                type="date"
+                min={startDate}
+                max={todayInputValue()}
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

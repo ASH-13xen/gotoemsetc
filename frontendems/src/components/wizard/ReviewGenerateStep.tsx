@@ -1,6 +1,10 @@
-import { CheckCircle2, Download, Loader2, XCircle } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { CheckCircle2, Download, Eye, Loader2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { GeneratedFilePreviewDialog } from '@/components/documents/GeneratedFilePreviewDialog'
+import { downloadGeneratedFile } from '@/api/documents.api'
 import type { DocumentTemplate } from '@/api/templates.api'
 import type { GenerateResult } from '@/api/documents.api'
 import type { SalaryComponent } from '@/api/employees.api'
@@ -33,6 +37,16 @@ export function ReviewGenerateStep({
   responsibilities,
 }: ReviewGenerateStepProps) {
   const monthlyGross = (salaryComponents ?? []).reduce((sum, c) => sum + (Number(c.monthlyAmount) || 0), 0)
+  const [previewDocId, setPreviewDocId] = useState<string | null>(null)
+  const [previewTitle, setPreviewTitle] = useState('')
+
+  const onDownload = async (documentId: string, filename: string) => {
+    try {
+      await downloadGeneratedFile(documentId, filename)
+    } catch {
+      toast.error('Could not download the file')
+    }
+  }
 
   return (
     <div className="grid gap-4">
@@ -97,39 +111,71 @@ export function ReviewGenerateStep({
             <CardTitle className="text-base">Results</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-2">
-            {results.map((result) => (
-              <div key={result.templateId} className="flex items-center justify-between gap-4">
-                <span className="flex items-center gap-2 text-sm">
-                  {result.status === 'completed' ? (
-                    <CheckCircle2 className="size-4 text-emerald-600" />
-                  ) : (
-                    <XCircle className="size-4 text-destructive" />
+            {results.map((result) => {
+              const file = result.document?.pdf ?? result.document?.docx
+              const isPdf = file?.contentType === 'application/pdf'
+              return (
+                <div key={result.templateId} className="flex items-center justify-between gap-4">
+                  <span className="flex items-center gap-2 text-sm">
+                    {result.status === 'completed' ? (
+                      <CheckCircle2 className="size-4 text-emerald-600" />
+                    ) : (
+                      <XCircle className="size-4 text-destructive" />
+                    )}
+                    {result.templateKey ?? result.templateId}
+                    {result.status === 'failed' && (
+                      <span className="text-xs text-muted-foreground">{result.error}</span>
+                    )}
+                  </span>
+                  {result.status === 'completed' && file && result.document && (
+                    <div className="flex items-center gap-2">
+                      {isPdf && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setPreviewDocId(result.document!._id)
+                            setPreviewTitle(result.templateKey ?? result.templateId)
+                          }}
+                        >
+                          <Eye className="size-3.5" />
+                          Preview
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onDownload(result.document!._id, file.filename)}
+                      >
+                        <Download className="size-3.5" />
+                        Download
+                      </Button>
+                    </div>
                   )}
-                  {result.templateKey ?? result.templateId}
-                  {result.status === 'failed' && (
-                    <span className="text-xs text-muted-foreground">{result.error}</span>
-                  )}
-                </span>
-                {result.status === 'completed' && result.document?.docx && (
-                  <Button asChild variant="outline" size="sm">
-                    <a href={result.document.docx.url} target="_blank" rel="noreferrer">
-                      <Download className="size-3.5" />
-                      Download
-                    </a>
-                  </Button>
-                )}
-              </div>
-            ))}
+                </div>
+              )
+            })}
           </CardContent>
         </Card>
       )}
 
-      <div className="flex justify-end">
-        <Button onClick={onGenerate} disabled={isGenerating}>
-          {isGenerating && <Loader2 className="size-4 animate-spin" />}
-          Generate documents
-        </Button>
-      </div>
+      {(!results || results.length === 0) ? (
+        <div className="flex justify-end">
+          <Button onClick={onGenerate} disabled={isGenerating}>
+            {isGenerating && <Loader2 className="size-4 animate-spin" />}
+            Generate documents
+          </Button>
+        </div>
+      ) : (
+        <div className="flex justify-end">
+          <Button variant="outline" onClick={onGenerate} disabled={isGenerating}>
+            {isGenerating && <Loader2 className="size-4 animate-spin" />}
+            Regenerate documents
+          </Button>
+        </div>
+      )}
+
+      <GeneratedFilePreviewDialog documentId={previewDocId} title={previewTitle} onClose={() => setPreviewDocId(null)} />
     </div>
   )
 }

@@ -8,7 +8,7 @@ const generate = asyncHandler(async (req, res) => {
     action: 'salarySlip.generate',
     resourceType: 'SalarySlip',
     resourceId: slip._id,
-    metadata: { employee: req.params.id, month: req.body.month, year: req.body.year },
+    metadata: { employee: req.params.id, startDate: req.body.startDate, endDate: req.body.endDate },
   };
   res.status(201).json({ slip });
 });

@@ -18,6 +18,11 @@ router.use(publicUploadLimiter);
 // request stream before this router runs).
 router.post('/applicants/google-form', googleFormWebhookController.submit);
 
+router.post(
+  '/upload-requests/:token/verify',
+  validate(uploadRequestValidator.verifyCode),
+  publicUploadController.verifyAccessCode
+);
 router.get(
   '/upload-requests/:token',
   validate(uploadRequestValidator.getPublicStatus),
@@ -25,8 +30,11 @@ router.get(
 );
 router.post(
   '/upload-requests/:token/documents',
-  validate(uploadRequestValidator.uploadDocuments),
+  // multer must run first — it's what parses the multipart body, so the
+  // `code` text field validate() checks isn't populated on req.body yet
+  // until upload.any() has run.
   upload.any(),
+  validate(uploadRequestValidator.uploadDocuments),
   publicUploadController.uploadDocuments
 );
 

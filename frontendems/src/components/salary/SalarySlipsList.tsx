@@ -6,10 +6,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useSalarySlips } from '@/hooks/useSalarySlips'
 import { downloadSalarySlip } from '@/api/salarySlips.api'
 
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-]
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+}
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(
@@ -21,9 +20,9 @@ export function SalarySlipsList({ employeeId, employeeName }: { employeeId: stri
   const { data, isLoading } = useSalarySlips(employeeId)
   const slips = data?.slips ?? []
 
-  const onDownload = async (slipId: string, month: number, year: number) => {
+  const onDownload = async (slipId: string, startDate: string, endDate: string) => {
     try {
-      await downloadSalarySlip(slipId, `${employeeName}-${year}-${String(month).padStart(2, '0')}.pdf`)
+      await downloadSalarySlip(slipId, `${employeeName}-${startDate}_to_${endDate}.pdf`)
     } catch {
       toast.error('Could not download salary slip')
     }
@@ -47,14 +46,18 @@ export function SalarySlipsList({ employeeId, employeeName }: { employeeId: stri
             <div key={slip._id} className="flex items-center justify-between gap-4 rounded-xl bg-secondary/30 p-4 border border-border/5">
               <span className="flex flex-col text-sm">
                 <span className="font-semibold text-foreground">
-                  {MONTH_NAMES[slip.month - 1]} {slip.year}
+                  {formatDate(slip.startDate)} – {formatDate(slip.endDate)}
                 </span>
                 <span className="text-xs text-muted-foreground mt-0.5">
-                  Net Payable: {formatCurrency(slip.netPayable)} · through{' '}
-                  {new Date(slip.cutoffDate).toLocaleDateString()}
+                  Net Payable: {formatCurrency(slip.netPayable)}
                 </span>
               </span>
-              <Button variant="outline" size="sm" className="rounded-xl" onClick={() => onDownload(slip._id, slip.month, slip.year)}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-xl"
+                onClick={() => onDownload(slip._id, slip.startDate.slice(0, 10), slip.endDate.slice(0, 10))}
+              >
                 <Download className="size-3.5" />
                 Download
               </Button>

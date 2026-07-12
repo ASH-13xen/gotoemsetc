@@ -13,6 +13,10 @@ export interface UploadRequest {
   // Reconstructed server-side from the (plainly stored) token — present on
   // every request, active or not; the frontend decides when to show it.
   link: string
+  // The one-time login code the employee must enter on the upload page in
+  // addition to the link. Cleared server-side (becomes null) once the
+  // request stops being active — expired, revoked, or fully fulfilled.
+  accessCode: string | null
 }
 
 export interface UploadedDocument {
