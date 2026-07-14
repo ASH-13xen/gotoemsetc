@@ -1,12 +1,12 @@
 import { apiClient } from './client'
-import type { MeetingAttendee } from './meetings.api'
+import type { EmployeeRef } from './shared.types'
 
 export interface Team {
   _id: string
   name: string
   description?: string
-  members: MeetingAttendee[]
-  leader?: MeetingAttendee
+  members: EmployeeRef[]
+  leader?: EmployeeRef
   createdAt: string
   updatedAt: string
 }

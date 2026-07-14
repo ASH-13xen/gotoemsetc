@@ -28,6 +28,22 @@ export interface QuotationTemplateFields {
   clientSignature?: FieldPosition
 }
 
+export interface ScopeOfWorkStep {
+  label: string
+  order: number
+}
+
+export interface ScopeOfWorkItem {
+  label: string
+  qtyPerCycle: number
+}
+
+export interface ScopeOfWorkSection {
+  name: string
+  items: ScopeOfWorkItem[]
+  steps: ScopeOfWorkStep[]
+}
+
 export interface QuotationTemplate {
   _id: string
   key: string
@@ -43,6 +59,7 @@ export interface QuotationTemplate {
   fixedAmount?: number
   fields: QuotationTemplateFields
   isConfigured: boolean
+  scopeOfWork: ScopeOfWorkSection[]
 }
 
 export async function listQuotationTemplates(): Promise<QuotationTemplate[]> {
@@ -60,6 +77,16 @@ export async function updateQuotationTemplateFields(
   fields: QuotationTemplateFields
 ): Promise<QuotationTemplate> {
   const { data } = await apiClient.patch<{ template: QuotationTemplate }>(`/quotation-templates/${id}/fields`, fields)
+  return data.template
+}
+
+export async function updateScopeOfWork(
+  id: string,
+  scopeOfWork: ScopeOfWorkSection[]
+): Promise<QuotationTemplate> {
+  const { data } = await apiClient.patch<{ template: QuotationTemplate }>(`/quotation-templates/${id}/scope-of-work`, {
+    scopeOfWork,
+  })
   return data.template
 }
 

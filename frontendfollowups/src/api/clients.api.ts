@@ -17,15 +17,26 @@ export interface AssignedTeam {
   leader?: { _id: string; firstName: string; lastName?: string }
 }
 
+export interface AssignedEmployee {
+  _id: string
+  firstName: string
+  lastName?: string
+  designation?: string
+  employeeCode?: string
+}
+
 export interface SalesClient {
   _id: string
   clientName: string
   brandName: string
   dateRegistered: string
+  logoUrl?: string
   contacts: Contact[]
   status: ClientStatus
   currentQuotation?: string
   assignedTeam?: AssignedTeam
+  assignedEmployees: AssignedEmployee[]
+  mainEmployee?: AssignedEmployee
   createdAt: string
   updatedAt: string
 }

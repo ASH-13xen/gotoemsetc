@@ -1,111 +1,92 @@
-const mongoose = require('mongoose');
 const Task = require('../models/Task');
 
-const POPULATE_ASSIGNEES = [
-  { path: 'client', select: 'clientName brandName' },
-  { path: 'assigneeEmployees', select: 'firstName lastName designation employeeCode' },
-  { path: 'assigneeTeam', select: 'name leader members' },
-  { path: 'comments.author', select: 'username role employeeLink' },
+const POPULATE = [
+  { path: 'assignedEmployees', select: 'firstName lastName designation employeeCode' },
+  { path: 'leadEmployee', select: 'firstName lastName designation employeeCode' },
+  { path: 'assignedTeam', select: 'name leader' },
+  { path: 'steps.assignedEmployees', select: 'firstName lastName designation employeeCode' },
 ];
-
-function listQuery({ client, stage, status, assignee, priority, search }) {
-  const query = { isDeleted: false };
-  if (client) query.client = client;
-  if (stage) query.stage = stage;
-  if (status) query.status = status;
-  if (priority) query.priority = priority;
-  if (assignee) query.assigneeEmployees = assignee;
-  if (search) query.title = new RegExp(search.trim(), 'i');
-  return query;
-}
-
-async function list({ client, stage, status, assignee, priority, search, page = 1, limit = 50 }) {
-  const query = listQuery({ client, stage, status, assignee, priority, search });
-  const skip = (page - 1) * limit;
-
-  const [items, total] = await Promise.all([
-    Task.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).populate(POPULATE_ASSIGNEES),
-    Task.countDocuments(query),
-  ]);
-
-  return { items, total, page, limit };
-}
-
-function findById(id) {
-  return Task.findOne({ _id: id, isDeleted: false }).populate(POPULATE_ASSIGNEES);
-}
 
 function create(data) {
   return Task.create(data);
 }
 
+function insertMany(docs) {
+  return Task.insertMany(docs);
+}
+
+function findById(id) {
+  return Task.findOne({ _id: id, isDeleted: false }).populate(POPULATE);
+}
+
+function listForCycle(clientId, cycleId) {
+  return Task.find({ client: clientId, cycle: cycleId, isDeleted: false }).sort({ sectionName: 1, itemLabel: 1 }).populate(POPULATE);
+}
+
+function listForClient(clientId) {
+  return Task.find({ client: clientId, isDeleted: false }).sort({ createdAt: -1 }).populate(POPULATE);
+}
+
+// For a set of clients, in a date window — the content calendar and
+// dashboard's "due this week" both need this shape.
+function listByClientsInWindow(clientIds, from, to) {
+  return Task.find({
+    client: { $in: clientIds },
+    isDeleted: false,
+    'steps.dueDate': { $gte: from, $lte: to },
+  })
+    .populate(POPULATE)
+    .populate('client', 'clientName brandName logoUrl');
+}
+
+function listByAssignee(employeeId) {
+  return Task.find({
+    isDeleted: false,
+    $or: [{ assignedEmployees: employeeId }, { leadEmployee: employeeId }, { 'steps.assignedEmployees': employeeId }],
+  })
+    .populate(POPULATE)
+    .populate('client', 'clientName brandName logoUrl');
+}
+
+function listIncompleteForCycle(cycleId) {
+  return Task.find({ cycle: cycleId, isDeleted: false, status: { $nin: ['done', 'missed', 'rolled_over'] } });
+}
+
 function updateById(id, data) {
-  return Task.findOneAndUpdate({ _id: id, isDeleted: false }, data, {
-    returnDocument: 'after',
-    runValidators: true,
-  }).populate(POPULATE_ASSIGNEES);
+  return Task.findOneAndUpdate({ _id: id, isDeleted: false }, data, { returnDocument: 'after', runValidators: true }).populate(
+    POPULATE
+  );
 }
 
-function softDeleteById(id) {
-  return Task.findOneAndUpdate({ _id: id, isDeleted: false }, { isDeleted: true }, { returnDocument: 'after' });
+function findRaw(id) {
+  return Task.findById(id);
 }
 
-// One soonest non-done, due-dated task per client — powers the Clients list's
-// "task if any due, priority and due date" summary.
-async function findNextDueForClients(clientIds) {
+// Admin-facing workload overview — active (not done/missed/rolled_over)
+// task counts grouped by employee, across every client at once.
+async function countActiveByEmployee() {
   return Task.aggregate([
-    {
-      $match: {
-        isDeleted: false,
-        client: { $in: clientIds.map((id) => new mongoose.Types.ObjectId(id)) },
-        status: { $ne: 'done' },
-        dueDate: { $ne: null },
-      },
-    },
-    { $sort: { dueDate: 1 } },
-    {
-      $group: {
-        _id: '$client',
-        title: { $first: '$title' },
-        priority: { $first: '$priority' },
-        dueDate: { $first: '$dueDate' },
-      },
-    },
+    { $match: { isDeleted: false, status: { $in: ['pending', 'in_progress'] } } },
+    { $unwind: '$assignedEmployees' },
+    { $group: { _id: '$assignedEmployees', count: { $sum: 1 } } },
   ]);
 }
 
-function pushComment(id, comment) {
-  return Task.findOneAndUpdate(
-    { _id: id, isDeleted: false },
-    { $push: { comments: comment } },
-    { returnDocument: 'after', runValidators: true }
-  ).populate(POPULATE_ASSIGNEES);
-}
-
-function pushAttachment(id, attachment) {
-  return Task.findOneAndUpdate(
-    { _id: id, isDeleted: false },
-    { $push: { attachments: attachment } },
-    { returnDocument: 'after', runValidators: true }
-  ).populate(POPULATE_ASSIGNEES);
-}
-
-function pullAttachment(id, attachmentId) {
-  return Task.findOneAndUpdate(
-    { _id: id, isDeleted: false },
-    { $pull: { attachments: { _id: attachmentId } } },
-    { returnDocument: 'after' }
-  ).populate(POPULATE_ASSIGNEES);
+function listActiveForClients(clientIds) {
+  return Task.find({ client: { $in: clientIds }, isDeleted: false }).populate(POPULATE).populate('client', 'clientName brandName logoUrl');
 }
 
 module.exports = {
-  list,
-  findById,
   create,
+  insertMany,
+  findById,
+  findRaw,
+  listForCycle,
+  listForClient,
+  listByClientsInWindow,
+  listByAssignee,
+  listIncompleteForCycle,
+  listActiveForClients,
+  countActiveByEmployee,
   updateById,
-  softDeleteById,
-  findNextDueForClients,
-  pushComment,
-  pushAttachment,
-  pullAttachment,
 };

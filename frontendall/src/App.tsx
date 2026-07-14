@@ -83,7 +83,7 @@ export default function App() {
                 path="/sales/*"
                 element={
                   <RequireAuth>
-                    <ShellLayout section="Sales">
+                    <ShellLayout section="Client Management">
                       <Suspense fallback={<RemoteFallback />}>
                         <RemoteSales basename="/sales" />
                       </Suspense>
@@ -95,7 +95,7 @@ export default function App() {
                 path="/followups/*"
                 element={
                   <RequireAuth>
-                    <ShellLayout section="Followups">
+                    <ShellLayout section="Task Management">
                       <Suspense fallback={<RemoteFallback />}>
                         <RemoteFollowups basename="/followups" />
                       </Suspense>

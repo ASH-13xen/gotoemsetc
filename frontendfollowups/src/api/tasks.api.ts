@@ -1,117 +1,77 @@
 import { apiClient } from './client'
-import type { MeetingAttendee } from './meetings.api'
 
-export type TaskStage = 'plan_of_action' | 'post' | 'shoot' | 'edit' | 'design' | 'calendar' | 'report' | 'custom'
+export type TaskStatus = 'pending' | 'in_progress' | 'done' | 'missed' | 'rolled_over'
+export type StepStatus = 'todo' | 'in_progress' | 'done'
+export type ApprovalStatus = 'not_required' | 'pending' | 'approved' | 'rejected'
 
-export const PIPELINE_STAGES: { value: TaskStage; label: string }[] = [
-  { value: 'plan_of_action', label: 'Plan of Action' },
-  { value: 'post', label: 'Post' },
-  { value: 'shoot', label: 'Shoot' },
-  { value: 'edit', label: 'Edit' },
-  { value: 'design', label: 'Design' },
-  { value: 'calendar', label: 'Calendar' },
-  { value: 'report', label: 'Report' },
-]
-
-export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done'
-export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
-
-export interface TaskAssigneeTeam {
+export interface EmployeeRef {
   _id: string
-  name: string
+  firstName: string
+  lastName?: string
+  designation?: string
+  employeeCode?: string
 }
 
-export interface TaskCommentAuthor {
+export interface TaskStep {
   _id: string
-  username: string
-  role: 'admin' | 'worker'
-  employeeLink?: string
-}
-
-export interface TaskComment {
-  _id: string
-  author: TaskCommentAuthor
-  body: string
-  createdAt: string
+  label: string
+  order: number
+  status: StepStatus
+  assignedEmployees: EmployeeRef[]
+  dueDate?: string
+  requiresApproval: boolean
+  approvalStatus: ApprovalStatus
+  approvedBy?: EmployeeRef
+  approvedAt?: string
+  completedBy?: EmployeeRef
+  completedAt?: string
 }
 
 export interface TaskAttachment {
-  _id: string
+  label: string
   url: string
-  publicId: string
-  resourceType: string
-  originalFilename?: string
-  mimeType?: string
-  sizeBytes?: number
-  createdAt: string
-}
-
-export interface TaskClient {
-  _id: string
-  clientName: string
-  brandName: string
+  addedBy?: EmployeeRef
+  addedAt: string
 }
 
 export interface Task {
   _id: string
-  title: string
-  description?: string
-  client: TaskClient
-  stage: TaskStage
-  customLabel?: string
+  client: string | { _id: string; clientName: string; brandName: string; logoUrl?: string }
+  cycle: string
+  sectionName: string
+  itemLabel: string
+  itemIndex: number
+  steps: TaskStep[]
   status: TaskStatus
-  priority: TaskPriority
-  dueDate?: string
-  assigneeEmployees: MeetingAttendee[]
-  assigneeTeam?: TaskAssigneeTeam
-  summary?: string
-  comments: TaskComment[]
+  assignedTeam?: { _id: string; name: string }
+  assignedEmployees: EmployeeRef[]
+  leadEmployee?: EmployeeRef
   attachments: TaskAttachment[]
+  rolledOverFrom?: string
+  rolledOverTo?: string
   createdAt: string
-  updatedAt: string
 }
 
-export interface ListTasksParams {
-  client?: string
-  stage?: TaskStage
-  status?: TaskStatus
-  assignee?: string
-  priority?: TaskPriority
-  search?: string
-  page?: number
-  limit?: number
-}
-
-export interface ListTasksResponse {
-  items: Task[]
-  total: number
-  page: number
-  limit: number
-}
-
-export interface CreateTaskInput {
-  title: string
-  description?: string
-  client: string
-  stage?: TaskStage
-  customLabel?: string
-  priority?: TaskPriority
-  dueDate?: string
-  assigneeEmployees?: string[]
-  assigneeTeam?: string
-}
-
-export type UpdateTaskInput = Partial<Omit<CreateTaskInput, 'client'>>
-
-export interface DueSummaryItem {
+export interface TaskCycle {
   _id: string
-  title: string
-  priority: TaskPriority
-  dueDate: string
+  client: string
+  cycleNumber: number
+  startDate: string
+  endDate: string
+  tasksGeneratedAt?: string
+  closedAt?: string
 }
 
-export async function listTasks(params: ListTasksParams): Promise<ListTasksResponse> {
-  const { data } = await apiClient.get('/tasks', { params })
+export async function listTasksForClient(
+  clientId: string,
+  cycleId?: string
+): Promise<{ cycles: TaskCycle[]; cycle: TaskCycle | null; tasks: Task[] }> {
+  const { data } = await apiClient.get(`/clients/${clientId}/tasks`, { params: { cycleId } })
+  return data
+}
+
+export async function syncClientCycle(clientId: string): Promise<{ cycle: TaskCycle | null; tasks: Task[] }> {
+  const { data } = await apiClient.post(`/clients/${clientId}/tasks/sync`)
   return data
 }
 
@@ -120,47 +80,66 @@ export async function getTask(id: string): Promise<{ task: Task }> {
   return data
 }
 
-export async function createTask(input: CreateTaskInput): Promise<{ task: Task }> {
-  const { data } = await apiClient.post('/tasks', input)
-  return data
-}
-
-export async function updateTask(id: string, input: UpdateTaskInput): Promise<{ task: Task }> {
-  const { data } = await apiClient.patch(`/tasks/${id}`, input)
-  return data
-}
-
-export async function updateTaskStatus(
+export async function updateTaskAssignment(
   id: string,
-  status: TaskStatus,
-  summary?: string
+  input: { assignedTeam?: string | null; assignedEmployees?: string[]; leadEmployee?: string | null }
 ): Promise<{ task: Task }> {
-  const { data } = await apiClient.patch(`/tasks/${id}/status`, { status, summary })
+  const { data } = await apiClient.patch(`/tasks/${id}/assignment`, input)
   return data
 }
 
-export async function deleteTask(id: string): Promise<void> {
-  await apiClient.delete(`/tasks/${id}`)
-}
-
-export async function addComment(id: string, body: string): Promise<{ task: Task }> {
-  const { data } = await apiClient.post(`/tasks/${id}/comments`, { body })
+export async function updateStepAssignment(
+  taskId: string,
+  stepId: string,
+  input: { assignedEmployees?: string[]; dueDate?: string | null; requiresApproval?: boolean }
+): Promise<{ task: Task }> {
+  const { data } = await apiClient.patch(`/tasks/${taskId}/steps/${stepId}/assignment`, input)
   return data
 }
 
-export async function uploadAttachment(id: string, file: File): Promise<{ task: Task }> {
-  const formData = new FormData()
-  formData.append('file', file)
-  const { data } = await apiClient.post(`/tasks/${id}/attachments`, formData)
+export async function updateStepStatus(taskId: string, stepId: string, status: StepStatus): Promise<{ task: Task }> {
+  const { data } = await apiClient.patch(`/tasks/${taskId}/steps/${stepId}/status`, { status })
   return data
 }
 
-export async function removeAttachment(id: string, attachmentId: string): Promise<{ task: Task }> {
-  const { data } = await apiClient.delete(`/tasks/${id}/attachments/${attachmentId}`)
+export async function decideStepApproval(
+  taskId: string,
+  stepId: string,
+  approved: boolean
+): Promise<{ task: Task }> {
+  const { data } = await apiClient.post(`/tasks/${taskId}/steps/${stepId}/approval`, { approved })
   return data
 }
 
-export async function getDueSummary(clientIds: string[]): Promise<{ items: DueSummaryItem[] }> {
-  const { data } = await apiClient.get('/tasks/due-summary', { params: { clients: clientIds.join(',') } })
+export async function addAttachment(taskId: string, label: string, url: string): Promise<{ task: Task }> {
+  const { data } = await apiClient.post(`/tasks/${taskId}/attachments`, { label, url })
+  return data
+}
+
+export async function removeAttachment(taskId: string, attachmentIndex: number): Promise<{ task: Task }> {
+  const { data } = await apiClient.delete(`/tasks/${taskId}/attachments/${attachmentIndex}`)
+  return data
+}
+
+export async function rolloverTask(taskId: string): Promise<{ task: Task }> {
+  const { data } = await apiClient.post(`/tasks/${taskId}/rollover`)
+  return data
+}
+
+export interface TaskMessage {
+  _id: string
+  task: string
+  sender: EmployeeRef
+  body: string
+  createdAt: string
+}
+
+export async function listMessages(taskId: string): Promise<{ messages: TaskMessage[] }> {
+  const { data } = await apiClient.get(`/tasks/${taskId}/messages`)
+  return data
+}
+
+export async function postMessage(taskId: string, body: string): Promise<{ message: TaskMessage }> {
+  const { data } = await apiClient.post(`/tasks/${taskId}/messages`, { body })
   return data
 }

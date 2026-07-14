@@ -1,71 +1,70 @@
 const { z } = require('zod');
-const { TASK_STAGE, TASK_STATUS, TASK_PRIORITY } = require('../config/constants');
+const { STEP_STATUS } = require('../config/constants');
 
 const idParam = z.object({ id: z.string().min(1) });
-const attachmentParam = z.object({ id: z.string().min(1), attachmentId: z.string().min(1) });
+const stepParam = z.object({ id: z.string().min(1), stepId: z.string().min(1) });
+const attachmentParam = z.object({ id: z.string().min(1), attachmentIndex: z.string().regex(/^\d+$/) });
+const employeeParam = z.object({ employeeId: z.string().min(1) });
 
-const stageEnum = z.enum(Object.values(TASK_STAGE));
-const statusEnum = z.enum(Object.values(TASK_STATUS));
-const priorityEnum = z.enum(Object.values(TASK_PRIORITY));
+const listForClient = { params: idParam, query: z.object({ cycleId: z.string().optional() }) };
+const syncCycle = { params: idParam };
+const getById = { params: idParam };
 
-const create = {
-  body: z.object({
-    title: z.string().min(1),
-    description: z.string().optional(),
-    client: z.string().min(1),
-    stage: stageEnum.optional(),
-    customLabel: z.string().optional(),
-    status: statusEnum.optional(),
-    priority: priorityEnum.optional(),
-    dueDate: z.coerce.date().optional(),
-    assigneeEmployees: z.array(z.string().min(1)).optional(),
-    assigneeTeam: z.string().min(1).optional(),
-  }),
-};
-
-const update = {
+const updateAssignment = {
   params: idParam,
   body: z.object({
-    title: z.string().min(1).optional(),
-    description: z.string().optional(),
-    stage: stageEnum.optional(),
-    customLabel: z.string().optional(),
-    priority: priorityEnum.optional(),
-    dueDate: z.coerce.date().optional(),
-    assigneeEmployees: z.array(z.string().min(1)).optional(),
-    assigneeTeam: z.string().min(1).optional(),
+    assignedTeam: z.string().min(1).nullable().optional(),
+    assignedEmployees: z.array(z.string().min(1)).optional(),
+    leadEmployee: z.string().min(1).nullable().optional(),
   }),
 };
 
-const updateStatus = {
-  params: idParam,
+const updateStepAssignment = {
+  params: stepParam,
   body: z.object({
-    status: statusEnum,
-    // Required by the service when status is 'done', optional otherwise.
-    summary: z.string().optional(),
+    assignedEmployees: z.array(z.string().min(1)).optional(),
+    dueDate: z.coerce.date().nullable().optional(),
+    requiresApproval: z.boolean().optional(),
   }),
 };
 
-const getOrDelete = { params: idParam };
-
-const list = {
-  query: z.object({
-    client: z.string().optional(),
-    stage: stageEnum.optional(),
-    status: statusEnum.optional(),
-    assignee: z.string().optional(),
-    priority: priorityEnum.optional(),
-    search: z.string().optional(),
-    page: z.coerce.number().int().positive().optional(),
-    limit: z.coerce.number().int().positive().max(200).optional(),
-  }),
+const updateStepStatus = {
+  params: stepParam,
+  body: z.object({ status: z.enum(Object.values(STEP_STATUS)) }),
 };
 
-const comment = {
+const decideStepApproval = {
+  params: stepParam,
+  body: z.object({ approved: z.boolean() }),
+};
+
+const addAttachment = {
   params: idParam,
-  body: z.object({ body: z.string().min(1) }),
+  body: z.object({ label: z.string().min(1), url: z.string().url() }),
 };
 
 const removeAttachment = { params: attachmentParam };
+const rollover = { params: idParam };
 
-module.exports = { create, update, updateStatus, getOrDelete, list, comment, removeAttachment };
+const listMessages = { params: idParam };
+const postMessage = { params: idParam, body: z.object({ body: z.string().min(1) }) };
+
+const workloadForEmployee = { params: employeeParam };
+const contentCalendar = { query: z.object({ from: z.string(), to: z.string() }) };
+
+module.exports = {
+  listForClient,
+  syncCycle,
+  getById,
+  updateAssignment,
+  updateStepAssignment,
+  updateStepStatus,
+  decideStepApproval,
+  addAttachment,
+  removeAttachment,
+  rollover,
+  listMessages,
+  postMessage,
+  workloadForEmployee,
+  contentCalendar,
+};

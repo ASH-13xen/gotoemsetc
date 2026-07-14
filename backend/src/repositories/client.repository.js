@@ -5,6 +5,10 @@ const POPULATE_TEAM = {
   select: 'name leader',
   populate: { path: 'leader', select: 'firstName lastName' },
 };
+const POPULATE_ASSIGNMENTS = [
+  { path: 'assignedEmployees', select: 'firstName lastName designation employeeCode' },
+  { path: 'mainEmployee', select: 'firstName lastName designation employeeCode' },
+];
 
 function listQuery({ search, status }) {
   const query = { isDeleted: false };
@@ -21,7 +25,12 @@ async function list({ search, status, page = 1, limit = 20 }) {
   const skip = (page - 1) * limit;
 
   const [items, total] = await Promise.all([
-    Client.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).populate(POPULATE_TEAM),
+    Client.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate(POPULATE_TEAM)
+      .populate(POPULATE_ASSIGNMENTS),
     Client.countDocuments(query),
   ]);
 
@@ -29,7 +38,7 @@ async function list({ search, status, page = 1, limit = 20 }) {
 }
 
 function findById(id) {
-  return Client.findOne({ _id: id, isDeleted: false }).populate(POPULATE_TEAM);
+  return Client.findOne({ _id: id, isDeleted: false }).populate(POPULATE_TEAM).populate(POPULATE_ASSIGNMENTS);
 }
 
 function create(data) {
@@ -40,7 +49,9 @@ function updateById(id, data) {
   return Client.findOneAndUpdate({ _id: id, isDeleted: false }, data, {
     returnDocument: 'after',
     runValidators: true,
-  }).populate(POPULATE_TEAM);
+  })
+    .populate(POPULATE_TEAM)
+    .populate(POPULATE_ASSIGNMENTS);
 }
 
 function addContact(id, contact) {

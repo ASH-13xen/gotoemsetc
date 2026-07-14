@@ -8,6 +8,7 @@ const clientRepository = require('../repositories/client.repository');
 const quotationTemplateRepository = require('../repositories/quotationTemplate.repository');
 const localFileStorage = require('./localFileStorage.service');
 const pdfStampService = require('./pdfStamp.service');
+const clientActivity = require('./clientActivity.service');
 
 function hashToken(rawToken) {
   return crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -73,6 +74,8 @@ async function generateQuotation(clientId, { templateId, planOptionKey }) {
     await clientRepository.updateById(clientId, { status: CLIENT_STATUS.LEAD, currentQuotation: null });
   }
 
+  await clientActivity.log(clientId, 'QUOTATION_GENERATED', { template: template.title, version });
+
   return quotationRepository.findById(quotation._id);
 }
 
@@ -102,6 +105,7 @@ async function adminSign(quotationId, signatureDataUrl) {
   });
 
   const updated = await quotationRepository.findById(quotationId);
+  await clientActivity.log(quotation.client, 'QUOTATION_SHARED', { version: quotation.version });
   return { quotation: updated, rawToken };
 }
 
@@ -162,10 +166,15 @@ async function clientSign(rawToken, signatureDataUrl) {
     signedAt: new Date(),
   });
 
+  // onboardedAt only gets set the first time — a later re-sign (new
+  // quotation version) shouldn't reset the recurring task cycle anchor.
   await clientRepository.updateById(quotation.client._id, {
     status: CLIENT_STATUS.ONBOARDED,
     currentQuotation: quotation._id,
+    ...(quotation.client.onboardedAt ? {} : { onboardedAt: new Date() }),
   });
+
+  await clientActivity.log(quotation.client._id, 'QUOTATION_SIGNED', { version: quotation.version }, 'client-link');
 
   return { quotationId: quotation._id.toString() };
 }

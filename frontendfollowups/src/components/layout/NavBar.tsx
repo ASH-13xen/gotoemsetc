@@ -6,6 +6,9 @@ import { cn } from '@/lib/utils'
 
 const LINKS = [
   { to: '/clients', label: 'Clients' },
+  { to: '/dashboard', label: 'Dashboard' },
+  { to: '/workload', label: 'Workload' },
+  { to: '/calendar', label: 'Calendar' },
   { to: '/teams', label: 'Teams' },
 ]
 
@@ -17,7 +20,7 @@ export function NavBar() {
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3.5">
         <div className="flex items-center gap-8">
           <span className="text-lg font-extrabold tracking-tight text-foreground select-none">
-            Followups
+            Task Management
           </span>
           <nav className="flex gap-2">
             {LINKS.map((link) => (

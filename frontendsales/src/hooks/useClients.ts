@@ -54,3 +54,26 @@ export function useOffboardClient(clientId: string) {
     },
   })
 }
+
+export function useUploadClientLogo(clientId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => clientsApi.uploadClientLogo(clientId, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...CLIENTS_KEY, clientId] })
+      queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
+    },
+  })
+}
+
+export function useAssignEmployees(clientId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ assignedEmployees, mainEmployee }: { assignedEmployees: string[]; mainEmployee: string | null }) =>
+      clientsApi.assignEmployees(clientId, assignedEmployees, mainEmployee),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...CLIENTS_KEY, clientId] })
+      queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
+    },
+  })
+}

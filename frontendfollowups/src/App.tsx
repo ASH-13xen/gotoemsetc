@@ -9,6 +9,9 @@ import LoginPage from '@/pages/LoginPage'
 import ClientsPage from '@/pages/ClientsPage'
 import ClientDetailPage from '@/pages/ClientDetailPage'
 import TeamsPage from '@/pages/TeamsPage'
+import DashboardPage from '@/pages/DashboardPage'
+import WorkloadPage from '@/pages/WorkloadPage'
+import ContentCalendarPage from '@/pages/ContentCalendarPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +55,30 @@ export default function App({ basename }: AppProps = {}) {
                 element={
                   <RequireAuth>
                     <TeamsPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/dashboard"
+                element={
+                  <RequireAuth>
+                    <DashboardPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/workload"
+                element={
+                  <RequireAuth>
+                    <WorkloadPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/calendar"
+                element={
+                  <RequireAuth>
+                    <ContentCalendarPage />
                   </RequireAuth>
                 }
               />

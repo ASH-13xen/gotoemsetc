@@ -22,7 +22,19 @@ function planLabel(quotation: Quotation) {
   )
 }
 
-function QuotationRow({ clientId, quotation }: { clientId: string; quotation: Quotation }) {
+function QuotationRow({
+  clientId,
+  clientName,
+  contactEmail,
+  contactPhone,
+  quotation,
+}: {
+  clientId: string
+  clientName: string
+  contactEmail?: string
+  contactPhone?: string
+  quotation: Quotation
+}) {
   const label = planLabel(quotation)
   const downloadVariant = quotation.finalSignedFile ? 'final' : quotation.adminSignedFile ? 'admin-signed' : 'draft'
 
@@ -54,13 +66,30 @@ function QuotationRow({ clientId, quotation }: { clientId: string; quotation: Qu
           <Download className="size-3.5" />
           {quotation.status === 'signed' ? 'FINAL PDF' : 'PREVIEW'}
         </Button>
-        <AdminSignDialog clientId={clientId} quotationId={quotation._id} canSign={quotation.status === 'draft'} />
+        <AdminSignDialog
+          clientId={clientId}
+          quotationId={quotation._id}
+          canSign={quotation.status === 'draft'}
+          clientName={clientName}
+          contactEmail={contactEmail}
+          contactPhone={contactPhone}
+        />
       </div>
     </div>
   )
 }
 
-export function QuotationsSection({ clientId }: { clientId: string }) {
+export function QuotationsSection({
+  clientId,
+  clientName,
+  contactEmail,
+  contactPhone,
+}: {
+  clientId: string
+  clientName: string
+  contactEmail?: string
+  contactPhone?: string
+}) {
   const { data: quotations, isLoading } = useQuotations(clientId)
   const hasActiveQuotation = quotations?.some((q) => q.status !== 'superseded') ?? false
 
@@ -80,7 +109,14 @@ export function QuotationsSection({ clientId }: { clientId: string }) {
       ) : (
         <div className="divide-y divide-border/60">
           {quotations.map((quotation) => (
-            <QuotationRow key={quotation._id} clientId={clientId} quotation={quotation} />
+            <QuotationRow
+              key={quotation._id}
+              clientId={clientId}
+              clientName={clientName}
+              contactEmail={contactEmail}
+              contactPhone={contactPhone}
+              quotation={quotation}
+            />
           ))}
         </div>
       )}

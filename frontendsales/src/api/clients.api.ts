@@ -11,14 +11,25 @@ export interface Contact {
   createdAt: string
 }
 
+export interface AssignedEmployee {
+  _id: string
+  firstName: string
+  lastName?: string
+  designation?: string
+  employeeCode?: string
+}
+
 export interface SalesClient {
   _id: string
   clientName: string
   brandName: string
   dateRegistered: string
+  logoUrl?: string
   contacts: Contact[]
   status: ClientStatus
   currentQuotation?: string
+  assignedEmployees: AssignedEmployee[]
+  mainEmployee?: AssignedEmployee
   createdAt: string
   updatedAt: string
 }
@@ -77,5 +88,23 @@ export async function removeContact(id: string, contactId: string): Promise<{ cl
 
 export async function offboardClient(id: string): Promise<{ client: SalesClient }> {
   const { data } = await apiClient.post(`/clients/${id}/offboard`)
+  return data
+}
+
+export async function uploadClientLogo(id: string, file: File): Promise<{ client: SalesClient }> {
+  const formData = new FormData()
+  formData.append('logo', file)
+  const { data } = await apiClient.post(`/clients/${id}/logo`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
+}
+
+export async function assignEmployees(
+  id: string,
+  assignedEmployees: string[],
+  mainEmployee: string | null
+): Promise<{ client: SalesClient }> {
+  const { data } = await apiClient.patch(`/clients/${id}`, { assignedEmployees, mainEmployee })
   return data
 }

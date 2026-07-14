@@ -1,61 +1,63 @@
 const { Schema, model } = require('mongoose');
-const { TASK_STAGE, TASK_STATUS, TASK_PRIORITY } = require('../config/constants');
+const { TASK_STATUS, STEP_STATUS, APPROVAL_STATUS } = require('../config/constants');
 
-const commentSchema = new Schema(
-  {
-    author: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    body: { type: String, required: true },
-  },
-  { timestamps: { createdAt: true, updatedAt: false } }
-);
+// Each step is tracked independently — its own assignees, due date, status,
+// and optional approval gate — rather than the task having one flat status.
+const taskStepSchema = new Schema({
+  label: { type: String, required: true },
+  order: { type: Number, required: true },
+  status: { type: String, enum: Object.values(STEP_STATUS), default: STEP_STATUS.TODO },
+  assignedEmployees: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
+  dueDate: { type: Date },
+  requiresApproval: { type: Boolean, default: false },
+  approvalStatus: { type: String, enum: Object.values(APPROVAL_STATUS), default: APPROVAL_STATUS.NOT_REQUIRED },
+  approvedBy: { type: Schema.Types.ObjectId, ref: 'Employee' },
+  approvedAt: { type: Date },
+  completedBy: { type: Schema.Types.ObjectId, ref: 'Employee' },
+  completedAt: { type: Date },
+  // Guards the daily overdue sweep from re-notifying about the same
+  // still-overdue step every single day.
+  overdueNotifiedAt: { type: Date },
+});
 
 const attachmentSchema = new Schema(
   {
+    label: { type: String, required: true },
     url: { type: String, required: true },
-    publicId: { type: String, required: true },
-    resourceType: { type: String, required: true },
-    originalFilename: String,
-    mimeType: String,
-    sizeBytes: Number,
-    uploadedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    addedBy: { type: Schema.Types.ObjectId, ref: 'Employee' },
+    addedAt: { type: Date, default: Date.now },
   },
-  { timestamps: { createdAt: true, updatedAt: false } }
+  { _id: false }
 );
 
+// One document per deliverable instance per cycle — e.g. cycle 3's "Reel #2"
+// for a client is its own Task, snapshotting the section's step pipeline at
+// generation time (so editing the template later doesn't retroactively
+// change in-flight tasks).
 const taskSchema = new Schema(
   {
-    title: { type: String, required: true, trim: true },
-    description: { type: String, trim: true },
-
     client: { type: Schema.Types.ObjectId, ref: 'Client', required: true, index: true },
-
-    stage: { type: String, enum: Object.values(TASK_STAGE), default: TASK_STAGE.CUSTOM },
-    // Only set (and only meaningful) when stage === 'custom' — the free-text
-    // label typed by the user, which groups this task's Pipeline copy under
-    // an "Others" bucket instead of one of the 7 fixed stage rows.
-    customLabel: { type: String, trim: true },
-
-    status: { type: String, enum: Object.values(TASK_STATUS), default: TASK_STATUS.TODO },
-    priority: { type: String, enum: Object.values(TASK_PRIORITY), default: TASK_PRIORITY.MEDIUM },
-    dueDate: Date,
-
-    assigneeEmployees: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
-    assigneeTeam: { type: Schema.Types.ObjectId, ref: 'Team' },
-
-    // Required when status is set to 'done' — a short close-out note.
-    summary: { type: String, trim: true },
-
-    comments: [commentSchema],
+    cycle: { type: Schema.Types.ObjectId, ref: 'TaskCycle', required: true, index: true },
+    quotationTemplate: { type: Schema.Types.ObjectId, ref: 'QuotationTemplate' },
+    sectionName: { type: String, required: true },
+    itemLabel: { type: String, required: true },
+    itemIndex: { type: Number, required: true },
+    steps: [taskStepSchema],
+    status: { type: String, enum: Object.values(TASK_STATUS), default: TASK_STATUS.PENDING },
+    assignedTeam: { type: Schema.Types.ObjectId, ref: 'Team' },
+    assignedEmployees: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
+    leadEmployee: { type: Schema.Types.ObjectId, ref: 'Employee' },
     attachments: [attachmentSchema],
-
+    // Set when this task was created to carry forward an incomplete task
+    // from a prior (now-closed) cycle, and on the original task when it
+    // gets carried forward — see task.service.js rolloverTask.
+    rolledOverFrom: { type: Schema.Types.ObjectId, ref: 'Task' },
+    rolledOverTo: { type: Schema.Types.ObjectId, ref: 'Task' },
     isDeleted: { type: Boolean, default: false },
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );
 
-taskSchema.index({ client: 1, stage: 1 });
-taskSchema.index({ status: 1, dueDate: 1 });
-taskSchema.index({ assigneeEmployees: 1 });
+taskSchema.index({ client: 1, cycle: 1 });
 
 module.exports = model('Task', taskSchema);

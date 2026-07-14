@@ -33,6 +33,10 @@ function findById(id) {
   return Employee.findOne({ _id: id, isDeleted: false });
 }
 
+function findByIds(ids) {
+  return Employee.find({ _id: { $in: ids }, isDeleted: false });
+}
+
 function count() {
   return Employee.countDocuments({ isDeleted: false });
 }
@@ -68,4 +72,4 @@ function softDeleteById(id) {
   );
 }
 
-module.exports = { list, findById, create, updateById, softDeleteById, count, countByStatus, listAllWithDob };
+module.exports = { list, findById, findByIds, create, updateById, softDeleteById, count, countByStatus, listAllWithDob };

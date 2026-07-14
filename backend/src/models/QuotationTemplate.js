@@ -22,6 +22,26 @@ const planOptionSchema = new Schema(
   { _id: false }
 );
 
+// Scope-of-Work → recurring task structure, defined once per template (e.g.
+// "GO-TO x DIAMOND") and reused for every client on that plan — see
+// scopeOfWork.service.js. `steps` is the shared pipeline every item in the
+// section goes through (e.g. Plan of Action → Shoot → Edit → Publish);
+// `items` are the actual deliverables with how many are due per monthly
+// cycle (e.g. "Number of Reels": 8).
+const scopeStepSchema = new Schema(
+  { label: { type: String, required: true }, order: { type: Number, required: true } },
+  { _id: false }
+);
+const scopeItemSchema = new Schema(
+  { label: { type: String, required: true }, qtyPerCycle: { type: Number, required: true, min: 0 } },
+  { _id: false }
+);
+const scopeSectionSchema = new Schema({
+  name: { type: String, required: true },
+  items: [scopeItemSchema],
+  steps: [scopeStepSchema],
+});
+
 const quotationTemplateSchema = new Schema(
   {
     key: { type: String, required: true, unique: true, index: true },
@@ -54,6 +74,7 @@ const quotationTemplateSchema = new Schema(
       clientSignature: positionSchema,
     },
     isConfigured: { type: Boolean, default: false },
+    scopeOfWork: [scopeSectionSchema],
   },
   { timestamps: true }
 );

@@ -20,4 +20,12 @@ function updateFields(id, fields, isConfigured) {
   );
 }
 
-module.exports = { list, findById, findByKey, updateFields };
+function updateScopeOfWork(id, scopeOfWork) {
+  return QuotationTemplate.findByIdAndUpdate(
+    id,
+    { $set: { scopeOfWork } },
+    { returnDocument: 'after', runValidators: true }
+  );
+}
+
+module.exports = { list, findById, findByKey, updateFields, updateScopeOfWork };

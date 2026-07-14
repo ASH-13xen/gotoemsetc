@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PdfPageCanvas } from '@/components/quotationTemplates/PdfPageCanvas'
 import type { PdfBox, PdfFieldBox } from '@/components/quotationTemplates/PdfPageCanvas'
+import { ScopeOfWorkEditor } from '@/components/quotationTemplates/ScopeOfWorkEditor'
 import { quotationTemplatePdfUrl } from '@/api/quotationTemplates.api'
 import type { QuotationTemplateFields } from '@/api/quotationTemplates.api'
 import { useQuotationTemplate, useUpdateQuotationTemplateFields } from '@/hooks/useQuotationTemplates'
@@ -22,6 +23,7 @@ export default function QuotationTemplateMapperPage() {
   const [initialized, setInitialized] = useState(false)
   const [activeFieldKey, setActiveFieldKey] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [tab, setTab] = useState<'fields' | 'scope'>('fields')
 
   useEffect(() => {
     if (template && !initialized) {
@@ -103,16 +105,40 @@ export default function QuotationTemplateMapperPage() {
             </button>
             <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-foreground">{template.title}</h1>
           </div>
-          <Button
-            className="bg-primary text-primary-foreground hover:opacity-95"
-            onClick={handleSave}
-            disabled={updateFields.isPending}
-          >
-            {updateFields.isPending && <Loader2 className="size-4 animate-spin" />}
-            {allPlaced ? 'Save Calibration' : 'Save Progress'}
-          </Button>
+          {tab === 'fields' && (
+            <Button
+              className="bg-primary text-primary-foreground hover:opacity-95"
+              onClick={handleSave}
+              disabled={updateFields.isPending}
+            >
+              {updateFields.isPending && <Loader2 className="size-4 animate-spin" />}
+              {allPlaced ? 'Save Calibration' : 'Save Progress'}
+            </Button>
+          )}
         </div>
 
+        <div className="flex gap-2 border-b border-border">
+          <button
+            onClick={() => setTab('fields')}
+            className={`px-4 py-2 text-sm font-semibold tracking-wide uppercase transition-colors ${
+              tab === 'fields' ? 'border-b-2 border-primary text-foreground' : 'text-muted-foreground'
+            }`}
+          >
+            Field Calibration
+          </button>
+          <button
+            onClick={() => setTab('scope')}
+            className={`px-4 py-2 text-sm font-semibold tracking-wide uppercase transition-colors ${
+              tab === 'scope' ? 'border-b-2 border-primary text-foreground' : 'text-muted-foreground'
+            }`}
+          >
+            Scope of Work
+          </button>
+        </div>
+
+        {tab === 'scope' && <ScopeOfWorkEditor template={template} />}
+
+        {tab === 'fields' && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[280px_1fr]">
           {/* FIELD LIST */}
           <div className="space-y-2 bg-card border border-border rounded-xl p-4 shadow-sm">
@@ -187,6 +213,7 @@ export default function QuotationTemplateMapperPage() {
             )}
           </div>
         </div>
+        )}
       </main>
     </div>
   )

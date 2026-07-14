@@ -4,8 +4,8 @@ import { useAuth } from '@/hooks/useAuth'
 
 const SECTIONS = [
   { to: '/ems', title: 'Employee Management (EMS)', description: 'Manage employee directories, tracks attendance, review profiles, and view incoming applicant files.' },
-  { to: '/sales', title: 'Sales Operations', description: 'Monitor active clients, prepare quotations, and streamline contract approvals.' },
-  { to: '/followups', title: 'Pipeline & Followups', description: 'Coordinate tasks, organize team meetings, and monitor client progression pipelines.' },
+  { to: '/sales', title: 'Client Management', description: 'Manage client relationships, prepare quotations, schedule meetings, and collect documents.' },
+  { to: '/followups', title: 'Task Management', description: 'Recurring content tasks generated from each client\'s quotation, tracked step by step.' },
 ]
 
 export default function ShellHomePage() {

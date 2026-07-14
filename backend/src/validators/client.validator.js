@@ -21,13 +21,25 @@ const register = {
 
 const update = {
   params: idParam,
-  body: z.object({
-    clientName: z.string().min(1).optional(),
-    brandName: z.string().min(1).optional(),
-    dateRegistered: z.coerce.date().optional(),
-    status: statusEnum.optional(),
-    assignedTeam: z.string().min(1).nullable().optional(),
-  }),
+  body: z
+    .object({
+      clientName: z.string().min(1).optional(),
+      brandName: z.string().min(1).optional(),
+      dateRegistered: z.coerce.date().optional(),
+      status: statusEnum.optional(),
+      assignedTeam: z.string().min(1).nullable().optional(),
+      assignedEmployees: z.array(z.string().min(1)).optional(),
+      mainEmployee: z.string().min(1).nullable().optional(),
+    })
+    // The point of accountability has to actually be one of the people
+    // assigned — can't name someone answerable who isn't even on the client.
+    .refine(
+      (data) =>
+        !data.mainEmployee ||
+        !data.assignedEmployees ||
+        data.assignedEmployees.includes(data.mainEmployee),
+      { message: 'mainEmployee must be one of assignedEmployees', path: ['mainEmployee'] }
+    ),
 };
 
 const getOrDelete = { params: idParam };

@@ -11,6 +11,7 @@ import ClientDetailPage from '@/pages/ClientDetailPage'
 import QuotationTemplatesPage from '@/pages/QuotationTemplatesPage'
 import QuotationTemplateMapperPage from '@/pages/QuotationTemplateMapperPage'
 import PublicQuotationPage from '@/pages/PublicQuotationPage'
+import PublicClientUploadPage from '@/pages/PublicClientUploadPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +35,8 @@ export default function App({ basename }: AppProps = {}) {
               <Route path="/login" element={<LoginPage />} />
               {/* Public, share-token-gated signing link sent to clients — no login required. */}
               <Route path="/quotation/:token" element={<PublicQuotationPage />} />
+              {/* Public, token+access-code-gated document upload link sent to clients. */}
+              <Route path="/client-documents/:token" element={<PublicClientUploadPage />} />
               <Route
                 path="/"
                 element={

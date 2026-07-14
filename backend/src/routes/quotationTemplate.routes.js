@@ -13,5 +13,10 @@ router.patch(
   validate(quotationTemplateValidator.updateFields),
   quotationTemplateController.updateFields
 );
+router.patch(
+  '/:id/scope-of-work',
+  validate(quotationTemplateValidator.updateScopeOfWork),
+  quotationTemplateController.updateScopeOfWork
+);
 
 module.exports = router;

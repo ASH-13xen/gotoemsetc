@@ -1,5 +1,7 @@
 const asyncHandler = require('../utils/asyncHandler');
+const ApiError = require('../utils/ApiError');
 const clientService = require('../services/client.service');
+const clientActivity = require('../services/clientActivity.service');
 
 const list = asyncHandler(async (req, res) => {
   const result = await clientService.listClients(req.query);
@@ -57,4 +59,26 @@ const remove = asyncHandler(async (req, res) => {
   res.status(204).send();
 });
 
-module.exports = { list, getById, register, update, addContact, removeContact, offboard, remove };
+const activity = asyncHandler(async (req, res) => {
+  const activityLog = await clientActivity.listForClient(req.params.id);
+  res.json({ activityLog });
+});
+
+const uploadLogo = asyncHandler(async (req, res) => {
+  if (!req.file) throw ApiError.badRequest('No logo file provided');
+  const client = await clientService.uploadLogo(req.params.id, req.file);
+  res.json({ client });
+});
+
+module.exports = {
+  list,
+  getById,
+  register,
+  update,
+  addContact,
+  removeContact,
+  offboard,
+  remove,
+  activity,
+  uploadLogo,
+};

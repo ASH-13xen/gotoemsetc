@@ -29,4 +29,17 @@ const updateFields = {
   }),
 };
 
-module.exports = { getOrPdf, updateFields };
+const scopeStepSchema = z.object({ label: z.string().min(1), order: z.number().int() });
+const scopeItemSchema = z.object({ label: z.string().min(1), qtyPerCycle: z.coerce.number().int().min(0) });
+const scopeSectionSchema = z.object({
+  name: z.string().min(1),
+  items: z.array(scopeItemSchema),
+  steps: z.array(scopeStepSchema),
+});
+
+const updateScopeOfWork = {
+  params: idParam,
+  body: z.object({ scopeOfWork: z.array(scopeSectionSchema) }),
+};
+
+module.exports = { getOrPdf, updateFields, updateScopeOfWork };

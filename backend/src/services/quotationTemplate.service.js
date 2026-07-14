@@ -40,4 +40,9 @@ async function saveFieldPositions(id, fields) {
   return updated;
 }
 
-module.exports = { listTemplates, getTemplate, saveFieldPositions };
+async function saveScopeOfWork(id, scopeOfWork) {
+  await getTemplate(id);
+  return quotationTemplateRepository.updateScopeOfWork(id, scopeOfWork);
+}
+
+module.exports = { listTemplates, getTemplate, saveFieldPositions, saveScopeOfWork };

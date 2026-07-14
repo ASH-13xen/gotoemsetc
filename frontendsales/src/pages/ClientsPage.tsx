@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FileCog, Search, Users2 } from 'lucide-react'
+import { Building2, FileCog, Search, Users2 } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -139,7 +139,16 @@ export default function ClientsPage() {
                     onClick={() => navigate(`/clients/${client._id}`)}
                   >
                     <TableCell className="p-4 text-base font-semibold tracking-wide text-foreground">
-                      {client.clientName}
+                      <div className="flex items-center gap-3">
+                        <div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-secondary/40">
+                          {client.logoUrl ? (
+                            <img src={client.logoUrl} alt="" className="size-full object-cover" />
+                          ) : (
+                            <Building2 className="size-4 text-muted-foreground" />
+                          )}
+                        </div>
+                        {client.clientName}
+                      </div>
                     </TableCell>
                     <TableCell className="p-4 text-sm text-foreground/80 font-medium">
                       {client.brandName}

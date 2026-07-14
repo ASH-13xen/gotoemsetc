@@ -22,8 +22,8 @@ export function ShellLayout({ children, section }: { children: ReactNode; sectio
   const links = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
     { to: '/ems', label: 'EMS', icon: Users },
-    { to: '/sales', label: 'Sales', icon: DollarSign },
-    { to: '/followups', label: 'Followups', icon: CalendarClock },
+    { to: '/sales', label: 'Client Management', icon: DollarSign },
+    { to: '/followups', label: 'Task Management', icon: CalendarClock },
     { to: '/birthdays', label: 'Birthdays', icon: Cake },
     ...(user?.role === 'admin' ? [{ to: '/audit-log', label: 'Audit Log', icon: ShieldAlert }] : []),
   ]

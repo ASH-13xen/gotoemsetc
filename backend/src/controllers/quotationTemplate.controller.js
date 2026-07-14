@@ -22,4 +22,9 @@ const updateFields = asyncHandler(async (req, res) => {
   res.json({ template });
 });
 
-module.exports = { list, getById, getPdf, updateFields };
+const updateScopeOfWork = asyncHandler(async (req, res) => {
+  const template = await quotationTemplateService.saveScopeOfWork(req.params.id, req.body.scopeOfWork);
+  res.json({ template });
+});
+
+module.exports = { list, getById, getPdf, updateFields, updateScopeOfWork };

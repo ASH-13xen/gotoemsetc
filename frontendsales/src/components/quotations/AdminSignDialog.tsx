@@ -6,17 +6,30 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { SignaturePad } from '@/components/signature/SignaturePad'
+import { ManualSendButtons } from '@/components/common/ManualSendButtons'
+import { buildGmailComposeUrl, buildWhatsappUrl } from '@/lib/manualSend'
 import { useAdminSignQuotation } from '@/hooks/useQuotations'
 
 interface AdminSignDialogProps {
   clientId: string
   quotationId: string
   canSign: boolean
+  clientName: string
+  contactEmail?: string
+  contactPhone?: string
 }
 
-export function AdminSignDialog({ clientId, quotationId, canSign }: AdminSignDialogProps) {
+export function AdminSignDialog({
+  clientId,
+  quotationId,
+  canSign,
+  clientName,
+  contactEmail,
+  contactPhone,
+}: AdminSignDialogProps) {
   const [open, setOpen] = useState(false)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [notified, setNotified] = useState(false)
   const adminSign = useAdminSignQuotation(clientId)
 
   const handleConfirm = (signatureDataUrl: string) => {
@@ -35,6 +48,13 @@ export function AdminSignDialog({ clientId, quotationId, canSign }: AdminSignDia
     toast.success('Link copied to clipboard')
   }
 
+  const emailBody = shareUrl
+    ? `Hi ${clientName},\n\nPlease review and sign your quotation using the secure link below:\n${shareUrl}\n\nThanks,\nGO-TO Friend`
+    : ''
+  const whatsappText = shareUrl
+    ? `Hi ${clientName}, please review and sign your quotation using this secure link: ${shareUrl}`
+    : ''
+
   if (!canSign && !open) return null
 
   return (
@@ -42,7 +62,10 @@ export function AdminSignDialog({ clientId, quotationId, canSign }: AdminSignDia
       open={open}
       onOpenChange={(next) => {
         setOpen(next)
-        if (!next) setShareUrl(null)
+        if (!next) {
+          setShareUrl(null)
+          setNotified(false)
+        }
       }}
     >
       {canSign && (
@@ -66,6 +89,12 @@ export function AdminSignDialog({ clientId, quotationId, canSign }: AdminSignDia
                 <Copy className="size-4" />
               </Button>
             </div>
+            <ManualSendButtons
+              emailHref={contactEmail ? buildGmailComposeUrl(contactEmail, 'Your Quotation — GO-TO Friend', emailBody) : undefined}
+              whatsappHref={contactPhone ? buildWhatsappUrl(contactPhone, whatsappText) : undefined}
+              checked={notified}
+              onCheckedChange={setNotified}
+            />
             <Button className="bg-primary text-white hover:opacity-90" onClick={() => setOpen(false)}>
               Done
             </Button>

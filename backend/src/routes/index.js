@@ -18,12 +18,14 @@ const quotationTemplateRoutes = require('./quotationTemplate.routes');
 const quotationRoutes = require('./quotation.routes');
 const teamRoutes = require('./team.routes');
 const taskRoutes = require('./task.routes');
-const pipelineLogRoutes = require('./pipelineLog.routes');
+const stepLibraryRoutes = require('./stepLibrary.routes');
 const holidayRoutes = require('./holiday.routes');
 const salarySlipRoutes = require('./salarySlip.routes');
 const userRoutes = require('./user.routes');
 const auditLogRoutes = require('./auditLog.routes');
 const notificationRoutes = require('./notification.routes');
+const clientDocumentRequestRoutes = require('./clientDocumentRequest.routes');
+const clientUploadedDocumentRoutes = require('./clientUploadedDocument.routes');
 
 const router = Router();
 
@@ -51,10 +53,12 @@ router.use('/quotation-templates', quotationTemplateRoutes);
 router.use('/quotations', quotationRoutes);
 router.use('/teams', teamRoutes);
 router.use('/tasks', taskRoutes);
-router.use('/pipeline-log', pipelineLogRoutes);
+router.use('/step-library', stepLibraryRoutes);
 router.use('/holidays', holidayRoutes);
 router.use('/salary-slips', salarySlipRoutes);
 router.use('/notifications', notificationRoutes);
+router.use('/client-document-requests', clientDocumentRequestRoutes);
+router.use('/client-uploaded-documents', clientUploadedDocumentRoutes);
 router.use('/users', requireRole(USER_ROLES.ADMIN), userRoutes);
 router.use('/audit-log', requireRole(USER_ROLES.ADMIN), auditLogRoutes);
 
