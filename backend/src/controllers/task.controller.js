@@ -3,7 +3,6 @@ const ApiError = require('../utils/ApiError');
 const taskService = require('../services/task.service');
 const taskCycleService = require('../services/taskCycle.service');
 const taskDashboardService = require('../services/taskDashboard.service');
-const { broadcastTaskMessage } = require('../websocket/taskChat');
 const { USER_ROLES } = require('../config/constants');
 
 // Attribution (completedBy/approvedBy/addedBy/sender) is an Employee ref,
@@ -71,16 +70,31 @@ const rollover = asyncHandler(async (req, res) => {
   res.status(201).json({ task });
 });
 
-const listMessages = asyncHandler(async (req, res) => {
-  const messages = await taskService.listMessages(req.params.id);
-  res.json({ messages });
+// --- Admin editing: steps, description, ad-hoc tasks ---
+
+const addStep = asyncHandler(async (req, res) => {
+  const task = await taskService.addStep(req.params.id, req.body);
+  res.status(201).json({ task });
 });
 
-const postMessage = asyncHandler(async (req, res) => {
-  const employeeId = requireEmployeeLink(req);
-  const message = await taskService.postMessage(req.params.id, employeeId, req.body.body);
-  broadcastTaskMessage(req.params.id, message);
-  res.status(201).json({ message });
+const removeStep = asyncHandler(async (req, res) => {
+  const task = await taskService.removeStep(req.params.id, req.params.stepId);
+  res.json({ task });
+});
+
+const updateTaskDetails = asyncHandler(async (req, res) => {
+  const task = await taskService.updateTaskDetails(req.params.id, req.body);
+  res.json({ task });
+});
+
+const createManualTask = asyncHandler(async (req, res) => {
+  const tasks = await taskService.createManualTask(req.params.id, req.body);
+  res.status(201).json({ tasks });
+});
+
+const deleteTask = asyncHandler(async (req, res) => {
+  await taskService.deleteTask(req.params.id);
+  res.status(204).send();
 });
 
 const dashboard = asyncHandler(async (req, res) => {
@@ -116,8 +130,11 @@ module.exports = {
   addAttachment,
   removeAttachment,
   rollover,
-  listMessages,
-  postMessage,
+  addStep,
+  removeStep,
+  updateTaskDetails,
+  createManualTask,
+  deleteTask,
   dashboard,
   workloadSummary,
   workloadForEmployee,

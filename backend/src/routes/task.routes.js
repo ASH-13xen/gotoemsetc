@@ -1,6 +1,8 @@
 const { Router } = require('express');
 const validate = require('../middlewares/validate.middleware');
 const { requireTaskClientAccess } = require('../middlewares/clientAccess.middleware');
+const { requireRole } = require('../middlewares/auth.middleware');
+const { USER_ROLES } = require('../config/constants');
 const taskValidator = require('../validators/task.validator');
 const taskController = require('../controllers/task.controller');
 
@@ -52,7 +54,34 @@ router.delete(
 );
 router.post('/:id/rollover', validate(taskValidator.rollover), requireTaskClientAccess(), taskController.rollover);
 
-router.get('/:id/messages', validate(taskValidator.listMessages), requireTaskClientAccess(), taskController.listMessages);
-router.post('/:id/messages', validate(taskValidator.postMessage), requireTaskClientAccess(), taskController.postMessage);
+// --- Admin-only structural editing: steps, description, deletion ---
+router.post(
+  '/:id/steps',
+  requireRole(USER_ROLES.ADMIN),
+  validate(taskValidator.addStep),
+  requireTaskClientAccess(),
+  taskController.addStep
+);
+router.delete(
+  '/:id/steps/:stepId',
+  requireRole(USER_ROLES.ADMIN),
+  validate(taskValidator.removeStep),
+  requireTaskClientAccess(),
+  taskController.removeStep
+);
+router.patch(
+  '/:id/details',
+  requireRole(USER_ROLES.ADMIN),
+  validate(taskValidator.updateTaskDetails),
+  requireTaskClientAccess(),
+  taskController.updateTaskDetails
+);
+router.delete(
+  '/:id',
+  requireRole(USER_ROLES.ADMIN),
+  validate(taskValidator.deleteTask),
+  requireTaskClientAccess(),
+  taskController.deleteTask
+);
 
 module.exports = router;

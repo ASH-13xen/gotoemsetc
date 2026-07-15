@@ -90,18 +90,42 @@ export function useRolloverTask(clientId?: string) {
   })
 }
 
-export function useTaskMessages(taskId: string | undefined) {
-  return useQuery({
-    queryKey: ['task-messages', taskId],
-    queryFn: () => tasksApi.listMessages(taskId as string),
-    enabled: Boolean(taskId),
+export function useAddStep(taskId: string, clientId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: Parameters<typeof tasksApi.addStep>[1]) => tasksApi.addStep(taskId, input),
+    onSuccess: () => invalidateTask(queryClient, clientId),
   })
 }
 
-export function usePostMessage(taskId: string) {
+export function useRemoveStep(taskId: string, clientId?: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (body: string) => tasksApi.postMessage(taskId, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['task-messages', taskId] }),
+    mutationFn: (stepId: string) => tasksApi.removeStep(taskId, stepId),
+    onSuccess: () => invalidateTask(queryClient, clientId),
+  })
+}
+
+export function useUpdateTaskDetails(taskId: string, clientId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: Parameters<typeof tasksApi.updateTaskDetails>[1]) => tasksApi.updateTaskDetails(taskId, input),
+    onSuccess: () => invalidateTask(queryClient, clientId),
+  })
+}
+
+export function useCreateManualTasks(clientId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: Parameters<typeof tasksApi.createManualTasks>[1]) => tasksApi.createManualTasks(clientId, input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks', clientId] }),
+  })
+}
+
+export function useDeleteTask(clientId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (taskId: string) => tasksApi.deleteTask(taskId),
+    onSuccess: () => invalidateTask(queryClient, clientId),
   })
 }

@@ -41,6 +41,7 @@ export interface Task {
   sectionName: string
   itemLabel: string
   itemIndex: number
+  description?: string
   steps: TaskStep[]
   status: TaskStatus
   assignedTeam?: { _id: string; name: string }
@@ -94,7 +95,7 @@ export async function updateTaskAssignment(
 export async function updateStepAssignment(
   taskId: string,
   stepId: string,
-  input: { assignedEmployees?: string[]; dueDate?: string | null; requiresApproval?: boolean }
+  input: { label?: string; assignedEmployees?: string[]; dueDate?: string | null; requiresApproval?: boolean }
 ): Promise<{ task: Task }> {
   const { data } = await apiClient.patch(`/tasks/${taskId}/steps/${stepId}/assignment`, input)
   return data
@@ -129,21 +130,34 @@ export async function rolloverTask(taskId: string): Promise<{ task: Task }> {
   return data
 }
 
-export interface TaskMessage {
-  _id: string
-  task: string
-  // Absent when posted by an admin account with no linked Employee record.
-  sender?: EmployeeRef | null
-  body: string
-  createdAt: string
-}
+// --- Admin editing: steps, description, ad-hoc tasks ---
 
-export async function listMessages(taskId: string): Promise<{ messages: TaskMessage[] }> {
-  const { data } = await apiClient.get(`/tasks/${taskId}/messages`)
+export async function addStep(
+  taskId: string,
+  input: { label: string; dueDate?: string | null; requiresApproval?: boolean }
+): Promise<{ task: Task }> {
+  const { data } = await apiClient.post(`/tasks/${taskId}/steps`, input)
   return data
 }
 
-export async function postMessage(taskId: string, body: string): Promise<{ message: TaskMessage }> {
-  const { data } = await apiClient.post(`/tasks/${taskId}/messages`, { body })
+export async function removeStep(taskId: string, stepId: string): Promise<{ task: Task }> {
+  const { data } = await apiClient.delete(`/tasks/${taskId}/steps/${stepId}`)
   return data
+}
+
+export async function updateTaskDetails(taskId: string, input: { description?: string }): Promise<{ task: Task }> {
+  const { data } = await apiClient.patch(`/tasks/${taskId}/details`, input)
+  return data
+}
+
+export async function createManualTasks(
+  clientId: string,
+  input: { sectionName: string; itemLabel: string; description?: string; steps?: { label: string }[]; quantity?: number }
+): Promise<{ tasks: Task[] }> {
+  const { data } = await apiClient.post(`/clients/${clientId}/tasks`, input)
+  return data
+}
+
+export async function deleteTask(taskId: string): Promise<void> {
+  await apiClient.delete(`/tasks/${taskId}`)
 }

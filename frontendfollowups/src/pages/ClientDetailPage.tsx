@@ -16,8 +16,12 @@ import {
 } from '@/components/ui/select'
 import { ClientStatusBadge } from '@/components/clients/ClientStatusBadge'
 import { TaskCard } from '@/components/tasks/TaskCard'
+import { AddManualTaskDialog } from '@/components/tasks/AddManualTaskDialog'
+import { ClientChatPanel } from '@/components/clients/ClientChatPanel'
+import { ClientChatAccessEditor } from '@/components/clients/ClientChatAccessEditor'
 import { useClient, useAssignClientTeam } from '@/hooks/useClients'
 import { useTeams } from '@/hooks/useTeams'
+import { useAuth } from '@/hooks/useAuth'
 import { useSyncClientCycle, useTasksForClient } from '@/hooks/useTasks'
 import type { Task } from '@/api/tasks.api'
 
@@ -112,6 +116,8 @@ function SectionProgress({ tasks }: { tasks: Task[] }) {
 
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const { data, isLoading } = useClient(id)
   const { data: teamsData } = useTeams()
   const assignTeam = useAssignClientTeam(id ?? '')
@@ -173,6 +179,14 @@ export default function ClientDetailPage() {
               </SelectContent>
             </Select>
           </div>
+        </div>
+
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold tracking-tight">Chat</h2>
+            {isAdmin && <ClientChatAccessEditor clientId={id} currentAllowed={client.chatAllowedEmployees} />}
+          </div>
+          <ClientChatPanel clientId={id} />
         </div>
 
         {!client.currentQuotation ? (
@@ -237,6 +251,7 @@ export default function ClientDetailPage() {
                 {syncCycle.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
                 Sync tasks now
               </Button>
+              {isAdmin && tasksQuery.data?.cycle && <AddManualTaskDialog clientId={id} />}
             </div>
 
             {tasksQuery.data && tasksQuery.data.tasks.length > 0 && <SectionProgress tasks={tasksQuery.data.tasks} />}

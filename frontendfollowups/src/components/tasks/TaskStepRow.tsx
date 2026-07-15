@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Check, ChevronDown, ChevronUp, Loader2, ThumbsDown, ThumbsUp } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Loader2, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { EmployeePicker } from '@/components/teams/EmployeePicker'
-import { useDecideStepApproval, useUpdateStepAssignment, useUpdateStepStatus } from '@/hooks/useTasks'
+import { useAuth } from '@/hooks/useAuth'
+import { useDecideStepApproval, useRemoveStep, useUpdateStepAssignment, useUpdateStepStatus } from '@/hooks/useTasks'
 import type { Task, TaskStep } from '@/api/tasks.api'
 
 function toDateInputValue(iso?: string) {
@@ -12,7 +13,11 @@ function toDateInputValue(iso?: string) {
 }
 
 export function TaskStepRow({ task, step, clientId }: { task: Task; step: TaskStep; clientId: string }) {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
+
   const [editing, setEditing] = useState(false)
+  const [label, setLabel] = useState(step.label)
   const [assignedIds, setAssignedIds] = useState(step.assignedEmployees.map((e) => e._id))
   const [dueDate, setDueDate] = useState(toDateInputValue(step.dueDate))
   const [requiresApproval, setRequiresApproval] = useState(step.requiresApproval)
@@ -20,6 +25,7 @@ export function TaskStepRow({ task, step, clientId }: { task: Task; step: TaskSt
   const updateStatus = useUpdateStepStatus(task._id, clientId)
   const updateAssignment = useUpdateStepAssignment(task._id, clientId)
   const decideApproval = useDecideStepApproval(task._id, clientId)
+  const removeStep = useRemoveStep(task._id, clientId)
 
   const isDone = step.status === 'done'
   const isOverdue = step.dueDate && !isDone && new Date(step.dueDate) < new Date()
@@ -33,8 +39,15 @@ export function TaskStepRow({ task, step, clientId }: { task: Task; step: TaskSt
   }
 
   const onSaveEdit = () => {
+    const input: Parameters<typeof updateAssignment.mutate>[0]['input'] = {
+      assignedEmployees: assignedIds,
+      dueDate: dueDate || null,
+      requiresApproval,
+    }
+    if (isAdmin && label.trim() && label.trim() !== step.label) input.label = label.trim()
+
     updateAssignment.mutate(
-      { stepId: step._id, input: { assignedEmployees: assignedIds, dueDate: dueDate || null, requiresApproval } },
+      { stepId: step._id, input },
       {
         onSuccess: () => setEditing(false),
         onError: () => toast.error('Could not save step details'),
@@ -47,6 +60,11 @@ export function TaskStepRow({ task, step, clientId }: { task: Task; step: TaskSt
       { stepId: step._id, approved },
       { onError: () => toast.error('Could not record approval') }
     )
+  }
+
+  const onRemoveStep = () => {
+    if (!window.confirm(`Remove step "${step.label}"?`)) return
+    removeStep.mutate(step._id, { onError: () => toast.error('Could not remove step') })
   }
 
   return (
@@ -76,6 +94,11 @@ export function TaskStepRow({ task, step, clientId }: { task: Task; step: TaskSt
         )}
         {step.dueDate && (
           <span className="text-xs text-muted-foreground">{new Date(step.dueDate).toLocaleDateString()}</span>
+        )}
+        {isAdmin && (
+          <button onClick={onRemoveStep} disabled={removeStep.isPending} className="text-muted-foreground hover:text-destructive">
+            {removeStep.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+          </button>
         )}
         <button onClick={() => setEditing((v) => !v)} className="text-muted-foreground hover:text-foreground">
           {editing ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
@@ -107,6 +130,12 @@ export function TaskStepRow({ task, step, clientId }: { task: Task; step: TaskSt
 
       {editing && (
         <div className="ml-7 mt-2 grid gap-2 rounded-lg bg-secondary/30 p-2.5">
+          {isAdmin && (
+            <div className="grid gap-1.5">
+              <span className="text-xs font-semibold text-muted-foreground">Step name</span>
+              <Input value={label} onChange={(e) => setLabel(e.target.value)} className="h-8" />
+            </div>
+          )}
           <EmployeePicker selectedIds={assignedIds} onChange={setAssignedIds} />
           <div className="flex items-center gap-3">
             <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-8 w-40" />

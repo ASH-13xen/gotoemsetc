@@ -42,6 +42,7 @@ const taskSchema = new Schema(
     sectionName: { type: String, required: true },
     itemLabel: { type: String, required: true },
     itemIndex: { type: Number, required: true },
+    description: { type: String, trim: true },
     steps: [taskStepSchema],
     status: { type: String, enum: Object.values(TASK_STATUS), default: TASK_STATUS.PENDING },
     assignedTeam: { type: Schema.Types.ObjectId, ref: 'Team' },

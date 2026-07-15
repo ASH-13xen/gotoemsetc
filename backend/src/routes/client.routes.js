@@ -1,7 +1,9 @@
 const { Router } = require('express');
 const validate = require('../middlewares/validate.middleware');
 const upload = require('../middlewares/multer.middleware');
-const { requireClientAccess } = require('../middlewares/clientAccess.middleware');
+const { requireClientAccess, requireClientChatAccess } = require('../middlewares/clientAccess.middleware');
+const { requireRole } = require('../middlewares/auth.middleware');
+const { USER_ROLES } = require('../config/constants');
 const clientValidator = require('../validators/client.validator');
 const clientController = require('../controllers/client.controller');
 const meetingValidator = require('../validators/meeting.validator');
@@ -14,6 +16,8 @@ const clientDocumentRequestValidator = require('../validators/clientDocumentRequ
 const clientDocumentRequestController = require('../controllers/clientDocumentRequest.controller');
 const taskValidator = require('../validators/task.validator');
 const taskController = require('../controllers/task.controller');
+const clientChatValidator = require('../validators/clientChat.validator');
+const clientChatController = require('../controllers/clientChat.controller');
 
 const router = Router();
 
@@ -45,6 +49,36 @@ router.post(
   validate(taskValidator.syncCycle),
   requireClientAccess(),
   taskController.syncCycle
+);
+// Admin-authored ad-hoc deliverable (or whole new section) on top of
+// whatever the quotation template auto-generated.
+router.post(
+  '/:id/tasks',
+  requireRole(USER_ROLES.ADMIN),
+  validate(taskValidator.createManualTask),
+  requireClientAccess(),
+  taskController.createManualTask
+);
+
+// Chat is per-client (not per-task) — its own admin-managed access roster,
+// separate from task assignment.
+router.get(
+  '/:id/chat/messages',
+  validate(clientChatValidator.listMessages),
+  requireClientChatAccess(),
+  clientChatController.listMessages
+);
+router.post(
+  '/:id/chat/messages',
+  validate(clientChatValidator.postMessage),
+  requireClientChatAccess(),
+  clientChatController.postMessage
+);
+router.patch(
+  '/:id/chat/access',
+  requireRole(USER_ROLES.ADMIN),
+  validate(clientChatValidator.updateChatAccess),
+  clientChatController.updateChatAccess
 );
 
 router.post('/:id/meetings', validate(meetingValidator.create), meetingController.create);

@@ -22,6 +22,7 @@ const updateAssignment = {
 const updateStepAssignment = {
   params: stepParam,
   body: z.object({
+    label: z.string().min(1).optional(),
     assignedEmployees: z.array(z.string().min(1)).optional(),
     dueDate: z.coerce.date().nullable().optional(),
     requiresApproval: z.boolean().optional(),
@@ -46,8 +47,36 @@ const addAttachment = {
 const removeAttachment = { params: attachmentParam };
 const rollover = { params: idParam };
 
-const listMessages = { params: idParam };
-const postMessage = { params: idParam, body: z.object({ body: z.string().min(1) }) };
+const stepInputSchema = z.object({ label: z.string().min(1) });
+
+const addStep = {
+  params: idParam,
+  body: z.object({
+    label: z.string().min(1),
+    dueDate: z.coerce.date().nullable().optional(),
+    requiresApproval: z.boolean().optional(),
+  }),
+};
+
+const removeStep = { params: stepParam };
+
+const updateTaskDetails = {
+  params: idParam,
+  body: z.object({ description: z.string().optional() }),
+};
+
+const deleteTask = { params: idParam };
+
+const createManualTask = {
+  params: idParam,
+  body: z.object({
+    sectionName: z.string().min(1),
+    itemLabel: z.string().min(1),
+    description: z.string().optional(),
+    steps: z.array(stepInputSchema).optional(),
+    quantity: z.coerce.number().int().positive().max(50).optional(),
+  }),
+};
 
 const workloadForEmployee = { params: employeeParam };
 const contentCalendar = { query: z.object({ from: z.string(), to: z.string() }) };
@@ -63,8 +92,11 @@ module.exports = {
   addAttachment,
   removeAttachment,
   rollover,
-  listMessages,
-  postMessage,
+  addStep,
+  removeStep,
+  updateTaskDetails,
+  deleteTask,
+  createManualTask,
   workloadForEmployee,
   contentCalendar,
 };

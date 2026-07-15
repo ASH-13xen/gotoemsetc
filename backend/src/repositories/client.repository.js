@@ -8,6 +8,7 @@ const POPULATE_TEAM = {
 const POPULATE_ASSIGNMENTS = [
   { path: 'assignedEmployees', select: 'firstName lastName designation employeeCode' },
   { path: 'mainEmployee', select: 'firstName lastName designation employeeCode' },
+  { path: 'chatAllowedEmployees', select: 'firstName lastName designation employeeCode' },
 ];
 
 function listQuery({ search, status }) {

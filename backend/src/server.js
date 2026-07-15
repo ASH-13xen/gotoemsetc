@@ -6,7 +6,7 @@ const logger = require('./utils/logger');
 const interviewReminderJob = require('./jobs/interviewReminder.job');
 const birthdayReminderJob = require('./jobs/birthdayReminder.job');
 const taskCycleJob = require('./jobs/taskCycle.job');
-const taskChat = require('./websocket/taskChat');
+const clientChat = require('./websocket/clientChat');
 
 async function main() {
   await connectDb();
@@ -17,7 +17,7 @@ async function main() {
   // Socket.io needs the raw HTTP server (not just the Express app) to
   // upgrade connections on the same port.
   const httpServer = http.createServer(app);
-  taskChat.init(httpServer);
+  clientChat.init(httpServer);
 
   httpServer.listen(env.port, () => {
     logger.info(`EMS backend listening on port ${env.port}`);

@@ -37,6 +37,7 @@ export interface SalesClient {
   assignedTeam?: AssignedTeam
   assignedEmployees: AssignedEmployee[]
   mainEmployee?: AssignedEmployee
+  chatAllowedEmployees: AssignedEmployee[]
   createdAt: string
   updatedAt: string
 }

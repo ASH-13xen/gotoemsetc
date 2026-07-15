@@ -31,4 +31,14 @@ function filterAccessibleClients(user, clients) {
   return clients.filter((client) => canAccessClientTasks(user, client));
 }
 
-module.exports = { canAccessClientTasks, filterAccessibleClients };
+// Deliberately separate from canAccessClientTasks — the chat roster is its
+// own admin-managed list (client.chatAllowedEmployees), not derived from
+// task assignment.
+function canAccessClientChat(user, client) {
+  if (user.role === USER_ROLES.ADMIN) return true;
+  if (!user.employeeLink) return false;
+  const employeeId = user.employeeLink.toString();
+  return (client.chatAllowedEmployees || []).some((emp) => toId(emp) === employeeId);
+}
+
+module.exports = { canAccessClientTasks, filterAccessibleClients, canAccessClientChat };

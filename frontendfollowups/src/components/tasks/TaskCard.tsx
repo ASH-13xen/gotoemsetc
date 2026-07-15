@@ -1,13 +1,21 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronUp, Link2, Loader2, RotateCcw, Trash2, Users } from 'lucide-react'
+import { ChevronDown, ChevronUp, Link2, Loader2, Plus, RotateCcw, Trash2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { TaskStepRow } from './TaskStepRow'
 import { TaskAssignmentEditor } from './TaskAssignmentEditor'
-import { TaskChatPanel } from './TaskChatPanel'
-import { useAddAttachment, useRemoveAttachment, useRolloverTask } from '@/hooks/useTasks'
+import { useAuth } from '@/hooks/useAuth'
+import {
+  useAddAttachment,
+  useAddStep,
+  useDeleteTask,
+  useRemoveAttachment,
+  useRolloverTask,
+  useUpdateTaskDetails,
+} from '@/hooks/useTasks'
 import type { Task } from '@/api/tasks.api'
 
 const STATUS_STYLES: Record<Task['status'], string> = {
@@ -19,13 +27,22 @@ const STATUS_STYLES: Record<Task['status'], string> = {
 }
 
 export function TaskCard({ task, clientId }: { task: Task; clientId: string }) {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
+
   const [expanded, setExpanded] = useState(false)
   const [attachLabel, setAttachLabel] = useState('')
   const [attachUrl, setAttachUrl] = useState('')
+  const [editingDescription, setEditingDescription] = useState(false)
+  const [descriptionDraft, setDescriptionDraft] = useState(task.description ?? '')
+  const [stepDraft, setStepDraft] = useState('')
 
   const addAttachment = useAddAttachment(task._id, clientId)
   const removeAttachment = useRemoveAttachment(task._id, clientId)
   const rollover = useRolloverTask(clientId)
+  const updateDetails = useUpdateTaskDetails(task._id, clientId)
+  const addStep = useAddStep(task._id, clientId)
+  const deleteTask = useDeleteTask(clientId)
 
   const doneSteps = task.steps.filter((s) => s.status === 'done').length
 
@@ -47,6 +64,36 @@ export function TaskCard({ task, clientId }: { task: Task; clientId: string }) {
     rollover.mutate(task._id, {
       onSuccess: () => toast.success('Rolled over into the current cycle'),
       onError: () => toast.error('Could not roll over this task'),
+    })
+  }
+
+  const onSaveDescription = () => {
+    updateDetails.mutate(
+      { description: descriptionDraft.trim() || undefined },
+      {
+        onSuccess: () => setEditingDescription(false),
+        onError: () => toast.error('Could not save description'),
+      }
+    )
+  }
+
+  const onAddStep = () => {
+    const label = stepDraft.trim()
+    if (!label) return
+    addStep.mutate(
+      { label },
+      {
+        onSuccess: () => setStepDraft(''),
+        onError: () => toast.error('Could not add step'),
+      }
+    )
+  }
+
+  const onDeleteTask = () => {
+    if (!window.confirm(`Delete "${task.itemLabel}"? This can't be undone.`)) return
+    deleteTask.mutate(task._id, {
+      onSuccess: () => toast.success('Task deleted'),
+      onError: () => toast.error('Could not delete this task'),
     })
   }
 
@@ -80,18 +127,65 @@ export function TaskCard({ task, clientId }: { task: Task; clientId: string }) {
             </Button>
           )}
 
+          <div className="grid gap-1.5">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Description</p>
+              {isAdmin && !editingDescription && (
+                <button className="text-xs font-medium text-primary hover:underline" onClick={() => setEditingDescription(true)}>
+                  {task.description ? 'Edit' : 'Add description'}
+                </button>
+              )}
+            </div>
+            {editingDescription ? (
+              <div className="grid gap-2">
+                <Textarea value={descriptionDraft} onChange={(e) => setDescriptionDraft(e.target.value)} rows={3} />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={onSaveDescription} disabled={updateDetails.isPending}>
+                    {updateDetails.isPending && <Loader2 className="size-3.5 animate-spin" />}
+                    Save
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setEditingDescription(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-foreground/90">{task.description || 'No description yet.'}</p>
+            )}
+          </div>
+
           <div className="grid gap-2">
             {[...task.steps]
               .sort((a, b) => a.order - b.order)
               .map((step) => (
                 <TaskStepRow key={step._id} task={task} step={step} clientId={clientId} />
               ))}
+            {isAdmin && (
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Add a step…"
+                  value={stepDraft}
+                  onChange={(e) => setStepDraft(e.target.value)}
+                  className="h-8 flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      onAddStep()
+                    }
+                  }}
+                />
+                <Button size="sm" className="h-8" onClick={onAddStep} disabled={addStep.isPending}>
+                  <Plus className="size-3.5" />
+                  Add step
+                </Button>
+              </div>
+            )}
           </div>
 
           <TaskAssignmentEditor task={task} clientId={clientId} />
 
           <div className="grid gap-2">
-            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Attachments</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Attachments &amp; links</p>
             {task.attachments.map((att, i) => (
               <div key={i} className="flex items-center justify-between gap-2 rounded-lg bg-secondary/30 px-3 py-1.5 text-sm">
                 <a href={att.url} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-primary hover:underline">
@@ -104,15 +198,26 @@ export function TaskCard({ task, clientId }: { task: Task; clientId: string }) {
               </div>
             ))}
             <div className="flex gap-2">
-              <Input placeholder="Label" value={attachLabel} onChange={(e) => setAttachLabel(e.target.value)} className="h-8 w-32" />
-              <Input placeholder="Link (Drive, etc.)" value={attachUrl} onChange={(e) => setAttachUrl(e.target.value)} className="h-8 flex-1" />
+              <Input placeholder="Label (e.g. Post link)" value={attachLabel} onChange={(e) => setAttachLabel(e.target.value)} className="h-8 w-40" />
+              <Input placeholder="URL" value={attachUrl} onChange={(e) => setAttachUrl(e.target.value)} className="h-8 flex-1" />
               <Button size="sm" onClick={onAddAttachment} disabled={addAttachment.isPending} className="h-8">
                 Add
               </Button>
             </div>
           </div>
 
-          <TaskChatPanel taskId={task._id} />
+          {isAdmin && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-fit text-destructive hover:bg-destructive/10"
+              onClick={onDeleteTask}
+              disabled={deleteTask.isPending}
+            >
+              {deleteTask.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+              Delete task
+            </Button>
+          )}
         </div>
       )}
     </div>

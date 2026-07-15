@@ -45,6 +45,10 @@ const clientSchema = new Schema(
     assignedEmployees: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
     mainEmployee: { type: Schema.Types.ObjectId, ref: 'Employee' },
     extraDetails: [extraDetailSchema],
+    // Who can see/post in this client's chat — admin-managed, deliberately
+    // independent of assignedEmployees/mainEmployee (task access) so the two
+    // rosters can differ.
+    chatAllowedEmployees: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
     isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }

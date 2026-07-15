@@ -4,7 +4,7 @@ const Task = require('../models/Task');
 const taskRepository = require('../repositories/task.repository');
 const taskCycleRepository = require('../repositories/taskCycle.repository');
 const clientRepository = require('../repositories/client.repository');
-const taskMessageRepository = require('../repositories/taskMessage.repository');
+const quotationRepository = require('../repositories/quotation.repository');
 const clientActivity = require('./clientActivity.service');
 const taskNotify = require('./taskNotify.service');
 const taskCycleService = require('./taskCycle.service');
@@ -59,11 +59,12 @@ function findStep(task, stepId) {
   return step;
 }
 
-async function updateStepAssignment(taskId, stepId, { assignedEmployees, dueDate, requiresApproval }) {
+async function updateStepAssignment(taskId, stepId, { label, assignedEmployees, dueDate, requiresApproval }) {
   const task = await taskRepository.findRaw(taskId);
   if (!task) throw ApiError.notFound('Task not found');
   const step = findStep(task, stepId);
 
+  if (label !== undefined) step.label = label;
   if (assignedEmployees !== undefined) step.assignedEmployees = assignedEmployees;
   if (dueDate !== undefined) step.dueDate = dueDate;
   if (requiresApproval !== undefined) {
@@ -158,7 +159,8 @@ async function rolloverTask(taskId) {
 
   const client = await clientRepository.findById(original.client);
   if (!client) throw ApiError.notFound('Client not found');
-  const currentCycle = await taskCycleService.ensureCurrentCycle(client);
+  const quotation = client.currentQuotation ? await quotationRepository.findById(client.currentQuotation) : null;
+  const currentCycle = await taskCycleService.ensureCurrentCycle(client, quotation);
 
   const newTask = await taskRepository.create({
     client: original.client,
@@ -216,12 +218,74 @@ async function sweepOverdueSteps() {
   return { stepsNotified: notified };
 }
 
-async function listMessages(taskId) {
-  return taskMessageRepository.listForTask(taskId);
+// Admin can freely restructure a task's step pipeline after generation —
+// e.g. drop "Caption Writing" and add something else — not just reassign
+// the steps a template originally snapshotted in.
+async function addStep(taskId, { label, dueDate, requiresApproval }) {
+  const task = await taskRepository.findRaw(taskId);
+  if (!task) throw ApiError.notFound('Task not found');
+
+  const nextOrder = task.steps.length ? Math.max(...task.steps.map((s) => s.order)) + 1 : 1;
+  task.steps.push({ label, order: nextOrder, dueDate, requiresApproval: requiresApproval || false });
+  task.status = deriveTaskStatus(task.status, task.steps);
+  await task.save();
+  return taskRepository.findById(taskId);
 }
 
-async function postMessage(taskId, senderEmployeeId, body) {
-  return taskMessageRepository.create({ task: taskId, sender: senderEmployeeId, body });
+async function removeStep(taskId, stepId) {
+  const task = await taskRepository.findRaw(taskId);
+  if (!task) throw ApiError.notFound('Task not found');
+  const step = findStep(task, stepId);
+  step.deleteOne();
+  task.status = deriveTaskStatus(task.status, task.steps);
+  await task.save();
+  return taskRepository.findById(taskId);
+}
+
+async function updateTaskDetails(taskId, { description }) {
+  const task = await taskRepository.updateById(taskId, { description });
+  if (!task) throw ApiError.notFound('Task not found');
+  return task;
+}
+
+// Admin-authored deliverable that isn't part of the signed quotation's
+// Scope of Work — e.g. adding a whole new "YouTube Shorts" line under an
+// existing section, or an entirely new section, on top of whatever the
+// template auto-generated. Slots into the client's current cycle; `quantity`
+// > 1 mirrors the auto-generator's "Label #N" numbering.
+async function createManualTask(clientId, { sectionName, itemLabel, description, steps, quantity }) {
+  const client = await clientRepository.findById(clientId);
+  if (!client) throw ApiError.notFound('Client not found');
+
+  const cycle = await taskCycleRepository.findLatestForClient(clientId);
+  if (!cycle) throw ApiError.badRequest('This client has no active cycle yet — sync tasks first.');
+
+  const stepDocs = (steps || []).map((s, i) => ({ label: s.label, order: i + 1 }));
+  const qty = quantity && quantity > 1 ? quantity : 1;
+
+  const docs = [];
+  for (let i = 0; i < qty; i += 1) {
+    docs.push({
+      client: clientId,
+      cycle: cycle._id,
+      sectionName,
+      itemLabel: qty > 1 ? `${itemLabel} #${i + 1}` : itemLabel,
+      itemIndex: i,
+      description,
+      steps: stepDocs.map((s) => ({ ...s })),
+    });
+  }
+
+  const created = await taskRepository.insertMany(docs);
+  await clientActivity.log(clientId, 'TASK_ADDED_MANUALLY', { sectionName, itemLabel, quantity: qty });
+  return Promise.all(created.map((d) => taskRepository.findById(d._id)));
+}
+
+async function deleteTask(taskId) {
+  const task = await taskRepository.findRaw(taskId);
+  if (!task) throw ApiError.notFound('Task not found');
+  task.isDeleted = true;
+  await task.save();
 }
 
 // Cross-client aggregate views — dashboard, workload, content calendar.
@@ -244,8 +308,11 @@ module.exports = {
   removeAttachment,
   rolloverTask,
   sweepOverdueSteps,
-  listMessages,
-  postMessage,
+  addStep,
+  removeStep,
+  updateTaskDetails,
+  createManualTask,
+  deleteTask,
   listByAssignee,
   listByClientsInWindow,
 };

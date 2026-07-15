@@ -1,7 +1,7 @@
 const ApiError = require('../utils/ApiError');
 const clientRepository = require('../repositories/client.repository');
 const taskRepository = require('../repositories/task.repository');
-const { canAccessClientTasks } = require('../utils/clientAccess');
+const { canAccessClientTasks, canAccessClientChat } = require('../utils/clientAccess');
 
 // Gates any route where :id (or the given param) is a client — used on the
 // nested /clients/:id/tasks-family of routes.
@@ -42,4 +42,22 @@ function requireTaskClientAccess(paramName = 'id') {
   };
 }
 
-module.exports = { requireClientAccess, requireTaskClientAccess };
+// Gates the per-client chat routes — a separate roster from task access
+// (client.chatAllowedEmployees, admin-managed).
+function requireClientChatAccess(paramName = 'id') {
+  return async (req, res, next) => {
+    try {
+      const client = await clientRepository.findById(req.params[paramName]);
+      if (!client) return next(ApiError.notFound('Client not found'));
+      if (!canAccessClientChat(req.user, client)) {
+        return next(ApiError.forbidden("You don't have access to this client's chat."));
+      }
+      req.client = client;
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
+module.exports = { requireClientAccess, requireTaskClientAccess, requireClientChatAccess };
