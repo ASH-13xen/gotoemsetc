@@ -15,6 +15,7 @@ export interface EmployeeRef {
 export interface TaskStep {
   _id: string
   label: string
+  whatToDo?: string
   order: number
   status: StepStatus
   assignedEmployees: EmployeeRef[]
@@ -95,7 +96,13 @@ export async function updateTaskAssignment(
 export async function updateStepAssignment(
   taskId: string,
   stepId: string,
-  input: { label?: string; assignedEmployees?: string[]; dueDate?: string | null; requiresApproval?: boolean }
+  input: {
+    label?: string
+    whatToDo?: string
+    assignedEmployees?: string[]
+    dueDate?: string | null
+    requiresApproval?: boolean
+  }
 ): Promise<{ task: Task }> {
   const { data } = await apiClient.patch(`/tasks/${taskId}/steps/${stepId}/assignment`, input)
   return data
@@ -134,7 +141,7 @@ export async function rolloverTask(taskId: string): Promise<{ task: Task }> {
 
 export async function addStep(
   taskId: string,
-  input: { label: string; dueDate?: string | null; requiresApproval?: boolean }
+  input: { label: string; whatToDo?: string; dueDate?: string | null; requiresApproval?: boolean }
 ): Promise<{ task: Task }> {
   const { data } = await apiClient.post(`/tasks/${taskId}/steps`, input)
   return data
@@ -152,7 +159,13 @@ export async function updateTaskDetails(taskId: string, input: { description?: s
 
 export async function createManualTasks(
   clientId: string,
-  input: { sectionName: string; itemLabel: string; description?: string; steps?: { label: string }[]; quantity?: number }
+  input: {
+    sectionName: string
+    itemLabel: string
+    description?: string
+    steps?: { label: string; whatToDo?: string }[]
+    quantity?: number
+  }
 ): Promise<{ tasks: Task[] }> {
   const { data } = await apiClient.post(`/clients/${clientId}/tasks`, input)
   return data

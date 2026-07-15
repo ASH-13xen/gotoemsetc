@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { isAxiosError } from 'axios'
-import { ChevronDown, ChevronUp, FileWarning, Loader2, RefreshCw, ShieldAlert } from 'lucide-react'
+import { ChevronDown, ChevronUp, FileWarning, Layers, Loader2, RefreshCw, ShieldAlert } from 'lucide-react'
 
 import { NavBar } from '@/components/layout/NavBar'
 import { Button } from '@/components/ui/button'
@@ -27,10 +27,6 @@ import type { Task } from '@/api/tasks.api'
 
 const NO_TEAM = '__none__'
 
-function baseLabel(itemLabel: string) {
-  return itemLabel.replace(/\s#\d+$/, '')
-}
-
 // "Stories #10" -> 10 — items are numbered in generation order but the
 // label is a string, so sorting on the label alone would put "#10" before
 // "#2". Single (un-numbered) deliverables sort first via 0.
@@ -39,77 +35,43 @@ function itemNumber(itemLabel: string) {
   return match ? Number(match[1]) : 0
 }
 
-// Groups a section's tasks by base deliverable (e.g. all "Stories #N"
-// together) so a daily-exploded deliverable with dozens of instances shows
-// as one collapsible group instead of a wall of individual cards.
-function ItemGroup({ base, tasks, clientId }: { base: string; tasks: Task[]; clientId: string }) {
-  const [open, setOpen] = useState(false)
+// One collapsible block per section (e.g. "Reels", "Stories") showing a
+// compact tile grid — a daily-exploded deliverable with dozens of instances
+// stays scannable as a grid instead of a wall of stacked, expanded cards.
+function SectionBlock({ sectionName, tasks, clientId }: { sectionName: string; tasks: Task[]; clientId: string }) {
   const sorted = useMemo(() => [...tasks].sort((a, b) => itemNumber(a.itemLabel) - itemNumber(b.itemLabel)), [tasks])
-
-  if (tasks.length === 1) {
-    return <TaskCard task={tasks[0]} clientId={clientId} />
-  }
-
+  const [open, setOpen] = useState(tasks.length <= 12)
   const done = tasks.filter((t) => t.status === 'done').length
 
   return (
     <div className="rounded-xl border border-border bg-card shadow-sm">
-      <button
-        className="flex w-full items-center justify-between gap-3 p-4 text-left"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="font-semibold">{base}</span>
-        <div className="flex shrink-0 items-center gap-3">
-          <span className="text-xs text-muted-foreground">
-            {done}/{tasks.length} done
+      <button className="flex w-full items-center justify-between gap-3 p-4 text-left" onClick={() => setOpen((v) => !v)}>
+        <div className="flex items-center gap-2">
+          <Layers className="size-4 text-primary" />
+          <span className="text-base font-bold tracking-tight">{sectionName}</span>
+          <span className="rounded-full bg-secondary px-2 py-0.5 text-xs font-medium text-secondary-foreground">
+            {tasks.length}
           </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <div className="hidden items-center gap-2 sm:flex">
+            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-secondary">
+              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${tasks.length ? (done / tasks.length) * 100 : 0}%` }} />
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {done}/{tasks.length}
+            </span>
+          </div>
           {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
         </div>
       </button>
       {open && (
-        <div className="grid gap-2 border-t border-border p-4">
+        <div className="grid grid-cols-2 gap-3 border-t border-border p-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {sorted.map((task) => (
             <TaskCard key={task._id} task={task} clientId={clientId} />
           ))}
         </div>
       )}
-    </div>
-  )
-}
-
-function SectionProgress({ tasks }: { tasks: Task[] }) {
-  const bySectionAndBase = useMemo(() => {
-    const map = new Map<string, { section: string; base: string; total: number; done: number }>()
-    for (const task of tasks) {
-      const key = `${task.sectionName}::${baseLabel(task.itemLabel)}`
-      const entry = map.get(key) ?? { section: task.sectionName, base: baseLabel(task.itemLabel), total: 0, done: 0 }
-      entry.total += 1
-      if (task.status === 'done') entry.done += 1
-      map.set(key, entry)
-    }
-    return [...map.values()]
-  }, [tasks])
-
-  if (bySectionAndBase.length === 0) return null
-
-  return (
-    <div className="grid gap-2 rounded-xl border border-border bg-card p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-3">
-      {bySectionAndBase.map((entry) => (
-        <div key={`${entry.section}-${entry.base}`} className="grid gap-1">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold">{entry.base}</span>
-            <span className="text-muted-foreground">
-              {entry.done}/{entry.total}
-            </span>
-          </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
-            <div
-              className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${entry.total ? (entry.done / entry.total) * 100 : 0}%` }}
-            />
-          </div>
-        </div>
-      ))}
     </div>
   )
 }
@@ -133,7 +95,7 @@ export default function ClientDetailPage() {
     return (
       <div className="min-h-screen bg-background">
         <NavBar />
-        <main className="mx-auto max-w-5xl space-y-4 p-6">
+        <main className="mx-auto max-w-6xl space-y-4 p-6">
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-96 w-full" />
         </main>
@@ -149,24 +111,32 @@ export default function ClientDetailPage() {
   }
 
   const notAssigned = isAxiosError(tasksQuery.error) && tasksQuery.error.response?.status === 403
+  const sections = tasksQuery.data
+    ? Object.entries(
+        tasksQuery.data.tasks.reduce<Record<string, Task[]>>((acc, task) => {
+          ;(acc[task.sectionName] ??= []).push(task)
+          return acc
+        }, {})
+      )
+    : []
 
   return (
     <div className="min-h-screen bg-background">
       <NavBar />
-      <main className="mx-auto max-w-5xl space-y-6 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      <main className="mx-auto max-w-6xl space-y-5 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card p-5 shadow-sm">
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-black tracking-tighter uppercase">{client.clientName}</h1>
+              <h1 className="text-2xl font-black tracking-tight">{client.clientName}</h1>
               <ClientStatusBadge status={client.status} />
             </div>
-            <p className="text-sm text-muted-foreground uppercase">{client.brandName}</p>
+            <p className="text-sm text-muted-foreground">{client.brandName}</p>
           </div>
 
           <div className="grid gap-1.5">
-            <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Team</span>
+            <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Team</span>
             <Select value={client.assignedTeam?._id ?? NO_TEAM} onValueChange={onTeamChange}>
-              <SelectTrigger className="h-9 w-56 rounded-lg border font-medium normal-case tracking-normal">
+              <SelectTrigger className="h-9 w-56">
                 <SelectValue placeholder="No team assigned" />
               </SelectTrigger>
               <SelectContent>
@@ -181,9 +151,9 @@ export default function ClientDetailPage() {
           </div>
         </div>
 
-        <div className="grid gap-2">
+        <div className="grid gap-2 rounded-xl border border-border bg-card p-5 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold tracking-tight">Chat</h2>
+            <h2 className="text-base font-bold tracking-tight">Chat</h2>
             {isAdmin && <ClientChatAccessEditor clientId={id} currentAllowed={client.chatAllowedEmployees} />}
           </div>
           <ClientChatPanel clientId={id} />
@@ -213,7 +183,7 @@ export default function ClientDetailPage() {
           <Skeleton className="h-96 w-full" />
         ) : (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4 shadow-sm">
               <Select
                 value={tasksQuery.data?.cycle?._id ?? ''}
                 onValueChange={(v) => setCycleId(v)}
@@ -236,25 +206,25 @@ export default function ClientDetailPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  syncCycle.mutate(undefined, {
-                    onSuccess: (result) =>
-                      toast.success(result.tasks.length > 0 ? `Generated ${result.tasks.length} task(s)` : 'Already up to date'),
-                    onError: () => toast.error('Could not sync tasks'),
-                  })
-                }
-                disabled={syncCycle.isPending}
-              >
-                {syncCycle.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-                Sync tasks now
-              </Button>
-              {isAdmin && tasksQuery.data?.cycle && <AddManualTaskDialog clientId={id} />}
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    syncCycle.mutate(undefined, {
+                      onSuccess: (result) =>
+                        toast.success(result.tasks.length > 0 ? `Generated ${result.tasks.length} task(s)` : 'Already up to date'),
+                      onError: () => toast.error('Could not sync tasks'),
+                    })
+                  }
+                  disabled={syncCycle.isPending}
+                >
+                  {syncCycle.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+                  Sync tasks now
+                </Button>
+                {isAdmin && tasksQuery.data?.cycle && <AddManualTaskDialog clientId={id} />}
+              </div>
             </div>
-
-            {tasksQuery.data && tasksQuery.data.tasks.length > 0 && <SectionProgress tasks={tasksQuery.data.tasks} />}
 
             {!tasksQuery.data?.cycle ? (
               <p className="text-sm text-muted-foreground">No cycle yet — click "Sync tasks now" to generate one.</p>
@@ -263,28 +233,9 @@ export default function ClientDetailPage() {
                 This cycle has no tasks — the quotation's template may not have a Scope of Work configured yet.
               </p>
             ) : (
-              Object.entries(
-                tasksQuery.data.tasks.reduce<Record<string, Task[]>>((acc, task) => {
-                  ;(acc[task.sectionName] ??= []).push(task)
-                  return acc
-                }, {})
-              ).map(([sectionName, sectionTasks]) => {
-                const groups = new Map<string, Task[]>()
-                for (const task of sectionTasks) {
-                  const key = baseLabel(task.itemLabel)
-                  const group = groups.get(key)
-                  if (group) group.push(task)
-                  else groups.set(key, [task])
-                }
-                return (
-                  <div key={sectionName} className="grid gap-3">
-                    <h2 className="text-lg font-bold tracking-tight">{sectionName}</h2>
-                    {[...groups.entries()].map(([base, tasks]) => (
-                      <ItemGroup key={base} base={base} tasks={tasks} clientId={id} />
-                    ))}
-                  </div>
-                )
-              })
+              sections.map(([sectionName, sectionTasks]) => (
+                <SectionBlock key={sectionName} sectionName={sectionName} tasks={sectionTasks} clientId={id} />
+              ))
             )}
           </>
         )}

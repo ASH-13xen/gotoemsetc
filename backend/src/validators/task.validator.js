@@ -23,6 +23,7 @@ const updateStepAssignment = {
   params: stepParam,
   body: z.object({
     label: z.string().min(1).optional(),
+    whatToDo: z.string().optional(),
     assignedEmployees: z.array(z.string().min(1)).optional(),
     dueDate: z.coerce.date().nullable().optional(),
     requiresApproval: z.boolean().optional(),
@@ -47,12 +48,13 @@ const addAttachment = {
 const removeAttachment = { params: attachmentParam };
 const rollover = { params: idParam };
 
-const stepInputSchema = z.object({ label: z.string().min(1) });
+const stepInputSchema = z.object({ label: z.string().min(1), whatToDo: z.string().optional() });
 
 const addStep = {
   params: idParam,
   body: z.object({
     label: z.string().min(1),
+    whatToDo: z.string().optional(),
     dueDate: z.coerce.date().nullable().optional(),
     requiresApproval: z.boolean().optional(),
   }),

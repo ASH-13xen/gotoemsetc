@@ -6,6 +6,10 @@ const { TASK_STATUS, STEP_STATUS, APPROVAL_STATUS } = require('../config/constan
 const taskStepSchema = new Schema({
   label: { type: String, required: true },
   order: { type: Number, required: true },
+  // Free-text brief employees fill in describing what's expected for this
+  // step (e.g. under "Plan of Action" for Reel #1) — separate from the
+  // step's label, which stays admin-controlled.
+  whatToDo: { type: String, trim: true },
   status: { type: String, enum: Object.values(STEP_STATUS), default: STEP_STATUS.TODO },
   assignedEmployees: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
   dueDate: { type: Date },

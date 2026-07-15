@@ -59,12 +59,13 @@ function findStep(task, stepId) {
   return step;
 }
 
-async function updateStepAssignment(taskId, stepId, { label, assignedEmployees, dueDate, requiresApproval }) {
+async function updateStepAssignment(taskId, stepId, { label, whatToDo, assignedEmployees, dueDate, requiresApproval }) {
   const task = await taskRepository.findRaw(taskId);
   if (!task) throw ApiError.notFound('Task not found');
   const step = findStep(task, stepId);
 
   if (label !== undefined) step.label = label;
+  if (whatToDo !== undefined) step.whatToDo = whatToDo;
   if (assignedEmployees !== undefined) step.assignedEmployees = assignedEmployees;
   if (dueDate !== undefined) step.dueDate = dueDate;
   if (requiresApproval !== undefined) {
@@ -169,7 +170,7 @@ async function rolloverTask(taskId) {
     sectionName: original.sectionName,
     itemLabel: original.itemLabel,
     itemIndex: original.itemIndex,
-    steps: original.steps.map((s) => ({ label: s.label, order: s.order, requiresApproval: s.requiresApproval })),
+    steps: original.steps.map((s) => ({ label: s.label, order: s.order, requiresApproval: s.requiresApproval, whatToDo: s.whatToDo })),
     assignedTeam: original.assignedTeam,
     assignedEmployees: original.assignedEmployees,
     leadEmployee: original.leadEmployee,
@@ -221,12 +222,12 @@ async function sweepOverdueSteps() {
 // Admin can freely restructure a task's step pipeline after generation —
 // e.g. drop "Caption Writing" and add something else — not just reassign
 // the steps a template originally snapshotted in.
-async function addStep(taskId, { label, dueDate, requiresApproval }) {
+async function addStep(taskId, { label, whatToDo, dueDate, requiresApproval }) {
   const task = await taskRepository.findRaw(taskId);
   if (!task) throw ApiError.notFound('Task not found');
 
   const nextOrder = task.steps.length ? Math.max(...task.steps.map((s) => s.order)) + 1 : 1;
-  task.steps.push({ label, order: nextOrder, dueDate, requiresApproval: requiresApproval || false });
+  task.steps.push({ label, whatToDo, order: nextOrder, dueDate, requiresApproval: requiresApproval || false });
   task.status = deriveTaskStatus(task.status, task.steps);
   await task.save();
   return taskRepository.findById(taskId);
@@ -260,7 +261,7 @@ async function createManualTask(clientId, { sectionName, itemLabel, description,
   const cycle = await taskCycleRepository.findLatestForClient(clientId);
   if (!cycle) throw ApiError.badRequest('This client has no active cycle yet — sync tasks first.');
 
-  const stepDocs = (steps || []).map((s, i) => ({ label: s.label, order: i + 1 }));
+  const stepDocs = (steps || []).map((s, i) => ({ label: s.label, whatToDo: s.whatToDo, order: i + 1 }));
   const qty = quantity && quantity > 1 ? quantity : 1;
 
   const docs = [];

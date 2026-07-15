@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronUp, Link2, Loader2, Plus, RotateCcw, Trash2, Users } from 'lucide-react'
+import { Link2, Loader2, Plus, RotateCcw, Trash2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { TaskStepRow } from './TaskStepRow'
 import { TaskAssignmentEditor } from './TaskAssignmentEditor'
 import { useAuth } from '@/hooks/useAuth'
@@ -26,11 +27,67 @@ const STATUS_STYLES: Record<Task['status'], string> = {
   rolled_over: 'bg-muted text-muted-foreground/60',
 }
 
+const DOT_STYLES: Record<Task['status'], string> = {
+  pending: 'bg-muted-foreground/30',
+  in_progress: 'bg-sky-500',
+  done: 'bg-emerald-500',
+  missed: 'bg-destructive',
+  rolled_over: 'bg-muted-foreground/30',
+}
+
+// Compact clickable tile — the full editing surface lives in the dialog it
+// opens. Keeps a section with many deliverables (e.g. 60+ Stories) scannable
+// as a grid instead of a tall stack of expanded accordions.
 export function TaskCard({ task, clientId }: { task: Task; clientId: string }) {
+  const [open, setOpen] = useState(false)
+  const doneSteps = task.steps.filter((s) => s.status === 'done').length
+  const pct = task.steps.length ? (doneSteps / task.steps.length) * 100 : 0
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className="flex flex-col gap-2 rounded-xl border border-border bg-card p-3 text-left shadow-sm transition-all hover:border-primary/40 hover:shadow-md"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-sm font-semibold">{task.itemLabel}</span>
+          <span className={`size-2 shrink-0 rounded-full ${DOT_STYLES[task.status]}`} />
+        </div>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+        </div>
+        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <span>
+            {doneSteps}/{task.steps.length} steps
+          </span>
+          {task.leadEmployee && (
+            <span className="flex items-center gap-1 truncate">
+              <Users className="size-3" />
+              {task.leadEmployee.firstName}
+            </span>
+          )}
+        </div>
+      </button>
+
+      {open && <TaskDetailDialog task={task} clientId={clientId} open={open} onOpenChange={setOpen} />}
+    </>
+  )
+}
+
+function TaskDetailDialog({
+  task,
+  clientId,
+  open,
+  onOpenChange,
+}: {
+  task: Task
+  clientId: string
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
 
-  const [expanded, setExpanded] = useState(false)
   const [attachLabel, setAttachLabel] = useState('')
   const [attachUrl, setAttachUrl] = useState('')
   const [editingDescription, setEditingDescription] = useState(false)
@@ -43,8 +100,6 @@ export function TaskCard({ task, clientId }: { task: Task; clientId: string }) {
   const updateDetails = useUpdateTaskDetails(task._id, clientId)
   const addStep = useAddStep(task._id, clientId)
   const deleteTask = useDeleteTask(clientId)
-
-  const doneSteps = task.steps.filter((s) => s.status === 'done').length
 
   const onAddAttachment = () => {
     if (!attachLabel.trim() || !attachUrl.trim()) return
@@ -92,34 +147,25 @@ export function TaskCard({ task, clientId }: { task: Task; clientId: string }) {
   const onDeleteTask = () => {
     if (!window.confirm(`Delete "${task.itemLabel}"? This can't be undone.`)) return
     deleteTask.mutate(task._id, {
-      onSuccess: () => toast.success('Task deleted'),
+      onSuccess: () => {
+        toast.success('Task deleted')
+        onOpenChange(false)
+      },
       onError: () => toast.error('Could not delete this task'),
     })
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-      <button className="flex w-full items-center justify-between gap-3 text-left" onClick={() => setExpanded((v) => !v)}>
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-semibold">{task.itemLabel}</span>
-          <Badge className={STATUS_STYLES[task.status]}>{task.status.replace('_', ' ')}</Badge>
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {doneSteps}/{task.steps.length} steps
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {task.leadEmployee && (
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Users className="size-3" />
-              {task.leadEmployee.firstName}
-            </span>
-          )}
-          {expanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-        </div>
-      </button>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <div className="flex flex-wrap items-center gap-2 pr-6">
+            <DialogTitle>{task.itemLabel}</DialogTitle>
+            <Badge className={STATUS_STYLES[task.status]}>{task.status.replace('_', ' ')}</Badge>
+          </div>
+        </DialogHeader>
 
-      {expanded && (
-        <div className="mt-4 grid gap-4">
+        <div className="grid gap-4">
           {task.status === 'missed' && (
             <Button size="sm" variant="outline" onClick={onRollover} disabled={rollover.isPending} className="w-fit">
               {rollover.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
@@ -155,6 +201,7 @@ export function TaskCard({ task, clientId }: { task: Task; clientId: string }) {
           </div>
 
           <div className="grid gap-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Steps</p>
             {[...task.steps]
               .sort((a, b) => a.order - b.order)
               .map((step) => (
@@ -182,7 +229,10 @@ export function TaskCard({ task, clientId }: { task: Task; clientId: string }) {
             )}
           </div>
 
-          <TaskAssignmentEditor task={task} clientId={clientId} />
+          <div className="grid gap-1.5">
+            <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Team &amp; assignment</p>
+            <TaskAssignmentEditor task={task} clientId={clientId} />
+          </div>
 
           <div className="grid gap-2">
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Attachments &amp; links</p>
@@ -219,7 +269,7 @@ export function TaskCard({ task, clientId }: { task: Task; clientId: string }) {
             </Button>
           )}
         </div>
-      )}
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

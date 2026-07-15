@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Check, ChevronDown, ChevronUp, Loader2, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, ClipboardList, Loader2, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { EmployeePicker } from '@/components/teams/EmployeePicker'
 import { useAuth } from '@/hooks/useAuth'
 import { useDecideStepApproval, useRemoveStep, useUpdateStepAssignment, useUpdateStepStatus } from '@/hooks/useTasks'
@@ -18,6 +19,7 @@ export function TaskStepRow({ task, step, clientId }: { task: Task; step: TaskSt
 
   const [editing, setEditing] = useState(false)
   const [label, setLabel] = useState(step.label)
+  const [whatToDo, setWhatToDo] = useState(step.whatToDo ?? '')
   const [assignedIds, setAssignedIds] = useState(step.assignedEmployees.map((e) => e._id))
   const [dueDate, setDueDate] = useState(toDateInputValue(step.dueDate))
   const [requiresApproval, setRequiresApproval] = useState(step.requiresApproval)
@@ -45,6 +47,7 @@ export function TaskStepRow({ task, step, clientId }: { task: Task; step: TaskSt
       requiresApproval,
     }
     if (isAdmin && label.trim() && label.trim() !== step.label) input.label = label.trim()
+    if (whatToDo !== (step.whatToDo ?? '')) input.whatToDo = whatToDo.trim()
 
     updateAssignment.mutate(
       { stepId: step._id, input },
@@ -68,87 +71,113 @@ export function TaskStepRow({ task, step, clientId }: { task: Task; step: TaskSt
   }
 
   return (
-    <div className="rounded-lg border border-border/60 bg-card p-2.5">
-      <div className="flex items-center gap-2.5">
+    <div className={`rounded-lg border p-3 transition-colors ${isDone ? 'border-border/50 bg-secondary/20' : 'border-border bg-card'}`}>
+      <div className="flex items-start gap-2.5">
         <button
           onClick={onToggle}
           disabled={updateStatus.isPending || pendingApproval}
-          className={`flex size-5 shrink-0 items-center justify-center rounded border-2 transition-colors ${
-            isDone ? 'border-emerald-600 bg-emerald-600' : 'border-muted-foreground/40'
+          className={`mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+            isDone ? 'border-emerald-600 bg-emerald-600' : 'border-muted-foreground/30 hover:border-primary'
           } ${pendingApproval ? 'opacity-50' : ''}`}
         >
           {isDone && <Check className="size-3.5 text-white" />}
         </button>
-        <span className={`flex-1 text-sm ${isDone ? 'text-muted-foreground line-through' : 'font-medium'}`}>
-          {step.label}
-        </span>
-        {pendingApproval && (
-          <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
-            Awaiting approval
-          </span>
-        )}
-        {isOverdue && (
-          <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive">
-            Overdue
-          </span>
-        )}
-        {step.dueDate && (
-          <span className="text-xs text-muted-foreground">{new Date(step.dueDate).toLocaleDateString()}</span>
-        )}
-        {isAdmin && (
-          <button onClick={onRemoveStep} disabled={removeStep.isPending} className="text-muted-foreground hover:text-destructive">
-            {removeStep.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
-          </button>
-        )}
-        <button onClick={() => setEditing((v) => !v)} className="text-muted-foreground hover:text-foreground">
-          {editing ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-        </button>
-      </div>
 
-      {step.assignedEmployees.length > 0 && (
-        <div className="ml-7 mt-1 flex flex-wrap gap-1">
-          {step.assignedEmployees.map((e) => (
-            <span key={e._id} className="rounded-full bg-secondary/60 px-2 py-0.5 text-[10px] font-medium">
-              {e.firstName} {e.lastName}
-            </span>
-          ))}
-        </div>
-      )}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className={`text-sm ${isDone ? 'text-muted-foreground line-through' : 'font-semibold'}`}>{step.label}</span>
+            {pendingApproval && (
+              <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-700">
+                Awaiting approval
+              </span>
+            )}
+            {isOverdue && (
+              <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-destructive">
+                Overdue
+              </span>
+            )}
+            {step.dueDate && (
+              <span className="text-xs text-muted-foreground">{new Date(step.dueDate).toLocaleDateString()}</span>
+            )}
+          </div>
 
-      {pendingApproval && (
-        <div className="ml-7 mt-2 flex gap-2">
-          <Button size="sm" variant="outline" onClick={() => onApproval(true)} disabled={decideApproval.isPending}>
-            <ThumbsUp className="size-3.5" />
-            Approve
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => onApproval(false)} disabled={decideApproval.isPending}>
-            <ThumbsDown className="size-3.5" />
-            Reject
-          </Button>
-        </div>
-      )}
+          {step.whatToDo && !editing && (
+            <p className="mt-1 flex items-start gap-1.5 text-xs text-muted-foreground">
+              <ClipboardList className="mt-0.5 size-3 shrink-0" />
+              <span className="whitespace-pre-wrap">{step.whatToDo}</span>
+            </p>
+          )}
 
-      {editing && (
-        <div className="ml-7 mt-2 grid gap-2 rounded-lg bg-secondary/30 p-2.5">
-          {isAdmin && (
-            <div className="grid gap-1.5">
-              <span className="text-xs font-semibold text-muted-foreground">Step name</span>
-              <Input value={label} onChange={(e) => setLabel(e.target.value)} className="h-8" />
+          {step.assignedEmployees.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {step.assignedEmployees.map((e) => (
+                <span key={e._id} className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">
+                  {e.firstName} {e.lastName}
+                </span>
+              ))}
             </div>
           )}
-          <EmployeePicker selectedIds={assignedIds} onChange={setAssignedIds} />
-          <div className="flex items-center gap-3">
-            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-8 w-40" />
-            <label className="flex items-center gap-1.5 text-xs">
-              <input
-                type="checkbox"
-                checked={requiresApproval}
-                onChange={(e) => setRequiresApproval(e.target.checked)}
+
+          {pendingApproval && (
+            <div className="mt-2 flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => onApproval(true)} disabled={decideApproval.isPending}>
+                <ThumbsUp className="size-3.5" />
+                Approve
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => onApproval(false)} disabled={decideApproval.isPending}>
+                <ThumbsDown className="size-3.5" />
+                Reject
+              </Button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1">
+          {isAdmin && (
+            <button onClick={onRemoveStep} disabled={removeStep.isPending} className="p-1 text-muted-foreground hover:text-destructive">
+              {removeStep.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+            </button>
+          )}
+          <button onClick={() => setEditing((v) => !v)} className="p-1 text-muted-foreground hover:text-foreground">
+            {editing ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+          </button>
+        </div>
+      </div>
+
+      {editing && (
+        <div className="mt-3 grid gap-3 rounded-lg bg-secondary/30 p-3 sm:grid-cols-2">
+          <div className="grid gap-3">
+            {isAdmin && (
+              <div className="grid gap-1.5">
+                <span className="text-xs font-semibold text-muted-foreground">Step name</span>
+                <Input value={label} onChange={(e) => setLabel(e.target.value)} className="h-8 bg-card" />
+              </div>
+            )}
+            <div className="grid gap-1.5">
+              <span className="text-xs font-semibold text-muted-foreground">What to do</span>
+              <Textarea
+                value={whatToDo}
+                onChange={(e) => setWhatToDo(e.target.value)}
+                placeholder="Describe what's expected for this step…"
+                rows={3}
+                className="bg-card text-sm"
               />
-              Requires approval
-            </label>
+            </div>
           </div>
-          <Button size="sm" onClick={onSaveEdit} disabled={updateAssignment.isPending} className="w-fit">
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <span className="text-xs font-semibold text-muted-foreground">Assigned to</span>
+              <EmployeePicker selectedIds={assignedIds} onChange={setAssignedIds} />
+            </div>
+            <div className="flex items-center gap-3">
+              <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-8 w-40 bg-card" />
+              <label className="flex items-center gap-1.5 text-xs">
+                <input type="checkbox" checked={requiresApproval} onChange={(e) => setRequiresApproval(e.target.checked)} />
+                Requires approval
+              </label>
+            </div>
+          </div>
+          <Button size="sm" onClick={onSaveEdit} disabled={updateAssignment.isPending} className="w-fit sm:col-span-2">
             {updateAssignment.isPending && <Loader2 className="size-3.5 animate-spin" />}
             Save
           </Button>
