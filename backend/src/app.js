@@ -5,6 +5,7 @@ const pinoHttp = require('pino-http');
 const env = require('./config/env');
 const logger = require('./utils/logger');
 const routes = require('./routes');
+const admsRoutes = require('./routes/adms.routes');
 const notFound = require('./middlewares/notFound.middleware');
 const errorHandler = require('./middlewares/error.middleware');
 
@@ -22,6 +23,12 @@ app.use(
     origin: [env.frontendUrl, env.salesFrontendUrl, env.followupsFrontendUrl, env.allFrontendUrl],
   })
 );
+
+// The ZKTeco biometric device speaks its own ADMS protocol at these fixed
+// paths (not under /api, and not JSON) — mounted first, with a raw-text
+// parser scoped only to this router, so it never touches the JSON parser
+// below or the JWT-gated /api routes.
+app.use('/iclock', express.text({ type: () => true, limit: '2mb' }), admsRoutes);
 
 // The Google Form webhook sends resumes as base64 inside the JSON body,
 // comfortably past the 5mb default — needs its own parser instance with a

@@ -28,6 +28,7 @@ const clientDocumentRequestRoutes = require('./clientDocumentRequest.routes');
 const clientUploadedDocumentRoutes = require('./clientUploadedDocument.routes');
 const inventoryRoutes = require('./inventory.routes');
 const eventRoutes = require('./event.routes');
+const devicePunchRoutes = require('./devicePunch.routes');
 
 const router = Router();
 
@@ -63,6 +64,7 @@ router.use('/client-document-requests', clientDocumentRequestRoutes);
 router.use('/client-uploaded-documents', clientUploadedDocumentRoutes);
 router.use('/inventory', inventoryRoutes);
 router.use('/events', eventRoutes);
+router.use('/device-punches', devicePunchRoutes);
 router.use('/users', requireRole(USER_ROLES.ADMIN), userRoutes);
 router.use('/audit-log', requireRole(USER_ROLES.ADMIN), auditLogRoutes);
 

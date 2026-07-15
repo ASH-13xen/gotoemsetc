@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AttendanceCalendar } from '@/components/attendance/AttendanceCalendar'
 import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummaryCard'
+import { DevicePunchFeed } from '@/components/attendance/DevicePunchFeed'
 import { useEmployee, useEmployees } from '@/hooks/useEmployees'
 import { useAttendanceMarkedToday } from '@/hooks/useAttendance'
 import { cn } from '@/lib/utils'
@@ -68,6 +69,8 @@ export default function AttendancePage() {
             <span className="text-3xl font-extrabold tracking-wide uppercase">BACK TO PORTAL</span>
           </div>
         </div>
+
+        <DevicePunchFeed />
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           {/* EMPLOYEE PICKER */}

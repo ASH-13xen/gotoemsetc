@@ -188,7 +188,7 @@ export default function ClientDetailPage() {
                 value={tasksQuery.data?.cycle?._id ?? ''}
                 onValueChange={(v) => setCycleId(v)}
               >
-                <SelectTrigger className="h-9 w-64">
+                <SelectTrigger className="h-9 w-full sm:w-80">
                   <SelectValue placeholder="Select a cycle" />
                 </SelectTrigger>
                 <SelectContent>

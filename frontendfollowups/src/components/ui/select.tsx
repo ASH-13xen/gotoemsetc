@@ -5,7 +5,10 @@ import { cn } from '@/lib/utils'
 
 const Select = SelectPrimitive.Root
 const SelectGroup = SelectPrimitive.Group
-const SelectValue = SelectPrimitive.Value
+
+function SelectValue({ className, ...props }: React.ComponentProps<typeof SelectPrimitive.Value>) {
+  return <SelectPrimitive.Value className={cn('min-w-0 flex-1 truncate text-left', className)} {...props} />
+}
 
 function SelectTrigger({
   className,
@@ -16,14 +19,14 @@ function SelectTrigger({
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        "border-foreground data-[placeholder]:text-muted-foreground/60 flex h-12 w-full items-center justify-between gap-2 rounded-none border-2 bg-transparent px-4 py-2 text-sm whitespace-nowrap shadow-none outline-none focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 font-bold uppercase tracking-wider",
+        "border-foreground data-[placeholder]:text-muted-foreground/60 flex h-12 w-full items-center justify-between gap-2 overflow-hidden rounded-none border-2 bg-transparent px-4 py-2 text-sm shadow-none outline-none focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 font-bold uppercase tracking-wider",
         className
       )}
       {...props}
     >
       {children}
       <SelectPrimitive.Icon asChild>
-        <ChevronDownIcon className="size-4 opacity-50" />
+        <ChevronDownIcon className="size-4 shrink-0 opacity-50" />
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
   )

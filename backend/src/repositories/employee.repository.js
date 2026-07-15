@@ -33,6 +33,25 @@ function findById(id) {
   return Employee.findOne({ _id: id, isDeleted: false });
 }
 
+// Maps a biometric device's numeric user ID (PIN) to an employee. Most
+// ZKTeco terminals only accept digits for the enrollment ID, but real
+// employeeCode values here look like "EMS-0012" — so if there's no exact
+// match, fall back to comparing digits-only (leading zeros ignored), which
+// lets you enroll someone with code "EMS-0012" using PIN "12" on the device.
+async function findByCode(employeeCode) {
+  const exact = await Employee.findOne({ employeeCode, isDeleted: false });
+  if (exact) return exact;
+
+  const digits = String(employeeCode).replace(/\D/g, '').replace(/^0+/, '');
+  if (!digits) return null;
+
+  const candidates = await Employee.find({ isDeleted: false, employeeCode: { $regex: /\d/ } }).select(
+    'employeeCode'
+  );
+  const match = candidates.find((e) => e.employeeCode.replace(/\D/g, '').replace(/^0+/, '') === digits);
+  return match ? Employee.findOne({ _id: match._id, isDeleted: false }) : null;
+}
+
 function findByIds(ids) {
   return Employee.find({ _id: { $in: ids }, isDeleted: false });
 }
@@ -72,4 +91,15 @@ function softDeleteById(id) {
   );
 }
 
-module.exports = { list, findById, findByIds, create, updateById, softDeleteById, count, countByStatus, listAllWithDob };
+module.exports = {
+  list,
+  findById,
+  findByIds,
+  findByCode,
+  create,
+  updateById,
+  softDeleteById,
+  count,
+  countByStatus,
+  listAllWithDob,
+};
