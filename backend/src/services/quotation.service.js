@@ -9,6 +9,7 @@ const quotationTemplateRepository = require('../repositories/quotationTemplate.r
 const localFileStorage = require('./localFileStorage.service');
 const pdfStampService = require('./pdfStamp.service');
 const clientActivity = require('./clientActivity.service');
+const taskCycleService = require('./taskCycle.service');
 
 function hashToken(rawToken) {
   return crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -175,6 +176,17 @@ async function clientSign(rawToken, signatureDataUrl) {
   });
 
   await clientActivity.log(quotation.client._id, 'QUOTATION_SIGNED', { version: quotation.version }, 'client-link');
+
+  // Best-effort: task generation depends on the template's Scope of Work
+  // being configured, which isn't guaranteed — a missing/misconfigured
+  // template must never block the signing flow that already succeeded. The
+  // daily cron and the manual "Sync tasks now" button both cover this as a
+  // fallback if it fails or was skipped here.
+  try {
+    await taskCycleService.syncClientCycle(quotation.client._id);
+  } catch (err) {
+    console.error('Task generation after quotation sign failed:', err);
+  }
 
   return { quotationId: quotation._id.toString() };
 }

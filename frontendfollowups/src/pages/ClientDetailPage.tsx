@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { isAxiosError } from 'axios'
-import { FileWarning, Loader2, RefreshCw, ShieldAlert } from 'lucide-react'
+import { ChevronDown, ChevronUp, FileWarning, Loader2, RefreshCw, ShieldAlert } from 'lucide-react'
 
 import { NavBar } from '@/components/layout/NavBar'
 import { Button } from '@/components/ui/button'
@@ -25,6 +25,52 @@ const NO_TEAM = '__none__'
 
 function baseLabel(itemLabel: string) {
   return itemLabel.replace(/\s#\d+$/, '')
+}
+
+// "Stories #10" -> 10 — items are numbered in generation order but the
+// label is a string, so sorting on the label alone would put "#10" before
+// "#2". Single (un-numbered) deliverables sort first via 0.
+function itemNumber(itemLabel: string) {
+  const match = /#(\d+)$/.exec(itemLabel)
+  return match ? Number(match[1]) : 0
+}
+
+// Groups a section's tasks by base deliverable (e.g. all "Stories #N"
+// together) so a daily-exploded deliverable with dozens of instances shows
+// as one collapsible group instead of a wall of individual cards.
+function ItemGroup({ base, tasks, clientId }: { base: string; tasks: Task[]; clientId: string }) {
+  const [open, setOpen] = useState(false)
+  const sorted = useMemo(() => [...tasks].sort((a, b) => itemNumber(a.itemLabel) - itemNumber(b.itemLabel)), [tasks])
+
+  if (tasks.length === 1) {
+    return <TaskCard task={tasks[0]} clientId={clientId} />
+  }
+
+  const done = tasks.filter((t) => t.status === 'done').length
+
+  return (
+    <div className="rounded-xl border border-border bg-card shadow-sm">
+      <button
+        className="flex w-full items-center justify-between gap-3 p-4 text-left"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="font-semibold">{base}</span>
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="text-xs text-muted-foreground">
+            {done}/{tasks.length} done
+          </span>
+          {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+        </div>
+      </button>
+      {open && (
+        <div className="grid gap-2 border-t border-border p-4">
+          {sorted.map((task) => (
+            <TaskCard key={task._id} task={task} clientId={clientId} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function SectionProgress({ tasks }: { tasks: Task[] }) {
@@ -164,8 +210,14 @@ export default function ClientDetailPage() {
                 <SelectContent>
                   {(tasksQuery.data?.cycles ?? []).map((c) => (
                     <SelectItem key={c._id} value={c._id}>
-                      Cycle {c.cycleNumber} · {new Date(c.startDate).toLocaleDateString()} –{' '}
-                      {new Date(c.endDate).toLocaleDateString()}
+                      {c.kind === 'one_time' ? (
+                        <>Batch {c.cycleNumber} · {new Date(c.startDate).toLocaleDateString()} (one-time)</>
+                      ) : (
+                        <>
+                          Cycle {c.cycleNumber} · {new Date(c.startDate).toLocaleDateString()} –{' '}
+                          {c.endDate ? new Date(c.endDate).toLocaleDateString() : '—'}
+                        </>
+                      )}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -201,14 +253,23 @@ export default function ClientDetailPage() {
                   ;(acc[task.sectionName] ??= []).push(task)
                   return acc
                 }, {})
-              ).map(([sectionName, tasks]) => (
-                <div key={sectionName} className="grid gap-3">
-                  <h2 className="text-lg font-bold tracking-tight">{sectionName}</h2>
-                  {tasks.map((task) => (
-                    <TaskCard key={task._id} task={task} clientId={id} />
-                  ))}
-                </div>
-              ))
+              ).map(([sectionName, sectionTasks]) => {
+                const groups = new Map<string, Task[]>()
+                for (const task of sectionTasks) {
+                  const key = baseLabel(task.itemLabel)
+                  const group = groups.get(key)
+                  if (group) group.push(task)
+                  else groups.set(key, [task])
+                }
+                return (
+                  <div key={sectionName} className="grid gap-3">
+                    <h2 className="text-lg font-bold tracking-tight">{sectionName}</h2>
+                    {[...groups.entries()].map(([base, tasks]) => (
+                      <ItemGroup key={base} base={base} tasks={tasks} clientId={id} />
+                    ))}
+                  </div>
+                )
+              })
             )}
           </>
         )}

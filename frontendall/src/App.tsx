@@ -11,6 +11,10 @@ import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
 import AuditLogPage from '@/pages/AuditLogPage'
 import BirthdaysPage from '@/pages/BirthdaysPage'
+import InventoryPage from '@/pages/InventoryPage'
+import InventoryItemDetailPage from '@/pages/InventoryItemDetailPage'
+import EventsPage from '@/pages/EventsPage'
+import EventDetailPage from '@/pages/EventDetailPage'
 import { ShellLayout } from '@/components/layout/ShellLayout'
 
 const RemoteEms = lazy(() => import('frontendems/App'))
@@ -51,6 +55,46 @@ export default function App() {
                   <RequireAuth>
                     <ShellLayout section="Birthdays">
                       <BirthdaysPage />
+                    </ShellLayout>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/inventory"
+                element={
+                  <RequireAuth>
+                    <ShellLayout section="Inventory Management">
+                      <InventoryPage />
+                    </ShellLayout>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/inventory/:id"
+                element={
+                  <RequireAuth>
+                    <ShellLayout section="Inventory Management">
+                      <InventoryItemDetailPage />
+                    </ShellLayout>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/events"
+                element={
+                  <RequireAuth>
+                    <ShellLayout section="Event Management">
+                      <EventsPage />
+                    </ShellLayout>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/events/:id"
+                element={
+                  <RequireAuth>
+                    <ShellLayout section="Event Management">
+                      <EventDetailPage />
                     </ShellLayout>
                   </RequireAuth>
                 }

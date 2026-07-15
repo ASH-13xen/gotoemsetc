@@ -75,6 +75,7 @@ module.exports = {
     STEP_OVERDUE: 'step_overdue',
     CYCLE_ENDING_SOON: 'cycle_ending_soon',
     CYCLE_ROLLOVER: 'cycle_rollover',
+    EVENT_RESPONSIBILITY_ASSIGNED: 'event_responsibility_assigned',
   },
   CLIENT_STATUS: { LEAD: 'lead', ONBOARDED: 'onboarded', OFFBOARDED: 'offboarded' },
   QUOTATION_STATUS: { DRAFT: 'draft', SHARED: 'shared', SIGNED: 'signed', SUPERSEDED: 'superseded' },
@@ -89,4 +90,15 @@ module.exports = {
   STEP_STATUS: { TODO: 'todo', IN_PROGRESS: 'in_progress', DONE: 'done' },
   APPROVAL_STATUS: { NOT_REQUIRED: 'not_required', PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected' },
   DEFAULT_CYCLE_REMINDER_DAYS_BEFORE_END: 5,
+
+  // What an inventory booking is for — "reason" in the product ask is this
+  // selection, not a separate freeform taxonomy; BOOKING_NOTES below covers
+  // any extra detail on top of it.
+  INVENTORY_BOOKING_CONTEXT: { EVENT: 'event', CLIENT_TASK: 'client_task', OTHER: 'other' },
+  INVENTORY_BOOKING_STATUS: { ACTIVE: 'active', RELEASED: 'released' },
+  INVENTORY_RELEASED_BY_ROLE: { EMPLOYEE: 'employee', ADMIN: 'admin' },
+
+  EVENT_MODE: { ONLINE: 'online', OFFLINE: 'offline' },
+  EVENT_STATUS: { UPCOMING: 'upcoming', COMPLETED: 'completed', CANCELLED: 'cancelled' },
+  EVENT_RESPONSIBILITY_STATUS: { PENDING: 'pending', DONE: 'done' },
 };

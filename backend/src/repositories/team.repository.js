@@ -13,6 +13,13 @@ function findById(id) {
   return Team.findOne({ _id: id, isDeleted: false }).populate(POPULATE);
 }
 
+// Which teams a given employee belongs to — used to resolve "my"
+// team-assigned event responsibilities without the caller needing to know
+// team membership.
+function listForMember(employeeId) {
+  return Team.find({ members: employeeId, isDeleted: false });
+}
+
 function create(data) {
   return Team.create(data);
 }
@@ -28,4 +35,4 @@ function softDeleteById(id) {
   return Team.findOneAndUpdate({ _id: id, isDeleted: false }, { isDeleted: true }, { returnDocument: 'after' });
 }
 
-module.exports = { list, findById, create, updateById, softDeleteById };
+module.exports = { list, findById, listForMember, create, updateById, softDeleteById };

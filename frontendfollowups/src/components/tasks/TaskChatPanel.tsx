@@ -39,7 +39,7 @@ export function TaskChatPanel({ taskId }: { taskId: string }) {
           messages.map((m) => (
             <div key={m._id} className="text-sm">
               <span className="font-semibold">
-                {m.sender.firstName} {m.sender.lastName ?? ''}
+                {m.sender ? `${m.sender.firstName} ${m.sender.lastName ?? ''}` : 'Admin'}
               </span>
               <span className="ml-2 text-[10px] text-muted-foreground">
                 {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

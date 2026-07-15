@@ -19,8 +19,11 @@ function findById(id) {
   return Task.findOne({ _id: id, isDeleted: false }).populate(POPULATE);
 }
 
+// Sorted by itemIndex (generation order), not itemLabel — itemLabel is a
+// string like "Stories #10", and string-sorting that would put "#10" before
+// "#2" (lexicographic, not numeric).
 function listForCycle(clientId, cycleId) {
-  return Task.find({ client: clientId, cycle: cycleId, isDeleted: false }).sort({ sectionName: 1, itemLabel: 1 }).populate(POPULATE);
+  return Task.find({ client: clientId, cycle: cycleId, isDeleted: false }).sort({ sectionName: 1, itemIndex: 1 }).populate(POPULATE);
 }
 
 function listForClient(clientId) {

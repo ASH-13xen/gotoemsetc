@@ -1,9 +1,12 @@
+import { Link } from 'react-router-dom'
+import { CalendarClock, PartyPopper, Users } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { apiClient } from '@/api/client'
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { motion } from 'framer-motion'
+import { useMyEventResponsibilities } from '@/hooks/useEvents'
 
 interface DashboardStats {
   totalEmployees: number
@@ -87,12 +90,73 @@ export default function DashboardPage() {
         <StatCard label="Offboarded employees" value={stats?.offboardedEmployees} />
       </motion.div>
 
-      {/* Placeholder container for future widgets */}
-      <div className="min-h-[300px] rounded-2xl border border-dashed border-border/60 bg-secondary/15 flex items-center justify-center p-8">
-        <span className="text-sm text-muted-foreground font-medium uppercase tracking-widest">
-          Widget Workspace Placeholder
-        </span>
-      </div>
+      <MyEventResponsibilitiesWidget />
     </div>
+  )
+}
+
+function MyEventResponsibilitiesWidget() {
+  const { data: responsibilities, isLoading } = useMyEventResponsibilities()
+
+  return (
+    <Card className="bg-card/90 backdrop-blur-md rounded-2xl border border-border/10 shadow-diffuse p-6">
+      <CardContent className="p-0">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+            <PartyPopper className="size-4 text-primary" />
+            My event responsibilities
+          </h2>
+          <Link to="/events" className="text-xs font-semibold text-primary hover:underline">
+            View all events →
+          </Link>
+        </div>
+
+        {isLoading ? (
+          <div className="mt-4 grid gap-2">
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+          </div>
+        ) : !responsibilities || responsibilities.length === 0 ? (
+          <p className="mt-4 text-sm text-muted-foreground">Nothing pending — you're all caught up.</p>
+        ) : (
+          <div className="mt-4 grid gap-2">
+            {responsibilities.slice(0, 6).map((r) => {
+              const event = typeof r.event === 'object' ? r.event : null
+              const isOverdue = r.dueDate && new Date(r.dueDate) < new Date()
+              return (
+                <Link
+                  key={r._id}
+                  to={event ? `/events/${event._id}` : '/events'}
+                  className="flex items-center justify-between gap-3 rounded-xl bg-secondary/30 p-3 hover:bg-secondary/50"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">{r.title}</p>
+                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                      {event?.title}
+                      {r.assignedTeam && (
+                        <span className="flex items-center gap-0.5">
+                          <Users className="size-3" />
+                          {r.assignedTeam.name}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  {r.dueDate && (
+                    <span
+                      className={`flex shrink-0 items-center gap-1 text-xs font-bold uppercase tracking-wide ${
+                        isOverdue ? 'text-destructive' : 'text-primary'
+                      }`}
+                    >
+                      <CalendarClock className="size-3" />
+                      {new Date(r.dueDate).toLocaleDateString()}
+                    </span>
+                  )}
+                </Link>
+              )
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

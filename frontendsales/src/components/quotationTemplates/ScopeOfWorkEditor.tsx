@@ -13,16 +13,24 @@ import {
 } from '@/components/ui/select'
 import { useStepLibrary, useCreateStep } from '@/hooks/useStepLibrary'
 import { useUpdateScopeOfWork } from '@/hooks/useQuotationTemplates'
-import type { QuotationTemplate, ScopeOfWorkSection } from '@/api/quotationTemplates.api'
+import type { PlanType, QuotationTemplate, ScopeOfWorkSection } from '@/api/quotationTemplates.api'
 
 const ADD_NEW = '__add_new__'
 
+const DELIVERABLE_LABEL: Record<PlanType, string> = {
+  duration: 'Deliverables (per monthly cycle)',
+  quantity: 'Deliverables (per single unit, e.g. per podcast — multiplied by the client’s selected quantity)',
+  fixed: 'Deliverables (one-time, for this engagement)',
+}
+
 function SectionEditor({
   section,
+  planType,
   onChange,
   onRemove,
 }: {
   section: ScopeOfWorkSection
+  planType: PlanType
   onChange: (next: ScopeOfWorkSection) => void
   onRemove: () => void
 }) {
@@ -31,7 +39,7 @@ function SectionEditor({
   const [newStepDraft, setNewStepDraft] = useState('')
   const library = data?.steps ?? []
 
-  const addItem = () => onChange({ ...section, items: [...section.items, { label: '', qtyPerCycle: 1 }] })
+  const addItem = () => onChange({ ...section, items: [...section.items, { label: '', qtyPerCycle: 1, perDay: false }] })
   const updateItem = (i: number, patch: Partial<ScopeOfWorkSection['items'][number]>) => {
     const items = section.items.map((item, idx) => (idx === i ? { ...item, ...patch } : item))
     onChange({ ...section, items })
@@ -87,7 +95,7 @@ function SectionEditor({
       </div>
 
       <div className="grid gap-2">
-        <Label className="text-xs uppercase tracking-wide text-muted-foreground">Deliverables (per monthly cycle)</Label>
+        <Label className="text-xs uppercase tracking-wide text-muted-foreground">{DELIVERABLE_LABEL[planType]}</Label>
         {section.items.map((item, i) => (
           <div key={i} className="flex items-center gap-2">
             <Input
@@ -103,6 +111,16 @@ function SectionEditor({
               onChange={(e) => updateItem(i, { qtyPerCycle: Number(e.target.value) })}
               className="w-24"
             />
+            {planType === 'duration' && (
+              <label className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={item.perDay ?? false}
+                  onChange={(e) => updateItem(i, { perDay: e.target.checked })}
+                />
+                per day
+              </label>
+            )}
             <Button variant="ghost" size="icon" onClick={() => removeItem(i)}>
               <Trash2 className="size-3.5" />
             </Button>
@@ -194,16 +212,21 @@ export function ScopeOfWorkEditor({ template }: { template: QuotationTemplate })
     })
   }
 
+  const description =
+    template.planType === 'duration'
+      ? 'Define once here — every client on this plan gets these deliverables and steps recurring each monthly cycle, anchored to their onboarding date.'
+      : template.planType === 'quantity'
+        ? 'Define once here, per single unit (e.g. per podcast) — a client’s selected quantity (e.g. "4 podcasts") multiplies these into a one-time batch of tasks when their quotation is signed.'
+        : 'Define once here — a signed quotation on this plan generates this one-time batch of tasks, exactly as listed (no recurrence, no quantity multiplier).'
+
   return (
     <div className="grid gap-4">
-      <p className="text-sm text-muted-foreground">
-        Define once here — every client generated against this template will get these deliverables and steps
-        recurring each monthly cycle, anchored to their onboarding date.
-      </p>
+      <p className="text-sm text-muted-foreground">{description}</p>
       {sections.map((section, i) => (
         <SectionEditor
           key={i}
           section={section}
+          planType={template.planType}
           onChange={(next) => updateSection(i, next)}
           onRemove={() => removeSection(i)}
         />

@@ -36,6 +36,10 @@ export interface ScopeOfWorkStep {
 export interface ScopeOfWorkItem {
   label: string
   qtyPerCycle: number
+  // Only meaningful for 'duration' (recurring monthly) templates — when
+  // true, qtyPerCycle is "count per day" and multiplied by the number of
+  // days in the cycle rather than used as a flat monthly total.
+  perDay?: boolean
 }
 
 export interface ScopeOfWorkSection {

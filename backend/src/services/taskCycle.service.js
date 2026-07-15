@@ -24,11 +24,28 @@ function addMonthsClamped(date, months) {
   return new Date(Date.UTC(year, month, Math.min(day, lastDayOfTargetMonth)));
 }
 
-// Creates whatever cycles are missing to catch a client up to "today" —
-// normally that's zero or one, but it correctly backfills multiple if the
-// daily job didn't run for a while. Idempotent: re-running finds the
+// Only 'duration' templates (monthly retainers, e.g. GO-TO x Diamond) are
+// recurring. 'quantity' templates (podcast batches, e.g. "4 podcasts") and
+// 'fixed' templates (a single one-off podcast) are a single batch of work
+// generated once per quotation, never a recurring monthly cycle — see
+// GO-TO x PM PREMIUM/PRO/STANDARD and RP GROWTH/PRO PACKAGE, which sell a
+// fixed batch of deliverables shot over a few days, not an ongoing retainer.
+function isOneTimeTemplate(template) {
+  return template.planType === 'quantity' || template.planType === 'fixed';
+}
+
+// "4_podcasts" -> 4, "1_podcast" -> 1 — quantity-type planOptionKeys always
+// start with the unit count (see quotationTemplate seed data).
+function parseQuantityFromPlanOptionKey(planOptionKey) {
+  const match = /^(\d+)_/.exec(planOptionKey || '');
+  return match ? Number(match[1]) : 1;
+}
+
+// Creates whatever recurring cycles are missing to catch a client up to
+// "today" — normally that's zero or one, but it correctly backfills multiple
+// if the daily job didn't run for a while. Idempotent: re-running finds the
 // existing latest cycle and does nothing further once it covers today.
-async function ensureCurrentCycle(client) {
+async function ensureCurrentCycle(client, quotation) {
   if (!client.onboardedAt) return null;
 
   const today = startOfUTCDay(new Date());
@@ -37,7 +54,14 @@ async function ensureCurrentCycle(client) {
   if (!latest) {
     const startDate = startOfUTCDay(new Date(client.onboardedAt));
     const endDate = new Date(addMonthsClamped(startDate, 1).getTime() - MS_PER_DAY);
-    latest = await taskCycleRepository.create({ client: client._id, cycleNumber: 1, startDate, endDate });
+    latest = await taskCycleRepository.create({
+      client: client._id,
+      quotation: quotation._id,
+      kind: 'recurring',
+      cycleNumber: 1,
+      startDate,
+      endDate,
+    });
   }
 
   while (latest.endDate < today) {
@@ -46,6 +70,8 @@ async function ensureCurrentCycle(client) {
     // eslint-disable-next-line no-await-in-loop
     latest = await taskCycleRepository.create({
       client: client._id,
+      quotation: quotation._id,
+      kind: 'recurring',
       cycleNumber: latest.cycleNumber + 1,
       startDate,
       endDate,
@@ -55,17 +81,45 @@ async function ensureCurrentCycle(client) {
   return latest;
 }
 
-// Expands a template's Scope of Work into one Task per deliverable instance
-// for this cycle — a no-op if generation already happened (idempotent) or
-// the client has no signed quotation / the quotation's template has no
-// Scope of Work configured yet.
-async function generateTasksForCycle(client, cycle) {
-  if (!cycle || cycle.tasksGeneratedAt) return [];
-  if (!client.currentQuotation) return [];
+// Finds (or creates) the single one_time cycle tied to this quotation — a
+// client that signs a new quantity/fixed-plan quotation later (another
+// batch of podcasts) gets a fresh cycle of its own, numbered after whatever
+// cycles already exist for them.
+async function ensureBatchForQuotation(client, quotation) {
+  let cycle = await taskCycleRepository.findByQuotation(quotation._id);
+  if (!cycle) {
+    const cycleNumber = await taskCycleRepository.nextCycleNumberForClient(client._id);
+    cycle = await taskCycleRepository.create({
+      client: client._id,
+      quotation: quotation._id,
+      kind: 'one_time',
+      cycleNumber,
+      startDate: startOfUTCDay(new Date()),
+    });
+  }
+  return cycle;
+}
 
-  const quotation = await quotationRepository.findById(client.currentQuotation);
+// Expands the cycle's own quotation's template Scope of Work into one Task
+// per deliverable instance — a no-op if generation already happened
+// (idempotent) or that template has no Scope of Work configured yet.
+// Reads the template from cycle.quotation (snapshotted at cycle-creation
+// time) rather than the client's current quotation, so a later plan change
+// never retroactively alters an already-generated cycle.
+async function generateTasksForCycle(cycle) {
+  if (!cycle || cycle.tasksGeneratedAt) return [];
+  if (!cycle.quotation) return [];
+
+  const quotation = await quotationRepository.findById(cycle.quotation);
   const template = quotation?.template;
   if (!template || !template.scopeOfWork || template.scopeOfWork.length === 0) return [];
+
+  const multiplier = template.planType === 'quantity'
+    ? parseQuantityFromPlanOptionKey(quotation.planOptionKey)
+    : 1;
+  const cycleDays = cycle.endDate
+    ? Math.round((cycle.endDate.getTime() - cycle.startDate.getTime()) / MS_PER_DAY) + 1
+    : 1;
 
   const taskDocs = [];
   for (const section of template.scopeOfWork) {
@@ -73,13 +127,15 @@ async function generateTasksForCycle(client, cycle) {
       .sort((a, b) => a.order - b.order)
       .map((s) => ({ label: s.label, order: s.order }));
     for (const item of section.items) {
-      for (let i = 0; i < item.qtyPerCycle; i += 1) {
+      const perUnitQty = item.perDay ? item.qtyPerCycle * cycleDays : item.qtyPerCycle;
+      const qty = perUnitQty * multiplier;
+      for (let i = 0; i < qty; i += 1) {
         taskDocs.push({
-          client: client._id,
+          client: cycle.client,
           cycle: cycle._id,
           quotationTemplate: template._id,
           sectionName: section.name,
-          itemLabel: item.qtyPerCycle > 1 ? `${item.label} #${i + 1}` : item.label,
+          itemLabel: qty > 1 ? `${item.label} #${i + 1}` : item.label,
           itemIndex: i,
           steps: steps.map((s) => ({ ...s })),
         });
@@ -92,16 +148,25 @@ async function generateTasksForCycle(client, cycle) {
   return taskRepository.insertMany(taskDocs);
 }
 
-// Runs the full per-client pipeline: catch up on cycles, generate this
-// cycle's tasks if not already done. Exported standalone so an admin action
-// ("generate tasks now") and the daily cron share the exact same logic.
+// Runs the full per-client pipeline: catch up on cycles (or spin up a
+// one-time batch), generate tasks if not already done. Exported standalone
+// so an admin action ("sync tasks now"), the post-signing hook, and the
+// daily cron all share the exact same logic.
 async function syncClientCycle(clientId) {
   const client = await clientRepository.findById(clientId);
   if (!client) throw ApiError.notFound('Client not found');
   if (client.status !== CLIENT_STATUS.ONBOARDED) return { client, cycle: null, tasks: [] };
+  if (!client.currentQuotation) return { client, cycle: null, tasks: [] };
 
-  const cycle = await ensureCurrentCycle(client);
-  const tasks = await generateTasksForCycle(client, cycle);
+  const quotation = await quotationRepository.findById(client.currentQuotation);
+  const template = quotation?.template;
+  if (!quotation || !template) return { client, cycle: null, tasks: [] };
+
+  const cycle = isOneTimeTemplate(template)
+    ? await ensureBatchForQuotation(client, quotation)
+    : await ensureCurrentCycle(client, quotation);
+
+  const tasks = await generateTasksForCycle(cycle);
   return { client, cycle, tasks };
 }
 

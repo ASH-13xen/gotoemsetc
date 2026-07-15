@@ -4,12 +4,18 @@ const taskService = require('../services/task.service');
 const taskCycleService = require('../services/taskCycle.service');
 const taskDashboardService = require('../services/taskDashboard.service');
 const { broadcastTaskMessage } = require('../websocket/taskChat');
+const { USER_ROLES } = require('../config/constants');
 
+// Attribution (completedBy/approvedBy/addedBy/sender) is an Employee ref,
+// but an admin account is an operator login, not necessarily tied to an
+// Employee record — admins act with no attribution rather than being
+// blocked. Workers always go through "create login for this employee" (see
+// user.service.js), so a worker with no link is an actual setup problem
+// worth surfacing.
 function requireEmployeeLink(req) {
-  if (!req.user.employeeLink) {
-    throw ApiError.badRequest('Your account is not linked to an employee record.');
-  }
-  return req.user.employeeLink;
+  if (req.user.employeeLink) return req.user.employeeLink;
+  if (req.user.role === USER_ROLES.ADMIN) return null;
+  throw ApiError.badRequest('Your account is not linked to an employee record.');
 }
 
 const listForClient = asyncHandler(async (req, res) => {

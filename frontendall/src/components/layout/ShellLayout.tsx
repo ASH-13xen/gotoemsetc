@@ -9,7 +9,9 @@ import {
   ShieldAlert,
   LogOut,
   Menu,
-  ChevronLeft
+  ChevronLeft,
+  Package,
+  PartyPopper
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
@@ -24,6 +26,8 @@ export function ShellLayout({ children, section }: { children: ReactNode; sectio
     { to: '/ems', label: 'EMS', icon: Users },
     { to: '/sales', label: 'Client Management', icon: DollarSign },
     { to: '/followups', label: 'Task Management', icon: CalendarClock },
+    { to: '/inventory', label: 'Inventory Management', icon: Package },
+    { to: '/events', label: 'Event Management', icon: PartyPopper },
     { to: '/birthdays', label: 'Birthdays', icon: Cake },
     ...(user?.role === 'admin' ? [{ to: '/audit-log', label: 'Audit Log', icon: ShieldAlert }] : []),
   ]

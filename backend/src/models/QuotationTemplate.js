@@ -33,7 +33,21 @@ const scopeStepSchema = new Schema(
   { _id: false }
 );
 const scopeItemSchema = new Schema(
-  { label: { type: String, required: true }, qtyPerCycle: { type: Number, required: true, min: 0 } },
+  {
+    label: { type: String, required: true },
+    // Meaning depends on the template's planType (see taskCycle.service.js):
+    // 'duration' templates (monthly retainers) -> literal count per month.
+    // 'quantity' templates (podcast batches) -> count per single unit in the
+    //   batch, multiplied by however many units the client's plan option
+    //   selected (e.g. "4 podcasts" x 3 reels/podcast = 12 Reel tasks).
+    // 'fixed' templates -> literal count for the one-off engagement.
+    qtyPerCycle: { type: Number, required: true, min: 0 },
+    // When true, qtyPerCycle is "count per day" and gets multiplied by the
+    // number of days in the cycle instead of used as a flat total — for
+    // deliverables like daily Stories that don't have a clean monthly count.
+    // Only meaningful on 'recurring' (duration-type) cycles.
+    perDay: { type: Boolean, default: false },
+  },
   { _id: false }
 );
 const scopeSectionSchema = new Schema({

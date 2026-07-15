@@ -6,7 +6,10 @@ const { Schema, model } = require('mongoose');
 const taskMessageSchema = new Schema(
   {
     task: { type: Schema.Types.ObjectId, ref: 'Task', required: true, index: true },
-    sender: { type: Schema.Types.ObjectId, ref: 'Employee', required: true },
+    // Optional — an admin account is an operator login, not necessarily
+    // tied to an Employee record, so it can post with no sender to populate.
+    // The frontend falls back to showing "Admin" when this is empty.
+    sender: { type: Schema.Types.ObjectId, ref: 'Employee' },
     body: { type: String, required: true, trim: true },
   },
   { timestamps: { createdAt: true, updatedAt: false } }

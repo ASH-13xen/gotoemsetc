@@ -52,12 +52,15 @@ export interface Task {
   createdAt: string
 }
 
+export type TaskCycleKind = 'recurring' | 'one_time'
+
 export interface TaskCycle {
   _id: string
   client: string
+  kind: TaskCycleKind
   cycleNumber: number
   startDate: string
-  endDate: string
+  endDate?: string
   tasksGeneratedAt?: string
   closedAt?: string
 }
@@ -129,7 +132,8 @@ export async function rolloverTask(taskId: string): Promise<{ task: Task }> {
 export interface TaskMessage {
   _id: string
   task: string
-  sender: EmployeeRef
+  // Absent when posted by an admin account with no linked Employee record.
+  sender?: EmployeeRef | null
   body: string
   createdAt: string
 }

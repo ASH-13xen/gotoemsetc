@@ -26,6 +26,8 @@ const auditLogRoutes = require('./auditLog.routes');
 const notificationRoutes = require('./notification.routes');
 const clientDocumentRequestRoutes = require('./clientDocumentRequest.routes');
 const clientUploadedDocumentRoutes = require('./clientUploadedDocument.routes');
+const inventoryRoutes = require('./inventory.routes');
+const eventRoutes = require('./event.routes');
 
 const router = Router();
 
@@ -59,6 +61,8 @@ router.use('/salary-slips', salarySlipRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/client-document-requests', clientDocumentRequestRoutes);
 router.use('/client-uploaded-documents', clientUploadedDocumentRoutes);
+router.use('/inventory', inventoryRoutes);
+router.use('/events', eventRoutes);
 router.use('/users', requireRole(USER_ROLES.ADMIN), userRoutes);
 router.use('/audit-log', requireRole(USER_ROLES.ADMIN), auditLogRoutes);
 

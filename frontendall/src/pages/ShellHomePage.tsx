@@ -6,6 +6,8 @@ const SECTIONS = [
   { to: '/ems', title: 'Employee Management (EMS)', description: 'Manage employee directories, tracks attendance, review profiles, and view incoming applicant files.' },
   { to: '/sales', title: 'Client Management', description: 'Manage client relationships, prepare quotations, schedule meetings, and collect documents.' },
   { to: '/followups', title: 'Task Management', description: 'Recurring content tasks generated from each client\'s quotation, tracked step by step.' },
+  { to: '/inventory', title: 'Inventory Management', description: 'Equipment in the company\'s possession, bookable by anyone and tracked by lock/check-in.' },
+  { to: '/events', title: 'Event Management', description: 'Company events, team responsibilities, and post-event summaries.' },
 ]
 
 export default function ShellHomePage() {
