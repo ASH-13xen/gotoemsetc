@@ -10,6 +10,7 @@ import {
   getPublicClientDocumentStatus,
   uploadPublicClientDocuments,
   verifyClientDocumentAccessCode,
+  type PublicClientDocumentStatus,
 } from '@/api/publicClientDocuments.api'
 
 function errorMessageFrom(error: unknown, fallback: string): string {
@@ -53,10 +54,18 @@ export default function PublicClientUploadPage() {
 
   const uploadMutation = useMutation({
     mutationFn: () => uploadPublicClientDocuments(token as string, verifiedCode as string, selectedFiles),
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success('Documents submitted — thank you!')
       setSelectedFiles({})
-      queryClient.invalidateQueries({ queryKey: ['publicClientDocumentStatus', token, verifiedCode] })
+      // A fully-fulfilled upload clears the access code server-side (see
+      // clientDocumentRequest.service.js), so refetching status with the
+      // now-stale code would fail — patch the cached status directly from
+      // this response instead of ever re-verifying the code.
+      queryClient.setQueryData(
+        ['publicClientDocumentStatus', token, verifiedCode],
+        (old: PublicClientDocumentStatus | undefined) =>
+          old ? { ...old, uploadedSlots: result.uploadedSlots, status: result.status } : old
+      )
     },
     onError: () => toast.error('Could not upload — please check the files and try again'),
   })

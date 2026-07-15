@@ -125,13 +125,18 @@ async function attachDocuments(rawToken, code, files) {
   }
 
   const uploaded = await uploadedDocumentRepository.listByUploadRequest(uploadRequest._id);
-  const uploadedTypes = new Set(uploaded.map((d) => d.docType));
-  const allFulfilled = uploadRequest.requestedDocTypes.every((t) => uploadedTypes.has(t));
+  const uploadedDocTypes = [...new Set(uploaded.map((d) => d.docType))];
+  const allFulfilled = uploadRequest.requestedDocTypes.every((t) => uploadedDocTypes.includes(t));
+  const status = allFulfilled ? UPLOAD_REQUEST_STATUS.FULFILLED : UPLOAD_REQUEST_STATUS.PARTIALLY_FULFILLED;
   await uploadRequestRepository.updateStatus(
     uploadRequest._id,
-    allFulfilled ? UPLOAD_REQUEST_STATUS.FULFILLED : UPLOAD_REQUEST_STATUS.PARTIALLY_FULFILLED,
+    status,
     allFulfilled ? { fulfilledAt: new Date() } : {}
   );
+  // Once fully fulfilled the access code is cleared immediately — the
+  // caller must use this response to update its own view rather than
+  // re-verifying the code against the server afterward, since that
+  // verification would now fail.
   if (allFulfilled) await uploadRequestRepository.clearAccessCode(uploadRequest._id);
 
   await activityService.log(
@@ -141,7 +146,7 @@ async function attachDocuments(rawToken, code, files) {
     'employee-link'
   );
 
-  return saved;
+  return { documents: saved, status, uploadedDocTypes };
 }
 
 async function listUploadedForEmployee(employeeId) {

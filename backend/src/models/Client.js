@@ -1,6 +1,14 @@
 const { Schema, model } = require('mongoose');
 const { CLIENT_STATUS } = require('../config/constants');
 
+// Freeform key/value pairs, mirroring Employee's extraDetails — lets admin
+// record anything about a client that doesn't have its own field, without a
+// schema change.
+const extraDetailSchema = new Schema(
+  { key: { type: String, required: true, trim: true }, value: { type: String, trim: true } },
+  { _id: false }
+);
+
 const contactSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -36,6 +44,7 @@ const clientSchema = new Schema(
     // single one of them marked as the point of accountability.
     assignedEmployees: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
     mainEmployee: { type: Schema.Types.ObjectId, ref: 'Employee' },
+    extraDetails: [extraDetailSchema],
     isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }

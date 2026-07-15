@@ -12,12 +12,16 @@ const getStatus = asyncHandler(async (req, res) => {
 });
 
 const uploadDocuments = asyncHandler(async (req, res) => {
-  const saved = await clientDocumentRequestService.attachDocuments(
+  const result = await clientDocumentRequestService.attachDocuments(
     req.params.token,
     req.body.code,
     req.files || []
   );
-  res.status(201).json({ uploaded: saved.map((d) => ({ slotIndex: d.slotIndex, docLabel: d.docLabel })) });
+  res.status(201).json({
+    uploaded: result.documents.map((d) => ({ slotIndex: d.slotIndex, docLabel: d.docLabel })),
+    status: result.status,
+    uploadedSlots: result.uploadedSlots,
+  });
 });
 
 module.exports = { verifyAccessCode, getStatus, uploadDocuments };

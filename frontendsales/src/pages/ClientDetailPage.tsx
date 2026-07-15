@@ -12,6 +12,7 @@ import { AssignEmployeesDialog } from '@/components/clients/AssignEmployeesDialo
 import { ClientLogoUpload } from '@/components/clients/ClientLogoUpload'
 import { ActivityTimeline } from '@/components/clients/ActivityTimeline'
 import { ClientNotes } from '@/components/clients/ClientNotes'
+import { ClientExtraDetails } from '@/components/clients/ClientExtraDetails'
 import { RequestClientDocumentsModal } from '@/components/clients/RequestClientDocumentsModal'
 import { ClientDocumentRequestHistory } from '@/components/clients/ClientDocumentRequestHistory'
 import { ClientUploadedDocumentsList } from '@/components/clients/ClientUploadedDocumentsList'
@@ -29,8 +30,8 @@ export default function ClientDetailPage() {
   if (isLoading || !data) {
     return (
       <div className="mx-auto max-w-4xl space-y-4 p-6">
-        <Skeleton className="h-32 w-full bg-neutral-800" />
-        <Skeleton className="h-64 w-full bg-neutral-800" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-64 w-full" />
       </div>
     )
   }
@@ -211,6 +212,9 @@ export default function ClientDetailPage() {
 
         {/* NOTES */}
         <ClientNotes clientId={client._id} />
+
+        {/* EXTRA DETAILS */}
+        <ClientExtraDetails clientId={client._id} extraDetails={client.extraDetails} />
 
         {/* ACTIVITY */}
         <ActivityTimeline clientId={client._id} />

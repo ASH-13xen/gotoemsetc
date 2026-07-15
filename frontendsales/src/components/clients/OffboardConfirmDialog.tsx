@@ -36,11 +36,11 @@ export function OffboardConfirmDialog({ clientId, clientName }: { clientId: stri
           Offboard Client
         </Button>
       </DialogTrigger>
-      <DialogContent className="rounded-none border-2 border-white bg-black text-white">
+      <DialogContent className="rounded-none border-2 border-foreground bg-card text-foreground">
         <DialogHeader>
           <DialogTitle className="uppercase tracking-widest">Are you sure?</DialogTitle>
-          <DialogDescription className="text-neutral-400">
-            This will mark <span className="font-bold text-white">{clientName}</span> as offboarded. This
+          <DialogDescription className="text-muted-foreground">
+            This will mark <span className="font-bold text-foreground">{clientName}</span> as offboarded. This
             action can be reviewed later but should only be done when the relationship has ended.
           </DialogDescription>
         </DialogHeader>

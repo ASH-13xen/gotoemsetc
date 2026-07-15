@@ -13,6 +13,8 @@ const generate = {
 
 const listForClient = { params: idParam };
 
+const getOrShareLink = { params: idParam };
+
 const adminSign = {
   params: idParam,
   body: z.object({ signatureDataUrl: z.string().min(1) }),
@@ -29,4 +31,4 @@ const signPublic = {
   body: z.object({ signatureDataUrl: z.string().min(1) }),
 };
 
-module.exports = { generate, listForClient, adminSign, getFile, getPublic, signPublic };
+module.exports = { generate, listForClient, adminSign, getOrShareLink, getFile, getPublic, signPublic };

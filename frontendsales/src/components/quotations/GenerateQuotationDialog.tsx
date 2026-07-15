@@ -68,22 +68,22 @@ export function GenerateQuotationDialog({ clientId, hasActiveQuotation }: Genera
       }}
     >
       <DialogTrigger asChild>
-        <Button className={hasActiveQuotation ? 'border-2 border-amber-500 bg-transparent text-amber-400 hover:bg-amber-500 hover:text-black' : 'bg-primary text-white hover:opacity-90'}>
+        <Button className={hasActiveQuotation ? 'border-2 border-amber-500 bg-transparent text-amber-600 hover:bg-amber-500 hover:text-black' : 'bg-primary text-white hover:opacity-90'}>
           {hasActiveQuotation ? 'Change Quotation' : 'Generate Quotation'}
         </Button>
       </DialogTrigger>
-      <DialogContent className="rounded-none border-2 border-white bg-black text-white">
+      <DialogContent className="rounded-none border-2 border-foreground bg-card text-foreground">
         {step === 'warning' ? (
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 tracking-widest uppercase">
-                <TriangleAlert className="size-5 text-amber-400" />
+                <TriangleAlert className="size-5 text-amber-600" />
                 Replace Current Quotation?
               </DialogTitle>
-              <DialogDescription className="text-neutral-400">
+              <DialogDescription className="text-muted-foreground">
                 Starting a new quotation immediately replaces the current one — even if the client hasn't
                 signed it yet. If the client had already signed and been onboarded off the current
-                quotation, their status will revert to <span className="font-bold text-white">Lead</span>{' '}
+                quotation, their status will revert to <span className="font-bold text-foreground">Lead</span>{' '}
                 until the new one is signed.
               </DialogDescription>
             </DialogHeader>
@@ -102,14 +102,14 @@ export function GenerateQuotationDialog({ clientId, hasActiveQuotation }: Genera
               <DialogTitle className="tracking-widest uppercase">
                 {hasActiveQuotation ? 'New Quotation' : 'Generate Quotation'}
               </DialogTitle>
-              <DialogDescription className="text-neutral-400">
+              <DialogDescription className="text-muted-foreground">
                 Pick a template — client name and brand name are filled in automatically.
               </DialogDescription>
             </DialogHeader>
 
             <div className="grid gap-4">
               <div className="grid gap-1.5">
-                <Label className="text-xs font-black tracking-widest text-neutral-400 uppercase">Template</Label>
+                <Label className="text-xs font-black tracking-widest text-muted-foreground uppercase">Template</Label>
                 <Select
                   value={templateId}
                   onValueChange={(v) => {
@@ -117,10 +117,10 @@ export function GenerateQuotationDialog({ clientId, hasActiveQuotation }: Genera
                     setPlanOptionKey('')
                   }}
                 >
-                  <SelectTrigger className="rounded-none border-2 border-white bg-black text-white">
+                  <SelectTrigger className="rounded-none border-2 border-foreground bg-card text-foreground">
                     <SelectValue placeholder="SELECT A TEMPLATE" />
                   </SelectTrigger>
-                  <SelectContent className="rounded-none border-2 border-white bg-black text-white">
+                  <SelectContent className="rounded-none border-2 border-foreground bg-card text-foreground">
                     {templates?.map((t) => (
                       <SelectItem key={t._id} value={t._id} disabled={!t.isConfigured}>
                         {t.title}
@@ -133,12 +133,12 @@ export function GenerateQuotationDialog({ clientId, hasActiveQuotation }: Genera
 
               {needsPlanOption && selectedTemplate && (
                 <div className="grid gap-1.5">
-                  <Label className="text-xs font-black tracking-widest text-neutral-400 uppercase">Plan</Label>
+                  <Label className="text-xs font-black tracking-widest text-muted-foreground uppercase">Plan</Label>
                   <Select value={planOptionKey} onValueChange={setPlanOptionKey}>
-                    <SelectTrigger className="rounded-none border-2 border-white bg-black text-white">
+                    <SelectTrigger className="rounded-none border-2 border-foreground bg-card text-foreground">
                       <SelectValue placeholder="SELECT A PLAN" />
                     </SelectTrigger>
-                    <SelectContent className="rounded-none border-2 border-white bg-black text-white">
+                    <SelectContent className="rounded-none border-2 border-foreground bg-card text-foreground">
                       {selectedTemplate.planOptions.map((option) => (
                         <SelectItem key={option.key} value={option.key}>
                           {option.label}

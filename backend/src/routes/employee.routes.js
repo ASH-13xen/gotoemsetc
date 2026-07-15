@@ -19,8 +19,10 @@ const router = Router();
 
 router.get('/', validate(employeeValidator.list), employeeController.list);
 router.post('/', validate(employeeValidator.create), employeeController.create);
-// Must come before /:id — otherwise Express matches "birthdays" as an :id.
+// Must come before /:id — otherwise Express matches "birthdays"/
+// "attendance-today" as an :id.
 router.get('/birthdays', employeeController.birthdays);
+router.get('/attendance-today', attendanceController.markedToday);
 router.get('/:id', validate(employeeValidator.getOrDelete), employeeController.getById);
 router.patch('/:id', validate(employeeValidator.update), employeeController.update);
 router.delete('/:id', validate(employeeValidator.getOrDelete), employeeController.remove);

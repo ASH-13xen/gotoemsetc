@@ -72,10 +72,10 @@ export function AssignEmployeesDialog({
           {currentAssigned.length > 0 ? 'Edit Assignment' : 'Assign Employees'}
         </Button>
       </DialogTrigger>
-      <DialogContent className="rounded-none border-2 border-white bg-black text-white">
+      <DialogContent className="rounded-none border-2 border-foreground bg-card text-foreground">
         <DialogHeader>
           <DialogTitle className="uppercase tracking-widest">Assign employees</DialogTitle>
-          <DialogDescription className="text-neutral-400">
+          <DialogDescription className="text-muted-foreground">
             Pick who's handling this client, then mark one of them as the main point of accountability.
           </DialogDescription>
         </DialogHeader>

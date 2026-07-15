@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { CalendarDays, Search } from 'lucide-react'
+import { CalendarDays, CheckCircle2, Search } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { AttendanceCalendar } from '@/components/attendance/AttendanceCalendar'
 import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummaryCard'
 import { useEmployee, useEmployees } from '@/hooks/useEmployees'
+import { useAttendanceMarkedToday } from '@/hooks/useAttendance'
 import { cn } from '@/lib/utils'
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -31,8 +32,19 @@ export default function AttendancePage() {
     limit: 100,
   })
   const { data: selectedEmployeeData } = useEmployee(employeeId)
+  const { data: markedTodayData } = useAttendanceMarkedToday()
 
-  const employees = employeesData?.items ?? []
+  const markedTodayIds = useMemo(() => new Set(markedTodayData?.employeeIds ?? []), [markedTodayData])
+
+  // Unmarked employees first (who still needs marking today), marked ones
+  // sink to the bottom — stable within each group (server order preserved).
+  const employees = useMemo(() => {
+    const items = employeesData?.items ?? []
+    const unmarked = items.filter((e) => !markedTodayIds.has(e._id))
+    const marked = items.filter((e) => markedTodayIds.has(e._id))
+    return [...unmarked, ...marked]
+  }, [employeesData, markedTodayIds])
+
   const selectedEmployee = selectedEmployeeData?.employee
 
   return (
@@ -83,24 +95,36 @@ export default function AttendancePage() {
                   No employees found
                 </p>
               ) : (
-                employees.map((employee) => (
-                  <button
-                    key={employee._id}
-                    type="button"
-                    onClick={() => navigate(`/attendance/${employee._id}`)}
-                    className={cn(
-                      'w-full border-l-4 border-transparent p-4 text-left transition-colors hover:bg-secondary/40',
-                      employeeId === employee._id && 'border-primary bg-secondary/50'
-                    )}
-                  >
-                    <p className="font-bold tracking-wide text-foreground uppercase">
-                      {employee.firstName} {employee.lastName}
-                    </p>
-                    <p className="mt-0.5 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-                      {employee.employeeCode} · {employee.designation}
-                    </p>
-                  </button>
-                ))
+                employees.map((employee) => {
+                  const markedToday = markedTodayIds.has(employee._id)
+                  return (
+                    <button
+                      key={employee._id}
+                      type="button"
+                      onClick={() => navigate(`/attendance/${employee._id}`)}
+                      className={cn(
+                        'w-full border-l-4 border-transparent p-4 text-left transition-colors hover:bg-secondary/40',
+                        employeeId === employee._id && 'border-primary bg-secondary/50',
+                        markedToday && 'opacity-60'
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-bold tracking-wide text-foreground uppercase">
+                          {employee.firstName} {employee.lastName}
+                        </p>
+                        {markedToday && (
+                          <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                            <CheckCircle2 className="size-3" />
+                            Marked
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                        {employee.employeeCode} · {employee.designation}
+                      </p>
+                    </button>
+                  )
+                })
               )}
             </div>
           </div>

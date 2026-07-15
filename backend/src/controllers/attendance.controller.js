@@ -17,4 +17,9 @@ const getSummary = asyncHandler(async (req, res) => {
   res.json({ summary });
 });
 
-module.exports = { mark, listForEmployee, getSummary };
+const markedToday = asyncHandler(async (req, res) => {
+  const employeeIds = await attendanceService.listMarkedTodayEmployeeIds();
+  res.json({ employeeIds });
+});
+
+module.exports = { mark, listForEmployee, getSummary, markedToday };

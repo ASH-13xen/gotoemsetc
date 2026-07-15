@@ -51,6 +51,19 @@ export async function adminSignQuotation(
   return data
 }
 
+// Mints a fresh share link for an already admin-signed quotation — lets the
+// admin re-fetch the client-facing signing link (and share buttons) any
+// time after the initial sign, not just in the one-shot moment right after
+// signing. Invalidates whatever link was shared before.
+export async function regenerateQuotationShareLink(
+  quotationId: string
+): Promise<{ quotation: Quotation; shareToken: string; shareUrl: string }> {
+  const { data } = await apiClient.post<{ quotation: Quotation; shareToken: string; shareUrl: string }>(
+    `/quotations/${quotationId}/share-link`
+  )
+  return data
+}
+
 export function quotationFileUrl(quotationId: string, variant: 'draft' | 'admin-signed' | 'final'): string {
   return `${API_BASE_URL}/quotations/${quotationId}/file/${variant}`
 }

@@ -110,6 +110,35 @@ async function adminSign(quotationId, signatureDataUrl) {
   return { quotation: updated, rawToken };
 }
 
+// Mints a fresh share link for a quotation that's already been admin-signed
+// — lets the admin re-fetch a shareable link (and re-open the WhatsApp/Gmail
+// share buttons) any time after the initial sign, not just in the one-shot
+// moment right after signing. Only the token's hash is ever stored, so the
+// raw link can't simply be "looked up" again — this issues a new one and
+// invalidates whatever link was shared before.
+async function regenerateShareLink(quotationId) {
+  const quotation = await quotationRepository.findById(quotationId);
+  if (!quotation) throw ApiError.notFound('Quotation not found');
+  if (!quotation.adminSignedFile) {
+    throw ApiError.badRequest('This quotation hasn\'t been signed yet — sign it first to generate a share link.');
+  }
+  if (quotation.status === QUOTATION_STATUS.SUPERSEDED) {
+    throw ApiError.badRequest('This quotation has been superseded and can no longer be shared.');
+  }
+
+  const rawToken = crypto.randomBytes(32).toString('hex');
+  const shareTokenExpiresAt = new Date(Date.now() + DEFAULT_QUOTATION_SHARE_EXPIRY_HOURS * 60 * 60 * 1000);
+
+  await quotationRepository.updateById(quotationId, {
+    shareTokenHash: hashToken(rawToken),
+    shareTokenExpiresAt,
+    sharedAt: new Date(),
+  });
+
+  const updated = await quotationRepository.findById(quotationId);
+  return { quotation: updated, rawToken };
+}
+
 // Re-validated on every public request, not just at share time.
 async function resolvePublicToken(rawToken) {
   const quotation = await quotationRepository.findByTokenHash(hashToken(rawToken));
@@ -208,6 +237,7 @@ module.exports = {
   listForClient,
   generateQuotation,
   adminSign,
+  regenerateShareLink,
   getPublicQuotation,
   getPublicFilePath,
   clientSign,

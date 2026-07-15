@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { GenerateQuotationDialog } from './GenerateQuotationDialog'
 import { AdminSignDialog } from './AdminSignDialog'
+import { QuotationShareLink } from './QuotationShareLink'
 import { useQuotations } from '@/hooks/useQuotations'
 import { openQuotationFile } from '@/api/quotations.api'
 import type { Quotation, QuotationStatus } from '@/api/quotations.api'
@@ -39,42 +40,57 @@ function QuotationRow({
   const downloadVariant = quotation.finalSignedFile ? 'final' : quotation.adminSignedFile ? 'admin-signed' : 'draft'
 
   return (
-    <div className={`flex flex-wrap items-center justify-between gap-3 py-4 first:pt-0 last:pb-0 ${quotation.status === 'superseded' ? 'opacity-50' : ''}`}>
-      <div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold tracking-wide text-foreground">
-            v{quotation.version} — {quotation.template.title}
-          </span>
-          <span className={`border px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase rounded-full ${STATUS_STYLES[quotation.status]}`}>
-            {quotation.status}
-          </span>
+    <div className={`grid gap-3 py-4 first:pt-0 last:pb-0 ${quotation.status === 'superseded' ? 'opacity-50' : ''}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold tracking-wide text-foreground">
+              v{quotation.version} — {quotation.template.title}
+            </span>
+            <span className={`border px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase rounded-full ${STATUS_STYLES[quotation.status]}`}>
+              {quotation.status}
+            </span>
+          </div>
+          <p className="mt-1 text-xs font-medium text-muted-foreground">
+            {label ? `${label} · ` : ''}
+            {new Date(quotation.createdAt).toLocaleDateString()}
+            {quotation.signedAt ? ` · Signed ${new Date(quotation.signedAt).toLocaleDateString()}` : ''}
+          </p>
         </div>
-        <p className="mt-1 text-xs font-medium text-muted-foreground">
-          {label ? `${label} · ` : ''}
-          {new Date(quotation.createdAt).toLocaleDateString()}
-          {quotation.signedAt ? ` · Signed ${new Date(quotation.signedAt).toLocaleDateString()}` : ''}
-        </p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              openQuotationFile(quotation._id, downloadVariant).catch(() => toast.error('Could not open quotation file'))
+            }}
+          >
+            <Download className="size-3.5" />
+            {quotation.status === 'signed' ? 'FINAL PDF' : 'PREVIEW'}
+          </Button>
+          <AdminSignDialog
+            clientId={clientId}
+            quotationId={quotation._id}
+            canSign={quotation.status === 'draft'}
+            clientName={clientName}
+            contactEmail={contactEmail}
+            contactPhone={contactPhone}
+          />
+        </div>
       </div>
-      <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            openQuotationFile(quotation._id, downloadVariant).catch(() => toast.error('Could not open quotation file'))
-          }}
-        >
-          <Download className="size-3.5" />
-          {quotation.status === 'signed' ? 'FINAL PDF' : 'PREVIEW'}
-        </Button>
-        <AdminSignDialog
+
+      {/* Awaiting the client's signature — the share link stays available
+          here for as long as that's true, not just in the moment right
+          after signing. */}
+      {quotation.status === 'shared' && (
+        <QuotationShareLink
           clientId={clientId}
           quotationId={quotation._id}
-          canSign={quotation.status === 'draft'}
           clientName={clientName}
           contactEmail={contactEmail}
           contactPhone={contactPhone}
         />
-      </div>
+      )}
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as clientsApi from '@/api/clients.api'
-import type { ContactInput, ListClientsParams, RegisterClientInput } from '@/api/clients.api'
+import type { ContactInput, ExtraDetail, ListClientsParams, RegisterClientInput } from '@/api/clients.api'
 
 const CLIENTS_KEY = ['clients']
 
@@ -63,6 +63,14 @@ export function useUploadClientLogo(clientId: string) {
       queryClient.invalidateQueries({ queryKey: [...CLIENTS_KEY, clientId] })
       queryClient.invalidateQueries({ queryKey: CLIENTS_KEY })
     },
+  })
+}
+
+export function useUpdateClientExtraDetails(clientId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (extraDetails: ExtraDetail[]) => clientsApi.updateExtraDetails(clientId, extraDetails),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [...CLIENTS_KEY, clientId] }),
   })
 }
 

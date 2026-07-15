@@ -74,17 +74,17 @@ export function AdminSignDialog({
           Sign & Share
         </Button>
       )}
-      <DialogContent className="rounded-none border-2 border-white bg-black text-white">
+      <DialogContent className="rounded-none border-2 border-foreground bg-card text-foreground">
         {shareUrl ? (
           <>
             <DialogHeader>
               <DialogTitle className="tracking-widest uppercase">Ready to Share</DialogTitle>
             </DialogHeader>
-            <p className="text-xs font-bold tracking-widest text-neutral-400 uppercase">
+            <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
               Send this link to the client — they'll be able to view and sign the quotation.
             </p>
             <div className="flex gap-2">
-              <Input readOnly value={shareUrl} className="rounded-none border-2 border-white bg-black text-white" />
+              <Input readOnly value={shareUrl} className="rounded-none border-2 border-foreground bg-background text-foreground" />
               <Button variant="outline" onClick={copyLink}>
                 <Copy className="size-4" />
               </Button>

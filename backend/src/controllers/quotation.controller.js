@@ -19,6 +19,12 @@ const adminSign = asyncHandler(async (req, res) => {
   res.json({ quotation, shareToken: rawToken, shareUrl });
 });
 
+const shareLink = asyncHandler(async (req, res) => {
+  const { quotation, rawToken } = await quotationService.regenerateShareLink(req.params.id);
+  const shareUrl = `${env.salesFrontendUrl}/quotation/${rawToken}`;
+  res.json({ quotation, shareToken: rawToken, shareUrl });
+});
+
 const downloadFile = asyncHandler(async (req, res) => {
   const filePath = await quotationService.getFilePathForVariant(req.params.id, req.params.variant);
   res.sendFile(localFileStorage.absolutePathFor(filePath));
@@ -39,4 +45,4 @@ const signPublic = asyncHandler(async (req, res) => {
   res.json(result);
 });
 
-module.exports = { listForClient, generate, adminSign, downloadFile, getPublic, getPublicFile, signPublic };
+module.exports = { listForClient, generate, adminSign, shareLink, downloadFile, getPublic, getPublicFile, signPublic };

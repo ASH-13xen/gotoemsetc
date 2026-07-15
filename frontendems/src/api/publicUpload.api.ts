@@ -17,11 +17,17 @@ export async function getPublicUploadStatus(token: string, code: string): Promis
   return data
 }
 
+export interface UploadDocumentsResult {
+  uploaded: { docType: string; url: string }[]
+  status: string
+  uploadedDocTypes: string[]
+}
+
 export async function uploadPublicDocuments(
   token: string,
   code: string,
   files: Record<string, File>
-): Promise<{ uploaded: { docType: string; url: string }[] }> {
+): Promise<UploadDocumentsResult> {
   const formData = new FormData()
   formData.append('code', code)
   for (const [docType, file] of Object.entries(files)) {

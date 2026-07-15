@@ -11,6 +11,11 @@ const contactSchema = z.object({
   phone: z.string().optional(),
 });
 
+const extraDetailSchema = z.object({
+  key: z.string().min(1),
+  value: z.string().optional(),
+});
+
 const register = {
   body: z.object({
     clientName: z.string().min(1),
@@ -30,6 +35,7 @@ const update = {
       assignedTeam: z.string().min(1).nullable().optional(),
       assignedEmployees: z.array(z.string().min(1)).optional(),
       mainEmployee: z.string().min(1).nullable().optional(),
+      extraDetails: z.array(extraDetailSchema).optional(),
     })
     // The point of accountability has to actually be one of the people
     // assigned — can't name someone answerable who isn't even on the client.

@@ -35,8 +35,8 @@ export default function QuotationTemplateMapperPage() {
   if (isLoading || !template) {
     return (
       <div className="mx-auto max-w-5xl space-y-4 p-6">
-        <Skeleton className="h-32 w-full bg-neutral-800" />
-        <Skeleton className="h-[600px] w-full bg-neutral-800" />
+        <Skeleton className="h-32 w-full" />
+        <Skeleton className="h-[600px] w-full" />
       </div>
     )
   }

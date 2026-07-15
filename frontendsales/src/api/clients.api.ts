@@ -19,6 +19,11 @@ export interface AssignedEmployee {
   employeeCode?: string
 }
 
+export interface ExtraDetail {
+  key: string
+  value?: string
+}
+
 export interface SalesClient {
   _id: string
   clientName: string
@@ -30,6 +35,7 @@ export interface SalesClient {
   currentQuotation?: string
   assignedEmployees: AssignedEmployee[]
   mainEmployee?: AssignedEmployee
+  extraDetails: ExtraDetail[]
   createdAt: string
   updatedAt: string
 }
@@ -106,5 +112,10 @@ export async function assignEmployees(
   mainEmployee: string | null
 ): Promise<{ client: SalesClient }> {
   const { data } = await apiClient.patch(`/clients/${id}`, { assignedEmployees, mainEmployee })
+  return data
+}
+
+export async function updateExtraDetails(id: string, extraDetails: ExtraDetail[]): Promise<{ client: SalesClient }> {
+  const { data } = await apiClient.patch(`/clients/${id}`, { extraDetails })
   return data
 }

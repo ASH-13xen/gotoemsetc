@@ -129,13 +129,18 @@ async function attachDocuments(rawToken, code, files) {
   }
 
   const uploaded = await clientUploadedDocumentRepository.listByRequest(request._id);
-  const uploadedSlots = new Set(uploaded.map((d) => d.slotIndex));
-  const allFulfilled = request.requestedDocTypes.every((_, i) => uploadedSlots.has(i));
+  const uploadedSlots = [...new Set(uploaded.map((d) => d.slotIndex))];
+  const allFulfilled = request.requestedDocTypes.every((_, i) => uploadedSlots.includes(i));
+  const status = allFulfilled ? UPLOAD_REQUEST_STATUS.FULFILLED : UPLOAD_REQUEST_STATUS.PARTIALLY_FULFILLED;
   await clientDocumentRequestRepository.updateStatus(
     request._id,
-    allFulfilled ? UPLOAD_REQUEST_STATUS.FULFILLED : UPLOAD_REQUEST_STATUS.PARTIALLY_FULFILLED,
+    status,
     allFulfilled ? { fulfilledAt: new Date() } : {}
   );
+  // Once fully fulfilled the access code is cleared immediately (nothing
+  // left to submit, so it shouldn't keep working) — the caller must use
+  // this response to update its own view rather than re-verifying the code
+  // against the server afterward, since that verification would now fail.
   if (allFulfilled) await clientDocumentRequestRepository.clearAccessCode(request._id);
 
   await clientActivity.log(
@@ -145,7 +150,7 @@ async function attachDocuments(rawToken, code, files) {
     'client-link'
   );
 
-  return saved;
+  return { documents: saved, status, uploadedSlots };
 }
 
 async function listUploadedForClient(clientId) {

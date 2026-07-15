@@ -34,3 +34,13 @@ export function useAdminSignQuotation(clientId: string) {
     },
   })
 }
+
+export function useRegenerateShareLink(clientId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (quotationId: string) => quotationsApi.regenerateQuotationShareLink(quotationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...QUOTATIONS_KEY, clientId] })
+    },
+  })
+}

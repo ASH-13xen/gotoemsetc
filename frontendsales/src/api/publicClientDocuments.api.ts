@@ -21,11 +21,17 @@ export async function getPublicClientDocumentStatus(
   return data
 }
 
+export interface UploadClientDocumentsResult {
+  uploaded: { slotIndex: number; docLabel: string }[]
+  status: string
+  uploadedSlots: number[]
+}
+
 export async function uploadPublicClientDocuments(
   token: string,
   code: string,
   files: Record<number, File>
-): Promise<{ uploaded: { slotIndex: number; docLabel: string }[] }> {
+): Promise<UploadClientDocumentsResult> {
   const formData = new FormData()
   formData.append('code', code)
   for (const [slotIndex, file] of Object.entries(files)) {

@@ -18,6 +18,13 @@ export function useAttendanceSummary(employeeId: string | undefined) {
   })
 }
 
+export function useAttendanceMarkedToday() {
+  return useQuery({
+    queryKey: ['attendance-marked-today'],
+    queryFn: () => attendanceApi.getAttendanceMarkedToday(),
+  })
+}
+
 export function useMarkAttendance(employeeId: string) {
   const queryClient = useQueryClient()
   return useMutation({
@@ -34,6 +41,7 @@ export function useMarkAttendance(employeeId: string) {
     }) => attendanceApi.markAttendance(employeeId, date, { status, overtimeHours, notes }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendance', employeeId] })
+      queryClient.invalidateQueries({ queryKey: ['attendance-marked-today'] })
     },
   })
 }

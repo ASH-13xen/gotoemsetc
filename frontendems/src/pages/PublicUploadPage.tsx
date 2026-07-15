@@ -7,7 +7,12 @@ import { Building2, CheckCircle2, KeyRound, Loader2, ShieldAlert, UploadCloud } 
 
 import { Button } from '@/components/ui/button'
 import { useConfig } from '@/hooks/useConfig'
-import { getPublicUploadStatus, uploadPublicDocuments, verifyUploadAccessCode } from '@/api/publicUpload.api'
+import {
+  getPublicUploadStatus,
+  uploadPublicDocuments,
+  verifyUploadAccessCode,
+  type PublicUploadStatus,
+} from '@/api/publicUpload.api'
 
 function errorMessageFrom(error: unknown, fallback: string): string {
   if (isAxiosError(error)) {
@@ -51,10 +56,18 @@ export default function PublicUploadPage() {
 
   const uploadMutation = useMutation({
     mutationFn: () => uploadPublicDocuments(token as string, verifiedCode as string, selectedFiles),
-    onSuccess: () => {
+    onSuccess: (result) => {
       toast.success('Documents submitted — thank you!')
       setSelectedFiles({})
-      queryClient.invalidateQueries({ queryKey: ['publicUploadStatus', token, verifiedCode] })
+      // A fully-fulfilled upload clears the access code server-side (see
+      // uploadRequest.service.js), so refetching status with the now-stale
+      // code would fail — patch the cached status directly from this
+      // response instead of ever re-verifying the code.
+      queryClient.setQueryData(
+        ['publicUploadStatus', token, verifiedCode],
+        (old: PublicUploadStatus | undefined) =>
+          old ? { ...old, uploadedDocTypes: result.uploadedDocTypes, status: result.status } : old
+      )
     },
     onError: () => toast.error('Could not upload — please check the files and try again'),
   })

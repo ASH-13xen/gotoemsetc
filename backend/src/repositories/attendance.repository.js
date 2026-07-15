@@ -22,4 +22,12 @@ function listForEmployee(employeeId, { from, to } = {}) {
   return AttendanceRecord.find(query).sort({ date: 1 });
 }
 
-module.exports = { upsertForDate, listForEmployee };
+// Which employees already have a record for this exact date — a record
+// with no status (overtime-only) still counts as "marked" for this
+// purpose, same as any other record.
+async function listEmployeeIdsForDate(date) {
+  const records = await AttendanceRecord.find({ date }).select('employee');
+  return records.map((r) => r.employee.toString());
+}
+
+module.exports = { upsertForDate, listForEmployee, listEmployeeIdsForDate };

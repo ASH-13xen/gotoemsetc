@@ -49,3 +49,10 @@ export async function getAttendanceSummary(employeeId: string): Promise<{ summar
   const { data } = await apiClient.get(`/employees/${employeeId}/attendance/summary`)
   return data
 }
+
+// Employee ids that already have today's attendance marked — drives the
+// Attendance page's "already marked" badge and bottom-of-list sort.
+export async function getAttendanceMarkedToday(): Promise<{ employeeIds: string[] }> {
+  const { data } = await apiClient.get('/employees/attendance-today')
+  return data
+}

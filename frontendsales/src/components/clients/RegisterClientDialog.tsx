@@ -70,46 +70,46 @@ export function RegisterClientDialog({ trigger }: { trigger?: React.ReactNode })
       <DialogTrigger asChild>
         {trigger ?? <Button>Register Client</Button>}
       </DialogTrigger>
-      <DialogContent className="rounded-none border-2 border-white bg-black text-white">
+      <DialogContent className="rounded-none border-2 border-foreground bg-card text-foreground">
         <DialogHeader>
           <DialogTitle className="uppercase tracking-widest">Register Client</DialogTitle>
-          <DialogDescription className="text-neutral-400">
+          <DialogDescription className="text-muted-foreground">
             Start tracking a new potential client.
           </DialogDescription>
         </DialogHeader>
         <form className="grid gap-4" onSubmit={handleSubmit(onSubmit)} noValidate>
           <div className="grid gap-1.5">
-            <Label htmlFor="clientName" className="text-xs font-black tracking-widest text-neutral-400 uppercase">
+            <Label htmlFor="clientName" className="text-xs font-black tracking-widest text-muted-foreground uppercase">
               Client Name
             </Label>
             <Input
               id="clientName"
-              className="rounded-none border-2 border-white bg-black text-white"
+              className="rounded-none border-2 border-foreground bg-background text-foreground"
               aria-invalid={Boolean(errors.clientName)}
               {...register('clientName')}
             />
             {errors.clientName && <p className="text-xs text-destructive">{errors.clientName.message}</p>}
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="brandName" className="text-xs font-black tracking-widest text-neutral-400 uppercase">
+            <Label htmlFor="brandName" className="text-xs font-black tracking-widest text-muted-foreground uppercase">
               Brand Name
             </Label>
             <Input
               id="brandName"
-              className="rounded-none border-2 border-white bg-black text-white"
+              className="rounded-none border-2 border-foreground bg-background text-foreground"
               aria-invalid={Boolean(errors.brandName)}
               {...register('brandName')}
             />
             {errors.brandName && <p className="text-xs text-destructive">{errors.brandName.message}</p>}
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="dateRegistered" className="text-xs font-black tracking-widest text-neutral-400 uppercase">
+            <Label htmlFor="dateRegistered" className="text-xs font-black tracking-widest text-muted-foreground uppercase">
               Date Registered
             </Label>
             <Input
               id="dateRegistered"
               type="date"
-              className="rounded-none border-2 border-white bg-black text-white"
+              className="rounded-none border-2 border-foreground bg-background text-foreground"
               aria-invalid={Boolean(errors.dateRegistered)}
               {...register('dateRegistered')}
             />

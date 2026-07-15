@@ -117,10 +117,10 @@ export function RequestClientDocumentsModal({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto rounded-none border-2 border-white bg-black text-white sm:max-w-lg">
+      <DialogContent className="max-h-[85vh] overflow-y-auto rounded-none border-2 border-foreground bg-card text-foreground sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="uppercase tracking-widest">Request documents</DialogTitle>
-          <DialogDescription className="text-neutral-400">
+          <DialogDescription className="text-muted-foreground">
             Type whatever you need from this client — a secure link (plus a separate access code) lets them
             upload directly, no login needed on their end beyond the code.
           </DialogDescription>

@@ -100,4 +100,10 @@ async function computeLifetimeSummary(employeeId) {
   return { dateOfJoining: employee.dateOfJoining, asOfDate: today, totalWorkingDays, unmarkedDays, counts };
 }
 
-module.exports = { markAttendance, listForEmployee, computeLifetimeSummary };
+// Which employees already have today's attendance marked — drives the
+// Attendance page's "already marked" indicator and bottom-of-list sort.
+async function listMarkedTodayEmployeeIds() {
+  return attendanceRepository.listEmployeeIdsForDate(todayUTCMidnight());
+}
+
+module.exports = { markAttendance, listForEmployee, computeLifetimeSummary, listMarkedTodayEmployeeIds };

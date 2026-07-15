@@ -72,7 +72,7 @@ export function SignaturePad({ onConfirm, onCancel, confirmLabel = 'OK, USE THIS
 
   return (
     <div className="space-y-4">
-      <div className="border-2 border-dashed border-white">
+      <div className="border-2 border-dashed border-foreground/40">
         <canvas
           ref={canvasRef}
           width={600}
@@ -84,7 +84,7 @@ export function SignaturePad({ onConfirm, onCancel, confirmLabel = 'OK, USE THIS
           onPointerLeave={stopDrawing}
         />
       </div>
-      <p className="text-xs font-bold tracking-widest text-neutral-500 uppercase">
+      <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
         Sign above using your mouse, stylus, or finger.
       </p>
       <div className="flex gap-3">
@@ -106,7 +106,7 @@ export function SignaturePad({ onConfirm, onCancel, confirmLabel = 'OK, USE THIS
         <button
           type="button"
           onClick={onCancel}
-          className="w-full text-center text-xs font-bold tracking-widest text-neutral-500 uppercase hover:text-white"
+          className="w-full text-center text-xs font-bold tracking-widest text-muted-foreground uppercase hover:text-foreground"
         >
           Cancel
         </button>
