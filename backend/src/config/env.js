@@ -36,6 +36,12 @@ const env = {
     from: process.env.SMTP_FROM || '',
   },
 
+  resend: {
+    apiKey: process.env.RESEND_API_KEY || '',
+    fromEmail: process.env.RESEND_FROM_EMAIL || '',
+  },
+  hrNotificationEmail: process.env.HR_NOTIFICATION_EMAIL || '',
+
   sofficePath: process.env.SOFFICE_PATH || '',
 
   templatesDir: path.join(__dirname, '..', '..', 'templates', 'files'),
@@ -53,5 +59,7 @@ env.cloudinaryConfigured = Boolean(
 );
 
 env.smtpConfigured = Boolean(env.smtp.host && env.smtp.port && env.smtp.user && env.smtp.pass);
+
+env.resendConfigured = Boolean(env.resend.apiKey && env.resend.fromEmail);
 
 module.exports = env;

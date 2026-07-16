@@ -45,16 +45,18 @@ function InterviewSendButtons({ applicant, interview }: { applicant: Applicant; 
       ? ` Location: ${interview.location}`
       : ' This will be an in-person interview.'
 
-  const emailBody = `Hi ${name},\n\nYour ${isOnline ? 'online' : 'in-person'} interview for ${position} ${verb} ${when}.${modeDetail}\n\nWe look forward to speaking with you.\n\nThanks,\n${companyName} HR`
   const whatsappText = `Hi ${name}, your ${isOnline ? 'online' : 'in-person'} interview for ${position} ${verb} ${when}.${modeDetail}`
-  const subject = `Interview ${isReschedule ? 'rescheduled' : 'scheduled'} — ${position}`
 
   return (
-    <ManualSendButtons
-      emailHref={applicant.email ? buildGmailComposeUrl(applicant.email, subject, emailBody) : undefined}
-      whatsappHref={applicant.phone ? buildWhatsappUrl(applicant.phone, whatsappText) : undefined}
-      storageKey={`notified_interview_${applicant._id}`}
-    />
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-muted-foreground">
+        Email sent automatically to the applicant and hr@gotofriend.in.
+      </p>
+      <ManualSendButtons
+        whatsappHref={applicant.phone ? buildWhatsappUrl(applicant.phone, whatsappText) : undefined}
+        storageKey={`notified_interview_${applicant._id}`}
+      />
+    </div>
   )
 }
 
