@@ -9,10 +9,9 @@ import { HireDialog } from '@/components/applicants/HireDialog'
 import { RejectDialog } from '@/components/applicants/RejectDialog'
 import { ScheduleInterviewDialog } from '@/components/applicants/ScheduleInterviewDialog'
 import { ManualSendButtons } from '@/components/common/ManualSendButtons'
-import { buildGmailComposeUrl, buildWhatsappUrl } from '@/lib/manualSend'
+import { buildWhatsappUrl } from '@/lib/manualSend'
 import { useApplicant } from '@/hooks/useApplicants'
 import { useEmployee } from '@/hooks/useEmployees'
-import { useConfig } from '@/hooks/useConfig'
 import type { Applicant, Interview } from '@/api/applicants.api'
 
 function Field({ label, value }: { label: string; value?: string | null }) {
@@ -28,8 +27,6 @@ function Field({ label, value }: { label: string; value?: string | null }) {
 // two booleans rather than 4 separate hardcoded templates — same content,
 // less duplication to keep in sync.
 function InterviewSendButtons({ applicant, interview }: { applicant: Applicant; interview: Interview }) {
-  const { data: config } = useConfig()
-  const companyName = config?.companyName ?? 'us'
   const name = `${applicant.firstName} ${applicant.lastName || ''}`.trim()
   const position = applicant.positionAppliedFor || 'the role'
   const when = new Date(interview.scheduledAt).toLocaleString()
@@ -61,9 +58,7 @@ function InterviewSendButtons({ applicant, interview }: { applicant: Applicant; 
 }
 
 function HireSendButtons({ applicant }: { applicant: Applicant }) {
-  const { data: config } = useConfig()
   const { data: employeeData } = useEmployee(applicant.linkedEmployee)
-  const companyName = config?.companyName ?? 'us'
   const name = `${applicant.firstName} ${applicant.lastName || ''}`.trim()
   const position = applicant.positionAppliedFor || 'the role'
   const startDate = employeeData?.employee.dateOfJoining
@@ -72,12 +67,10 @@ function HireSendButtons({ applicant }: { applicant: Applicant }) {
   const reason = applicant.selectionNotes || ''
   const startDetail = startDate ? ` Your start date is ${startDate}.` : ''
 
-  const emailBody = `Hi ${name},\n\nCongratulations! We're delighted to offer you the position of ${position}.${startDetail} Why we chose you: ${reason}\n\nWelcome to the team!\n\nThanks,\n${companyName} HR`
   const whatsappText = `Congratulations ${name}! We're delighted to offer you the position of ${position}.${startDetail} Why we chose you: ${reason}. Welcome to the team!`
 
   return (
     <ManualSendButtons
-      emailHref={applicant.email ? buildGmailComposeUrl(applicant.email, `You're hired — ${companyName}`, emailBody) : undefined}
       whatsappHref={applicant.phone ? buildWhatsappUrl(applicant.phone, whatsappText) : undefined}
       storageKey={`notified_hire_${applicant._id}`}
     />
@@ -85,18 +78,14 @@ function HireSendButtons({ applicant }: { applicant: Applicant }) {
 }
 
 function RejectSendButtons({ applicant }: { applicant: Applicant }) {
-  const { data: config } = useConfig()
-  const companyName = config?.companyName ?? 'us'
   const name = `${applicant.firstName} ${applicant.lastName || ''}`.trim()
   const position = applicant.positionAppliedFor || 'the role'
   const reason = applicant.rejectionReason || ''
 
-  const emailBody = `Hi ${name},\n\nThank you for applying for ${position} and for interviewing with us. After careful consideration, we won't be moving forward at this time.\n\nFeedback: ${reason}\n\nWe wish you the best in your search.\n\nThanks,\n${companyName} HR`
   const whatsappText = `Hi ${name}, thank you for applying for ${position} and for interviewing with us. After careful consideration, we won't be moving forward at this time. Feedback: ${reason}. We wish you the best in your search.`
 
   return (
     <ManualSendButtons
-      emailHref={applicant.email ? buildGmailComposeUrl(applicant.email, `Update on your application — ${position}`, emailBody) : undefined}
       whatsappHref={applicant.phone ? buildWhatsappUrl(applicant.phone, whatsappText) : undefined}
       storageKey={`notified_reject_${applicant._id}`}
     />
