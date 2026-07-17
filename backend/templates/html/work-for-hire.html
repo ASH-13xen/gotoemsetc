@@ -8,31 +8,29 @@
   body {
     font-family: 'Segoe UI', Calibri, Arial, sans-serif;
     color: #1a1a1a;
-    font-size: 10.5pt;
-    line-height: 1.5;
+    font-size: 9.5pt;
+    line-height: 1.22;
     margin: 0;
     padding: 0;
   }
+  .header { display: flex; justify-content: flex-end; margin-bottom: 2pt; }
+  .logo-header { height: 84pt; width: auto; } /* ~10% of an A4 page, standard across all documents */
   h2 {
-    font-size: 16pt;
+    font-size: 15pt;
     text-align: center;
-    margin: 0 0 4pt;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10pt;
+    margin: 0 0 3pt;
+    text-decoration: underline;
   }
-  .effective-date { text-align: center; margin: 0 0 16pt; font-style: italic; }
-  h3 { font-size: 12pt; margin: 16pt 0 6pt; }
-  p { margin: 0 0 8pt; }
+  .effective-date { text-align: center; margin: 0 0 8pt; font-style: italic; }
+  h3 { font-size: 11pt; margin: 8pt 0 4pt; }
+  p { margin: 0 0 5pt; }
   strong { font-weight: 700; }
-  ul { margin: 0 0 10pt; padding-left: 18pt; }
-  li { margin-bottom: 4pt; }
-  .logo-header { height: 56pt; width: auto; }
+  ul { margin: 0 0 5pt; padding-left: 16pt; }
+  li { margin-bottom: 2pt; }
 </style>
 </head>
 <body>
-<h2><strong>WORK FOR HIRE AGREEMENT</strong><img src="assets/logo.png" class="logo-header" alt="GO-TO Friend" /></h2>
+<div class="header"><img src="assets/logo.png" class="logo-header" alt="GO-TO Friend" /></div><h2><strong>WORK FOR HIRE AGREEMENT</strong></h2>
 <p class="effective-date">Effective From: 01.02.2026</p>
 <p>Date: {todayDate} | Creative Name: {employeeName} | Role: Graphic Designer| Videographer| Video-Editor.</p>
 <h3><strong>1. Ownership of Work Product (Work Made for Hire)</strong></h3>

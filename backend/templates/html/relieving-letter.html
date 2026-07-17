@@ -13,24 +13,22 @@
     margin: 0;
     padding: 0;
   }
+  .header { display: flex; justify-content: flex-end; margin-bottom: 2pt; }
+  .logo-header { height: 84pt; width: auto; } /* ~10% of an A4 page, standard across all documents */
   h2 {
     font-size: 18pt;
     text-align: center;
-    margin: 0 0 20pt;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10pt;
+    margin: 0 0 12pt;
     letter-spacing: 1px;
+    text-decoration: underline;
   }
   p { margin: 0 0 10pt; }
   strong { font-weight: 700; }
   ul { margin: 0 0 12pt; padding-left: 20pt; }
   li { margin-bottom: 6pt; }
-  .logo-header { height: 64pt; width: auto; vertical-align: middle; }
 </style>
 </head>
 <body>
-<h2><strong>FORMAL RELIEVING LETTER</strong><img src="assets/logo.png" class="logo-header" alt="GO-TO Friend" /></h2><p><strong>Date: {todayDate}</strong></p><p><strong>To: {employeeName}</strong></p><p><strong>{employeeAddress}</strong></p><p><strong>Subject: Relieving Order and Acceptance of Resignation</strong></p><p><strong>Dear {employeeName},</strong></p><p>This is with reference to your letter of resignation dated {resignationDate}, wherein you requested to be relieved from your services as {designation} at GO-TO Friend Pvt. Ltd.</p><p>We wish to inform you that your resignation has been formally accepted. Accordingly, you are being relieved from your duties effective as of the close of business hours on {lastWorkingDate}.</p><p>By way of this letter, the management confirms the following:</p><ul><li><strong>Clearance of Dues:</strong> Your full and final settlement has been processed, and all financial obligations between you and the company have been reconciled.</li><li><strong>Asset Handover: We acknowledge the successful return of all company property, including {assetsReturned}.</strong></li><li><strong>Confidentiality:</strong> We remind you that your obligations regarding the non-disclosure of proprietary information and trade secrets, as per your employment contract, remain in effect post-employment as well.</li></ul><p>We appreciate the professional manner in which you handled your transition and handover process. Your contributions to the {department} during your tenure of {tenureDuration} have been valued.</p><p>We wish you success and prosperity in your future professional endeavors.</p><p><strong>With Regards</strong></p><p><strong>For GO-TO Friend Pvt. Ltd.,</strong></p><p><strong>Juhika Paradkar</strong></p><p><strong>HR Executive</strong></p><p><strong>For GO-TO Friend Pvt. Ltd.</strong></p>
+<div class="header"><img src="assets/logo.png" class="logo-header" alt="GO-TO Friend" /></div><h2><strong>FORMAL RELIEVING LETTER</strong></h2><p><strong>Date: {todayDate}</strong></p><p><strong>To: {employeeName}</strong></p><p><strong>{employeeAddress}</strong></p><p><strong>Subject: Relieving Order and Acceptance of Resignation</strong></p><p><strong>Dear {employeeName},</strong></p><p>This is with reference to your letter of resignation dated {resignationDate}, wherein you requested to be relieved from your services as {designation} at GO-TO Friend Pvt. Ltd.</p><p>We wish to inform you that your resignation has been formally accepted. Accordingly, you are being relieved from your duties effective as of the close of business hours on {lastWorkingDate}.</p><p>By way of this letter, the management confirms the following:</p><ul><li><strong>Clearance of Dues:</strong> Your full and final settlement has been processed, and all financial obligations between you and the company have been reconciled.</li><li><strong>Asset Handover: We acknowledge the successful return of all company property, including {assetsReturned}.</strong></li><li><strong>Confidentiality:</strong> We remind you that your obligations regarding the non-disclosure of proprietary information and trade secrets, as per your employment contract, remain in effect post-employment as well.</li></ul><p>We appreciate the professional manner in which you handled your transition and handover process. Your contributions to the {department} during your tenure of {tenureDuration} have been valued.</p><p>We wish you success and prosperity in your future professional endeavors.</p><p><strong>With Regards</strong></p><p><strong>For GO-TO Friend Pvt. Ltd.,</strong></p><p><strong>Juhika Paradkar</strong></p><p><strong>HR Executive</strong></p><p><strong>For GO-TO Friend Pvt. Ltd.</strong></p>
 </body>
 </html>

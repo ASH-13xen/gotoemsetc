@@ -8,20 +8,27 @@
   body {
     font-family: Georgia, 'Times New Roman', serif;
     color: #1a1a1a;
-    font-size: 11.5pt;
-    line-height: 1.6;
+    font-size: 10pt;
+    line-height: 1.25;
     margin: 0;
     padding: 0;
   }
-  p { margin: 0 0 10pt; }
+  p { margin: 0 0 6pt; }
   strong { font-weight: 700; }
-  ul { margin: 0 0 12pt; padding-left: 20pt; }
-  li { margin-bottom: 6pt; }
-  .logo-bar { text-align: right; margin-bottom: 12pt; }
-  .logo-header { height: 64pt; width: auto; }
+  ul { margin: 0 0 6pt; padding-left: 18pt; }
+  li { margin-bottom: 3pt; }
+  .header { display: flex; justify-content: flex-end; margin-bottom: 2pt; }
+  .logo-header { height: 84pt; width: auto; } /* ~10% of an A4 page, standard across all documents */
+  h2 {
+    font-size: 18pt;
+    text-align: center;
+    margin: 0 0 12pt;
+    letter-spacing: 1px;
+    text-decoration: underline;
+  }
 </style>
 </head>
 <body>
-<div class="logo-bar"><img src="assets/logo.png" class="logo-header" alt="GO-TO Friend" /></div><p><strong>Date: {todayDate}</strong></p><p><strong>To, {employeeName}, {designation}, GO-TO Friend Pvt. Ltd.</strong></p><p><strong>Subject: Promotion to {newDesignation}</strong></p><p>Dear {employeeName},</p><p><strong>CONGRATULATIONS. We are pleased to inform you that in recognition of your consistent performance, dedication, and contribution to GO-TO Friend Pvt. Ltd., you are being promoted to the position of {newDesignation}, effective from {promotionEffectiveDate}.</strong></p><p>Over the past period, your efforts in {achievementsSummary} have demonstrated strong leadership, ownership, and a commitment to excellence. This promotion reflects our confidence in your abilities and our belief that you will continue to deliver outstanding results in your new role.</p><p>Your revised compensation package will be:</p><ul><li><strong>New CTC: {newAnnualCTC} per annum</strong></li><li><strong>Benefits/Allowances (if any): {benefitsDetails}</strong></li></ul><p>Your reporting manager will remain {reportingManager} (or update if changing), and you will be taking on responsibilities including, but not limited to:</p>{#responsibilities}<ul><li>{text}</li></ul>{/responsibilities}<p>We look forward to your continued contributions and leadership as you step into this new role. Congratulations on your well-deserved promotion!</p><p>Warm regards,</p><p>For GO-TO Friend Pvt. Ltd.,</p><p><strong>Prakhar Agrawal,</strong></p><p><strong>CEO (Chief Executive Officer)</strong></p><p><strong>GO-TO Friend Pvt. Ltd.</strong></p><p><strong>Candidate Signature:</strong> ____________________________</p><p><strong>Date:</strong> ____________________________________</p>
+<div class="header"><img src="assets/logo.png" class="logo-header" alt="GO-TO Friend" /></div><h2><strong>PROMOTION LETTER</strong></h2><p><strong>Date: {todayDate}</strong></p><p><strong>To, {employeeName}, {designation}, GO-TO Friend Pvt. Ltd.</strong></p><p><strong>Subject: Promotion to {newDesignation}</strong></p><p>Dear {employeeName},</p><p><strong>CONGRATULATIONS. We are pleased to inform you that in recognition of your consistent performance, dedication, and contribution to GO-TO Friend Pvt. Ltd., you are being promoted to the position of {newDesignation}, effective from {promotionEffectiveDate}.</strong></p><p>Over the past period, your efforts in {achievementsSummary} have demonstrated strong leadership, ownership, and a commitment to excellence. This promotion reflects our confidence in your abilities and our belief that you will continue to deliver outstanding results in your new role.</p><p>Your revised compensation package will be:</p><ul><li><strong>New CTC: {newAnnualCTC} per annum</strong></li><li><strong>Benefits/Allowances (if any): {benefitsDetails}</strong></li></ul><p>Your reporting manager will remain {reportingManager} (or update if changing), and you will be taking on responsibilities including, but not limited to:</p>{#responsibilities}<ul><li>{text}</li></ul>{/responsibilities}<p>We look forward to your continued contributions and leadership as you step into this new role. Congratulations on your well-deserved promotion!</p><p>Warm regards,</p><p>For GO-TO Friend Pvt. Ltd.,</p><p><strong>Prakhar Agrawal,</strong></p><p><strong>CEO (Chief Executive Officer)</strong></p><p><strong>GO-TO Friend Pvt. Ltd.</strong></p><p><strong>Candidate Signature:</strong> ____________________________</p><p><strong>Date:</strong> ____________________________________</p>
 </body>
 </html>

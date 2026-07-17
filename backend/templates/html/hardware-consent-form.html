@@ -13,14 +13,13 @@
     margin: 0;
     padding: 0;
   }
+  .header { display: flex; justify-content: flex-end; margin-bottom: 2pt; }
+  .logo-header { height: 84pt; width: auto; } /* ~10% of an A4 page, standard across all documents */
   h2 {
     font-size: 16pt;
     text-align: center;
     margin: 0 0 16pt;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10pt;
+    text-decoration: underline;
   }
   h3 {
     font-size: 12pt;
@@ -47,11 +46,11 @@
   .rating-table td:first-child { width: 24%; }
   .rating-table td:not(:first-child) { height: 16pt; }
   .status-table td { width: 16.66%; }
-  .logo-header { height: 56pt; width: auto; }
 </style>
 </head>
 <body>
-<h2><strong>Employee Hardware Usage &amp; Consent Form</strong><img src="assets/logo.png" class="logo-header" alt="GO-TO Friend" /></h2>
+<div class="header"><img src="assets/logo.png" class="logo-header" alt="GO-TO Friend" /></div>
+<h2><strong>Employee Hardware Usage &amp; Consent Form</strong></h2>
 <table class="header-fields">
 <tr><td>Employee Name: {employeeName}</td><td>Designation: {designation}</td></tr>
 <tr><td>Department: {department}</td><td>Date of Issue: {todayDate}</td></tr>
