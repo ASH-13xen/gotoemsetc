@@ -1,21 +1,36 @@
+import { useState } from 'react'
 import { Fingerprint } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useDevicePunches } from '@/hooks/useDevicePunches'
 
-// Raw feed of whatever the biometric device has pushed — newest first. Not
-// wired into the daily attendance mark/status; this is just "show me the
-// scans the device sent" for now.
+function todayDateInputValue() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+// Company-wide scan browser — pick a day, see every scan (matched or not)
+// from that day only, across all employees. Not wired into the daily
+// attendance mark/status; this is just "show me what the device sent".
 export function DevicePunchFeed() {
-  const { data, isLoading } = useDevicePunches({ limit: 20 })
+  const [date, setDate] = useState(todayDateInputValue)
+  const { data, isLoading } = useDevicePunches({ date })
   const punches = data?.punches ?? []
 
   return (
     <Card className="p-6">
       <CardHeader className="px-0 pt-0">
-        <div className="flex items-center gap-2">
-          <Fingerprint className="size-4 text-primary" />
-          <CardTitle>Biometric device scans</CardTitle>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Fingerprint className="size-4 text-primary" />
+            <CardTitle>Biometric device scans</CardTitle>
+          </div>
+          <Input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="h-9 w-auto"
+          />
         </div>
       </CardHeader>
       <CardContent className="px-0 pb-0">
@@ -26,10 +41,7 @@ export function DevicePunchFeed() {
             ))}
           </div>
         ) : punches.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No scans received yet — once your ZKTeco device is configured to push to this server, scans will
-            appear here.
-          </p>
+          <p className="text-sm text-muted-foreground">No scans on this day.</p>
         ) : (
           <div className="divide-y divide-border/10">
             {punches.map((punch) => (

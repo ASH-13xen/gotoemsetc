@@ -1,36 +1,186 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<title>Letter of Appointment</title>
-<style>
-  * { box-sizing: border-box; }
-  body {
-    font-family: Georgia, 'Times New Roman', serif;
-    color: #1a1a1a;
-    font-size: 11.5pt;
-    line-height: 1.6;
-    margin: 0;
-    padding: 0;
-  }
-  p { margin: 0 0 10pt; }
-  p:first-of-type strong {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10pt;
-    font-size: 18pt;
-    letter-spacing: 1px;
-    text-align: center;
-    margin-bottom: 6pt;
-  }
-  strong { font-weight: 700; }
-  ol { margin: 0 0 12pt; padding-left: 20pt; }
-  li { margin-bottom: 8pt; }
-  .logo-header { height: 64pt; width: auto; vertical-align: middle; }
-</style>
-</head>
-<body>
-<p><strong><img src="assets/logo.png" class="logo-header" alt="GO-TO Friend" />LETTER OF APPOINTMENT </strong></p><p><strong>Date: {todayDate}</strong></p><p>To,</p><p>Dear {employeeName}</p><p>{employeeAddress}</p><p>We are pleased to offer you the position of {designation} with GO-TO Friend Pvt. Ltd., based in {workLocation} and the job description is {jobDescription}.</p><p>Your appointment will be subject to the following terms and conditions:</p><ol><li><strong>Position &amp; Joining Date: You will join as {designation} effective from {dateOfJoining}</strong></li><li><strong>Compensation: </strong>Your total annual compensation will be <strong>{annualCTC}</strong> (<strong>{annualCTCInWords}</strong>) per annum as per the enclosed CTC structure. Salary will be credited on a monthly basis to your bank account.</li><li><strong>Probation Period: </strong>You will be on probation for a period of <strong>3-6 MONTHS</strong>, after which your performance will be reviewed for confirmation.</li><li><strong>Work Location &amp; Timings: Your primary work location will be {workLocation}. The regular office timings are 9:30 AM - 6:30 PM, subject to company policy.</strong></li><li><strong>Leave &amp; Benefits: </strong>You will be entitled to leave and other benefits as per company policy, which may be amended from time to time.</li><li><strong>Termination of Employment: </strong>During probation, either party may terminate this agreement with 30 Days written notice. </li><li><strong>Confidentiality &amp; Code of Conduct: </strong>You are required to maintain confidentiality of company information and comply with all company policies.</li><li><strong>Deductions: </strong>Company may deduct owed amount from your compensation for debts, overpaid leave and other cost</li></ol><p>I have read and understood the contents of the offer letter and exhibits hereto and accept all the terms and conditions of this letter.</p><p><strong>For GO-TO Friend Pvt. Ltd.,</strong></p><p><strong>Juhika Paradkar</strong></p><p><strong>HR Executive</strong></p><p><strong>For GO-TO Friend Pvt. Ltd.</strong></p><p>Candidate Acceptance: I have read and understand the terms of this offer and hereby accept employment with <strong>GO-TO Friend Pvt. Ltd.</strong> under the conditions described above.</p>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <title>Letter of Appointment</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      /* Setting standard PDF page margins and size */
+      @page {
+        size: A4;
+        margin: 15mm 20mm;
+      }
+
+      body {
+        font-family: Georgia, "Times New Roman", serif;
+        color: #1a1a1a;
+        font-size: 10.5pt; /* Slightly reduced to guarantee 1-page fit */
+        line-height: 1.45; /* Tightened line height */
+        margin: 0;
+        padding: 0;
+      }
+
+      /* Header layout for top-right logo */
+      .header {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 10pt;
+      }
+
+      .logo-header {
+        height: 80pt; /* Enlarged logo */
+        width: auto;
+      }
+
+      h1.document-title {
+        text-align: center;
+        font-size: 16pt;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        text-decoration: underline;
+        margin: 0 0 20pt 0;
+      }
+
+      p {
+        margin: 0 0 8pt;
+      }
+
+      strong {
+        font-weight: 700;
+      }
+
+      .recipient-info {
+        margin-bottom: 15pt;
+      }
+
+      ol {
+        margin: 10pt 0 15pt;
+        padding-left: 20pt;
+      }
+
+      li {
+        margin-bottom: 6pt;
+        text-align: justify; /* Cleaner edge for list items */
+      }
+
+      /* Side-by-side signature blocks to save vertical space */
+      .signatures {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-top: 30pt;
+      }
+
+      .signature-block {
+        width: 45%;
+      }
+
+      .signature-space {
+        margin-top: 40pt; /* Space for physical signature */
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Top Right Logo -->
+    <div class="header">
+      <img src="assets/logo.png" class="logo-header" alt="GO-TO Friend" />
+    </div>
+
+    <!-- Document Title -->
+    <h1 class="document-title">Letter of Appointment</h1>
+
+    <div class="recipient-info">
+      <p><strong>Date:</strong> <strong>{todayDate}</strong></p>
+      <p>To,</p>
+      <p><strong>{employeeName}</strong></p>
+      <p><strong>{employeeAddress}</strong></p>
+    </div>
+
+    <p>Dear <strong>{employeeName}</strong>,</p>
+
+    <p>
+      We are pleased to offer you the position of
+      <strong>{designation}</strong> with GO-TO Friend Pvt. Ltd., based in
+      <strong>{workLocation}</strong> and the job description is
+      <strong>{jobDescription}</strong>.
+    </p>
+
+    <p>
+      Your appointment will be subject to the following terms and conditions:
+    </p>
+
+    <ol>
+      <li>
+        <strong>Position &amp; Joining Date:</strong> You will join as
+        <strong>{designation}</strong> effective from
+        <strong>{dateOfJoining}</strong>.
+      </li>
+      <li>
+        <strong>Compensation:</strong> Your total annual compensation will be
+        <strong>{annualCTC}</strong> (<strong>{annualCTCInWords}</strong>) per
+        annum as per the enclosed CTC structure. Salary will be credited on a
+        monthly basis to your bank account.
+      </li>
+      <li>
+        <strong>Probation Period:</strong> You will be on probation for a period
+        of <strong>3-6 MONTHS</strong>, after which your performance will be
+        reviewed for confirmation.
+      </li>
+      <li>
+        <strong>Work Location &amp; Timings:</strong> Your primary work location
+        will be <strong>{workLocation}</strong>. The regular office timings are
+        9:30 AM - 6:30 PM, subject to company policy.
+      </li>
+      <li>
+        <strong>Leave &amp; Benefits:</strong> You will be entitled to leave and
+        other benefits as per company policy, which may be amended from time to
+        time.
+      </li>
+      <li>
+        <strong>Termination of Employment:</strong> During probation, either
+        party may terminate this agreement with 30 Days written notice.
+      </li>
+      <li>
+        <strong>Confidentiality &amp; Code of Conduct:</strong> You are required
+        to maintain confidentiality of company information and comply with all
+        company policies.
+      </li>
+      <li>
+        <strong>Deductions:</strong> Company may deduct owed amount from your
+        compensation for debts, overpaid leave and other costs.
+      </li>
+    </ol>
+
+    <p>
+      I have read and understood the contents of the offer letter and exhibits
+      hereto and accept all the terms and conditions of this letter.
+    </p>
+
+    <!-- Side-by-side signatures to keep the document to one page -->
+    <div class="signatures">
+      <div class="signature-block">
+        <p><strong>For GO-TO Friend Pvt. Ltd.,</strong></p>
+        <div class="signature-space"></div>
+        <p><strong>Juhika Paradkar</strong><br />HR Executive</p>
+      </div>
+
+      <div class="signature-block">
+        <p><strong>Candidate Acceptance:</strong></p>
+        <p>
+          I have read and understand the terms of this offer and hereby accept
+          employment with <strong>GO-TO Friend Pvt. Ltd.</strong> under the
+          conditions described above.
+        </p>
+        <div class="signature-space" style="margin-top: 15pt"></div>
+        <p>
+          ___________________________<br /><strong>{employeeName}</strong
+          ><br />Date: ____________
+        </p>
+      </div>
+    </div>
+  </body>
 </html>
