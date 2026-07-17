@@ -1,9 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'sonner'
 
 import { AuthProvider } from '@/context/AuthContext'
 import { RequireAuth } from '@/components/auth/RequireAuth'
+import { RequireAdmin } from '@/components/auth/RequireAdmin'
+import { RequireOwnEmployee } from '@/components/auth/RequireOwnEmployee'
+import { RequireOwnAttendance } from '@/components/auth/RequireOwnAttendance'
+import { useAuth } from '@/hooks/useAuth'
 import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
 import EmployeeDetailPage from '@/pages/EmployeeDetailPage'
@@ -12,6 +16,20 @@ import PublicUploadPage from '@/pages/PublicUploadPage'
 import ApplicantsPage from '@/pages/ApplicantsPage'
 import ApplicantDetailPage from '@/pages/ApplicantDetailPage'
 import AttendancePage from '@/pages/AttendancePage'
+
+// A worker has no use for the admin dashboard (it's an all-employees
+// browser) — send them straight to their own employee record instead.
+function Home() {
+  const { user, isReady } = useAuth()
+  if (!isReady) return null
+  if (user?.role === 'admin') return <DashboardPage />
+  if (user?.employeeLink) return <Navigate to={`/employees/${user.employeeLink}`} replace />
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center text-center text-muted-foreground">
+      No employee record is linked to this account. Contact an admin.
+    </div>
+  )
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,7 +56,7 @@ export default function App({ basename }: AppProps = {}) {
               path="/"
               element={
                 <RequireAuth>
-                  <DashboardPage />
+                  <Home />
                 </RequireAuth>
               }
             />
@@ -46,7 +64,9 @@ export default function App({ basename }: AppProps = {}) {
               path="/employees/:id"
               element={
                 <RequireAuth>
-                  <EmployeeDetailPage />
+                  <RequireOwnEmployee>
+                    <EmployeeDetailPage />
+                  </RequireOwnEmployee>
                 </RequireAuth>
               }
             />
@@ -54,7 +74,9 @@ export default function App({ basename }: AppProps = {}) {
               path="/employees/:id/wizard"
               element={
                 <RequireAuth>
-                  <EmployeeWizardPage />
+                  <RequireAdmin>
+                    <EmployeeWizardPage />
+                  </RequireAdmin>
                 </RequireAuth>
               }
             />
@@ -62,7 +84,9 @@ export default function App({ basename }: AppProps = {}) {
               path="/applicants"
               element={
                 <RequireAuth>
-                  <ApplicantsPage />
+                  <RequireAdmin>
+                    <ApplicantsPage />
+                  </RequireAdmin>
                 </RequireAuth>
               }
             />
@@ -70,7 +94,9 @@ export default function App({ basename }: AppProps = {}) {
               path="/applicants/:id"
               element={
                 <RequireAuth>
-                  <ApplicantDetailPage />
+                  <RequireAdmin>
+                    <ApplicantDetailPage />
+                  </RequireAdmin>
                 </RequireAuth>
               }
             />
@@ -78,7 +104,9 @@ export default function App({ basename }: AppProps = {}) {
               path="/attendance"
               element={
                 <RequireAuth>
-                  <AttendancePage />
+                  <RequireOwnAttendance>
+                    <AttendancePage />
+                  </RequireOwnAttendance>
                 </RequireAuth>
               }
             />
@@ -86,7 +114,9 @@ export default function App({ basename }: AppProps = {}) {
               path="/attendance/:employeeId"
               element={
                 <RequireAuth>
-                  <AttendancePage />
+                  <RequireOwnAttendance>
+                    <AttendancePage />
+                  </RequireOwnAttendance>
                 </RequireAuth>
               }
             />

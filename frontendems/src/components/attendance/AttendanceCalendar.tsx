@@ -77,6 +77,7 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
   const [openDay, setOpenDay] = useState<string | null>(null)
   const [pendingStatus, setPendingStatus] = useState<string>(NO_STATUS)
   const [pendingOvertimeHours, setPendingOvertimeHours] = useState('')
+  const [pendingIsLate, setPendingIsLate] = useState(false)
 
   const month = monthDate.getUTCMonth() + 1
   const year = monthDate.getUTCFullYear()
@@ -100,12 +101,12 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
   const onSave = (dateKey: string) => {
     const overtimeHours = pendingOvertimeHours.trim() ? Number(pendingOvertimeHours) : undefined
     const status = pendingStatus === NO_STATUS ? undefined : (pendingStatus as AttendanceStatus)
-    if (status === undefined && overtimeHours === undefined) {
-      toast.error('Set a status or overtime hours (or both)')
+    if (status === undefined && overtimeHours === undefined && !pendingIsLate) {
+      toast.error('Set a status, overtime hours, or late flag (or a combination)')
       return
     }
     markAttendance.mutate(
-      { date: dateKey, status, overtimeHours },
+      { date: dateKey, status, overtimeHours, isLate: pendingIsLate },
       {
         onSuccess: () => {
           toast.success('Attendance saved')
@@ -202,6 +203,7 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                       setOpenDay(open ? dateKey : null)
                       setPendingStatus(record?.status ?? NO_STATUS)
                       setPendingOvertimeHours(record?.overtimeHours ? String(record.overtimeHours) : '')
+                      setPendingIsLate(record?.isLate ?? false)
                     }}
                   >
                     <PopoverTrigger asChild>
@@ -222,6 +224,11 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                         {record?.overtimeHours ? (
                           <span className="text-[9px] font-black text-neutral-400">+{record.overtimeHours}h</span>
                         ) : null}
+                        {record?.isLate && (
+                          <span className="absolute bottom-0.5 right-0.5 text-[8px] font-black uppercase text-amber-500">
+                            L
+                          </span>
+                        )}
                         {record?.isBackdated && (
                           <Clock3 className="absolute top-1 right-1 size-3 text-neutral-400" />
                         )}
@@ -254,41 +261,70 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                             Auto-marked from biometric scans
                           </p>
                         )}
-                        <Select value={pendingStatus} onValueChange={setPendingStatus}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={NO_STATUS}>— No status —</SelectItem>
-                            {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-                              <SelectItem key={key} value={key}>
-                                {cfg.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <div className="grid gap-1.5">
-                          <Label htmlFor={`ot-${dateKey}`} className="text-xs font-black uppercase tracking-widest text-neutral-400">
-                            Overtime Hours
-                          </Label>
-                          <Input
-                            id={`ot-${dateKey}`}
-                            type="number"
-                            min="0"
-                            step="0.5"
-                            value={pendingOvertimeHours}
-                            onChange={(e) => setPendingOvertimeHours(e.target.value)}
-                            className="rounded-xl"
-                          />
-                        </div>
-                        <Button
-                          size="sm"
-                          className="bg-emerald-600 text-white hover:bg-emerald-500 rounded-xl"
-                          onClick={() => onSave(dateKey)}
-                          disabled={markAttendance.isPending}
-                        >
-                          Save
-                        </Button>
+                        {record?.modifiedByRequest && (
+                          <p className="text-xs font-bold uppercase tracking-widest text-amber-500">
+                            Modified by HR
+                          </p>
+                        )}
+                        {!isAdmin && (
+                          <div className="grid gap-1 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                            <p>Status: {record?.status ? STATUS_CONFIG[record.status].label : '— none —'}</p>
+                            {record?.isLate && <p className="text-amber-500">Late arrival</p>}
+                            {record?.overtimeHours ? <p>Overtime: {record.overtimeHours}h</p> : null}
+                          </div>
+                        )}
+                        {isAdmin && (
+                          <>
+                            <Select value={pendingStatus} onValueChange={setPendingStatus}>
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value={NO_STATUS}>— No status —</SelectItem>
+                                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                                  <SelectItem key={key} value={key}>
+                                    {cfg.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <div className="grid gap-1.5">
+                              <Label htmlFor={`ot-${dateKey}`} className="text-xs font-black uppercase tracking-widest text-neutral-400">
+                                Overtime Hours
+                              </Label>
+                              <Input
+                                id={`ot-${dateKey}`}
+                                type="number"
+                                min="0"
+                                step="0.5"
+                                value={pendingOvertimeHours}
+                                onChange={(e) => setPendingOvertimeHours(e.target.value)}
+                                className="rounded-xl"
+                              />
+                            </div>
+                            <label
+                              htmlFor={`late-${dateKey}`}
+                              className="flex items-center gap-2 cursor-pointer select-none text-xs font-black uppercase tracking-widest text-neutral-400"
+                            >
+                              <input
+                                id={`late-${dateKey}`}
+                                type="checkbox"
+                                checked={pendingIsLate}
+                                onChange={(e) => setPendingIsLate(e.target.checked)}
+                                className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
+                              />
+                              Late arrival
+                            </label>
+                            <Button
+                              size="sm"
+                              className="bg-emerald-600 text-white hover:bg-emerald-500 rounded-xl"
+                              onClick={() => onSave(dateKey)}
+                              disabled={markAttendance.isPending}
+                            >
+                              Save
+                            </Button>
+                          </>
+                        )}
                         {isAdmin && (
                           <Button
                             size="sm"

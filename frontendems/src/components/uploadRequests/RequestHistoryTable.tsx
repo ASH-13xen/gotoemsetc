@@ -8,8 +8,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useRevokeUploadRequest, useUploadRequests } from '@/hooks/useUploadRequests'
 import { useConfig } from '@/hooks/useConfig'
 import { ManualSendButtons } from '@/components/common/ManualSendButtons'
-import { buildGmailComposeUrl, buildWhatsappUrl } from '@/lib/manualSend'
-import { buildDocumentRequestEmailBody, buildDocumentRequestWhatsappText } from '@/lib/documentRequestTemplates'
+import { buildWhatsappUrl } from '@/lib/manualSend'
+import { buildDocumentRequestWhatsappText } from '@/lib/documentRequestTemplates'
 import type { UploadRequest, UploadRequestStatus } from '@/api/uploadRequests.api'
 
 const STATUS_VARIANT: Record<UploadRequestStatus, 'secondary' | 'success' | 'warning' | 'destructive'> = {
@@ -25,14 +25,12 @@ const ACTIVE_STATUSES: UploadRequestStatus[] = ['pending', 'partially_fulfilled'
 function RequestRow({
   req,
   employeeName,
-  employeeEmail,
   employeePhone,
   onRevoke,
   revokePending,
 }: {
   req: UploadRequest
   employeeName: string
-  employeeEmail?: string
   employeePhone?: string
   onRevoke: () => void
   revokePending: boolean
@@ -44,7 +42,6 @@ function RequestRow({
   const docLabels = req.requestedDocTypes
     .map((key) => config?.docTypes.find((d) => d.key === key)?.label ?? key)
     .join(', ')
-  const companyName = config?.companyName ?? 'us'
 
   const onCopy = async () => {
     await navigator.clipboard.writeText(req.link)
@@ -90,15 +87,6 @@ function RequestRow({
             </div>
           )}
           <ManualSendButtons
-            emailHref={
-              employeeEmail && req.accessCode
-                ? buildGmailComposeUrl(
-                    employeeEmail,
-                    `Document Request — ${companyName}`,
-                    buildDocumentRequestEmailBody(employeeName, docLabels, req.link, req.accessCode, companyName)
-                  )
-                : undefined
-            }
             whatsappHref={
               employeePhone && req.accessCode
                 ? buildWhatsappUrl(
@@ -118,12 +106,10 @@ function RequestRow({
 export function RequestHistoryTable({
   employeeId,
   employeeName,
-  employeeEmail,
   employeePhone,
 }: {
   employeeId: string
   employeeName: string
-  employeeEmail?: string
   employeePhone?: string
 }) {
   const { data, isLoading } = useUploadRequests(employeeId)
@@ -147,7 +133,6 @@ export function RequestHistoryTable({
               key={req._id}
               req={req}
               employeeName={employeeName}
-              employeeEmail={employeeEmail}
               employeePhone={employeePhone}
               revokePending={revoke.isPending}
               onRevoke={() =>

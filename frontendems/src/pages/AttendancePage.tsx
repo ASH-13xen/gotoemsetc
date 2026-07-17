@@ -9,8 +9,11 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { AttendanceCalendar } from '@/components/attendance/AttendanceCalendar'
 import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummaryCard'
 import { DevicePunchFeed } from '@/components/attendance/DevicePunchFeed'
+import { RequestModificationDialog } from '@/components/attendance/RequestModificationDialog'
+import { AttendanceRequestsPanel } from '@/components/attendance/AttendanceRequestsPanel'
 import { useEmployee, useEmployees } from '@/hooks/useEmployees'
 import { useAttendanceMarkedToday } from '@/hooks/useAttendance'
+import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -25,15 +28,17 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 export default function AttendancePage() {
   const { employeeId } = useParams<{ employeeId?: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, 300)
 
-  const { data: employeesData, isLoading: employeesLoading } = useEmployees({
-    search: debouncedSearch || undefined,
-    limit: 100,
-  })
+  const { data: employeesData, isLoading: employeesLoading } = useEmployees(
+    { search: debouncedSearch || undefined, limit: 100 },
+    { enabled: isAdmin }
+  )
   const { data: selectedEmployeeData } = useEmployee(employeeId)
-  const { data: markedTodayData } = useAttendanceMarkedToday()
+  const { data: markedTodayData } = useAttendanceMarkedToday({ enabled: isAdmin })
 
   const markedTodayIds = useMemo(() => new Set(markedTodayData?.employeeIds ?? []), [markedTodayData])
 
@@ -70,99 +75,115 @@ export default function AttendancePage() {
           </div>
         </div>
 
-        <DevicePunchFeed />
+        {!isAdmin && (
+          <div className="flex justify-end">
+            <RequestModificationDialog />
+          </div>
+        )}
 
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-          {/* EMPLOYEE PICKER */}
-          <div className="flex max-h-[calc(100vh-260px)] flex-col bg-card/90 backdrop-blur-md rounded-2xl shadow-diffuse border-0 overflow-hidden lg:col-span-1">
-            <div className="border-b border-border/15 p-4">
-              <div className="relative flex items-center">
-                <Search className="pointer-events-none absolute left-3 size-4 text-muted-foreground/60 z-10" />
-                <Input
-                  placeholder="SEARCH EMPLOYEES..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="h-11 pl-9 text-sm uppercase"
-                />
-              </div>
-            </div>
-            <div className="divide-y divide-border/10 overflow-y-auto">
-              {employeesLoading ? (
-                <div className="space-y-2 p-4">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Skeleton key={i} className="h-14 w-full bg-neutral-800" />
-                  ))}
+        {isAdmin && <DevicePunchFeed />}
+
+        {isAdmin ? (
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+            {/* EMPLOYEE PICKER */}
+            <div className="flex max-h-[calc(100vh-260px)] flex-col bg-card/90 backdrop-blur-md rounded-2xl shadow-diffuse border-0 overflow-hidden lg:col-span-1">
+              <div className="border-b border-border/15 p-4">
+                <div className="relative flex items-center">
+                  <Search className="pointer-events-none absolute left-3 size-4 text-muted-foreground/60 z-10" />
+                  <Input
+                    placeholder="SEARCH EMPLOYEES..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="h-11 pl-9 text-sm uppercase"
+                  />
                 </div>
-              ) : employees.length === 0 ? (
-                <p className="p-6 text-center text-sm font-bold tracking-widest text-neutral-400 uppercase">
-                  No employees found
-                </p>
-              ) : (
-                employees.map((employee) => {
-                  const markedToday = markedTodayIds.has(employee._id)
-                  return (
-                    <button
-                      key={employee._id}
-                      type="button"
-                      onClick={() => navigate(`/attendance/${employee._id}`)}
-                      className={cn(
-                        'w-full border-l-4 border-transparent p-4 text-left transition-colors hover:bg-secondary/40',
-                        employeeId === employee._id && 'border-primary bg-secondary/50',
-                        markedToday && 'opacity-60'
-                      )}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="font-bold tracking-wide text-foreground uppercase">
-                          {employee.firstName} {employee.lastName}
-                        </p>
-                        {markedToday && (
-                          <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-                            <CheckCircle2 className="size-3" />
-                            Marked
-                          </span>
+              </div>
+              <div className="divide-y divide-border/10 overflow-y-auto">
+                {employeesLoading ? (
+                  <div className="space-y-2 p-4">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Skeleton key={i} className="h-14 w-full bg-neutral-800" />
+                    ))}
+                  </div>
+                ) : employees.length === 0 ? (
+                  <p className="p-6 text-center text-sm font-bold tracking-widest text-neutral-400 uppercase">
+                    No employees found
+                  </p>
+                ) : (
+                  employees.map((employee) => {
+                    const markedToday = markedTodayIds.has(employee._id)
+                    return (
+                      <button
+                        key={employee._id}
+                        type="button"
+                        onClick={() => navigate(`/attendance/${employee._id}`)}
+                        className={cn(
+                          'w-full border-l-4 border-transparent p-4 text-left transition-colors hover:bg-secondary/40',
+                          employeeId === employee._id && 'border-primary bg-secondary/50',
+                          markedToday && 'opacity-60'
                         )}
-                      </div>
-                      <p className="mt-0.5 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-                        {employee.employeeCode} · {employee.designation}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-bold tracking-wide text-foreground uppercase">
+                            {employee.firstName} {employee.lastName}
+                          </p>
+                          {markedToday && (
+                            <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                              <CheckCircle2 className="size-3" />
+                              Marked
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+                          {employee.employeeCode} · {employee.designation}
+                        </p>
+                      </button>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* CALENDAR */}
+            <div className="lg:col-span-2 space-y-8">
+              {!employeeId ? (
+                <Card className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+                  <CalendarDays className="size-16 text-muted-foreground/40" />
+                  <p className="text-2xl font-bold tracking-wider text-foreground uppercase">Select an employee</p>
+                  <p className="text-sm font-semibold tracking-widest text-muted-foreground uppercase">
+                    Choose someone from the list to view or mark attendance.
+                  </p>
+                </Card>
+              ) : (
+                <div className="space-y-6">
+                  <Card className="flex flex-wrap items-center justify-between gap-4 p-6">
+                    <div>
+                      <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
+                        Viewing attendance for
                       </p>
-                    </button>
-                  )
-                })
+                      <h2 className="text-2xl font-extrabold tracking-tight text-foreground uppercase">
+                        {selectedEmployee ? `${selectedEmployee.firstName} ${selectedEmployee.lastName}` : '…'}
+                      </h2>
+                    </div>
+                    <Button variant="outline" onClick={() => navigate(`/employees/${employeeId}`)} className="rounded-xl">
+                      View Profile
+                    </Button>
+                  </Card>
+                  <AttendanceSummaryCard employeeId={employeeId} />
+                  <AttendanceCalendar employeeId={employeeId} />
+                </div>
               )}
+              <AttendanceRequestsPanel />
             </div>
           </div>
-
-          {/* CALENDAR */}
-          <div className="lg:col-span-2">
-            {!employeeId ? (
-              <Card className="flex flex-col items-center justify-center gap-4 py-24 text-center">
-                <CalendarDays className="size-16 text-muted-foreground/40" />
-                <p className="text-2xl font-bold tracking-wider text-foreground uppercase">Select an employee</p>
-                <p className="text-sm font-semibold tracking-widest text-muted-foreground uppercase">
-                  Choose someone from the list to view or mark attendance.
-                </p>
-              </Card>
-            ) : (
-              <div className="space-y-6">
-                <Card className="flex flex-wrap items-center justify-between gap-4 p-6">
-                  <div>
-                    <p className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
-                      Viewing attendance for
-                    </p>
-                    <h2 className="text-2xl font-extrabold tracking-tight text-foreground uppercase">
-                      {selectedEmployee ? `${selectedEmployee.firstName} ${selectedEmployee.lastName}` : '…'}
-                    </h2>
-                  </div>
-                  <Button variant="outline" onClick={() => navigate(`/employees/${employeeId}`)} className="rounded-xl">
-                    View Profile
-                  </Button>
-                </Card>
-                <AttendanceSummaryCard employeeId={employeeId} />
-                <AttendanceCalendar employeeId={employeeId} />
-              </div>
-            )}
-          </div>
-        </div>
+        ) : (
+          employeeId && (
+            <div className="space-y-6">
+              <AttendanceSummaryCard employeeId={employeeId} />
+              <AttendanceCalendar employeeId={employeeId} />
+            </div>
+          )
+        )}
       </main>
     </div>
   )

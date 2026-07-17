@@ -29,6 +29,7 @@ const clientUploadedDocumentRoutes = require('./clientUploadedDocument.routes');
 const inventoryRoutes = require('./inventory.routes');
 const eventRoutes = require('./event.routes');
 const devicePunchRoutes = require('./devicePunch.routes');
+const attendanceRequestRoutes = require('./attendanceRequest.routes');
 
 const router = Router();
 
@@ -46,11 +47,13 @@ router.use(auditLogger);
 
 router.use('/employees', employeeRoutes);
 router.use('/templates', templateRoutes);
-router.use('/documents', documentRoutes);
-router.use('/upload-requests', uploadRequestRoutes);
-router.use('/uploaded-documents', uploadedDocumentRoutes);
+// Document System (Generate Docs / HR Collection) — fully admin-only.
+router.use('/documents', requireRole(USER_ROLES.ADMIN), documentRoutes);
+router.use('/upload-requests', requireRole(USER_ROLES.ADMIN), uploadRequestRoutes);
+router.use('/uploaded-documents', requireRole(USER_ROLES.ADMIN), uploadedDocumentRoutes);
 router.use('/dashboard', dashboardRoutes);
-router.use('/applicants', applicantRoutes);
+// Recruitment/Applicants — fully admin-only.
+router.use('/applicants', requireRole(USER_ROLES.ADMIN), applicantRoutes);
 router.use('/clients', clientRoutes);
 router.use('/quotation-templates', quotationTemplateRoutes);
 router.use('/quotations', quotationRoutes);
@@ -65,6 +68,7 @@ router.use('/client-uploaded-documents', clientUploadedDocumentRoutes);
 router.use('/inventory', inventoryRoutes);
 router.use('/events', eventRoutes);
 router.use('/device-punches', devicePunchRoutes);
+router.use('/attendance-requests', attendanceRequestRoutes);
 router.use('/users', requireRole(USER_ROLES.ADMIN), userRoutes);
 router.use('/audit-log', requireRole(USER_ROLES.ADMIN), auditLogRoutes);
 

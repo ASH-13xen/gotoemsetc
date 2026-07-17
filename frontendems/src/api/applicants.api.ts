@@ -139,9 +139,15 @@ export async function hireApplicant(
   id: string,
   selectionNotes: string,
   decisionDate: string,
-  startDate: string
+  startDate: string,
+  hiredPosition?: string
 ): Promise<{ applicant: Applicant; employee: { _id: string } }> {
-  const { data } = await apiClient.post(`/applicants/${id}/hire`, { selectionNotes, decisionDate, startDate })
+  const { data } = await apiClient.post(`/applicants/${id}/hire`, {
+    selectionNotes,
+    decisionDate,
+    startDate,
+    hiredPosition,
+  })
   return data
 }
 

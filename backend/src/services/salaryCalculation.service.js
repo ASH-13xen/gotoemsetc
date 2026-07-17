@@ -51,8 +51,14 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
 
   const counts = { P: 0, O: 0, H: 0, L: 0, SL: 0, W: 0 };
   let totalOvertimeHours = 0;
+  // isLate is independent of status (see attendanceClassifier.service.js) —
+  // a day can be e.g. Short Leave AND late at once, so it's tallied
+  // separately here rather than folded into counts.L (which stays exactly
+  // what it always was: days whose *status* is literally 'L').
+  let lateFlagCount = 0;
   for (const record of records) {
     if (record.status) counts[record.status] += 1;
+    if (record.isLate) lateFlagCount += 1;
     totalOvertimeHours += record.overtimeHours || 0;
   }
 
@@ -73,7 +79,7 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
   const daysWorkedTotal = counts.P + counts.O + counts.W + counts.L + counts.SL + counts.H * 0.5;
 
   // >2 late = 1 short leave; >2 short leave (incl. converted lates) = 1 half day.
-  const lateToSLUnits = Math.floor(counts.L / 3);
+  const lateToSLUnits = Math.floor((counts.L + lateFlagCount) / 3);
   const effectiveSLUnits = counts.SL + lateToSLUnits;
   const halfDayPenaltyUnits = Math.floor(effectiveSLUnits / 3);
 

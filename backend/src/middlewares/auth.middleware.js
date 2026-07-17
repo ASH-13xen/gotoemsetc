@@ -32,4 +32,19 @@ function requireRole(...roles) {
   };
 }
 
-module.exports = { verifyToken, requireRole };
+// Admins pass through unconditionally; anyone else only passes if
+// req[source][paramName] matches their own linked Employee id — used on
+// self-service reads (own employee record, own attendance, own device
+// punches) that a worker must still be able to reach, unlike the flatly
+// admin-only routes. `source` is 'params' for routes like /:id, 'query' for
+// routes that take the target employee as a query string (?employeeId=…).
+function requireSelfOrAdmin(paramName = 'id', source = 'params') {
+  return (req, res, next) => {
+    if (!req.user) return next(ApiError.unauthorized());
+    if (req.user.role === 'admin') return next();
+    if (req.user.employeeLink && req.user.employeeLink === req[source][paramName]) return next();
+    return next(ApiError.forbidden());
+  };
+}
+
+module.exports = { verifyToken, requireRole, requireSelfOrAdmin };

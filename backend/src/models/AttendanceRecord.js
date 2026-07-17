@@ -19,6 +19,14 @@ const attendanceRecordSchema = new Schema(
     // day that isn't currently isAutoMarked, so it never overwrites a human
     // decision, but freely re-classifies its own earlier auto-marks.
     isAutoMarked: { type: Boolean, default: false },
+    // Independent of status — arrival past the grace cutoff, whether or not
+    // it also pushed the day into Short Leave/Half Day. Feeds the payroll
+    // late->short-leave conversion (see salaryCalculation.service.js)
+    // alongside (not instead of) a literal status: 'L' day.
+    isLate: { type: Boolean, default: false },
+    // True only when this record was last updated via the attendance
+    // modification request resolve endpoint — the "modified by HR" marker.
+    modifiedByRequest: { type: Boolean, default: false },
     notes: String,
   },
   { timestamps: true }

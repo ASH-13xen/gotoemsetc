@@ -24,19 +24,17 @@ import { cn } from '@/lib/utils'
 import { useConfig } from '@/hooks/useConfig'
 import { useCreateUploadRequest } from '@/hooks/useUploadRequests'
 import { ManualSendButtons } from '@/components/common/ManualSendButtons'
-import { buildGmailComposeUrl, buildWhatsappUrl } from '@/lib/manualSend'
-import { buildDocumentRequestEmailBody, buildDocumentRequestWhatsappText } from '@/lib/documentRequestTemplates'
+import { buildWhatsappUrl } from '@/lib/manualSend'
+import { buildDocumentRequestWhatsappText } from '@/lib/documentRequestTemplates'
 
 export function RequestDocumentsModal({
   employeeId,
   employeeName,
-  employeeEmail,
   employeePhone,
   trigger,
 }: {
   employeeId: string
   employeeName: string
-  employeeEmail?: string
   employeePhone?: string
   trigger?: React.ReactNode
 }) {
@@ -78,9 +76,6 @@ export function RequestDocumentsModal({
   const docLabels = selectedTypes
     .map((key) => config?.docTypes.find((d) => d.key === key)?.label ?? key)
     .join(', ')
-  const companyName = config?.companyName ?? 'us'
-  const emailBody =
-    link && accessCode ? buildDocumentRequestEmailBody(employeeName, docLabels, link, accessCode, companyName) : ''
   const whatsappText =
     link && accessCode ? buildDocumentRequestWhatsappText(employeeName, docLabels, link, accessCode) : ''
 
@@ -191,12 +186,12 @@ export function RequestDocumentsModal({
               </div>
             )}
             <p className="text-xs text-muted-foreground">
-              Share this link with the employee. They'll also need the access code above to open
-              it — it's a separate one-time login, not related to any other stored credentials.
-              Both expire automatically.
+              An email with this link and access code has already been sent to the employee
+              automatically. They'll need the access code above to open the link — it's a
+              separate one-time login, not related to any other stored credentials. Both expire
+              automatically.
             </p>
             <ManualSendButtons
-              emailHref={employeeEmail ? buildGmailComposeUrl(employeeEmail, `Document Request — ${companyName}`, emailBody) : undefined}
               whatsappHref={employeePhone ? buildWhatsappUrl(employeePhone, whatsappText) : undefined}
               storageKey={link ? `notified_modal_${link.split('/').pop()}` : undefined}
             />

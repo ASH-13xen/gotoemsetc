@@ -268,30 +268,33 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
               <span className="text-2xl font-extrabold uppercase tracking-wide">BACK TO PORTAL</span>
             </div>
 
-            {/* Generate Documents */}
-            <div
-              onClick={() => navigate(`/employees/${employeeId}/wizard`)}
-              className="bg-secondary text-secondary-foreground p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
-            >
-              <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">DOCUMENT SYSTEM</span>
-              <span className="text-2xl font-extrabold uppercase tracking-wide">GENERATE DOCS</span>
-            </div>
+            {/* Generate Documents — admin-only */}
+            {isAdmin && (
+              <div
+                onClick={() => navigate(`/employees/${employeeId}/wizard`)}
+                className="bg-secondary text-secondary-foreground p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
+              >
+                <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">DOCUMENT SYSTEM</span>
+                <span className="text-2xl font-extrabold uppercase tracking-wide">GENERATE DOCS</span>
+              </div>
+            )}
 
-            {/* Request Documents */}
-            <RequestDocumentsModal
-              employeeId={employeeId}
-              employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
-              employeeEmail={employee.personalEmail}
-              employeePhone={employee.phone}
-              trigger={
-                <div
-                  className="bg-secondary text-secondary-foreground p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
-                >
-                  <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">HR COLLECTION</span>
-                  <span className="text-2xl font-extrabold uppercase tracking-wide">REQUEST FILES</span>
-                </div>
-              }
-            />
+            {/* Request Documents — admin-only */}
+            {isAdmin && (
+              <RequestDocumentsModal
+                employeeId={employeeId}
+                employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
+                employeePhone={employee.phone}
+                trigger={
+                  <div
+                    className="bg-secondary text-secondary-foreground p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
+                  >
+                    <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">HR COLLECTION</span>
+                    <span className="text-2xl font-extrabold uppercase tracking-wide">REQUEST FILES</span>
+                  </div>
+                }
+              />
+            )}
 
             {/* Add/Manage Credentials — admin-only */}
             {isAdmin && (
@@ -325,6 +328,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
 
         {/* DETAILS FORM */}
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-8">
+        <fieldset disabled={!isAdmin} className="contents">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Personal Details */}
             <Card className="p-6 space-y-6">
@@ -668,27 +672,31 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
             </Button>
           </Card>
 
-          {/* Form Action Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button
-              type="submit"
-              disabled={updateEmployee.isPending}
-              className="bg-emerald-500/10 text-emerald-700 text-lg font-bold h-14 rounded-xl tracking-wider border-0 hover:bg-emerald-500/25 transition-all cursor-pointer shadow-none"
-            >
-              {updateEmployee.isPending && <Loader2 className="size-5 animate-spin" />}
-              SAVE PROFILE CHANGES
-            </Button>
-            <Button
-              type="button"
-              onClick={onDelete}
-              disabled={deleteEmployee.isPending}
-              variant="ghost"
-              className="text-destructive hover:bg-destructive/10 text-lg font-bold h-14 rounded-xl tracking-wider cursor-pointer"
-            >
-              {deleteEmployee.isPending && <Loader2 className="size-5 animate-spin" />}
-              DELETE PROFILE
-            </Button>
-          </div>
+        </fieldset>
+
+          {/* Form Action Buttons — admin-only, a worker only has read access to their own record */}
+          {isAdmin && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Button
+                type="submit"
+                disabled={updateEmployee.isPending}
+                className="bg-emerald-500/10 text-emerald-700 text-lg font-bold h-14 rounded-xl tracking-wider border-0 hover:bg-emerald-500/25 transition-all cursor-pointer shadow-none"
+              >
+                {updateEmployee.isPending && <Loader2 className="size-5 animate-spin" />}
+                SAVE PROFILE CHANGES
+              </Button>
+              <Button
+                type="button"
+                onClick={onDelete}
+                disabled={deleteEmployee.isPending}
+                variant="ghost"
+                className="text-destructive hover:bg-destructive/10 text-lg font-bold h-14 rounded-xl tracking-wider cursor-pointer"
+              >
+                {deleteEmployee.isPending && <Loader2 className="size-5 animate-spin" />}
+                DELETE PROFILE
+              </Button>
+            </div>
+          )}
         </form>
 
         {/* Recruitment Details — carried over from the application, only present on employees hired through the pipeline */}
@@ -738,19 +746,22 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
           {isAdmin && (
             <SalarySlipsList employeeId={employeeId} employeeName={`${employee.firstName} ${employee.lastName ?? ''}`} />
           )}
-          <GeneratedDocumentsList
-            employeeId={employeeId}
-            employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
-            employeeEmail={employee.personalEmail}
-            employeePhone={employee.phone}
-          />
-          <UploadedDocumentsList employeeId={employeeId} />
-          <RequestHistoryTable
-            employeeId={employeeId}
-            employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
-            employeeEmail={employee.personalEmail}
-            employeePhone={employee.phone}
-          />
+          {isAdmin && (
+            <>
+              <GeneratedDocumentsList
+                employeeId={employeeId}
+                employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
+                employeeEmail={employee.personalEmail}
+                employeePhone={employee.phone}
+              />
+              <UploadedDocumentsList employeeId={employeeId} />
+              <RequestHistoryTable
+                employeeId={employeeId}
+                employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
+                employeePhone={employee.phone}
+              />
+            </>
+          )}
           <ActivityTimeline employeeId={employeeId} />
         </div>
       </main>

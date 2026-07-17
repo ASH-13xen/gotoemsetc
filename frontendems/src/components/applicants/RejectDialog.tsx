@@ -36,7 +36,7 @@ export function RejectDialog({ applicantId, trigger }: { applicantId: string; tr
       { rejectionReason, decisionDate },
       {
         onSuccess: () => {
-          toast.success('Applicant marked as rejected')
+          toast.success('Applicant marked as rejected — a decline email has been sent automatically')
           setOpen(false)
         },
         onError: () => toast.error('Could not update applicant'),
@@ -58,8 +58,8 @@ export function RejectDialog({ applicantId, trigger }: { applicantId: string; tr
         <DialogHeader>
           <DialogTitle>Reject this applicant</DialogTitle>
           <DialogDescription>
-            They'll stay on record as rejected, along with your reason. You'll then get Send
-            Email/Send WhatsApp buttons to let them know yourself.
+            They'll stay on record as rejected, along with your reason. A decline email goes out
+            automatically (plus a WhatsApp button you send yourself).
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">

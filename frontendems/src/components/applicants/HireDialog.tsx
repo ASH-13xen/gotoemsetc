@@ -7,6 +7,13 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -21,12 +28,27 @@ function todayValue() {
   return new Date().toISOString().slice(0, 10)
 }
 
-export function HireDialog({ applicantId, trigger }: { applicantId: string; trigger?: React.ReactNode }) {
+export function HireDialog({
+  applicantId,
+  positionAppliedFor,
+  trigger,
+}: {
+  applicantId: string
+  positionAppliedFor?: string
+  trigger?: React.ReactNode
+}) {
   const [open, setOpen] = useState(false)
   const [selectionNotes, setSelectionNotes] = useState('')
   const [decisionDate, setDecisionDate] = useState(todayValue())
   const [startDate, setStartDate] = useState(todayValue())
+  const [hiredPosition, setHiredPosition] = useState('')
   const hireApplicant = useHireApplicant(applicantId)
+
+  const appliedPositions = (positionAppliedFor || '')
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
+  const needsPositionChoice = appliedPositions.length > 1
 
   const onSubmit = () => {
     if (!selectionNotes.trim()) {
@@ -37,11 +59,15 @@ export function HireDialog({ applicantId, trigger }: { applicantId: string; trig
       toast.error('Please enter a start date')
       return
     }
+    if (needsPositionChoice && !hiredPosition) {
+      toast.error('Select which position you’re hiring them for')
+      return
+    }
     hireApplicant.mutate(
-      { selectionNotes, decisionDate, startDate },
+      { selectionNotes, decisionDate, startDate, hiredPosition: hiredPosition || undefined },
       {
         onSuccess: () => {
-          toast.success('Applicant hired — use the Send buttons below to let them know')
+          toast.success('Applicant hired — a welcome email has been sent automatically')
           setOpen(false)
         },
         onError: () => toast.error('Could not hire applicant'),
@@ -63,11 +89,31 @@ export function HireDialog({ applicantId, trigger }: { applicantId: string; trig
         <DialogHeader>
           <DialogTitle>Hire this applicant</DialogTitle>
           <DialogDescription>
-            This creates their employee record. You'll then get Send Email/Send WhatsApp buttons
-            to let them know yourself, with this reason included.
+            This creates their employee record and automatically emails them a welcome message
+            (plus a WhatsApp button you send yourself).
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
+          {needsPositionChoice && (
+            <div className="grid gap-1.5">
+              <Label htmlFor="hiredPosition">Which position are you hiring them for?</Label>
+              <Select value={hiredPosition} onValueChange={setHiredPosition}>
+                <SelectTrigger id="hiredPosition" className="w-full rounded-xl">
+                  <SelectValue placeholder="Select a position" />
+                </SelectTrigger>
+                <SelectContent>
+                  {appliedPositions.map((position) => (
+                    <SelectItem key={position} value={position}>
+                      {position}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                They applied for multiple roles — pick the one this hire is for.
+              </p>
+            </div>
+          )}
           <div className="grid gap-1.5">
             <Label htmlFor="selectionNotes">Why were they selected?</Label>
             <Textarea

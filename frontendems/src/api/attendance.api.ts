@@ -12,13 +12,19 @@ export interface AttendanceRecord {
   // True when the daily biometric classifier wrote this record rather than
   // an admin — an admin save always flips this back to false.
   isAutoMarked: boolean
+  // Independent of status — arrival past the grace cutoff, can coexist with
+  // any status (e.g. Short Leave AND late on the same day).
+  isLate: boolean
+  // True when this record was last updated via an attendance modification
+  // request resolution.
+  modifiedByRequest: boolean
   notes?: string
 }
 
 export async function markAttendance(
   employeeId: string,
   date: string,
-  input: { status?: AttendanceStatus; overtimeHours?: number; notes?: string }
+  input: { status?: AttendanceStatus; overtimeHours?: number; isLate?: boolean; notes?: string }
 ): Promise<{ record: AttendanceRecord }> {
   const { data } = await apiClient.post(`/employees/${employeeId}/attendance`, {
     date,

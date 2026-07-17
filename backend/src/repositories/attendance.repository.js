@@ -8,10 +8,19 @@ const AttendanceRecord = require('../models/AttendanceRecord');
 // manual admin save must always flip an existing auto-mark back to false,
 // and the classifier must always set it true, so neither path can rely on
 // "leave untouched" here.
-function upsertForDate(employeeId, date, { status, overtimeHours, notes }, isBackdated, isAutoMarked = false) {
+function upsertForDate(
+  employeeId,
+  date,
+  { status, overtimeHours, notes, isLate },
+  isBackdated,
+  isAutoMarked = false,
+  modifiedByRequest
+) {
+  const update = { status, overtimeHours, isBackdated, notes, isAutoMarked, isLate };
+  if (modifiedByRequest !== undefined) update.modifiedByRequest = modifiedByRequest;
   return AttendanceRecord.findOneAndUpdate(
     { employee: employeeId, date },
-    { status, overtimeHours, isBackdated, notes, isAutoMarked },
+    update,
     { upsert: true, returnDocument: 'after', runValidators: true, setDefaultsOnInsert: true }
   );
 }

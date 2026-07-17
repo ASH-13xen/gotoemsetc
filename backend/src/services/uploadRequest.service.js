@@ -2,17 +2,36 @@ const crypto = require('node:crypto');
 
 const ApiError = require('../utils/ApiError');
 const { UPLOAD_REQUEST_STATUS, DEFAULT_UPLOAD_REQUEST_EXPIRY_HOURS } = require('../config/constants');
+const DOC_TYPES = require('../config/docTypes');
 const employeeRepository = require('../repositories/employee.repository');
 const uploadRequestRepository = require('../repositories/uploadRequest.repository');
 const uploadedDocumentRepository = require('../repositories/uploadedDocument.repository');
 const cloudinaryUploadService = require('./cloudinaryUpload.service');
 const activityService = require('./activity.service');
+const emailService = require('./email.service');
+const env = require('../config/env');
+const logger = require('../utils/logger');
 
 // 6-digit numeric — short enough to read out over a phone call or retype
 // from a WhatsApp message, delivered separately from (and required in
 // addition to) the link itself.
 function generateAccessCode() {
   return String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+}
+
+// Fire-and-forget, same pattern as sendInterviewEmails — the request is
+// still created and returned to the admin either way.
+async function sendUploadRequestEmail(employee, requestedDocTypes, link, accessCode) {
+  if (!employee.personalEmail) return;
+
+  const employeeName = `${employee.firstName} ${employee.lastName || ''}`.trim();
+  const docLabels = requestedDocTypes
+    .map((key) => DOC_TYPES.find((d) => d.key === key)?.label ?? key)
+    .join(', ');
+  const subject = `Document Request — ${env.companyName}`;
+  const html = `<p>Hi ${employeeName},</p><p>Please upload the following documents using the secure link below:</p><p>${docLabels}</p><p><a href="${link}">${link}</a></p><p>You'll be asked for this access code before you can upload: <strong>${accessCode}</strong></p><p>Thanks,<br/>${env.companyName} HR</p>`;
+
+  await emailService.sendEmail({ to: employee.personalEmail, subject, html });
 }
 
 async function createRequest(employeeId, { requestedDocTypes, expiresInHours }) {
@@ -34,6 +53,11 @@ async function createRequest(employeeId, { requestedDocTypes, expiresInHours }) 
   });
 
   await activityService.log(employee._id, 'UPLOAD_REQUEST_CREATED', { requestedDocTypes });
+
+  const link = `${env.frontendUrl}/upload/${token}`;
+  sendUploadRequestEmail(employee, requestedDocTypes, link, accessCode).catch((err) =>
+    logger.error({ err }, 'sendUploadRequestEmail failed')
+  );
 
   return { uploadRequest };
 }

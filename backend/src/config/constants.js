@@ -78,11 +78,14 @@ module.exports = {
     EVENT_RESPONSIBILITY_ASSIGNED: 'event_responsibility_assigned',
     ATTENDANCE_NO_SCAN: 'attendance_no_scan',
     ATTENDANCE_SINGLE_SCAN: 'attendance_single_scan',
+    ATTENDANCE_UNCLASSIFIED: 'attendance_unclassified',
+    ATTENDANCE_MODIFICATION_REQUESTED: 'attendance_modification_requested',
   },
   CLIENT_STATUS: { LEAD: 'lead', ONBOARDED: 'onboarded', OFFBOARDED: 'offboarded' },
   QUOTATION_STATUS: { DRAFT: 'draft', SHARED: 'shared', SIGNED: 'signed', SUPERSEDED: 'superseded' },
   DEFAULT_QUOTATION_SHARE_EXPIRY_HOURS: 24 * 14,
   USER_ROLES: { ADMIN: 'admin', WORKER: 'worker' },
+  ATTENDANCE_REQUEST_STATUS: { PENDING: 'pending', RESOLVED: 'resolved' },
   // Default seed for the shared step library (admin can add/edit/remove
   // freely afterward — these just give a new install something to start from).
   DEFAULT_STEP_LIBRARY: [

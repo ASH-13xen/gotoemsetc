@@ -18,10 +18,11 @@ export function useAttendanceSummary(employeeId: string | undefined) {
   })
 }
 
-export function useAttendanceMarkedToday() {
+export function useAttendanceMarkedToday(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['attendance-marked-today'],
     queryFn: () => attendanceApi.getAttendanceMarkedToday(),
+    enabled: options?.enabled ?? true,
   })
 }
 
@@ -32,13 +33,15 @@ export function useMarkAttendance(employeeId: string) {
       date,
       status,
       overtimeHours,
+      isLate,
       notes,
     }: {
       date: string
       status?: AttendanceStatus
       overtimeHours?: number
+      isLate?: boolean
       notes?: string
-    }) => attendanceApi.markAttendance(employeeId, date, { status, overtimeHours, notes }),
+    }) => attendanceApi.markAttendance(employeeId, date, { status, overtimeHours, isLate, notes }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendance', employeeId] })
       queryClient.invalidateQueries({ queryKey: ['attendance-marked-today'] })

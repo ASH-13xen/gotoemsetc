@@ -35,11 +35,13 @@ export function useHireApplicant(id: string) {
       selectionNotes,
       decisionDate,
       startDate,
+      hiredPosition,
     }: {
       selectionNotes: string
       decisionDate: string
       startDate: string
-    }) => applicantsApi.hireApplicant(id, selectionNotes, decisionDate, startDate),
+      hiredPosition?: string
+    }) => applicantsApi.hireApplicant(id, selectionNotes, decisionDate, startDate, hiredPosition),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: APPLICANTS_KEY })
       queryClient.invalidateQueries({ queryKey: ['employees'] })

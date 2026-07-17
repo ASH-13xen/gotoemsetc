@@ -8,11 +8,12 @@ import type {
 
 const EMPLOYEES_KEY = ['employees']
 
-export function useEmployees(params: ListEmployeesParams) {
+export function useEmployees(params: ListEmployeesParams, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: [...EMPLOYEES_KEY, params],
     queryFn: () => employeesApi.listEmployees(params),
     placeholderData: (prev) => prev,
+    enabled: options?.enabled ?? true,
   })
 }
 

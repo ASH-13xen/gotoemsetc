@@ -14,7 +14,7 @@ function todayUTCMidnight() {
 // `dateStr` is a plain 'YYYY-MM-DD' string, which the spec guarantees parses
 // as UTC midnight — kept consistent with todayUTCMidnight() so the backdated
 // comparison never drifts by a day depending on the server's local timezone.
-async function markAttendance(employeeId, dateStr, { status, overtimeHours, notes }) {
+async function markAttendance(employeeId, dateStr, { status, overtimeHours, notes, isLate }) {
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) throw ApiError.notFound('Employee not found');
 
@@ -28,8 +28,13 @@ async function markAttendance(employeeId, dateStr, { status, overtimeHours, note
 
   const isBackdated = date.getTime() < today.getTime();
 
-  const record = await attendanceRepository.upsertForDate(employeeId, date, { status, overtimeHours, notes }, isBackdated);
-  await activityService.log(employeeId, 'ATTENDANCE_MARKED', { date: dateStr, status, overtimeHours, isBackdated });
+  const record = await attendanceRepository.upsertForDate(
+    employeeId,
+    date,
+    { status, overtimeHours, notes, isLate },
+    isBackdated
+  );
+  await activityService.log(employeeId, 'ATTENDANCE_MARKED', { date: dateStr, status, overtimeHours, isLate, isBackdated });
   return record;
 }
 

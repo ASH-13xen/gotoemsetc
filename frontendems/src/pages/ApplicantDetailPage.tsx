@@ -200,6 +200,7 @@ export default function ApplicantDetailPage() {
               <>
                 <HireDialog
                   applicantId={applicant._id}
+                  positionAppliedFor={applicant.positionAppliedFor}
                   trigger={
                     <div className="bg-emerald-500/10 text-emerald-700 p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]">
                       <span className="text-[10px] font-bold tracking-widest text-emerald-700/70 uppercase">DECISION</span>

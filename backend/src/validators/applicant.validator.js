@@ -68,6 +68,7 @@ const hire = {
     selectionNotes: z.string().min(1, 'Please note why this applicant was selected'),
     decisionDate: z.coerce.date(),
     startDate: z.coerce.date(),
+    hiredPosition: z.string().optional(),
   }),
 };
 
