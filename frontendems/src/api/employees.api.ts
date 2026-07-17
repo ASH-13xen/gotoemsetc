@@ -28,6 +28,8 @@ export interface ExtraDetail {
 export interface Employee {
   _id: string
   employeeCode: string
+  // Biometric device enrollment PIN — admin-only, set manually.
+  ecoId?: string
   firstName: string
   lastName?: string
   personalEmail?: string

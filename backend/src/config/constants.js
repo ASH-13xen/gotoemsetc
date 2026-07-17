@@ -76,6 +76,8 @@ module.exports = {
     CYCLE_ENDING_SOON: 'cycle_ending_soon',
     CYCLE_ROLLOVER: 'cycle_rollover',
     EVENT_RESPONSIBILITY_ASSIGNED: 'event_responsibility_assigned',
+    ATTENDANCE_NO_SCAN: 'attendance_no_scan',
+    ATTENDANCE_SINGLE_SCAN: 'attendance_single_scan',
   },
   CLIENT_STATUS: { LEAD: 'lead', ONBOARDED: 'onboarded', OFFBOARDED: 'offboarded' },
   QUOTATION_STATUS: { DRAFT: 'draft', SHARED: 'shared', SIGNED: 'signed', SUPERSEDED: 'superseded' },

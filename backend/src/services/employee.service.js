@@ -2,6 +2,7 @@ const employeeRepository = require('../repositories/employee.repository');
 const counterRepository = require('../repositories/counter.repository');
 const activityService = require('./activity.service');
 const ApiError = require('../utils/ApiError');
+const { USER_ROLES } = require('../config/constants');
 
 async function listEmployees(params) {
   return employeeRepository.list(params);
@@ -48,10 +49,14 @@ async function createEmployee(data) {
   return employee;
 }
 
-async function updateEmployee(id, data) {
-  const employee = await employeeRepository.updateById(id, data);
+async function updateEmployee(id, data, actingUserRole) {
+  // ecoId (the biometric device PIN) is admin-only — silently dropped for
+  // anyone else rather than erroring, so the rest of a non-admin's edit
+  // still goes through.
+  const payload = actingUserRole === USER_ROLES.ADMIN ? data : { ...data, ecoId: undefined };
+  const employee = await employeeRepository.updateById(id, payload);
   if (!employee) throw ApiError.notFound('Employee not found');
-  await activityService.log(employee._id, 'EMPLOYEE_UPDATED', { fields: Object.keys(data) });
+  await activityService.log(employee._id, 'EMPLOYEE_UPDATED', { fields: Object.keys(payload) });
   return employee;
 }
 

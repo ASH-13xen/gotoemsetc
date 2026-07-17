@@ -35,6 +35,10 @@ const employeeSchema = new Schema(
     // Numeric-looking string, starting at 1001 — see
     // scripts/seedEmployeeCounter.js and employee.service.js.
     employeeCode: { type: String, unique: true, sparse: true },
+    // The biometric device's enrollment PIN for this employee — admin-only
+    // (see employee.service.js#updateEmployee), set manually since the PIN
+    // is assigned on the physical device, not derivable from anything else.
+    ecoId: { type: String, trim: true, unique: true, sparse: true },
 
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, trim: true },

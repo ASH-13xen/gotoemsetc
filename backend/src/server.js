@@ -6,6 +6,7 @@ const logger = require('./utils/logger');
 const interviewReminderJob = require('./jobs/interviewReminder.job');
 const birthdayReminderJob = require('./jobs/birthdayReminder.job');
 const taskCycleJob = require('./jobs/taskCycle.job');
+const attendanceClassifierJob = require('./jobs/attendanceClassifier.job');
 const clientChat = require('./websocket/clientChat');
 
 async function main() {
@@ -13,6 +14,7 @@ async function main() {
   interviewReminderJob.start();
   birthdayReminderJob.start();
   taskCycleJob.start();
+  attendanceClassifierJob.start();
 
   // Socket.io needs the raw HTTP server (not just the Express app) to
   // upgrade connections on the same port.

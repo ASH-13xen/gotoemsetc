@@ -17,6 +17,8 @@ export interface DevicePunch {
 export async function listDevicePunches(params?: {
   limit?: number
   employeeId?: string
+  // 'YYYY-MM-DD' — restricts to scans within that one calendar day.
+  date?: string
 }): Promise<{ punches: DevicePunch[] }> {
   const { data } = await apiClient.get('/device-punches', { params })
   return data

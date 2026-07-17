@@ -41,6 +41,7 @@ type AddressForm = {
 }
 
 type FormValues = {
+  ecoId: string
   firstName: string
   lastName: string
   personalEmail: string
@@ -97,6 +98,7 @@ function addressesEqual(a: AddressForm, b: AddressForm): boolean {
 
 function toFormValues(employee: Employee): FormValues {
   return {
+    ecoId: employee.ecoId ?? '',
     firstName: employee.firstName ?? '',
     lastName: employee.lastName ?? '',
     personalEmail: employee.personalEmail ?? '',
@@ -207,6 +209,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
     updateEmployee.mutate(
       {
         ...values,
+        ecoId: values.ecoId || undefined,
         ctcAnnual: values.ctcAnnual ? Number(values.ctcAnnual) : undefined,
         monthlyPay: values.monthlyPay ? Number(values.monthlyPay) : undefined,
         payDate: values.payDate ? Number(values.payDate) : undefined,
@@ -580,6 +583,10 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 COMPENSATION & IDENTIFICATION
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="ecoId" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">BIOMETRIC DEVICE PIN (ECO ID)</Label>
+                  <Input id="ecoId" {...register('ecoId')} />
+                </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="ctcAnnual" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">ANNUAL CTC</Label>
                   <Input id="ctcAnnual" type="number" {...register('ctcAnnual')} />

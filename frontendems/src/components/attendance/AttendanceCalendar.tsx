@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { useAttendance, useMarkAttendance } from '@/hooks/useAttendance'
 import { useCreateHoliday, useDeleteHoliday, useHolidays } from '@/hooks/useHolidays'
 import { useAuth } from '@/hooks/useAuth'
+import { useDevicePunches } from '@/hooks/useDevicePunches'
 import { STATUS_CONFIG } from './statusConfig'
 import type { AttendanceStatus } from '@/api/attendance.api'
 
@@ -25,6 +26,37 @@ const NO_STATUS = '__none__'
 
 function pad(n: number) {
   return String(n).padStart(2, '0')
+}
+
+// Raw biometric scans for one employee on one day — shown inside the
+// day-popover so an admin can see exactly what the classifier (or they
+// themselves) is working from, not just the resulting status.
+function DayScans({ employeeId, date }: { employeeId: string; date: string }) {
+  const { data, isLoading } = useDevicePunches({ employeeId, date })
+  const punches = data?.punches ?? []
+
+  if (isLoading) return <p className="text-xs text-muted-foreground">Loading scans…</p>
+  if (punches.length === 0) {
+    return <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">No scans this day</p>
+  }
+
+  // API returns newest-first; show chronologically (arrival first).
+  const chronological = [...punches].reverse()
+  return (
+    <div className="grid gap-1">
+      <p className="text-xs font-black uppercase tracking-widest text-neutral-400">Scans</p>
+      <div className="flex flex-wrap gap-1.5">
+        {chronological.map((punch) => (
+          <span
+            key={punch._id}
+            className="rounded-lg bg-secondary/60 px-2 py-1 text-xs font-bold text-foreground"
+          >
+            {new Date(punch.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 // Backend normalizes attendance dates to UTC midnight and compares "today"
@@ -214,6 +246,12 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                         {holiday && (
                           <p className="text-xs font-bold uppercase tracking-widest text-neutral-500">
                             Holiday: {holiday.label}
+                          </p>
+                        )}
+                        <DayScans employeeId={employeeId} date={dateKey} />
+                        {record?.isAutoMarked && (
+                          <p className="text-xs font-bold uppercase tracking-widest text-primary">
+                            Auto-marked from biometric scans
                           </p>
                         )}
                         <Select value={pendingStatus} onValueChange={setPendingStatus}>

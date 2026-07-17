@@ -13,6 +13,12 @@ const attendanceRecordSchema = new Schema(
     // True when this record was written on a day after `date` already passed —
     // a data-entry/audit flag, not a statement about the employee's punctuality.
     isBackdated: { type: Boolean, default: false },
+    // True only when the daily biometric classifier wrote this record. Any
+    // manual admin save (markAttendance) always sets this back to false —
+    // that's what makes an admin edit permanent: the classifier skips any
+    // day that isn't currently isAutoMarked, so it never overwrites a human
+    // decision, but freely re-classifies its own earlier auto-marks.
+    isAutoMarked: { type: Boolean, default: false },
     notes: String,
   },
   { timestamps: true }

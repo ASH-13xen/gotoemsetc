@@ -26,6 +26,10 @@ const extraDetailSchema = z.object({
 });
 
 const mutableFields = {
+  // Admin-only — see employee.service.js#updateEmployee, which strips this
+  // from the payload for non-admin callers regardless of what's sent here.
+  ecoId: z.string().trim().min(1).optional(),
+
   firstName: z.string().min(1),
   lastName: z.string().optional(),
   personalEmail: z.string().email().optional().or(z.literal('')),

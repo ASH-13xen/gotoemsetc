@@ -9,6 +9,9 @@ export interface AttendanceRecord {
   status?: AttendanceStatus
   overtimeHours: number
   isBackdated: boolean
+  // True when the daily biometric classifier wrote this record rather than
+  // an admin — an admin save always flips this back to false.
+  isAutoMarked: boolean
   notes?: string
 }
 

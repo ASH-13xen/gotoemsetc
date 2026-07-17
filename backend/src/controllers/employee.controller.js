@@ -30,7 +30,7 @@ const create = asyncHandler(async (req, res) => {
 });
 
 const update = asyncHandler(async (req, res) => {
-  const employee = await employeeService.updateEmployee(req.params.id, req.body);
+  const employee = await employeeService.updateEmployee(req.params.id, req.body, req.user.role);
   req.auditContext = {
     action: 'employee.update',
     resourceType: 'Employee',

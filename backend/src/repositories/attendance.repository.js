@@ -4,12 +4,22 @@ const AttendanceRecord = require('../models/AttendanceRecord');
 // `status`/`overtimeHours` as `undefined` when the caller didn't provide them
 // leaves whatever was already stored untouched (e.g. setting OT hours on a
 // day that already has a status doesn't clear that status, and vice versa).
-function upsertForDate(employeeId, date, { status, overtimeHours, notes }, isBackdated) {
+// `isAutoMarked` is always written explicitly (never left undefined) — a
+// manual admin save must always flip an existing auto-mark back to false,
+// and the classifier must always set it true, so neither path can rely on
+// "leave untouched" here.
+function upsertForDate(employeeId, date, { status, overtimeHours, notes }, isBackdated, isAutoMarked = false) {
   return AttendanceRecord.findOneAndUpdate(
     { employee: employeeId, date },
-    { status, overtimeHours, isBackdated, notes },
+    { status, overtimeHours, isBackdated, notes, isAutoMarked },
     { upsert: true, returnDocument: 'after', runValidators: true, setDefaultsOnInsert: true }
   );
+}
+
+// Only what the classifier needs to decide whether a day is safe to
+// (re)write — never touches days a human already decided on.
+function findForDate(employeeId, date) {
+  return AttendanceRecord.findOne({ employee: employeeId, date });
 }
 
 function listForEmployee(employeeId, { from, to } = {}) {
@@ -30,4 +40,4 @@ async function listEmployeeIdsForDate(date) {
   return records.map((r) => r.employee.toString());
 }
 
-module.exports = { upsertForDate, listForEmployee, listEmployeeIdsForDate };
+module.exports = { upsertForDate, findForDate, listForEmployee, listEmployeeIdsForDate };
