@@ -89,11 +89,16 @@ async function renderPdfFromHtml(html, templateDir) {
   try {
     await fs.writeFile(tempFile, html, 'utf8');
     await page.goto(`file://${tempFile}`, { waitUntil: 'networkidle0' });
-    return await page.pdf({
+    // page.pdf() returns a plain Uint8Array on this Puppeteer version, not a
+    // Node Buffer — Mongoose's Buffer schema type (see GeneratedDocument.js)
+    // rejects a bare Uint8Array even though Buffer extends it, so this must
+    // be wrapped before it's ever stored.
+    const pdfBytes = await page.pdf({
       format: 'A4',
       printBackground: true,
       margin: { top: '20mm', bottom: '20mm', left: '18mm', right: '18mm' },
     });
+    return Buffer.from(pdfBytes);
   } finally {
     await page.close();
     await fs.unlink(tempFile).catch(() => {});
