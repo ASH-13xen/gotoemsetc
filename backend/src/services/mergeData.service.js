@@ -99,19 +99,6 @@ function resolveComputedField(key, employee) {
   }
 }
 
-// Job description is entered one point per line in the wizard — rendered as
-// a bulleted list (docxtemplater's `linebreaks: true` turns each \n into a
-// <w:br/>), rather than requiring a real Word list/loop in every template.
-function formatBulletPoints(value) {
-  if (typeof value !== 'string' || !value.trim()) return value;
-  return value
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => `• ${line}`)
-    .join('\n');
-}
-
 // Resolves a template's loops[] — `salaryComponents` comes from the employee
 // record, `responsibilities` is generation-time-only manual input (like
 // jobDescription, it isn't stored on the employee), so blank rows never
@@ -157,8 +144,6 @@ function buildMergeData(template, employee, overrides = {}) {
     } else {
       value = getByPath(plainEmployee, field.mapsTo || field.key);
     }
-
-    if (field.key === 'jobDescription') value = formatBulletPoints(value);
 
     if (field.source !== 'computed') {
       if (field.type === 'date') value = formatDate(value);

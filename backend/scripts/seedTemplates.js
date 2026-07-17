@@ -48,7 +48,7 @@ const employmentType = {
 const jobDescription = {
   key: 'jobDescription', label: 'Job description', type: 'textarea', required: true,
   source: 'manual', group: 'Job Details', order: 20,
-  helpText: 'One point per line — each line is rendered as its own bullet.',
+  helpText: 'A short paragraph describing the role and responsibilities.',
 };
 
 // Computed purely from employee.salaryComponents — never shown in the wizard

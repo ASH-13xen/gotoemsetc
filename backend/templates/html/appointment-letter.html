@@ -15,22 +15,20 @@
       }
 
       body {
-        position: relative; /* anchors the absolutely-positioned .header below */
         font-family: Georgia, "Times New Roman", serif;
         color: #1a1a1a;
-        font-size: 10pt; /* Reduced further to guarantee 1-page fit */
-        line-height: 1.3; /* Tightened line height */
+        font-size: 9.5pt; /* Reduced further to guarantee 1-page fit */
+        line-height: 1.16; /* Tightened line height */
         margin: 0;
         padding: 0;
       }
 
-      /* Taken out of document flow (position: absolute) so a large logo
-         doesn't push the title/body text down the page — it just floats in
-         the top-right corner independent of everything else's layout. */
+      /* In normal document flow, above the title — right-aligned within its
+         own row rather than centered. */
       .header {
-        position: absolute;
-        top: 0;
-        right: 0;
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 2pt;
       }
 
       .logo-header {
@@ -45,11 +43,11 @@
         letter-spacing: 1px;
         text-transform: uppercase;
         text-decoration: underline;
-        margin: 0 0 12pt 0;
+        margin: 0 0 8pt 0;
       }
 
       p {
-        margin: 0 0 6pt;
+        margin: 0 0 5pt;
       }
 
       strong {
@@ -57,16 +55,16 @@
       }
 
       .recipient-info {
-        margin-bottom: 10pt;
+        margin-bottom: 8pt;
       }
 
       ol {
-        margin: 8pt 0 10pt;
+        margin: 6pt 0 8pt;
         padding-left: 18pt;
       }
 
       li {
-        margin-bottom: 4pt;
+        margin-bottom: 3pt;
         text-align: justify; /* Cleaner edge for list items */
       }
 
@@ -75,7 +73,7 @@
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        margin-top: 18pt;
+        margin-top: 14pt;
       }
 
       .signature-block {
@@ -83,7 +81,7 @@
       }
 
       .signature-space {
-        margin-top: 26pt; /* Space for physical signature */
+        margin-top: 20pt; /* Space for physical signature */
       }
     </style>
   </head>
@@ -178,7 +176,7 @@
           employment with <strong>GO-TO Friend Pvt. Ltd.</strong> under the
           conditions described above.
         </p>
-        <div class="signature-space" style="margin-top: 10pt"></div>
+        <div class="signature-space" style="margin-top: 8pt"></div>
         <p>
           ___________________________<br /><strong>{employeeName}</strong
           ><br />Date: ____________
