@@ -2,16 +2,21 @@ const cron = require('node-cron');
 const attendanceClassifierService = require('../services/attendanceClassifier.service');
 const logger = require('../utils/logger');
 
-// 8pm IST, daily — 1.5 hours past the 6:30pm shift end, so every realistic
-// scan for the day has already landed. Pinned to Asia/Kolkata explicitly,
-// same reasoning as interviewReminder.job.js (Render runs in UTC).
+// 11:55pm IST, daily — real-time processing (see
+// devicePunch.service.js#recordPunch -> attendanceClassifier.service.js)
+// handles classification the moment each scan arrives, so this is only a
+// backstop: it catches employees with zero scans all day (the one thing
+// that can never be event-driven — there's no event for nothing happening)
+// and settles any stragglers real-time processing didn't get to. Pinned to
+// Asia/Kolkata explicitly, same reasoning as interviewReminder.job.js
+// (Render runs in UTC).
 function start() {
   cron.schedule(
-    '0 20 * * *',
+    '55 23 * * *',
     () => {
       attendanceClassifierService
-        .classifyDay()
-        .catch((err) => logger.error({ err }, 'Attendance classifier job failed'));
+        .runNightlyBackstop()
+        .catch((err) => logger.error({ err }, 'Attendance backstop job failed'));
     },
     { timezone: 'Asia/Kolkata' }
   );

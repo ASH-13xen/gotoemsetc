@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { useAttendance, useMarkAttendance } from '@/hooks/useAttendance'
 import { useCreateHoliday, useDeleteHoliday, useHolidays } from '@/hooks/useHolidays'
 import { useAuth } from '@/hooks/useAuth'
+import { hasPermission } from '@/lib/permissions'
 import { useDevicePunches } from '@/hooks/useDevicePunches'
 import { STATUS_CONFIG } from './statusConfig'
 import type { AttendanceStatus } from '@/api/attendance.api'
@@ -69,6 +70,7 @@ function todayKey() {
 export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
+  const canMark = hasPermission(user, 'mark_attendance')
 
   const [monthDate, setMonthDate] = useState(() => {
     const now = new Date()
@@ -78,6 +80,7 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
   const [pendingStatus, setPendingStatus] = useState<string>(NO_STATUS)
   const [pendingOvertimeHours, setPendingOvertimeHours] = useState('')
   const [pendingIsLate, setPendingIsLate] = useState(false)
+  const [pendingEarlyDeparture, setPendingEarlyDeparture] = useState(false)
 
   const month = monthDate.getUTCMonth() + 1
   const year = monthDate.getUTCFullYear()
@@ -101,12 +104,12 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
   const onSave = (dateKey: string) => {
     const overtimeHours = pendingOvertimeHours.trim() ? Number(pendingOvertimeHours) : undefined
     const status = pendingStatus === NO_STATUS ? undefined : (pendingStatus as AttendanceStatus)
-    if (status === undefined && overtimeHours === undefined && !pendingIsLate) {
-      toast.error('Set a status, overtime hours, or late flag (or a combination)')
+    if (status === undefined && overtimeHours === undefined && !pendingIsLate && !pendingEarlyDeparture) {
+      toast.error('Set a status, overtime hours, late flag, or early-departure flag (or a combination)')
       return
     }
     markAttendance.mutate(
-      { date: dateKey, status, overtimeHours, isLate: pendingIsLate },
+      { date: dateKey, status, overtimeHours, isLate: pendingIsLate, earlyDeparture: pendingEarlyDeparture },
       {
         onSuccess: () => {
           toast.success('Attendance saved')
@@ -204,6 +207,7 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                       setPendingStatus(record?.status ?? NO_STATUS)
                       setPendingOvertimeHours(record?.overtimeHours ? String(record.overtimeHours) : '')
                       setPendingIsLate(record?.isLate ?? false)
+                      setPendingEarlyDeparture(record?.earlyDeparture ?? false)
                     }}
                   >
                     <PopoverTrigger asChild>
@@ -228,6 +232,14 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                           <span className="absolute bottom-0.5 right-0.5 text-[8px] font-black uppercase text-amber-500">
                             L
                           </span>
+                        )}
+                        {record?.earlyDeparture && (
+                          <span className="absolute bottom-0.5 left-0.5 text-[8px] font-black uppercase text-red-500">
+                            E
+                          </span>
+                        )}
+                        {record && !record.isSettled && (
+                          <span className="absolute top-0.5 left-0.5 size-1.5 rounded-full bg-yellow-500" title="Pending" />
                         )}
                         {record?.isBackdated && (
                           <Clock3 className="absolute top-1 right-1 size-3 text-neutral-400" />
@@ -266,14 +278,20 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                             Modified by HR
                           </p>
                         )}
-                        {!isAdmin && (
+                        {record && !record.isSettled && (
+                          <p className="text-xs font-bold uppercase tracking-widest text-yellow-500">
+                            Pending — may still change today
+                          </p>
+                        )}
+                        {!canMark && (
                           <div className="grid gap-1 text-xs font-bold uppercase tracking-widest text-muted-foreground">
                             <p>Status: {record?.status ? STATUS_CONFIG[record.status].label : '— none —'}</p>
                             {record?.isLate && <p className="text-amber-500">Late arrival</p>}
+                            {record?.earlyDeparture && <p className="text-red-500">Left early</p>}
                             {record?.overtimeHours ? <p>Overtime: {record.overtimeHours}h</p> : null}
                           </div>
                         )}
-                        {isAdmin && (
+                        {canMark && (
                           <>
                             <Select value={pendingStatus} onValueChange={setPendingStatus}>
                               <SelectTrigger className="w-full">
@@ -314,6 +332,19 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                                 className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
                               />
                               Late arrival
+                            </label>
+                            <label
+                              htmlFor={`early-${dateKey}`}
+                              className="flex items-center gap-2 cursor-pointer select-none text-xs font-black uppercase tracking-widest text-neutral-400"
+                            >
+                              <input
+                                id={`early-${dateKey}`}
+                                type="checkbox"
+                                checked={pendingEarlyDeparture}
+                                onChange={(e) => setPendingEarlyDeparture(e.target.checked)}
+                                className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
+                              />
+                              Early departure
                             </label>
                             <Button
                               size="sm"

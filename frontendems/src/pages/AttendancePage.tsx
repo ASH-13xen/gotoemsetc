@@ -14,6 +14,7 @@ import { AttendanceRequestsPanel } from '@/components/attendance/AttendanceReque
 import { useEmployee, useEmployees } from '@/hooks/useEmployees'
 import { useAttendanceMarkedToday } from '@/hooks/useAttendance'
 import { useAuth } from '@/hooks/useAuth'
+import { hasPermission } from '@/lib/permissions'
 import { cn } from '@/lib/utils'
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -29,16 +30,16 @@ export default function AttendancePage() {
   const { employeeId } = useParams<{ employeeId?: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
+  const canManage = hasPermission(user, 'mark_attendance')
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, 300)
 
   const { data: employeesData, isLoading: employeesLoading } = useEmployees(
     { search: debouncedSearch || undefined, limit: 100 },
-    { enabled: isAdmin }
+    { enabled: canManage }
   )
   const { data: selectedEmployeeData } = useEmployee(employeeId)
-  const { data: markedTodayData } = useAttendanceMarkedToday({ enabled: isAdmin })
+  const { data: markedTodayData } = useAttendanceMarkedToday({ enabled: canManage })
 
   const markedTodayIds = useMemo(() => new Set(markedTodayData?.employeeIds ?? []), [markedTodayData])
 
@@ -75,15 +76,15 @@ export default function AttendancePage() {
           </div>
         </div>
 
-        {!isAdmin && (
+        {!canManage && (
           <div className="flex justify-end">
             <RequestModificationDialog />
           </div>
         )}
 
-        {isAdmin && <DevicePunchFeed />}
+        {canManage && <DevicePunchFeed />}
 
-        {isAdmin ? (
+        {canManage ? (
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
             {/* EMPLOYEE PICKER */}
             <div className="flex max-h-[calc(100vh-260px)] flex-col bg-card/90 backdrop-blur-md rounded-2xl shadow-diffuse border-0 overflow-hidden lg:col-span-1">

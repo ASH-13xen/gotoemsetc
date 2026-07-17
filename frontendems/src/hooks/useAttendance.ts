@@ -34,14 +34,16 @@ export function useMarkAttendance(employeeId: string) {
       status,
       overtimeHours,
       isLate,
+      earlyDeparture,
       notes,
     }: {
       date: string
       status?: AttendanceStatus
       overtimeHours?: number
       isLate?: boolean
+      earlyDeparture?: boolean
       notes?: string
-    }) => attendanceApi.markAttendance(employeeId, date, { status, overtimeHours, isLate, notes }),
+    }) => attendanceApi.markAttendance(employeeId, date, { status, overtimeHours, isLate, earlyDeparture, notes }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendance', employeeId] })
       queryClient.invalidateQueries({ queryKey: ['attendance-marked-today'] })

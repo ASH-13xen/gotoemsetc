@@ -3,6 +3,21 @@ const ApiError = require('../utils/ApiError');
 const userRepository = require('../repositories/user.repository');
 const { USER_ROLES } = require('../config/constants');
 
+// A non-admin granting permissions (via their own add_credentials grant)
+// can only ever hand out a subset of what they themselves hold — otherwise
+// a worker with just add_credentials could mint a credential with, say,
+// view_salary_slip and hand it to someone (or reuse it), which is a real
+// privilege-escalation path. Admins are unrestricted.
+function assertNoEscalation(requestedPermissions, actingUser) {
+  if (!requestedPermissions || requestedPermissions.length === 0) return;
+  if (actingUser.role === USER_ROLES.ADMIN) return;
+  const granted = new Set(actingUser.permissions || []);
+  const overreach = requestedPermissions.filter((p) => !granted.has(p));
+  if (overreach.length > 0) {
+    throw ApiError.forbidden(`You can't grant permissions you don't have: ${overreach.join(', ')}`);
+  }
+}
+
 async function listUsers() {
   return userRepository.list();
 }
@@ -15,7 +30,13 @@ async function getUser(id) {
 
 function toCredentialView(user) {
   if (!user) return null;
-  return { _id: user._id, username: user.username, role: user.role, isActive: user.isActive };
+  return {
+    _id: user._id,
+    username: user.username,
+    role: user.role,
+    isActive: user.isActive,
+    permissions: user.permissions || [],
+  };
 }
 
 async function getCredentialForEmployee(employeeId) {
@@ -23,11 +44,15 @@ async function getCredentialForEmployee(employeeId) {
   return toCredentialView(user);
 }
 
-// Employee-linked credentials always grant plain worker access — same
-// permissions as any other worker, nothing employee-specific.
-async function createCredential(employeeId, { username, password }) {
+// Employee-linked credentials always grant plain worker access, optionally
+// topped up with specific permissions the acting user (admin, or a worker
+// with add_credentials) chooses to grant — see assertNoEscalation for the
+// non-admin limit on what they're allowed to hand out.
+async function createCredential(employeeId, { username, password, permissions }, actingUser) {
   const existing = await userRepository.findByEmployeeId(employeeId);
   if (existing) throw ApiError.conflict('This employee already has login credentials');
+
+  assertNoEscalation(permissions, actingUser);
 
   const passwordHash = await bcrypt.hash(password, 10);
   try {
@@ -37,6 +62,7 @@ async function createCredential(employeeId, { username, password }) {
       role: USER_ROLES.WORKER,
       employeeLink: employeeId,
       isActive: true,
+      permissions: permissions || [],
     });
     return toCredentialView(user);
   } catch (err) {
@@ -45,10 +71,16 @@ async function createCredential(employeeId, { username, password }) {
   }
 }
 
-async function updateCredential(userId, { username, password }) {
+async function updateCredential(userId, { username, password, permissions }, actingUser) {
   const patch = {};
   if (username !== undefined) patch.username = username;
   if (password) patch.passwordHash = await bcrypt.hash(password, 10);
+  // Only an admin may change an existing credential's permissions — a
+  // non-admin add_credentials holder can grant permissions at creation
+  // time (within their own limit) but can't later escalate one further.
+  if (permissions !== undefined && actingUser.role === USER_ROLES.ADMIN) {
+    patch.permissions = permissions;
+  }
 
   try {
     const user = await userRepository.updateById(userId, patch);

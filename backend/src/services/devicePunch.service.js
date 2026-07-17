@@ -1,6 +1,7 @@
 const logger = require('../utils/logger');
 const employeeRepository = require('../repositories/employee.repository');
 const devicePunchRepository = require('../repositories/devicePunch.repository');
+const attendanceClassifierService = require('./attendanceClassifier.service');
 
 // ZKTeco ADMS sends attendance logs as tab-separated lines, one punch per
 // line: "PIN\tYYYY-MM-DD HH:mm:ss\tStatus\tVerify\t...". We only need the
@@ -22,13 +23,25 @@ function parseAttLogLine(line) {
 // thinks it happened".
 async function recordPunch(employeeCode, raw, deviceSerial) {
   const employee = await employeeRepository.findByCode(employeeCode);
-  return devicePunchRepository.create({
+  const timestamp = new Date();
+  const punch = await devicePunchRepository.create({
     employeeCode,
     employee: employee ? employee._id : null,
-    timestamp: new Date(),
+    timestamp,
     deviceSerial,
     raw,
   });
+
+  // Fire-and-forget — a matched punch drives real-time attendance
+  // classification (see attendanceClassifier.service.js), but a slow/failed
+  // classification pass should never hold up or fail the device's response.
+  if (employee) {
+    attendanceClassifierService
+      .handlePunchEvent(employee._id, timestamp)
+      .catch((err) => logger.error({ err, employeeId: employee._id }, 'handlePunchEvent failed'));
+  }
+
+  return punch;
 }
 
 // Body is the device's raw POST payload — one or more ATTLOG lines. Bad

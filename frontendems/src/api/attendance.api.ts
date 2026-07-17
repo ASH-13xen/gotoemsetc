@@ -18,13 +18,25 @@ export interface AttendanceRecord {
   // True when this record was last updated via an attendance modification
   // request resolution.
   modifiedByRequest: boolean
+  // Departure-side Short Leave (left early) — independent of status, can
+  // coexist with an arrival-side status: 'SL'/'H' (two short leaves in one day).
+  earlyDeparture: boolean
+  // False while the day is still provisional (real-time classification
+  // could still revise it later today); true once finalized.
+  isSettled: boolean
   notes?: string
 }
 
 export async function markAttendance(
   employeeId: string,
   date: string,
-  input: { status?: AttendanceStatus; overtimeHours?: number; isLate?: boolean; notes?: string }
+  input: {
+    status?: AttendanceStatus
+    overtimeHours?: number
+    isLate?: boolean
+    earlyDeparture?: boolean
+    notes?: string
+  }
 ): Promise<{ record: AttendanceRecord }> {
   const { data } = await apiClient.post(`/employees/${employeeId}/attendance`, {
     date,

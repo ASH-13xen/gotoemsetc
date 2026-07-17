@@ -27,6 +27,16 @@ const attendanceRecordSchema = new Schema(
     // True only when this record was last updated via the attendance
     // modification request resolve endpoint — the "modified by HR" marker.
     modifiedByRequest: { type: Boolean, default: false },
+    // Departure-side Short Leave (left 4:30pm-shiftEnd) — independent of
+    // status, can co-occur with an arrival-side status: 'SL'/'H' day (two
+    // short leaves in one day). See attendanceClassifier.service.js.
+    earlyDeparture: { type: Boolean, default: false },
+    // False while the day could still be revised by a later scan today (the
+    // real-time classifier keeps updating status/earlyDeparture/overtimeHours
+    // as scans arrive); true once finalized — either by tomorrow's first
+    // scan proving today is over, or by the nightly backstop. Notifications
+    // only fire once settled, so a mid-day guess never spams an admin.
+    isSettled: { type: Boolean, default: false },
     notes: String,
   },
   { timestamps: true }

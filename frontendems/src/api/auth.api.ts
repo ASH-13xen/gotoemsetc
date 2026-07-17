@@ -5,6 +5,7 @@ export interface AuthUser {
   username: string
   role: 'admin' | 'worker'
   employeeLink: string | null
+  permissions: string[]
 }
 
 export interface LoginInput {

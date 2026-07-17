@@ -21,15 +21,17 @@ export function ShellLayout({ children, section }: { children: ReactNode; sectio
   const { user, signOut } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
 
+  const isAdmin = user?.role === 'admin'
+
   const links = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
     { to: '/ems', label: 'EMS', icon: Users },
-    { to: '/sales', label: 'Client Management', icon: DollarSign },
-    { to: '/followups', label: 'Task Management', icon: CalendarClock },
-    { to: '/inventory', label: 'Inventory Management', icon: Package },
-    { to: '/events', label: 'Event Management', icon: PartyPopper },
+    ...(isAdmin ? [{ to: '/sales', label: 'Client Management', icon: DollarSign }] : []),
+    ...(isAdmin ? [{ to: '/followups', label: 'Task Management', icon: CalendarClock }] : []),
+    ...(isAdmin ? [{ to: '/inventory', label: 'Inventory Management', icon: Package }] : []),
+    ...(isAdmin ? [{ to: '/events', label: 'Event Management', icon: PartyPopper }] : []),
     { to: '/birthdays', label: 'Birthdays', icon: Cake },
-    ...(user?.role === 'admin' ? [{ to: '/audit-log', label: 'Audit Log', icon: ShieldAlert }] : []),
+    ...(isAdmin ? [{ to: '/audit-log', label: 'Audit Log', icon: ShieldAlert }] : []),
   ]
 
   return (

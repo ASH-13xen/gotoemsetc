@@ -5,7 +5,13 @@ const env = require('../config/env');
 const userRepository = require('../repositories/user.repository');
 
 function toPublicUser(user) {
-  return { id: user._id, username: user.username, role: user.role, employeeLink: user.employeeLink };
+  return {
+    id: user._id,
+    username: user.username,
+    role: user.role,
+    employeeLink: user.employeeLink,
+    permissions: user.permissions || [],
+  };
 }
 
 async function login(username, password) {
@@ -21,6 +27,7 @@ async function login(username, password) {
       username: user.username,
       role: user.role,
       employeeLink: user.employeeLink ? user.employeeLink.toString() : null,
+      permissions: user.permissions || [],
     },
     env.jwtSecret,
     { expiresIn: env.jwtExpiresIn }

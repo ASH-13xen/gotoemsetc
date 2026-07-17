@@ -73,8 +73,9 @@ function assertReadyForDecision(applicant) {
 }
 
 // Sent to the applicant directly, plus a copy to the HR inbox — via Resend,
-// fire-and-forget, same pattern as sendInterviewEmails.
-async function sendHireEmail(applicant, employee) {
+// fire-and-forget, same pattern as sendInterviewEmails. Includes the admin's
+// selectionNotes verbatim, same as the reject email includes rejectionReason.
+async function sendHireEmail(applicant, employee, selectionNotes) {
   const applicantName = `${applicant.firstName} ${applicant.lastName || ''}`.trim();
   const position = employee.designation || 'the role';
   const startDate = employee.dateOfJoining
@@ -83,6 +84,7 @@ async function sendHireEmail(applicant, employee) {
 
   const subject = `Welcome to ${env.companyName} — ${position}`;
   const bodyLine = `Congratulations! We're delighted to confirm you've been selected for the ${position} role. Your start date is ${startDate}.`;
+  const reasonLine = selectionNotes ? `<p>${selectionNotes}</p>` : '';
 
   const sends = [];
   if (applicant.email) {
@@ -90,7 +92,7 @@ async function sendHireEmail(applicant, employee) {
       emailService.sendEmail({
         to: applicant.email,
         subject,
-        html: `<p>Hi ${applicantName},</p><p>${bodyLine}</p><p>Our HR team will follow up shortly with onboarding details.</p><p>Welcome aboard,<br/>${env.companyName} HR</p>`,
+        html: `<p>Hi ${applicantName},</p><p>${bodyLine}</p>${reasonLine}<p>Our HR team will follow up shortly with onboarding details.</p><p>Welcome aboard,<br/>${env.companyName} HR</p>`,
       })
     );
   }
@@ -99,7 +101,7 @@ async function sendHireEmail(applicant, employee) {
       emailService.sendEmail({
         to: env.hrNotificationEmail,
         subject: `[Copy] ${subject} — ${applicantName}`,
-        html: `<p>${bodyLine}</p><p>Applicant: ${applicantName} (${applicant.email || 'no email on file'}, ${applicant.phone || 'no phone on file'})</p>`,
+        html: `<p>${bodyLine}</p>${reasonLine}<p>Applicant: ${applicantName} (${applicant.email || 'no email on file'}, ${applicant.phone || 'no phone on file'})</p>`,
       })
     );
   }
@@ -110,12 +112,13 @@ async function sendHireEmail(applicant, employee) {
   }
 }
 
-// Rejection reason stays internal — the HR copy gets the full reason for the
-// record, the applicant gets a generic, tactful decline.
+// Includes the admin's rejectionReason verbatim in the applicant's own copy
+// too, per instruction — not just the internal HR copy.
 async function sendRejectEmail(applicant, rejectionReason) {
   const applicantName = `${applicant.firstName} ${applicant.lastName || ''}`.trim();
   const position = applicant.positionAppliedFor || 'the role';
   const subject = `Application update — ${position}`;
+  const reasonLine = rejectionReason ? `<p>${rejectionReason}</p>` : '';
 
   const sends = [];
   if (applicant.email) {
@@ -123,7 +126,7 @@ async function sendRejectEmail(applicant, rejectionReason) {
       emailService.sendEmail({
         to: applicant.email,
         subject,
-        html: `<p>Hi ${applicantName},</p><p>Thank you for taking the time to apply for ${position} and for interviewing with us. After careful consideration, we've decided to move forward with other candidates for this role.</p><p>We appreciate your interest in ${env.companyName} and wish you the very best in your search.</p><p>Regards,<br/>${env.companyName} HR</p>`,
+        html: `<p>Hi ${applicantName},</p><p>Thank you for taking the time to apply for ${position} and for interviewing with us. After careful consideration, we've decided to move forward with other candidates for this role.</p>${reasonLine}<p>We appreciate your interest in ${env.companyName} and wish you the very best in your search.</p><p>Regards,<br/>${env.companyName} HR</p>`,
       })
     );
   }
@@ -201,7 +204,7 @@ async function hireApplicant(id, { selectionNotes, decisionDate, startDate, hire
     applicantName: `${applicant.firstName} ${applicant.lastName || ''}`.trim(),
   });
 
-  sendHireEmail(updatedApplicant, employee).catch((err) => logger.error({ err }, 'sendHireEmail failed'));
+  sendHireEmail(updatedApplicant, employee, selectionNotes).catch((err) => logger.error({ err }, 'sendHireEmail failed'));
 
   return { applicant: updatedApplicant, employee };
 }

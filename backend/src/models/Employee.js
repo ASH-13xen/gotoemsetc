@@ -66,6 +66,14 @@ const employeeSchema = new Schema(
     },
     reportingManager: String,
     workLocation: String,
+    // "HH:mm" 24h strings — drives the attendance classifier's arrival/
+    // departure boundaries for this specific employee (see
+    // attendanceClassifier.service.js). Defaults match the company-wide
+    // shift; only the on-time cutoff and the normal/overtime split actually
+    // move with these — the dead zones and half-day window stay fixed for
+    // everyone regardless of an individual's configured shift.
+    workingHoursStart: { type: String, trim: true, default: '09:30' },
+    workingHoursEnd: { type: String, trim: true, default: '18:30' },
     ctcAnnual: Number,
     monthlyPay: Number,
     // Itemized monthly breakup (Basic, HRA, etc.) — ctcAnnual above is kept as

@@ -48,6 +48,10 @@ export interface Employee {
   employmentType: EmploymentType
   reportingManager?: string
   workLocation?: string
+  // "HH:mm" 24h — drives the attendance classifier's arrival/departure
+  // boundaries for this employee. Defaults to '09:30'/'18:30'.
+  workingHoursStart?: string
+  workingHoursEnd?: string
   ctcAnnual?: number
   monthlyPay?: number
   salaryComponents?: SalaryComponent[]

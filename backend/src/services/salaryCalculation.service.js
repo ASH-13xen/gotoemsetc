@@ -56,9 +56,14 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
   // separately here rather than folded into counts.L (which stays exactly
   // what it always was: days whose *status* is literally 'L').
   let lateFlagCount = 0;
+  // earlyDeparture is likewise independent of status — a day can be a
+  // Short Leave arrival AND an early departure at once (two short leaves in
+  // one day), so it's a separate tally feeding the same penalty pool below.
+  let earlyDepartureCount = 0;
   for (const record of records) {
     if (record.status) counts[record.status] += 1;
     if (record.isLate) lateFlagCount += 1;
+    if (record.earlyDeparture) earlyDepartureCount += 1;
     totalOvertimeHours += record.overtimeHours || 0;
   }
 
@@ -78,9 +83,10 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
 
   const daysWorkedTotal = counts.P + counts.O + counts.W + counts.L + counts.SL + counts.H * 0.5;
 
-  // >2 late = 1 short leave; >2 short leave (incl. converted lates) = 1 half day.
+  // >2 late = 1 short leave; >2 short leave (incl. converted lates and
+  // early-departure days) = 1 half day.
   const lateToSLUnits = Math.floor((counts.L + lateFlagCount) / 3);
-  const effectiveSLUnits = counts.SL + lateToSLUnits;
+  const effectiveSLUnits = counts.SL + lateToSLUnits + earlyDepartureCount;
   const halfDayPenaltyUnits = Math.floor(effectiveSLUnits / 3);
 
   return {

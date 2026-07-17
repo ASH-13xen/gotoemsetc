@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const validate = require('../middlewares/validate.middleware');
-const { requireRole } = require('../middlewares/auth.middleware');
-const { USER_ROLES } = require('../config/constants');
+const { requirePermission } = require('../middlewares/auth.middleware');
+const { PERMISSIONS } = require('../config/constants');
 const attendanceRequestValidator = require('../validators/attendanceRequest.validator');
 const attendanceRequestController = require('../controllers/attendanceRequest.controller');
 
@@ -11,7 +11,7 @@ router.post('/', validate(attendanceRequestValidator.create), attendanceRequestC
 router.get('/', validate(attendanceRequestValidator.list), attendanceRequestController.list);
 router.post(
   '/:id/resolve',
-  requireRole(USER_ROLES.ADMIN),
+  requirePermission(PERMISSIONS.MARK_ATTENDANCE),
   validate(attendanceRequestValidator.resolve),
   attendanceRequestController.resolve
 );

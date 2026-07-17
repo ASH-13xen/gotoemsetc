@@ -14,6 +14,32 @@ const addressSchema = z
 
 const employmentTypeEnum = z.enum(['full-time', 'part-time', 'contract', 'intern']);
 const statusEnum = z.enum(['draft', 'active', 'offboarded']);
+const timeStringSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Must be HH:mm (24h)');
+
+function timeToMinutes(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
+// Keeps the arrival-side Short-Leave window and the departure-side
+// Early-Departure window from disappearing/inverting — see
+// attendanceClassifier.service.js for how these two boundaries are used.
+function assertWorkingHoursSane(data, ctx) {
+  if (data.workingHoursStart && timeToMinutes(data.workingHoursStart) + 15 >= 11 * 60 + 30) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['workingHoursStart'],
+      message: 'Working hours start must be early enough that start + 15min grace stays before 11:30am',
+    });
+  }
+  if (data.workingHoursEnd && timeToMinutes(data.workingHoursEnd) <= 16 * 60 + 30) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['workingHoursEnd'],
+      message: 'Working hours end must be after 4:30pm',
+    });
+  }
+}
 
 const salaryComponentSchema = z.object({
   label: z.string().min(1),
@@ -49,6 +75,8 @@ const mutableFields = {
   employmentType: employmentTypeEnum.optional(),
   reportingManager: z.string().optional(),
   workLocation: z.string().optional(),
+  workingHoursStart: timeStringSchema.optional(),
+  workingHoursEnd: timeStringSchema.optional(),
   ctcAnnual: z.coerce.number().optional(),
   monthlyPay: z.coerce.number().optional(),
   salaryComponents: z.array(salaryComponentSchema).optional(),
@@ -105,6 +133,8 @@ const create = {
     employmentType: true,
     reportingManager: true,
     workLocation: true,
+    workingHoursStart: true,
+    workingHoursEnd: true,
     ctcAnnual: true,
     monthlyPay: true,
     bankAccountNumber: true,
@@ -118,12 +148,12 @@ const create = {
     companyLoginAdded: true,
     officePhoneAdded: true,
     personalPhoneAdded: true,
-  }),
+  }).superRefine(assertWorkingHoursSane),
 };
 
 const update = {
   ...idParam,
-  body: z.object(mutableFields).partial(),
+  body: z.object(mutableFields).partial().superRefine(assertWorkingHoursSane),
 };
 
 const getOrDelete = { ...idParam };

@@ -28,6 +28,7 @@ import { RequestHistoryTable } from '@/components/uploadRequests/RequestHistoryT
 import { ActivityTimeline } from '@/components/employees/ActivityTimeline'
 import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummaryCard'
 import { useAuth } from '@/hooks/useAuth'
+import { hasPermission } from '@/lib/permissions'
 import { useDeleteEmployee, useEmployee, useUpdateEmployee } from '@/hooks/useEmployees'
 import { BLOOD_GROUPS, type Address, type Employee, type EmployeeStatus, type EmploymentType } from '@/api/employees.api'
 
@@ -55,6 +56,8 @@ type FormValues = {
   department: string
   reportingManager: string
   workLocation: string
+  workingHoursStart: string
+  workingHoursEnd: string
   dateOfJoining: string
   dateOfHiring: string
   employmentType: EmploymentType
@@ -112,6 +115,8 @@ function toFormValues(employee: Employee): FormValues {
     department: employee.department ?? '',
     reportingManager: employee.reportingManager ?? '',
     workLocation: employee.workLocation ?? '',
+    workingHoursStart: employee.workingHoursStart ?? '09:30',
+    workingHoursEnd: employee.workingHoursEnd ?? '18:30',
     dateOfJoining: toDateInputValue(employee.dateOfJoining),
     dateOfHiring: toDateInputValue(employee.dateOfHiring),
     employmentType: employee.employmentType ?? 'full-time',
@@ -187,6 +192,11 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   const navigate = useNavigate()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
+  const canGenerateDocs = hasPermission(user, 'generate_documents')
+  const canRequestDocs = hasPermission(user, 'request_documents')
+  const canAddCredentials = hasPermission(user, 'add_credentials')
+  const canViewSalary = hasPermission(user, 'view_salary_slip')
+  const canEditDetails = hasPermission(user, 'edit_employee_details')
   const updateEmployee = useUpdateEmployee(employeeId)
   const deleteEmployee = useDeleteEmployee()
 
@@ -268,8 +278,8 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
               <span className="text-2xl font-extrabold uppercase tracking-wide">BACK TO PORTAL</span>
             </div>
 
-            {/* Generate Documents — admin-only */}
-            {isAdmin && (
+            {/* Generate Documents */}
+            {canGenerateDocs && (
               <div
                 onClick={() => navigate(`/employees/${employeeId}/wizard`)}
                 className="bg-secondary text-secondary-foreground p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
@@ -279,8 +289,8 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
               </div>
             )}
 
-            {/* Request Documents — admin-only */}
-            {isAdmin && (
+            {/* Request Documents */}
+            {canRequestDocs && (
               <RequestDocumentsModal
                 employeeId={employeeId}
                 employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
@@ -296,8 +306,8 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
               />
             )}
 
-            {/* Add/Manage Credentials — admin-only */}
-            {isAdmin && (
+            {/* Add/Manage Credentials */}
+            {canAddCredentials && (
               <CredentialsDialog
                 employeeId={employeeId}
                 employeeName={`${employee.firstName} ${employee.lastName ?? ''}`}
@@ -310,8 +320,8 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
               />
             )}
 
-            {/* Generate Salary Slip — admin-only */}
-            {isAdmin && (
+            {/* Generate Salary Slip */}
+            {canViewSalary && (
               <GenerateSalarySlipDialog
                 employeeId={employeeId}
                 employeeName={`${employee.firstName} ${employee.lastName ?? ''}`}
@@ -328,7 +338,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
 
         {/* DETAILS FORM */}
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-8">
-        <fieldset disabled={!isAdmin} className="contents">
+        <fieldset disabled={!canEditDetails} className="contents">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Personal Details */}
             <Card className="p-6 space-y-6">
@@ -405,6 +415,16 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 <div className="grid gap-1.5">
                   <Label htmlFor="workLocation" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">WORK LOCATION</Label>
                   <Input id="workLocation" {...register('workLocation')} className="uppercase" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="workingHoursStart" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">SHIFT START</Label>
+                    <Input id="workingHoursStart" type="time" {...register('workingHoursStart')} />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="workingHoursEnd" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">SHIFT END</Label>
+                    <Input id="workingHoursEnd" type="time" {...register('workingHoursEnd')} />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-1.5">
@@ -674,27 +694,31 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
 
         </fieldset>
 
-          {/* Form Action Buttons — admin-only, a worker only has read access to their own record */}
-          {isAdmin && (
+          {/* Form Action Buttons — Save needs edit_employee_details, Delete stays admin-only */}
+          {(canEditDetails || isAdmin) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Button
-                type="submit"
-                disabled={updateEmployee.isPending}
-                className="bg-emerald-500/10 text-emerald-700 text-lg font-bold h-14 rounded-xl tracking-wider border-0 hover:bg-emerald-500/25 transition-all cursor-pointer shadow-none"
-              >
-                {updateEmployee.isPending && <Loader2 className="size-5 animate-spin" />}
-                SAVE PROFILE CHANGES
-              </Button>
-              <Button
-                type="button"
-                onClick={onDelete}
-                disabled={deleteEmployee.isPending}
-                variant="ghost"
-                className="text-destructive hover:bg-destructive/10 text-lg font-bold h-14 rounded-xl tracking-wider cursor-pointer"
-              >
-                {deleteEmployee.isPending && <Loader2 className="size-5 animate-spin" />}
-                DELETE PROFILE
-              </Button>
+              {canEditDetails && (
+                <Button
+                  type="submit"
+                  disabled={updateEmployee.isPending}
+                  className="bg-emerald-500/10 text-emerald-700 text-lg font-bold h-14 rounded-xl tracking-wider border-0 hover:bg-emerald-500/25 transition-all cursor-pointer shadow-none"
+                >
+                  {updateEmployee.isPending && <Loader2 className="size-5 animate-spin" />}
+                  SAVE PROFILE CHANGES
+                </Button>
+              )}
+              {isAdmin && (
+                <Button
+                  type="button"
+                  onClick={onDelete}
+                  disabled={deleteEmployee.isPending}
+                  variant="ghost"
+                  className="text-destructive hover:bg-destructive/10 text-lg font-bold h-14 rounded-xl tracking-wider cursor-pointer"
+                >
+                  {deleteEmployee.isPending && <Loader2 className="size-5 animate-spin" />}
+                  DELETE PROFILE
+                </Button>
+              )}
             </div>
           )}
         </form>
@@ -743,17 +767,19 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
 
         <div className="mt-8 grid gap-8">
           <AttendanceSummaryCard employeeId={employeeId} />
-          {isAdmin && (
+          {canViewSalary && (
             <SalarySlipsList employeeId={employeeId} employeeName={`${employee.firstName} ${employee.lastName ?? ''}`} />
           )}
-          {isAdmin && (
+          {canGenerateDocs && (
+            <GeneratedDocumentsList
+              employeeId={employeeId}
+              employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
+              employeeEmail={employee.personalEmail}
+              employeePhone={employee.phone}
+            />
+          )}
+          {canRequestDocs && (
             <>
-              <GeneratedDocumentsList
-                employeeId={employeeId}
-                employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
-                employeeEmail={employee.personalEmail}
-                employeePhone={employee.phone}
-              />
               <UploadedDocumentsList employeeId={employeeId} />
               <RequestHistoryTable
                 employeeId={employeeId}

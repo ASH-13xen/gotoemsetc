@@ -12,53 +12,66 @@ const attendanceValidator = require('../validators/attendance.validator');
 const attendanceController = require('../controllers/attendance.controller');
 const salarySlipValidator = require('../validators/salarySlip.validator');
 const salarySlipController = require('../controllers/salarySlip.controller');
-const { requireRole, requireSelfOrAdmin } = require('../middlewares/auth.middleware');
-const { USER_ROLES } = require('../config/constants');
+const {
+  requireRole,
+  requireSelfOrAdmin,
+  requirePermission,
+  requireSelfOrPermission,
+  requireDirectoryAccess,
+  requireSelfOrDirectoryAccess,
+} = require('../middlewares/auth.middleware');
+const { USER_ROLES, PERMISSIONS } = require('../config/constants');
 
 const router = Router();
 
-// Browsing/creating/editing/removing employees, and the two general HR
-// utility lists below, are admin-only — a worker only ever reaches their
-// own record via requireSelfOrAdmin on /:id.
-router.get('/', requireRole(USER_ROLES.ADMIN), validate(employeeValidator.list), employeeController.list);
-router.post('/', requireRole(USER_ROLES.ADMIN), validate(employeeValidator.create), employeeController.create);
+// Any granted permission unlocks directory browsing (you need to find the
+// employee before you can act on them) — see requireDirectoryAccess.
+router.get('/', requireDirectoryAccess(), validate(employeeValidator.list), employeeController.list);
+router.post('/', requirePermission(PERMISSIONS.ADD_EMPLOYEE), validate(employeeValidator.create), employeeController.create);
 // Must come before /:id — otherwise Express matches "birthdays"/
 // "attendance-today" as an :id.
-router.get('/birthdays', requireRole(USER_ROLES.ADMIN), employeeController.birthdays);
-router.get('/attendance-today', requireRole(USER_ROLES.ADMIN), attendanceController.markedToday);
-router.get('/:id', requireSelfOrAdmin(), validate(employeeValidator.getOrDelete), employeeController.getById);
-router.patch('/:id', requireRole(USER_ROLES.ADMIN), validate(employeeValidator.update), employeeController.update);
+// Left open to any authenticated user, unlike everything else here — the
+// birthdays widget is meant to stay visible platform-wide.
+router.get('/birthdays', employeeController.birthdays);
+router.get('/attendance-today', requirePermission(PERMISSIONS.MARK_ATTENDANCE), attendanceController.markedToday);
+router.get('/:id', requireSelfOrDirectoryAccess(), validate(employeeValidator.getOrDelete), employeeController.getById);
+router.patch(
+  '/:id',
+  requirePermission(PERMISSIONS.EDIT_EMPLOYEE_DETAILS),
+  validate(employeeValidator.update),
+  employeeController.update
+);
+// Deletion stays strictly admin-only — not part of the grantable permission set.
 router.delete('/:id', requireRole(USER_ROLES.ADMIN), validate(employeeValidator.getOrDelete), employeeController.remove);
 
-// Document System (Generate Docs / HR Collection) — fully admin-only.
 router.post(
   '/:id/documents/generate',
-  requireRole(USER_ROLES.ADMIN),
+  requirePermission(PERMISSIONS.GENERATE_DOCUMENTS),
   validate(documentGenerationValidator.generate),
   documentController.generate
 );
 router.get(
   '/:id/documents',
-  requireRole(USER_ROLES.ADMIN),
+  requirePermission(PERMISSIONS.GENERATE_DOCUMENTS),
   validate(documentGenerationValidator.listForEmployee),
   documentController.listForEmployee
 );
 
 router.post(
   '/:id/upload-requests',
-  requireRole(USER_ROLES.ADMIN),
+  requirePermission(PERMISSIONS.REQUEST_DOCUMENTS),
   validate(uploadRequestValidator.create),
   uploadRequestController.create
 );
 router.get(
   '/:id/upload-requests',
-  requireRole(USER_ROLES.ADMIN),
+  requirePermission(PERMISSIONS.REQUEST_DOCUMENTS),
   validate(uploadRequestValidator.listForEmployee),
   uploadRequestController.listForEmployee
 );
 router.get(
   '/:id/uploaded-documents',
-  requireRole(USER_ROLES.ADMIN),
+  requirePermission(PERMISSIONS.REQUEST_DOCUMENTS),
   validate(uploadedDocumentValidator.listForEmployee),
   uploadedDocumentController.listForEmployee
 );
@@ -70,32 +83,36 @@ router.get(
   employeeController.activity
 );
 
-// Marking/editing attendance is admin-only — a worker can only read their
-// own (requireSelfOrAdmin) and submit a modification request instead (see
-// attendanceRequest.routes.js).
-router.post('/:id/attendance', requireRole(USER_ROLES.ADMIN), validate(attendanceValidator.mark), attendanceController.mark);
+// Marking attendance needs mark_attendance; reading is self, admin, or
+// mark_attendance (you need to see it before you can decide what to mark).
+router.post(
+  '/:id/attendance',
+  requirePermission(PERMISSIONS.MARK_ATTENDANCE),
+  validate(attendanceValidator.mark),
+  attendanceController.mark
+);
 router.get(
   '/:id/attendance',
-  requireSelfOrAdmin(),
+  requireSelfOrPermission(PERMISSIONS.MARK_ATTENDANCE),
   validate(attendanceValidator.listForEmployee),
   attendanceController.listForEmployee
 );
 router.get(
   '/:id/attendance/summary',
-  requireSelfOrAdmin(),
+  requireSelfOrPermission(PERMISSIONS.MARK_ATTENDANCE),
   validate(attendanceValidator.getSummary),
   attendanceController.getSummary
 );
 
 router.post(
   '/:id/salary-slips/generate',
-  requireRole(USER_ROLES.ADMIN),
+  requirePermission(PERMISSIONS.VIEW_SALARY_SLIP),
   validate(salarySlipValidator.generate),
   salarySlipController.generate
 );
 router.get(
   '/:id/salary-slips',
-  requireRole(USER_ROLES.ADMIN),
+  requirePermission(PERMISSIONS.VIEW_SALARY_SLIP),
   validate(salarySlipValidator.listForEmployee),
   salarySlipController.listForEmployee
 );

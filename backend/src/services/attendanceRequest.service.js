@@ -53,7 +53,13 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate) {
     throw ApiError.conflict('This request has already been resolved');
   }
 
-  if (attendanceUpdate && (attendanceUpdate.status || attendanceUpdate.overtimeHours !== undefined || attendanceUpdate.isLate !== undefined)) {
+  if (
+    attendanceUpdate &&
+    (attendanceUpdate.status ||
+      attendanceUpdate.overtimeHours !== undefined ||
+      attendanceUpdate.isLate !== undefined ||
+      attendanceUpdate.earlyDeparture !== undefined)
+  ) {
     await attendanceRepository.upsertForDate(
       request.employee,
       request.date,

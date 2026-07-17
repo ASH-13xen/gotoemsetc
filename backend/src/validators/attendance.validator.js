@@ -12,11 +12,17 @@ const mark = {
       status: z.enum(Object.values(ATTENDANCE_STATUS)).optional(),
       overtimeHours: z.coerce.number().min(0).optional(),
       isLate: z.coerce.boolean().optional(),
+      earlyDeparture: z.coerce.boolean().optional(),
       notes: z.string().optional(),
     })
-    .refine((data) => data.status !== undefined || data.overtimeHours !== undefined || data.isLate !== undefined, {
-      message: 'At least one of status, overtimeHours or isLate is required',
-    }),
+    .refine(
+      (data) =>
+        data.status !== undefined ||
+        data.overtimeHours !== undefined ||
+        data.isLate !== undefined ||
+        data.earlyDeparture !== undefined,
+      { message: 'At least one of status, overtimeHours, isLate or earlyDeparture is required' }
+    ),
 };
 
 const listForEmployee = {

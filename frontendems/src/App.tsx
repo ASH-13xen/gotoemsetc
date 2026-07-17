@@ -4,10 +4,11 @@ import { Toaster } from 'sonner'
 
 import { AuthProvider } from '@/context/AuthContext'
 import { RequireAuth } from '@/components/auth/RequireAuth'
-import { RequireAdmin } from '@/components/auth/RequireAdmin'
 import { RequireOwnEmployee } from '@/components/auth/RequireOwnEmployee'
 import { RequireOwnAttendance } from '@/components/auth/RequireOwnAttendance'
+import { RequirePermission } from '@/components/auth/RequirePermission'
 import { useAuth } from '@/hooks/useAuth'
+import { hasAnyPermission } from '@/lib/permissions'
 import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
 import EmployeeDetailPage from '@/pages/EmployeeDetailPage'
@@ -17,12 +18,14 @@ import ApplicantsPage from '@/pages/ApplicantsPage'
 import ApplicantDetailPage from '@/pages/ApplicantDetailPage'
 import AttendancePage from '@/pages/AttendancePage'
 
-// A worker has no use for the admin dashboard (it's an all-employees
-// browser) — send them straight to their own employee record instead.
+// A worker with no granted permissions has no use for the admin dashboard
+// (it's an all-employees browser) — send them straight to their own
+// employee record instead. Admins, and anyone holding at least one
+// permission (they need directory access to use it), see the dashboard.
 function Home() {
   const { user, isReady } = useAuth()
   if (!isReady) return null
-  if (user?.role === 'admin') return <DashboardPage />
+  if (hasAnyPermission(user)) return <DashboardPage />
   if (user?.employeeLink) return <Navigate to={`/employees/${user.employeeLink}`} replace />
   return (
     <div className="flex min-h-[50vh] items-center justify-center text-center text-muted-foreground">
@@ -74,9 +77,9 @@ export default function App({ basename }: AppProps = {}) {
               path="/employees/:id/wizard"
               element={
                 <RequireAuth>
-                  <RequireAdmin>
+                  <RequirePermission permission="generate_documents">
                     <EmployeeWizardPage />
-                  </RequireAdmin>
+                  </RequirePermission>
                 </RequireAuth>
               }
             />
@@ -84,9 +87,9 @@ export default function App({ basename }: AppProps = {}) {
               path="/applicants"
               element={
                 <RequireAuth>
-                  <RequireAdmin>
+                  <RequirePermission permission="view_applicants">
                     <ApplicantsPage />
-                  </RequireAdmin>
+                  </RequirePermission>
                 </RequireAuth>
               }
             />
@@ -94,9 +97,9 @@ export default function App({ basename }: AppProps = {}) {
               path="/applicants/:id"
               element={
                 <RequireAuth>
-                  <RequireAdmin>
+                  <RequirePermission permission="view_applicants">
                     <ApplicantDetailPage />
-                  </RequireAdmin>
+                  </RequirePermission>
                 </RequireAuth>
               }
             />

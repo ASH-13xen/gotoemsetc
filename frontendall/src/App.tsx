@@ -63,9 +63,11 @@ export default function App() {
                 path="/inventory"
                 element={
                   <RequireAuth>
-                    <ShellLayout section="Inventory Management">
-                      <InventoryPage />
-                    </ShellLayout>
+                    <RequireRole role="admin">
+                      <ShellLayout section="Inventory Management">
+                        <InventoryPage />
+                      </ShellLayout>
+                    </RequireRole>
                   </RequireAuth>
                 }
               />
@@ -73,9 +75,11 @@ export default function App() {
                 path="/inventory/:id"
                 element={
                   <RequireAuth>
-                    <ShellLayout section="Inventory Management">
-                      <InventoryItemDetailPage />
-                    </ShellLayout>
+                    <RequireRole role="admin">
+                      <ShellLayout section="Inventory Management">
+                        <InventoryItemDetailPage />
+                      </ShellLayout>
+                    </RequireRole>
                   </RequireAuth>
                 }
               />
@@ -83,9 +87,11 @@ export default function App() {
                 path="/events"
                 element={
                   <RequireAuth>
-                    <ShellLayout section="Event Management">
-                      <EventsPage />
-                    </ShellLayout>
+                    <RequireRole role="admin">
+                      <ShellLayout section="Event Management">
+                        <EventsPage />
+                      </ShellLayout>
+                    </RequireRole>
                   </RequireAuth>
                 }
               />
@@ -93,9 +99,11 @@ export default function App() {
                 path="/events/:id"
                 element={
                   <RequireAuth>
-                    <ShellLayout section="Event Management">
-                      <EventDetailPage />
-                    </ShellLayout>
+                    <RequireRole role="admin">
+                      <ShellLayout section="Event Management">
+                        <EventDetailPage />
+                      </ShellLayout>
+                    </RequireRole>
                   </RequireAuth>
                 }
               />
@@ -127,11 +135,13 @@ export default function App() {
                 path="/sales/*"
                 element={
                   <RequireAuth>
-                    <ShellLayout section="Client Management">
-                      <Suspense fallback={<RemoteFallback />}>
-                        <RemoteSales basename="/sales" />
-                      </Suspense>
-                    </ShellLayout>
+                    <RequireRole role="admin">
+                      <ShellLayout section="Client Management">
+                        <Suspense fallback={<RemoteFallback />}>
+                          <RemoteSales basename="/sales" />
+                        </Suspense>
+                      </ShellLayout>
+                    </RequireRole>
                   </RequireAuth>
                 }
               />
@@ -139,11 +149,13 @@ export default function App() {
                 path="/followups/*"
                 element={
                   <RequireAuth>
-                    <ShellLayout section="Task Management">
-                      <Suspense fallback={<RemoteFallback />}>
-                        <RemoteFollowups basename="/followups" />
-                      </Suspense>
-                    </ShellLayout>
+                    <RequireRole role="admin">
+                      <ShellLayout section="Task Management">
+                        <Suspense fallback={<RemoteFallback />}>
+                          <RemoteFollowups basename="/followups" />
+                        </Suspense>
+                      </ShellLayout>
+                    </RequireRole>
                   </RequireAuth>
                 }
               />

@@ -86,6 +86,20 @@ module.exports = {
   DEFAULT_QUOTATION_SHARE_EXPIRY_HOURS: 24 * 14,
   USER_ROLES: { ADMIN: 'admin', WORKER: 'worker' },
   ATTENDANCE_REQUEST_STATUS: { PENDING: 'pending', RESOLVED: 'resolved' },
+  // Granular capabilities a worker credential can be individually granted
+  // (via Add Credentials) on top of their base self-only access — an admin
+  // always implicitly has every one of these. See auth.middleware.js's
+  // requirePermission/requireSelfOrPermission for how these gate routes.
+  PERMISSIONS: {
+    VIEW_APPLICANTS: 'view_applicants',
+    ADD_EMPLOYEE: 'add_employee',
+    GENERATE_DOCUMENTS: 'generate_documents',
+    REQUEST_DOCUMENTS: 'request_documents',
+    ADD_CREDENTIALS: 'add_credentials',
+    VIEW_SALARY_SLIP: 'view_salary_slip',
+    EDIT_EMPLOYEE_DETAILS: 'edit_employee_details',
+    MARK_ATTENDANCE: 'mark_attendance',
+  },
   // Default seed for the shared step library (admin can add/edit/remove
   // freely afterward — these just give a new install something to start from).
   DEFAULT_STEP_LIBRARY: [

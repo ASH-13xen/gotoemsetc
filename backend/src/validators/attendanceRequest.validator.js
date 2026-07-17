@@ -23,6 +23,7 @@ const resolve = {
     status: z.enum(Object.values(ATTENDANCE_STATUS)).optional(),
     overtimeHours: z.coerce.number().min(0).optional(),
     isLate: z.coerce.boolean().optional(),
+    earlyDeparture: z.coerce.boolean().optional(),
   }),
 };
 

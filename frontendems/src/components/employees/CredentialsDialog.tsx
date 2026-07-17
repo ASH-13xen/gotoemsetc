@@ -20,6 +20,8 @@ import {
   useEmployeeCredential,
   useUpdateCredential,
 } from '@/hooks/useCredentials'
+import { PERMISSION_OPTIONS, type Permission } from '@/api/credentials.api'
+import { useAuth } from '@/hooks/useAuth'
 
 function slugifyUsername(name: string): string {
   return name
@@ -41,6 +43,15 @@ export function CredentialsDialog({
   const [open, setOpen] = useState(false)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [permissions, setPermissions] = useState<Permission[]>([])
+
+  const { user: actingUser } = useAuth()
+  const isAdmin = actingUser?.role === 'admin'
+  // A non-admin add_credentials holder can only ever grant permissions they
+  // themselves have — matches the backend's assertNoEscalation guard.
+  const grantableOptions = isAdmin
+    ? PERMISSION_OPTIONS
+    : PERMISSION_OPTIONS.filter((opt) => actingUser?.permissions?.includes(opt.value))
 
   const { data, isLoading } = useEmployeeCredential(employeeId)
   const credential = data?.credential
@@ -52,7 +63,12 @@ export function CredentialsDialog({
     if (!open) return
     setPassword('')
     setUsername(credential?.username ?? slugifyUsername(employeeName))
+    setPermissions(credential?.permissions ?? [])
   }, [open, credential, employeeName])
+
+  const togglePermission = (perm: Permission) => {
+    setPermissions((prev) => (prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]))
+  }
 
   const onCreate = () => {
     if (!username.trim() || !password) {
@@ -60,7 +76,7 @@ export function CredentialsDialog({
       return
     }
     createCredential.mutate(
-      { username: username.trim(), password },
+      { username: username.trim(), password, permissions },
       {
         onSuccess: () => toast.success('Credentials created'),
         onError: (err: unknown) => {
@@ -76,7 +92,14 @@ export function CredentialsDialog({
   const onSave = () => {
     if (!credential) return
     updateCredential.mutate(
-      { userId: credential._id, username: username.trim(), password: password || undefined },
+      {
+        userId: credential._id,
+        username: username.trim(),
+        password: password || undefined,
+        // Only admins may edit an existing credential's permissions — the
+        // backend silently ignores this field from anyone else.
+        permissions: isAdmin ? permissions : undefined,
+      },
       {
         onSuccess: () => {
           toast.success('Credentials updated')
@@ -115,10 +138,10 @@ export function CredentialsDialog({
           </DialogTitle>
           <DialogDescription>
             {hasActiveCredential
-              ? 'This grants worker-level access to the platform — same permissions as any other worker.'
+              ? 'By default this only grants read-only access to their own record — tick any extra permissions below to give them more.'
               : credential
                 ? 'This employee has revoked credentials. Set a new password to reactivate, or change the username.'
-                : 'Creates a login for this employee with worker-level access — same permissions as any other worker.'}
+                : 'Creates a login for this employee. By default they can only view their own record — tick any extra permissions below to give them more.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -142,6 +165,38 @@ export function CredentialsDialog({
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
+            {(isAdmin || !credential) && (
+              <div className="grid gap-1.5">
+                <Label>Permissions</Label>
+                {grantableOptions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    You don't hold any permissions yourself, so you can't grant any.
+                  </p>
+                ) : (
+                  <div className="grid gap-2 rounded-xl border border-border/40 p-3">
+                    {grantableOptions.map((opt) => (
+                      <label
+                        key={opt.value}
+                        className="flex items-center gap-2 cursor-pointer select-none text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={permissions.includes(opt.value)}
+                          onChange={() => togglePermission(opt.value)}
+                          className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
+                        />
+                        {opt.label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {!isAdmin && credential && (
+              <p className="text-xs text-muted-foreground">
+                Only an admin can change permissions on an existing credential.
+              </p>
+            )}
           </div>
         )}
 

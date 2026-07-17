@@ -8,15 +8,20 @@ const AttendanceRecord = require('../models/AttendanceRecord');
 // manual admin save must always flip an existing auto-mark back to false,
 // and the classifier must always set it true, so neither path can rely on
 // "leave untouched" here.
+// `isSettled` defaults true — every caller except the real-time classifier's
+// provisional writes is making a final decision (a manual admin mark, or a
+// request-resolve) the instant it's saved. The classifier explicitly passes
+// false while a day could still be revised by a later scan the same day.
 function upsertForDate(
   employeeId,
   date,
-  { status, overtimeHours, notes, isLate },
+  { status, overtimeHours, notes, isLate, earlyDeparture },
   isBackdated,
   isAutoMarked = false,
-  modifiedByRequest
+  modifiedByRequest,
+  isSettled = true
 ) {
-  const update = { status, overtimeHours, isBackdated, notes, isAutoMarked, isLate };
+  const update = { status, overtimeHours, isBackdated, notes, isAutoMarked, isLate, earlyDeparture, isSettled };
   if (modifiedByRequest !== undefined) update.modifiedByRequest = modifiedByRequest;
   return AttendanceRecord.findOneAndUpdate(
     { employee: employeeId, date },
@@ -29,6 +34,18 @@ function upsertForDate(
 // (re)write — never touches days a human already decided on.
 function findForDate(employeeId, date) {
   return AttendanceRecord.findOne({ employee: employeeId, date });
+}
+
+// Every auto-marked, not-yet-settled record for this employee strictly
+// before `beforeDate` — used to settle "yesterday" (or older stragglers)
+// the moment a new scan proves that day is over.
+function findUnsettledBefore(employeeId, beforeDate) {
+  return AttendanceRecord.find({
+    employee: employeeId,
+    date: { $lt: beforeDate },
+    isAutoMarked: true,
+    isSettled: false,
+  });
 }
 
 function listForEmployee(employeeId, { from, to } = {}) {
@@ -49,4 +66,4 @@ async function listEmployeeIdsForDate(date) {
   return records.map((r) => r.employee.toString());
 }
 
-module.exports = { upsertForDate, findForDate, listForEmployee, listEmployeeIdsForDate };
+module.exports = { upsertForDate, findForDate, findUnsettledBefore, listForEmployee, listEmployeeIdsForDate };

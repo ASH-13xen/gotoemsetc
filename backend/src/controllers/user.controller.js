@@ -17,12 +17,12 @@ const getForEmployee = asyncHandler(async (req, res) => {
 });
 
 const createForEmployee = asyncHandler(async (req, res) => {
-  const credential = await userService.createCredential(req.params.employeeId, req.body);
+  const credential = await userService.createCredential(req.params.employeeId, req.body, req.user);
   res.status(201).json({ credential });
 });
 
 const updateCredential = asyncHandler(async (req, res) => {
-  const credential = await userService.updateCredential(req.params.id, req.body);
+  const credential = await userService.updateCredential(req.params.id, req.body, req.user);
   res.json({ credential });
 });
 

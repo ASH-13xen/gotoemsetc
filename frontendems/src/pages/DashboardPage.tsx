@@ -25,6 +25,8 @@ import { AddEmployeeDialog } from '@/components/employees/AddEmployeeDialog'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { useEmployees } from '@/hooks/useEmployees'
 import { useDashboardStats } from '@/hooks/useDashboardStats'
+import { useAuth } from '@/hooks/useAuth'
+import { hasPermission } from '@/lib/permissions'
 import type { EmployeeStatus } from '@/api/employees.api'
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -38,6 +40,7 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<EmployeeStatus | 'all'>('all')
   const debouncedSearch = useDebouncedValue(search, 350)
@@ -65,13 +68,15 @@ export default function DashboardPage() {
           {/* Action Tiles */}
           <div className="flex flex-col gap-4">
             {/* Go to Applicants Tile */}
-            <div
-              onClick={() => navigate('/applicants')}
-              className="bg-primary text-primary-foreground p-6 rounded-xl flex flex-col justify-between cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
-            >
-              <span className="text-xs font-bold tracking-wider opacity-90 uppercase">VIEW RECRUITMENT</span>
-              <span className="text-2xl font-extrabold tracking-wide">APPLICANTS</span>
-            </div>
+            {hasPermission(user, 'view_applicants') && (
+              <div
+                onClick={() => navigate('/applicants')}
+                className="bg-primary text-primary-foreground p-6 rounded-xl flex flex-col justify-between cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
+              >
+                <span className="text-xs font-bold tracking-wider opacity-90 uppercase">VIEW RECRUITMENT</span>
+                <span className="text-2xl font-extrabold tracking-wide">APPLICANTS</span>
+              </div>
+            )}
 
             {/* Go to Attendance Tile */}
             <div
@@ -83,16 +88,18 @@ export default function DashboardPage() {
             </div>
 
             {/* Add Employee Tile */}
-            <AddEmployeeDialog
-              trigger={
-                <div
-                  className="bg-emerald-600 text-white p-6 rounded-xl flex flex-col justify-between cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
-                >
-                  <span className="text-xs font-bold tracking-wider opacity-90 uppercase">CREATE PROFILE</span>
-                  <span className="text-2xl font-extrabold tracking-wide">ADD EMPLOYEE</span>
-                </div>
-              }
-            />
+            {hasPermission(user, 'add_employee') && (
+              <AddEmployeeDialog
+                trigger={
+                  <div
+                    className="bg-emerald-600 text-white p-6 rounded-xl flex flex-col justify-between cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
+                  >
+                    <span className="text-xs font-bold tracking-wider opacity-90 uppercase">CREATE PROFILE</span>
+                    <span className="text-2xl font-extrabold tracking-wide">ADD EMPLOYEE</span>
+                  </div>
+                }
+              />
+            )}
           </div>
         </div>
 
