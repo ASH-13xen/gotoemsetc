@@ -15,38 +15,41 @@
       }
 
       body {
+        position: relative; /* anchors the absolutely-positioned .header below */
         font-family: Georgia, "Times New Roman", serif;
         color: #1a1a1a;
-        font-size: 10.5pt; /* Slightly reduced to guarantee 1-page fit */
-        line-height: 1.45; /* Tightened line height */
+        font-size: 10pt; /* Reduced further to guarantee 1-page fit */
+        line-height: 1.3; /* Tightened line height */
         margin: 0;
         padding: 0;
       }
 
-      /* Header layout for top-right logo */
+      /* Taken out of document flow (position: absolute) so a large logo
+         doesn't push the title/body text down the page — it just floats in
+         the top-right corner independent of everything else's layout. */
       .header {
-        display: flex;
-        justify-content: flex-end;
-        margin-bottom: 10pt;
+        position: absolute;
+        top: 0;
+        right: 0;
       }
 
       .logo-header {
-        height: 80pt; /* Enlarged logo */
+        height: 168pt; /* ~20% of an A4 page's height */
         width: auto;
       }
 
       h1.document-title {
         text-align: center;
-        font-size: 16pt;
+        font-size: 22pt;
         font-weight: 700;
         letter-spacing: 1px;
         text-transform: uppercase;
         text-decoration: underline;
-        margin: 0 0 20pt 0;
+        margin: 0 0 12pt 0;
       }
 
       p {
-        margin: 0 0 8pt;
+        margin: 0 0 6pt;
       }
 
       strong {
@@ -54,16 +57,16 @@
       }
 
       .recipient-info {
-        margin-bottom: 15pt;
+        margin-bottom: 10pt;
       }
 
       ol {
-        margin: 10pt 0 15pt;
-        padding-left: 20pt;
+        margin: 8pt 0 10pt;
+        padding-left: 18pt;
       }
 
       li {
-        margin-bottom: 6pt;
+        margin-bottom: 4pt;
         text-align: justify; /* Cleaner edge for list items */
       }
 
@@ -72,7 +75,7 @@
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        margin-top: 30pt;
+        margin-top: 18pt;
       }
 
       .signature-block {
@@ -80,7 +83,7 @@
       }
 
       .signature-space {
-        margin-top: 40pt; /* Space for physical signature */
+        margin-top: 26pt; /* Space for physical signature */
       }
     </style>
   </head>
@@ -175,7 +178,7 @@
           employment with <strong>GO-TO Friend Pvt. Ltd.</strong> under the
           conditions described above.
         </p>
-        <div class="signature-space" style="margin-top: 15pt"></div>
+        <div class="signature-space" style="margin-top: 10pt"></div>
         <p>
           ___________________________<br /><strong>{employeeName}</strong
           ><br />Date: ____________
