@@ -4,25 +4,28 @@ const devicePunchRepository = require('../repositories/devicePunch.repository');
 
 // ZKTeco ADMS sends attendance logs as tab-separated lines, one punch per
 // line: "PIN\tYYYY-MM-DD HH:mm:ss\tStatus\tVerify\t...". We only need the
-// first two fields — everything else varies by device model/firmware.
+// first field (PIN) — the device's own embedded timestamp is deliberately
+// ignored (see recordPunch) since these terminals' onboard clocks drift and
+// aren't reliably kept in sync.
 function parseAttLogLine(line) {
   const fields = line.split('\t');
   const employeeCode = fields[0]?.trim();
   const timestampStr = fields[1]?.trim();
   if (!employeeCode || !timestampStr) return null;
 
-  const timestamp = new Date(timestampStr.replace(' ', 'T'));
-  if (Number.isNaN(timestamp.getTime())) return null;
-
-  return { employeeCode, timestamp };
+  return { employeeCode };
 }
 
-async function recordPunch(employeeCode, timestamp, raw, deviceSerial) {
+// Uses the server's receipt time rather than the device's embedded
+// timestamp — the device's onboard clock can drift out of sync, so "when we
+// heard about it" is treated as more trustworthy than "when the device
+// thinks it happened".
+async function recordPunch(employeeCode, raw, deviceSerial) {
   const employee = await employeeRepository.findByCode(employeeCode);
   return devicePunchRepository.create({
     employeeCode,
     employee: employee ? employee._id : null,
-    timestamp,
+    timestamp: new Date(),
     deviceSerial,
     raw,
   });
@@ -45,7 +48,7 @@ async function processAttLogBody(body, deviceSerial) {
       continue;
     }
     // eslint-disable-next-line no-await-in-loop
-    await recordPunch(parsed.employeeCode, parsed.timestamp, line, deviceSerial);
+    await recordPunch(parsed.employeeCode, line, deviceSerial);
     recorded += 1;
   }
   return recorded;
