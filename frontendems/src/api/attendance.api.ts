@@ -56,18 +56,30 @@ export async function listAttendance(
   return data
 }
 
-// Lifetime (not month-scoped) — every working day from date of joining
-// through today, split into unmarked vs. each status.
+// Every working day in [from, to] (or, with neither given, date of joining
+// through today), split into unmarked vs. each status — plus the Late/SL/
+// Half-Day conversion breakdown so a stacked day's true payroll impact is
+// visible, not just its arrival-side status.
 export interface AttendanceSummary {
   dateOfJoining: string | null
   asOfDate: string
   totalWorkingDays: number
   unmarkedDays: number
   counts: Record<AttendanceStatus, number>
+  lateFlagCount: number
+  earlyDepartureCount: number
+  lateToSLUnits: number
+  effectiveSLUnits: number
+  halfDayPenaltyUnits: number
 }
 
-export async function getAttendanceSummary(employeeId: string): Promise<{ summary: AttendanceSummary }> {
-  const { data } = await apiClient.get(`/employees/${employeeId}/attendance/summary`)
+export async function getAttendanceSummary(
+  employeeId: string,
+  range?: { from?: string; to?: string }
+): Promise<{ summary: AttendanceSummary }> {
+  const { data } = await apiClient.get(`/employees/${employeeId}/attendance/summary`, {
+    params: range,
+  })
   return data
 }
 

@@ -167,4 +167,17 @@ const list = {
   }),
 };
 
-module.exports = { create, update, getOrDelete, list };
+const addFlag = {
+  ...idParam,
+  body: z.object({
+    color: z.enum(['red', 'green']),
+    note: z.string().optional(),
+    date: z.coerce.date().optional(),
+  }),
+};
+
+const removeFlag = {
+  params: z.object({ id: z.string().min(1), flagId: z.string().min(1) }),
+};
+
+module.exports = { create, update, getOrDelete, list, addFlag, removeFlag };

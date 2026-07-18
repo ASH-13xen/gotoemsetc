@@ -4,15 +4,16 @@ const attendanceRepository = require('../repositories/attendance.repository');
 const holidayRepository = require('../repositories/holiday.repository');
 const notificationService = require('./notification.service');
 const userRepository = require('../repositories/user.repository');
-const { dateKey, isOffDay } = require('../utils/attendanceDays');
+const { dateKey, isSunday } = require('../utils/attendanceDays');
 const { ATTENDANCE_STATUS, NOTIFICATION_TYPES } = require('../config/constants');
 const logger = require('../utils/logger');
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
 // Fixed for every employee, regardless of their configured working hours —
-// only the grace cutoff (derived from workingHoursStart) and the
-// normal/overtime split (derived from workingHoursEnd) move per employee.
+// only the grace cutoff, the late cutoff (both derived from
+// workingHoursStart) and the normal/overtime split (derived from
+// workingHoursEnd) move per employee.
 const HALF_DAY_ARRIVAL_START = 11 * 60 + 30; // 11:30am
 const HALF_DAY_ARRIVAL_END = 13 * 60 + 59; // 1:59pm
 const MIDDAY_DEAD_ZONE_START = 14 * 60; // 2:00pm
@@ -20,6 +21,7 @@ const MIDDAY_DEAD_ZONE_END = 16 * 60 + 29; // 4:29pm
 const EARLY_DEPARTURE_START = 16 * 60 + 30; // 4:30pm
 const NIGHT_DEAD_ZONE_END = 6 * 60 + 59; // 6:59am — valid hours resume at 7:00am
 const GRACE_MINUTES = 15;
+const LATE_WINDOW_MINUTES = 15; // grace cutoff + this = the Late cutoff
 
 function todayUTCMidnight() {
   const now = new Date();
@@ -52,13 +54,15 @@ function parseTimeToMinutes(hhmm) {
   return h * 60 + m;
 }
 
-// The only two boundaries that move with an employee's configured working
+// The only boundaries that move with an employee's configured working
 // hours — everything else in this file is a fixed clock time for everyone.
 function employeeBoundaries(employee) {
   const shiftStart = parseTimeToMinutes(employee.workingHoursStart);
   const shiftEnd = parseTimeToMinutes(employee.workingHoursEnd);
+  const graceCutoff = shiftStart + GRACE_MINUTES;
   return {
-    graceCutoff: shiftStart + GRACE_MINUTES,
+    graceCutoff,
+    lateCutoff: graceCutoff + LATE_WINDOW_MINUTES,
     shiftEnd,
     normalEnd: shiftEnd + 59,
   };
@@ -71,13 +75,25 @@ function isDeadZoneMinute(minutes) {
 // Drops scans that fall in either dead zone before arrival/departure are
 // ever picked — a dead-zone scan never becomes anyone's "first" or "last"
 // for classification, though it's always stored in DevicePunch regardless.
+// Weekday-only — see validPunchesForSunday for why Sunday doesn't share the
+// midday half of this.
 function validPunches(punches) {
   return punches.filter((p) => !isDeadZoneMinute(istMinutesOfDay(p.timestamp)));
+}
+
+// Sundays only exclude the night dead zone (bogus pre-7am scans) — the
+// midday dead zone exists specifically to ignore lunch-break ambiguity on a
+// structured workday, which doesn't apply to a Sunday's raw duration
+// calculation (a 3pm scan is a perfectly valid endpoint there).
+function validPunchesForSunday(punches) {
+  return punches.filter((p) => istMinutesOfDay(p.timestamp) > NIGHT_DEAD_ZONE_END);
 }
 
 // The single source of truth for turning a day's punches into a result —
 // used both for the real-time provisional write (handlePunchEvent) and the
 // final settlement determination (settleDay), so they can never disagree.
+// Weekday-only — Sundays use computeSundayOvertime instead (no arrival/
+// departure windows apply there).
 //
 // Returns one of:
 //   { outcome: 'no-scan' }
@@ -91,12 +107,13 @@ function classifyPunches(punches, employee) {
   if (valid.length === 0) return { outcome: 'no-scan' };
   if (valid.length === 1) return { outcome: 'single-scan' };
 
-  const { graceCutoff, shiftEnd, normalEnd } = employeeBoundaries(employee);
+  const { graceCutoff, lateCutoff, shiftEnd, normalEnd } = employeeBoundaries(employee);
   const arrivalMinutes = istMinutesOfDay(valid[0].timestamp);
   const departureMinutes = istMinutesOfDay(valid[valid.length - 1].timestamp);
 
   let status;
   if (arrivalMinutes <= graceCutoff) status = ATTENDANCE_STATUS.PRESENT;
+  else if (arrivalMinutes <= lateCutoff) status = ATTENDANCE_STATUS.LATE;
   else if (arrivalMinutes < HALF_DAY_ARRIVAL_START) status = ATTENDANCE_STATUS.SHORT_LEAVE;
   else if (arrivalMinutes <= HALF_DAY_ARRIVAL_END) status = ATTENDANCE_STATUS.HALF_DAY;
   else status = null; // arrival landed at/after the midday dead zone with no earlier valid scan
@@ -117,6 +134,24 @@ function classifyPunches(punches, employee) {
   return { outcome: 'classified', status, earlyDeparture, overtimeHours };
 }
 
+// Sundays don't use the weekday arrival/departure windows at all — any time
+// actually spent (first valid scan to last) becomes overtime directly,
+// rounded to the nearest 0.5h, with no baseline subtraction and no 1h
+// minimum (unlike weekday overtime). Only the night dead zone is filtered
+// (see validPunchesForSunday) — a 3pm scan is a normal, valid Sunday
+// endpoint, unlike on a weekday. Returns null when there aren't at least two
+// valid scans to measure a span from — same "not enough info yet" treatment
+// as the weekday single-scan/no-scan cases, just without a notification
+// (see settleDay — a quiet Sunday is expected, not an anomaly).
+function computeSundayOvertime(punches) {
+  const valid = validPunchesForSunday(punches);
+  if (valid.length < 2) return null;
+  const first = istMinutesOfDay(valid[0].timestamp);
+  const last = istMinutesOfDay(valid[valid.length - 1].timestamp);
+  const overtimeHours = Math.round(((last - first) / 60) * 2) / 2;
+  return { overtimeHours };
+}
+
 async function notifyAdmins(type, title, message, employeeId) {
   const admins = await userRepository.findAdmins();
   await notificationService.createForUsers(
@@ -125,10 +160,12 @@ async function notifyAdmins(type, title, message, employeeId) {
   );
 }
 
-async function isOffDayLabel(dateLabel) {
+// Company holidays are always fully skipped (unchanged). Sundays are NOT an
+// "off day" here anymore — see computeSundayOvertime — this now checks
+// holidays only.
+async function isHolidayLabel(dateLabel) {
   const holidays = await holidayRepository.list({ from: dateLabel, to: dateLabel });
-  const holidayDateKeys = new Set(holidays.map((h) => dateKey(h.date)));
-  return isOffDay(dateLabel, holidayDateKeys);
+  return holidays.some((h) => dateKey(h.date) === dateKey(dateLabel));
 }
 
 // Called fire-and-forget right after a punch is recorded (see
@@ -148,13 +185,29 @@ async function handlePunchEvent(employeeId, timestamp) {
     await settleDay(employeeId, record.date);
   }
 
-  if (await isOffDayLabel(dateLabel)) return; // Sundays/holidays are never auto-classified
+  if (await isHolidayLabel(dateLabel)) return; // company holidays are never auto-classified
 
   const existing = await attendanceRepository.findForDate(employeeId, dateLabel);
   if (existing && !existing.isAutoMarked) return; // an admin already decided this day — never touch it
 
   const { start, end } = istDayBoundsUTC(dateLabel);
   const punches = await devicePunchRepository.listForEmployeeOnDay(employeeId, start, end);
+
+  if (isSunday(dateLabel)) {
+    const sundayResult = computeSundayOvertime(punches);
+    if (!sundayResult) return; // not enough scans yet — leave it for settlement to decide
+    await attendanceRepository.upsertForDate(
+      employeeId,
+      dateLabel,
+      { status: undefined, earlyDeparture: false, overtimeHours: sundayResult.overtimeHours },
+      false,
+      true,
+      undefined,
+      false
+    );
+    return;
+  }
+
   const result = classifyPunches(punches, employee);
 
   if (result.outcome !== 'classified') return; // not enough info yet — leave it for settlement to decide
@@ -183,10 +236,29 @@ async function settleDay(employeeId, dateLabel) {
   if (existing && !existing.isAutoMarked) return;
   if (existing && existing.isSettled) return;
 
-  if (await isOffDayLabel(dateLabel)) return;
+  if (await isHolidayLabel(dateLabel)) return;
 
   const { start, end } = istDayBoundsUTC(dateLabel);
   const punches = await devicePunchRepository.listForEmployeeOnDay(employeeId, start, end);
+
+  if (isSunday(dateLabel)) {
+    const sundayResult = computeSundayOvertime(punches);
+    if (sundayResult) {
+      await attendanceRepository.upsertForDate(
+        employeeId,
+        dateLabel,
+        { status: undefined, earlyDeparture: false, overtimeHours: sundayResult.overtimeHours },
+        false,
+        true,
+        undefined,
+        true
+      );
+    }
+    // 0/1 scan on a Sunday is unremarkable — no record, no notification,
+    // unlike the weekday no-scan/single-scan anomaly cases below.
+    return;
+  }
+
   const result = classifyPunches(punches, employee);
   const employeeName = `${employee.firstName} ${employee.lastName || ''}`.trim();
 
@@ -236,13 +308,16 @@ async function settleDay(employeeId, dateLabel) {
 // primary classifier, just catches the one thing that can never be
 // event-driven (zero scans all day) and settles any stragglers real-time
 // processing didn't get to (e.g. an employee's last working day, with no
-// "tomorrow" scan to trigger settlement naturally).
+// "tomorrow" scan to trigger settlement naturally). Sundays still run (to
+// settle any pending Sunday-OT records), just without the no-scan
+// notification — see the `sunday` check below.
 async function runNightlyBackstop(dateLabel = todayUTCMidnight()) {
-  if (await isOffDayLabel(dateLabel)) {
-    logger.info({ date: dateKey(dateLabel) }, 'Attendance backstop: off day, skipping entirely');
+  if (await isHolidayLabel(dateLabel)) {
+    logger.info({ date: dateKey(dateLabel) }, 'Attendance backstop: holiday, skipping entirely');
     return { settled: 0, noScan: 0 };
   }
 
+  const sunday = isSunday(dateLabel);
   const employees = await employeeRepository.listActive();
   const { start, end } = istDayBoundsUTC(dateLabel);
 
@@ -253,18 +328,21 @@ async function runNightlyBackstop(dateLabel = todayUTCMidnight()) {
     // eslint-disable-next-line no-await-in-loop
     const punches = await devicePunchRepository.listForEmployeeOnDay(employee._id, start, end);
     if (punches.length === 0) {
-      // eslint-disable-next-line no-await-in-loop
-      const existing = await attendanceRepository.findForDate(employee._id, dateLabel);
-      if (!existing) {
-        const employeeName = `${employee.firstName} ${employee.lastName || ''}`.trim();
+      // A quiet Sunday is expected, not an anomaly — no notification.
+      if (!sunday) {
         // eslint-disable-next-line no-await-in-loop
-        await notifyAdmins(
-          NOTIFICATION_TYPES.ATTENDANCE_NO_SCAN,
-          'No biometric scan today',
-          `${employeeName} has not scanned in at all today.`,
-          employee._id
-        );
-        noScan += 1;
+        const existing = await attendanceRepository.findForDate(employee._id, dateLabel);
+        if (!existing) {
+          const employeeName = `${employee.firstName} ${employee.lastName || ''}`.trim();
+          // eslint-disable-next-line no-await-in-loop
+          await notifyAdmins(
+            NOTIFICATION_TYPES.ATTENDANCE_NO_SCAN,
+            'No biometric scan today',
+            `${employeeName} has not scanned in at all today.`,
+            employee._id
+          );
+          noScan += 1;
+        }
       }
     } else {
       // eslint-disable-next-line no-await-in-loop
@@ -287,4 +365,4 @@ async function runNightlyBackstop(dateLabel = todayUTCMidnight()) {
   return { settled, noScan };
 }
 
-module.exports = { handlePunchEvent, settleDay, runNightlyBackstop, classifyPunches };
+module.exports = { handlePunchEvent, settleDay, runNightlyBackstop, classifyPunches, computeSundayOvertime };

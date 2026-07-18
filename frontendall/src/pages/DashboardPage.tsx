@@ -50,21 +50,35 @@ function StatCard({ label, value }: { label: string; value: number | undefined }
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  const isAdminLike = user?.role === 'admin' || user?.role === 'hr'
 
   const { data: stats } = useQuery({
     queryKey: ['dashboardStats'],
     queryFn: getDashboardStats,
+    enabled: isAdminLike,
   })
 
   const { data: totalApplicants } = useQuery({
     queryKey: ['applicantsCount', 'all'],
     queryFn: () => getApplicantsCount(),
+    enabled: isAdminLike,
   })
 
   const { data: upcomingMeetings } = useQuery({
     queryKey: ['applicantsCount', 'interview_scheduled'],
     queryFn: () => getApplicantsCount('interview_scheduled'),
+    enabled: isAdminLike,
   })
+
+  if (!isAdminLike) {
+    return (
+      <div className="py-4">
+        <h1 className="text-3xl font-light tracking-tight text-foreground/90">
+          Welcome, <span className="font-semibold text-primary">{user?.username}</span>
+        </h1>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8 py-4">

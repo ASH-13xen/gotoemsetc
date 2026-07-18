@@ -51,4 +51,26 @@ const activity = asyncHandler(async (req, res) => {
   res.json({ activityLog });
 });
 
-module.exports = { list, getById, birthdays, create, update, remove, activity };
+const addFlag = asyncHandler(async (req, res) => {
+  const employee = await employeeService.addFlag(req.params.id, req.body, req.user.id);
+  req.auditContext = {
+    action: 'employee.flag.add',
+    resourceType: 'Employee',
+    resourceId: employee._id,
+    metadata: req.body,
+  };
+  res.status(201).json({ employee: shapeForRole('Employee', employee, req.user.role) });
+});
+
+const removeFlag = asyncHandler(async (req, res) => {
+  const employee = await employeeService.removeFlag(req.params.id, req.params.flagId);
+  req.auditContext = {
+    action: 'employee.flag.remove',
+    resourceType: 'Employee',
+    resourceId: employee._id,
+    metadata: { flagId: req.params.flagId },
+  };
+  res.json({ employee: shapeForRole('Employee', employee, req.user.role) });
+});
+
+module.exports = { list, getById, birthdays, create, update, remove, activity, addFlag, removeFlag };

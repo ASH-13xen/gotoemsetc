@@ -54,3 +54,24 @@ export function useDeleteEmployee() {
     },
   })
 }
+
+export function useAddFlag(employeeId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { color: 'red' | 'green'; note?: string; date?: string }) =>
+      employeesApi.addFlag(employeeId, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY })
+    },
+  })
+}
+
+export function useRemoveFlag(employeeId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (flagId: string) => employeesApi.removeFlag(employeeId, flagId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY })
+    },
+  })
+}

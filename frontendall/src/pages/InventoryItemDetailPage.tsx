@@ -15,7 +15,7 @@ export default function InventoryItemDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'hr'
 
   const { data, isLoading } = useInventoryItem(id)
   const { data: bookings } = useItemBookings(id)

@@ -34,3 +34,14 @@ export function useDeleteDocument(employeeId: string) {
     },
   })
 }
+
+export function useUploadSignedDocument(employeeId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ documentId, file }: { documentId: string; file: File }) =>
+      documentsApi.uploadSignedDocument(employeeId, documentId, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents', employeeId] })
+    },
+  })
+}

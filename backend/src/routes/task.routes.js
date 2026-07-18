@@ -57,28 +57,28 @@ router.post('/:id/rollover', validate(taskValidator.rollover), requireTaskClient
 // --- Admin-only structural editing: steps, description, deletion ---
 router.post(
   '/:id/steps',
-  requireRole(USER_ROLES.ADMIN),
+  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
   validate(taskValidator.addStep),
   requireTaskClientAccess(),
   taskController.addStep
 );
 router.delete(
   '/:id/steps/:stepId',
-  requireRole(USER_ROLES.ADMIN),
+  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
   validate(taskValidator.removeStep),
   requireTaskClientAccess(),
   taskController.removeStep
 );
 router.patch(
   '/:id/details',
-  requireRole(USER_ROLES.ADMIN),
+  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
   validate(taskValidator.updateTaskDetails),
   requireTaskClientAccess(),
   taskController.updateTaskDetails
 );
 router.delete(
   '/:id',
-  requireRole(USER_ROLES.ADMIN),
+  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
   validate(taskValidator.deleteTask),
   requireTaskClientAccess(),
   taskController.deleteTask

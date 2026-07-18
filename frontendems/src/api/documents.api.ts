@@ -18,6 +18,9 @@ export interface GeneratedDocument {
   mergeDataSnapshot?: Record<string, unknown>
   docx?: FileMeta
   pdf?: FileMeta
+  // The countersigned copy HR/admin uploads back after the employee
+  // physically signs this document — separate from the generated pdf/docx.
+  signedFile?: FileMeta
   status: 'completed' | 'failed'
   errorMessage?: string
   createdAt: string
@@ -65,6 +68,33 @@ export async function fetchGeneratedFileBlob(documentId: string): Promise<Blob> 
 export async function downloadGeneratedFile(documentId: string, filename: string): Promise<void> {
   const blob = await fetchGeneratedFileBlob(documentId)
   const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}
+
+export async function uploadSignedDocument(
+  employeeId: string,
+  documentId: string,
+  file: File
+): Promise<{ document: GeneratedDocument }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const { data } = await apiClient.post(
+    `/employees/${employeeId}/documents/${documentId}/signed`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } }
+  )
+  return data
+}
+
+export async function downloadSignedFile(documentId: string, filename: string): Promise<void> {
+  const { data } = await apiClient.get(`/documents/${documentId}/signed-file`, { responseType: 'blob' })
+  const url = window.URL.createObjectURL(data as Blob)
   const link = document.createElement('a')
   link.href = url
   link.download = filename

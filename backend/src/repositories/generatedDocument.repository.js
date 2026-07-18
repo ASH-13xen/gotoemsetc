@@ -3,7 +3,7 @@ const GeneratedDocument = require('../models/GeneratedDocument');
 // The file bytes can be a few hundred KB each — fine to store, but never
 // worth shipping over the wire for a list/detail view, so they're excluded
 // here and only loaded by findByIdWithFile for the actual download route.
-const WITHOUT_FILE_DATA = '-docx.data -pdf.data';
+const WITHOUT_FILE_DATA = '-docx.data -pdf.data -signedFile.data';
 
 function create(data) {
   return GeneratedDocument.create(data);
@@ -32,4 +32,18 @@ function countCompletedSince(date) {
   return GeneratedDocument.countDocuments({ status: 'completed', createdAt: { $gte: date } });
 }
 
-module.exports = { create, listByEmployee, findById, findByIdWithFile, deleteById, countCompletedSince };
+function setSignedFile(id, signedFile) {
+  return GeneratedDocument.findByIdAndUpdate(id, { signedFile }, { returnDocument: 'after' }).select(
+    WITHOUT_FILE_DATA
+  );
+}
+
+module.exports = {
+  create,
+  listByEmployee,
+  findById,
+  findByIdWithFile,
+  deleteById,
+  countCompletedSince,
+  setSignedFile,
+};

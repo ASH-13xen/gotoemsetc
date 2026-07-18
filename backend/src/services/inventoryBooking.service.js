@@ -5,8 +5,8 @@ const {
   INVENTORY_BOOKING_STATUS,
   INVENTORY_RELEASED_BY_ROLE,
   INVENTORY_BOOKING_CONTEXT,
-  USER_ROLES,
 } = require('../config/constants');
+const { isAdminLike } = require('../utils/roles');
 
 // A booking locks `quantity` units the moment it's created — this is a
 // physical-checkout model (like signing gear out of a cage), not a calendar
@@ -60,7 +60,7 @@ async function releaseBooking(bookingId, actingUser) {
     throw ApiError.badRequest('This booking has already been released');
   }
 
-  const isAdmin = actingUser.role === USER_ROLES.ADMIN;
+  const isAdmin = isAdminLike(actingUser);
   const isOwner =
     Boolean(actingUser.employeeLink) &&
     Boolean(booking.bookedBy) &&

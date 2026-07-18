@@ -12,6 +12,7 @@ const attendanceValidator = require('../validators/attendance.validator');
 const attendanceController = require('../controllers/attendance.controller');
 const salarySlipValidator = require('../validators/salarySlip.validator');
 const salarySlipController = require('../controllers/salarySlip.controller');
+const upload = require('../middlewares/multer.middleware');
 const {
   requireRole,
   requireSelfOrAdmin,
@@ -42,7 +43,22 @@ router.patch(
   employeeController.update
 );
 // Deletion stays strictly admin-only — not part of the grantable permission set.
-router.delete('/:id', requireRole(USER_ROLES.ADMIN), validate(employeeValidator.getOrDelete), employeeController.remove);
+router.delete('/:id', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), validate(employeeValidator.getOrDelete), employeeController.remove);
+
+// Flags (red/green performance markers) — role-only, not a grantable
+// permission, per the product ask.
+router.post(
+  '/:id/flags',
+  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
+  validate(employeeValidator.addFlag),
+  employeeController.addFlag
+);
+router.delete(
+  '/:id/flags/:flagId',
+  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
+  validate(employeeValidator.removeFlag),
+  employeeController.removeFlag
+);
 
 router.post(
   '/:id/documents/generate',
@@ -55,6 +71,13 @@ router.get(
   requirePermission(PERMISSIONS.GENERATE_DOCUMENTS),
   validate(documentGenerationValidator.listForEmployee),
   documentController.listForEmployee
+);
+router.post(
+  '/:id/documents/:docId/signed',
+  requirePermission(PERMISSIONS.GENERATE_DOCUMENTS),
+  upload.single('file'),
+  validate(documentGenerationValidator.uploadSigned),
+  documentController.uploadSigned
 );
 
 router.post(

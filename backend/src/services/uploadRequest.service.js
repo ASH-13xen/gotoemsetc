@@ -129,6 +129,19 @@ async function attachDocuments(rawToken, code, files) {
 
   const saved = [];
   for (const file of validFiles) {
+    // A re-upload of a doc type that's already on file is a replace, not an
+    // addition — destroy the prior version(s) so this never leaves an
+    // orphaned Cloudinary asset or a duplicate row in the employee's
+    // document list (see uploadedDocument.repository.js#findByEmployeeAndDocType).
+    // eslint-disable-next-line no-await-in-loop
+    const previous = await uploadedDocumentRepository.findByEmployeeAndDocType(uploadRequest.employee, file.fieldname);
+    for (const prior of previous) {
+      // eslint-disable-next-line no-await-in-loop
+      if (prior.publicId) await cloudinaryUploadService.destroy(prior.publicId, { resourceType: prior.resourceType });
+      // eslint-disable-next-line no-await-in-loop
+      await uploadedDocumentRepository.deleteById(prior._id);
+    }
+
     const upload = await cloudinaryUploadService.uploadBuffer(file.buffer, {
       folder: `ems/employees/${uploadRequest.employee}/uploaded`,
       publicId: `${file.fieldname}-${Date.now()}-${Math.round(Math.random() * 1e6)}`,

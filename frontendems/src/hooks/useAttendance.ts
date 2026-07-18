@@ -10,10 +10,10 @@ export function useAttendance(employeeId: string | undefined, month: number, yea
   })
 }
 
-export function useAttendanceSummary(employeeId: string | undefined) {
+export function useAttendanceSummary(employeeId: string | undefined, range?: { from?: string; to?: string }) {
   return useQuery({
-    queryKey: ['attendance-summary', employeeId],
-    queryFn: () => attendanceApi.getAttendanceSummary(employeeId as string),
+    queryKey: ['attendance-summary', employeeId, range?.from, range?.to],
+    queryFn: () => attendanceApi.getAttendanceSummary(employeeId as string, range),
     enabled: Boolean(employeeId),
   })
 }

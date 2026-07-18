@@ -13,7 +13,7 @@ export function ShellNav() {
     { to: '/ems', label: 'EMS' },
     { to: '/sales', label: 'Sales' },
     { to: '/followups', label: 'Task Management' },
-    ...(user?.role === 'admin' ? [{ to: '/audit-log', label: 'Audit Log' }] : []),
+    ...((user?.role === 'admin' || user?.role === 'hr') ? [{ to: '/audit-log', label: 'Audit Log' }] : []),
   ]
 
   return (

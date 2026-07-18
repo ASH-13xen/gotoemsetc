@@ -1,12 +1,18 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { CheckCircle2, Download, Eye, FileText, Share2, Trash2, XCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { CheckCircle2, Download, Eye, FileSignature, FileText, Share2, Trash2, XCircle } from 'lucide-react'
+import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { useDeleteDocument, useEmployeeDocuments } from '@/hooks/useDocuments'
+import { cn } from '@/lib/utils'
+import { useDeleteDocument, useEmployeeDocuments, useUploadSignedDocument } from '@/hooks/useDocuments'
 import { useConfig } from '@/hooks/useConfig'
-import { downloadGeneratedFile, fetchGeneratedFileBlob, type GeneratedDocument } from '@/api/documents.api'
+import {
+  downloadGeneratedFile,
+  downloadSignedFile,
+  fetchGeneratedFileBlob,
+  type GeneratedDocument,
+} from '@/api/documents.api'
 import { GeneratedFilePreviewDialog } from './GeneratedFilePreviewDialog'
 import { ManualSendButtons } from '@/components/common/ManualSendButtons'
 import { buildGmailComposeUrl, buildWhatsappUrl } from '@/lib/manualSend'
@@ -26,6 +32,7 @@ function useNotified(storageKey: string): [boolean, (value: boolean) => void] {
 
 function DocumentRow({
   doc,
+  employeeId,
   employeeName,
   employeeEmail,
   employeePhone,
@@ -35,6 +42,7 @@ function DocumentRow({
   onDelete,
 }: {
   doc: GeneratedDocument
+  employeeId: string
   employeeName?: string
   employeeEmail?: string
   employeePhone?: string
@@ -44,6 +52,7 @@ function DocumentRow({
   onDelete: (documentId: string) => void
 }) {
   const [notified, setNotified] = useNotified(`notified_document_${doc._id}`)
+  const uploadSigned = useUploadSignedDocument(employeeId)
   const file = doc.pdf ?? doc.docx
   const isPdf = file?.contentType === 'application/pdf'
   const emailBody = file
@@ -117,11 +126,55 @@ function DocumentRow({
               Download
             </Button>
           )}
+          <label
+            className={cn(
+              buttonVariants({ variant: 'outline', size: 'sm' }),
+              uploadSigned.isPending ? 'pointer-events-none opacity-50' : 'cursor-pointer'
+            )}
+          >
+            <FileSignature className="size-3.5" />
+            Upload Signed PDF
+            <input
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              disabled={uploadSigned.isPending}
+              onChange={(e) => {
+                const selected = e.target.files?.[0]
+                e.target.value = ''
+                if (!selected) return
+                uploadSigned.mutate(
+                  { documentId: doc._id, file: selected },
+                  {
+                    onSuccess: () => toast.success('Signed copy uploaded'),
+                    onError: () => toast.error('Could not upload the signed copy'),
+                  }
+                )
+              }}
+            />
+          </label>
           <Button variant="ghost" size="sm" onClick={() => onDelete(doc._id)}>
             <Trash2 className="size-3.5" />
           </Button>
         </div>
       </div>
+
+      {doc.signedFile && (
+        <div className="flex items-center justify-between gap-3 rounded-lg bg-secondary/40 px-3 py-2 text-xs">
+          <span className="flex items-center gap-1.5 font-semibold text-muted-foreground">
+            <FileSignature className="size-3.5" />
+            Signed copy on file
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => downloadSignedFile(doc._id, doc.signedFile!.filename).catch(() => toast.error('Could not download the signed copy'))}
+          >
+            <Download className="size-3.5" />
+            Download
+          </Button>
+        </div>
+      )}
 
       {file && (employeeEmail || employeePhone) && (
         <div className="border-t pt-2">
@@ -206,6 +259,7 @@ export function GeneratedDocumentsList({
             <DocumentRow
               key={doc._id}
               doc={doc}
+              employeeId={employeeId}
               employeeName={employeeName}
               employeeEmail={employeeEmail}
               employeePhone={employeePhone}

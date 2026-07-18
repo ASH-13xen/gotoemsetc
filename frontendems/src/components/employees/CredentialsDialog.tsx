@@ -22,6 +22,7 @@ import {
 } from '@/hooks/useCredentials'
 import { PERMISSION_OPTIONS, type Permission } from '@/api/credentials.api'
 import { useAuth } from '@/hooks/useAuth'
+import { isAdminLike } from '@/lib/permissions'
 
 function slugifyUsername(name: string): string {
   return name
@@ -46,7 +47,7 @@ export function CredentialsDialog({
   const [permissions, setPermissions] = useState<Permission[]>([])
 
   const { user: actingUser } = useAuth()
-  const isAdmin = actingUser?.role === 'admin'
+  const isAdmin = isAdminLike(actingUser)
   // A non-admin add_credentials holder can only ever grant permissions they
   // themselves have — matches the backend's assertNoEscalation guard.
   const grantableOptions = isAdmin

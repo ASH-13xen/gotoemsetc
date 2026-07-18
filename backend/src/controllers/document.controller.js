@@ -43,4 +43,27 @@ const remove = asyncHandler(async (req, res) => {
   res.status(204).send();
 });
 
-module.exports = { generate, listForEmployee, getById, downloadFile, remove };
+// The countersigned copy HR/admin uploads back after the employee physically
+// signs a generated document — stored the same way as the generated file
+// itself (bytes in Mongo), not Cloudinary (see GeneratedDocument.js).
+const uploadSigned = asyncHandler(async (req, res) => {
+  if (!req.file) throw ApiError.badRequest('No file was uploaded');
+  const document = await generatedDocumentRepository.setSignedFile(req.params.docId, {
+    data: req.file.buffer,
+    contentType: req.file.mimetype,
+    filename: req.file.originalname,
+  });
+  if (!document) throw ApiError.notFound('Document not found');
+  res.status(201).json({ document });
+});
+
+const downloadSignedFile = asyncHandler(async (req, res) => {
+  const document = await generatedDocumentRepository.findByIdWithFile(req.params.id);
+  if (!document?.signedFile?.data) throw ApiError.notFound('No signed copy on file');
+
+  res.set('Content-Type', document.signedFile.contentType);
+  res.set('Content-Disposition', `attachment; filename="${document.signedFile.filename}"`);
+  res.send(document.signedFile.data);
+});
+
+module.exports = { generate, listForEmployee, getById, downloadFile, remove, uploadSigned, downloadSignedFile };

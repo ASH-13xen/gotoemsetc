@@ -3,6 +3,7 @@ const attendanceRepository = require('../repositories/attendance.repository');
 const holidayRepository = require('../repositories/holiday.repository');
 const { ATTENDANCE_STATUS } = require('../config/constants');
 const { dateKey, isOffDay } = require('../utils/attendanceDays');
+const { computeEffectiveUnits } = require('../utils/attendancePenalties');
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -83,11 +84,13 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
 
   const daysWorkedTotal = counts.P + counts.O + counts.W + counts.L + counts.SL + counts.H * 0.5;
 
-  // >2 late = 1 short leave; >2 short leave (incl. converted lates and
-  // early-departure days) = 1 half day.
-  const lateToSLUnits = Math.floor((counts.L + lateFlagCount) / 3);
-  const effectiveSLUnits = counts.SL + lateToSLUnits + earlyDepartureCount;
-  const halfDayPenaltyUnits = Math.floor(effectiveSLUnits / 3);
+  // Every 2 lates = 1 short leave; every 2 short leave units (incl.
+  // converted lates and early-departure days) = 1 half day.
+  const { lateToSLUnits, effectiveSLUnits, halfDayPenaltyUnits } = computeEffectiveUnits({
+    counts,
+    lateFlagCount,
+    earlyDepartureCount,
+  });
 
   return {
     totalDaysInPeriod,
@@ -95,6 +98,10 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
     workingDaysInPeriod,
     counts,
     daysWorkedTotal,
+    lateFlagCount,
+    earlyDepartureCount,
+    lateToSLUnits,
+    effectiveSLUnits,
     halfDayPenaltyUnits,
     unpaidAbsentDays,
     totalOvertimeHours,

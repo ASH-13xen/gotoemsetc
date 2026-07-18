@@ -35,6 +35,12 @@ function findAdmins() {
   return User.find({ role: USER_ROLES.ADMIN, isActive: true });
 }
 
+// Attendance modification requests route to HR specifically (not admin) —
+// see attendanceRequest.service.js#createRequest.
+function findHr() {
+  return User.find({ role: USER_ROLES.HR, isActive: true });
+}
+
 module.exports = {
   findByUsername,
   findById,
@@ -44,4 +50,5 @@ module.exports = {
   updateById,
   list,
   findAdmins,
+  findHr,
 };

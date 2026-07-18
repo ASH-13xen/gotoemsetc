@@ -1,5 +1,5 @@
 const sensitiveFields = require('../config/sensitiveFields');
-const { USER_ROLES } = require('../config/constants');
+const { isAdminLike } = require('./roles');
 
 function stripFields(doc, fields) {
   if (!doc) return doc;
@@ -14,7 +14,7 @@ function stripFields(doc, fields) {
 // the document came through. Admin always sees everything.
 function shapeForRole(resourceType, doc, role) {
   const fields = sensitiveFields[resourceType];
-  if (!fields || !fields.length || role === USER_ROLES.ADMIN || !doc) return doc;
+  if (!fields || !fields.length || isAdminLike({ role }) || !doc) return doc;
 
   return Array.isArray(doc) ? doc.map((item) => stripFields(item, fields)) : stripFields(doc, fields);
 }

@@ -17,6 +17,7 @@ function requiredPassword(envVar) {
 
 const users = [
   { username: 'admin', password: requiredPassword('SEED_ADMIN_PASSWORD'), role: USER_ROLES.ADMIN },
+  { username: 'hr', password: requiredPassword('SEED_HR_PASSWORD'), role: USER_ROLES.HR },
   { username: 'worker1', password: requiredPassword('SEED_WORKER1_PASSWORD'), role: USER_ROLES.WORKER },
   { username: 'worker2', password: requiredPassword('SEED_WORKER2_PASSWORD'), role: USER_ROLES.WORKER },
   { username: 'worker3', password: requiredPassword('SEED_WORKER3_PASSWORD'), role: USER_ROLES.WORKER },

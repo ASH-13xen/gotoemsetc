@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils'
 import { useAttendance, useMarkAttendance } from '@/hooks/useAttendance'
 import { useCreateHoliday, useDeleteHoliday, useHolidays } from '@/hooks/useHolidays'
 import { useAuth } from '@/hooks/useAuth'
-import { hasPermission } from '@/lib/permissions'
+import { hasPermission, isAdminLike } from '@/lib/permissions'
 import { useDevicePunches } from '@/hooks/useDevicePunches'
 import { STATUS_CONFIG } from './statusConfig'
 import type { AttendanceStatus } from '@/api/attendance.api'
@@ -69,7 +69,7 @@ function todayKey() {
 
 export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = isAdminLike(user)
   const canMark = hasPermission(user, 'mark_attendance')
 
   const [monthDate, setMonthDate] = useState(() => {

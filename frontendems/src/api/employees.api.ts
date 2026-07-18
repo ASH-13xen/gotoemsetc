@@ -25,6 +25,14 @@ export interface ExtraDetail {
   value?: string
 }
 
+export interface EmployeeFlag {
+  _id: string
+  color: 'red' | 'green'
+  note?: string
+  date: string
+  addedBy?: string
+}
+
 export interface Employee {
   _id: string
   employeeCode: string
@@ -85,6 +93,7 @@ export interface Employee {
   selectionNotes?: string
 
   status: EmployeeStatus
+  flags?: EmployeeFlag[]
   createdAt: string
   updatedAt: string
 }
@@ -133,4 +142,17 @@ export async function updateEmployee(
 
 export async function deleteEmployee(id: string): Promise<void> {
   await apiClient.delete(`/employees/${id}`)
+}
+
+export async function addFlag(
+  employeeId: string,
+  input: { color: 'red' | 'green'; note?: string; date?: string }
+): Promise<{ employee: Employee }> {
+  const { data } = await apiClient.post(`/employees/${employeeId}/flags`, input)
+  return data
+}
+
+export async function removeFlag(employeeId: string, flagId: string): Promise<{ employee: Employee }> {
+  const { data } = await apiClient.delete(`/employees/${employeeId}/flags/${flagId}`)
+  return data
 }

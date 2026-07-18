@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const ApiError = require('../utils/ApiError');
 const env = require('../config/env');
+const { isAdminLike } = require('../utils/roles');
 
 function verifyToken(req, res, next) {
   const header = req.headers.authorization || '';
@@ -42,7 +43,7 @@ function requireRole(...roles) {
 function requireSelfOrAdmin(paramName = 'id', source = 'params') {
   return (req, res, next) => {
     if (!req.user) return next(ApiError.unauthorized());
-    if (req.user.role === 'admin') return next();
+    if (isAdminLike(req.user)) return next();
     if (req.user.employeeLink && req.user.employeeLink === req[source][paramName]) return next();
     return next(ApiError.forbidden());
   };
@@ -56,7 +57,7 @@ function requireSelfOrAdmin(paramName = 'id', source = 'params') {
 function requirePermission(...perms) {
   return (req, res, next) => {
     if (!req.user) return next(ApiError.unauthorized());
-    if (req.user.role === 'admin') return next();
+    if (isAdminLike(req.user)) return next();
     if (perms.some((p) => req.user.permissions.includes(p))) return next();
     return next(ApiError.forbidden());
   };
@@ -69,7 +70,7 @@ function requirePermission(...perms) {
 function requireSelfOrPermission(permission, paramName = 'id', source = 'params') {
   return (req, res, next) => {
     if (!req.user) return next(ApiError.unauthorized());
-    if (req.user.role === 'admin') return next();
+    if (isAdminLike(req.user)) return next();
     if (req.user.employeeLink && req.user.employeeLink === req[source][paramName]) return next();
     if (req.user.permissions.includes(permission)) return next();
     return next(ApiError.forbidden());
@@ -82,7 +83,7 @@ function requireSelfOrPermission(permission, paramName = 'id', source = 'params'
 function requireDirectoryAccess() {
   return (req, res, next) => {
     if (!req.user) return next(ApiError.unauthorized());
-    if (req.user.role === 'admin' || req.user.permissions.length > 0) return next();
+    if (isAdminLike(req.user) || req.user.permissions.length > 0) return next();
     return next(ApiError.forbidden());
   };
 }
@@ -92,7 +93,7 @@ function requireDirectoryAccess() {
 function requireSelfOrDirectoryAccess(paramName = 'id') {
   return (req, res, next) => {
     if (!req.user) return next(ApiError.unauthorized());
-    if (req.user.role === 'admin') return next();
+    if (isAdminLike(req.user)) return next();
     if (req.user.employeeLink && req.user.employeeLink === req.params[paramName]) return next();
     if (req.user.permissions.length > 0) return next();
     return next(ApiError.forbidden());

@@ -170,7 +170,7 @@ export default function AttendancePage() {
                       View Profile
                     </Button>
                   </Card>
-                  <AttendanceSummaryCard employeeId={employeeId} />
+                  <AttendanceSummaryCard employeeId={employeeId} showViewFullButton={false} />
                   <AttendanceCalendar employeeId={employeeId} />
                 </div>
               )}
@@ -180,7 +180,7 @@ export default function AttendancePage() {
         ) : (
           employeeId && (
             <div className="space-y-6">
-              <AttendanceSummaryCard employeeId={employeeId} />
+              <AttendanceSummaryCard employeeId={employeeId} showViewFullButton={false} />
               <AttendanceCalendar employeeId={employeeId} />
             </div>
           )

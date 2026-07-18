@@ -21,6 +21,10 @@ const generatedDocumentSchema = new Schema(
     mergeDataSnapshot: Schema.Types.Mixed,
     docx: fileSchema,
     pdf: fileSchema,
+    // The signed/countersigned copy HR or admin uploads back after the
+    // employee physically signs the generated document — same excluded-by-
+    // default storage as docx/pdf above.
+    signedFile: fileSchema,
     status: {
       type: String,
       enum: Object.values(GENERATED_DOCUMENT_STATUS),

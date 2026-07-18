@@ -24,7 +24,7 @@ export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'hr'
 
   const { data, isLoading } = useEvent(id)
   const completeEvent = useCompleteEvent(id ?? '')

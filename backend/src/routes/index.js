@@ -54,27 +54,27 @@ router.use('/uploaded-documents', requirePermission(PERMISSIONS.REQUEST_DOCUMENT
 router.use('/dashboard', dashboardRoutes);
 // Recruitment/Applicants — admin, or a worker granted view_applicants.
 router.use('/applicants', requirePermission(PERMISSIONS.VIEW_APPLICANTS), applicantRoutes);
-// Client Management (CMS) — fully admin-only.
-router.use('/clients', requireRole(USER_ROLES.ADMIN), clientRoutes);
-router.use('/quotation-templates', requireRole(USER_ROLES.ADMIN), quotationTemplateRoutes);
-router.use('/quotations', requireRole(USER_ROLES.ADMIN), quotationRoutes);
-router.use('/client-document-requests', requireRole(USER_ROLES.ADMIN), clientDocumentRequestRoutes);
-router.use('/client-uploaded-documents', requireRole(USER_ROLES.ADMIN), clientUploadedDocumentRoutes);
-// Task Management — fully admin-only.
-router.use('/teams', requireRole(USER_ROLES.ADMIN), teamRoutes);
-router.use('/tasks', requireRole(USER_ROLES.ADMIN), taskRoutes);
-router.use('/step-library', requireRole(USER_ROLES.ADMIN), stepLibraryRoutes);
+// Client Management (CMS) — admin/HR only.
+router.use('/clients', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), clientRoutes);
+router.use('/quotation-templates', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), quotationTemplateRoutes);
+router.use('/quotations', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), quotationRoutes);
+router.use('/client-document-requests', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), clientDocumentRequestRoutes);
+router.use('/client-uploaded-documents', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), clientUploadedDocumentRoutes);
+// Task Management — admin/HR only.
+router.use('/teams', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), teamRoutes);
+router.use('/tasks', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), taskRoutes);
+router.use('/step-library', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), stepLibraryRoutes);
 router.use('/holidays', holidayRoutes);
 router.use('/salary-slips', salarySlipRoutes);
 router.use('/notifications', notificationRoutes);
-// Inventory / Event Management — fully admin-only.
-router.use('/inventory', requireRole(USER_ROLES.ADMIN), inventoryRoutes);
-router.use('/events', requireRole(USER_ROLES.ADMIN), eventRoutes);
+// Inventory / Event Management — admin/HR only.
+router.use('/inventory', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), inventoryRoutes);
+router.use('/events', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), eventRoutes);
 router.use('/device-punches', devicePunchRoutes);
 router.use('/attendance-requests', attendanceRequestRoutes);
 // Gated per-route inside user.routes.js — some actions there are reachable
 // by a worker with add_credentials, not just admins.
 router.use('/users', userRoutes);
-router.use('/audit-log', requireRole(USER_ROLES.ADMIN), auditLogRoutes);
+router.use('/audit-log', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), auditLogRoutes);
 
 module.exports = router;

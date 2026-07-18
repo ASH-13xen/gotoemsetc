@@ -8,7 +8,7 @@ module.exports = {
     REVOKED: 'revoked',
   },
   GENERATED_DOCUMENT_STATUS: { COMPLETED: 'completed', FAILED: 'failed' },
-  DEFAULT_UPLOAD_REQUEST_EXPIRY_HOURS: 72,
+  DEFAULT_UPLOAD_REQUEST_EXPIRY_HOURS: 24,
   MAX_UPLOAD_FILE_SIZE_BYTES: 10 * 1024 * 1024, // 10MB
   ALLOWED_UPLOAD_MIME_TYPES: [
     'application/pdf',
@@ -84,7 +84,11 @@ module.exports = {
   CLIENT_STATUS: { LEAD: 'lead', ONBOARDED: 'onboarded', OFFBOARDED: 'offboarded' },
   QUOTATION_STATUS: { DRAFT: 'draft', SHARED: 'shared', SIGNED: 'signed', SUPERSEDED: 'superseded' },
   DEFAULT_QUOTATION_SHARE_EXPIRY_HOURS: 24 * 14,
-  USER_ROLES: { ADMIN: 'admin', WORKER: 'worker' },
+  // HR sits below Admin but is treated as admin-equivalent everywhere except
+  // one explicit restriction (can't edit attendance older than 2 days — see
+  // attendance.service.js#assertCanEditAttendanceDate). See
+  // auth.middleware.js's isAdminLike for where this equivalence is applied.
+  USER_ROLES: { ADMIN: 'admin', WORKER: 'worker', HR: 'hr' },
   ATTENDANCE_REQUEST_STATUS: { PENDING: 'pending', RESOLVED: 'resolved' },
   // Granular capabilities a worker credential can be individually granted
   // (via Add Credentials) on top of their base self-only access — an admin

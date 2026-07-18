@@ -18,7 +18,7 @@ export function RemoteShellBar({ section }: { section: string }) {
         <span className="text-xs font-semibold text-muted-foreground bg-secondary/80 px-2.5 py-1 rounded-full uppercase tracking-wider">/ {section}</span>
       </div>
       <div className="flex items-center gap-4">
-        {user?.role === 'admin' && (
+        {(user?.role === 'admin' || user?.role === 'hr') && (
           <Link to="/audit-log" className="text-xs font-bold tracking-wider uppercase text-foreground hover:text-primary transition-colors">
             Audit Log
           </Link>

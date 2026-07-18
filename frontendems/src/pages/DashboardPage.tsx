@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/table'
 import { StatusBadge } from '@/components/employees/StatusBadge'
 import { AddEmployeeDialog } from '@/components/employees/AddEmployeeDialog'
+import { FlagStrip } from '@/components/employees/EmployeeFlags'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { useEmployees } from '@/hooks/useEmployees'
 import { useDashboardStats } from '@/hooks/useDashboardStats'
@@ -185,7 +186,10 @@ export default function DashboardPage() {
                       {employee.employeeCode}
                     </TableCell>
                     <TableCell className="font-semibold text-base text-foreground p-4">
-                      {employee.firstName} {employee.lastName}
+                      <div className="flex items-center gap-2">
+                        {employee.firstName} {employee.lastName}
+                        <FlagStrip flags={employee.flags ?? []} />
+                      </div>
                     </TableCell>
                     <TableCell className="text-sm text-foreground/80 p-4 font-medium">{employee.designation}</TableCell>
                     <TableCell className="text-sm text-foreground/80 p-4 font-medium">{employee.department || '—'}</TableCell>

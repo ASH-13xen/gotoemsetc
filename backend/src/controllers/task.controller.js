@@ -3,7 +3,7 @@ const ApiError = require('../utils/ApiError');
 const taskService = require('../services/task.service');
 const taskCycleService = require('../services/taskCycle.service');
 const taskDashboardService = require('../services/taskDashboard.service');
-const { USER_ROLES } = require('../config/constants');
+const { isAdminLike } = require('../utils/roles');
 
 // Attribution (completedBy/approvedBy/addedBy/sender) is an Employee ref,
 // but an admin account is an operator login, not necessarily tied to an
@@ -13,7 +13,7 @@ const { USER_ROLES } = require('../config/constants');
 // worth surfacing.
 function requireEmployeeLink(req) {
   if (req.user.employeeLink) return req.user.employeeLink;
-  if (req.user.role === USER_ROLES.ADMIN) return null;
+  if (isAdminLike(req.user)) return null;
   throw ApiError.badRequest('Your account is not linked to an employee record.');
 }
 

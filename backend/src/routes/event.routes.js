@@ -23,7 +23,7 @@ router.post('/:id/cancel', validate(eventValidator.getOrDeleteEvent), eventContr
 // Only admin fills in the after-the-fact summary, per the product ask.
 router.patch(
   '/:id/summary',
-  requireRole(USER_ROLES.ADMIN),
+  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
   validate(eventValidator.fillSummary),
   eventController.fillSummary
 );

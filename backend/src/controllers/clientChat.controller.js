@@ -2,12 +2,12 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const clientChatService = require('../services/clientChat.service');
 const { broadcastClientMessage } = require('../websocket/clientChat');
-const { USER_ROLES } = require('../config/constants');
+const { isAdminLike } = require('../utils/roles');
 
 // Same admin-or-linked-employee attribution pattern as task.controller.js.
 function requireEmployeeLink(req) {
   if (req.user.employeeLink) return req.user.employeeLink;
-  if (req.user.role === USER_ROLES.ADMIN) return null;
+  if (isAdminLike(req.user)) return null;
   throw ApiError.badRequest('Your account is not linked to an employee record.');
 }
 

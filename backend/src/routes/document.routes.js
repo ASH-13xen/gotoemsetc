@@ -7,6 +7,7 @@ const router = Router();
 
 router.get('/:id', validate(documentGenerationValidator.getOrDelete), documentController.getById);
 router.get('/:id/file', validate(documentGenerationValidator.getOrDelete), documentController.downloadFile);
+router.get('/:id/signed-file', validate(documentGenerationValidator.getOrDelete), documentController.downloadSignedFile);
 router.delete('/:id', validate(documentGenerationValidator.getOrDelete), documentController.remove);
 
 module.exports = router;

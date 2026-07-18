@@ -16,21 +16,21 @@ router.get('/items/:id', validate(inventoryValidator.getOrDeleteItem), inventory
 // to any employee.
 router.post(
   '/items',
-  requireRole(USER_ROLES.ADMIN),
+  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
   upload.single('photo'),
   validate(inventoryValidator.createItem),
   inventoryController.createItem
 );
 router.patch(
   '/items/:id',
-  requireRole(USER_ROLES.ADMIN),
+  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
   upload.single('photo'),
   validate(inventoryValidator.updateItem),
   inventoryController.updateItem
 );
 router.delete(
   '/items/:id',
-  requireRole(USER_ROLES.ADMIN),
+  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
   validate(inventoryValidator.getOrDeleteItem),
   inventoryController.deleteItem
 );

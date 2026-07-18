@@ -1,4 +1,4 @@
-const { USER_ROLES } = require('../config/constants');
+const { isAdminLike } = require('./roles');
 
 // client.assignedEmployees/mainEmployee usually arrive populated (full
 // Employee documents, per client.repository.js) rather than raw ObjectIds —
@@ -15,7 +15,7 @@ function toId(value) {
 // status) via the normal client list/detail endpoints — this only gates
 // task-management specifics.
 function canAccessClientTasks(user, client) {
-  if (user.role === USER_ROLES.ADMIN) return true;
+  if (isAdminLike(user)) return true;
   if (!user.employeeLink) return false;
   const employeeId = user.employeeLink.toString();
 
@@ -27,7 +27,7 @@ function canAccessClientTasks(user, client) {
 // content calendar) to silently filter down to what this user may see,
 // rather than 403ing an aggregate endpoint.
 function filterAccessibleClients(user, clients) {
-  if (user.role === USER_ROLES.ADMIN) return clients;
+  if (isAdminLike(user)) return clients;
   return clients.filter((client) => canAccessClientTasks(user, client));
 }
 
@@ -35,7 +35,7 @@ function filterAccessibleClients(user, clients) {
 // own admin-managed list (client.chatAllowedEmployees), not derived from
 // task assignment.
 function canAccessClientChat(user, client) {
-  if (user.role === USER_ROLES.ADMIN) return true;
+  if (isAdminLike(user)) return true;
   if (!user.employeeLink) return false;
   const employeeId = user.employeeLink.toString();
   return (client.chatAllowedEmployees || []).some((emp) => toId(emp) === employeeId);

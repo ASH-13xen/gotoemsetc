@@ -22,14 +22,17 @@ import { GeneratedDocumentsList } from '@/components/documents/GeneratedDocument
 import { UploadedDocumentsList } from '@/components/documents/UploadedDocumentsList'
 import { RequestDocumentsModal } from '@/components/uploadRequests/RequestDocumentsModal'
 import { CredentialsDialog } from '@/components/employees/CredentialsDialog'
+import { FlagStrip, EmployeeFlagsManager } from '@/components/employees/EmployeeFlags'
 import { GenerateSalarySlipDialog } from '@/components/salary/GenerateSalarySlipDialog'
 import { SalarySlipsList } from '@/components/salary/SalarySlipsList'
 import { RequestHistoryTable } from '@/components/uploadRequests/RequestHistoryTable'
 import { ActivityTimeline } from '@/components/employees/ActivityTimeline'
 import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummaryCard'
 import { useAuth } from '@/hooks/useAuth'
-import { hasPermission } from '@/lib/permissions'
+import { hasPermission, isAdminLike } from '@/lib/permissions'
 import { useDeleteEmployee, useEmployee, useUpdateEmployee } from '@/hooks/useEmployees'
+import { useUploadedDocuments } from '@/hooks/useUploadRequests'
+import { cn } from '@/lib/utils'
 import { BLOOD_GROUPS, type Address, type Employee, type EmployeeStatus, type EmploymentType } from '@/api/employees.api'
 
 type AddressForm = {
@@ -191,11 +194,13 @@ export default function EmployeeDetailPage() {
 function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; employeeId: string }) {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = isAdminLike(user)
   const canGenerateDocs = hasPermission(user, 'generate_documents')
   const canRequestDocs = hasPermission(user, 'request_documents')
   const canAddCredentials = hasPermission(user, 'add_credentials')
   const canViewSalary = hasPermission(user, 'view_salary_slip')
+  const { data: uploadedDocsData } = useUploadedDocuments(employeeId)
+  const photoDoc = uploadedDocsData?.uploadedDocuments.find((d) => d.docType === 'photo')
   const canEditDetails = hasPermission(user, 'edit_employee_details')
   const updateEmployee = useUpdateEmployee(employeeId)
   const deleteEmployee = useDeleteEmployee()
@@ -253,17 +258,31 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
       <main className="mx-auto max-w-4xl space-y-8">
         {/* HERO DETAIL HEADER */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3 bg-transparent">
-          {/* Identity Tile */}
-          <Card className="md:col-span-2 p-8 flex flex-col justify-between min-h-[220px]">
-            <div className="flex flex-col gap-2">
-              <span className="text-xs font-bold tracking-widest text-muted-foreground uppercase">EMPLOYEE PROFILE</span>
-              <h1 className="text-4xl md:text-6xl font-extrabold uppercase tracking-tighter text-foreground">
+          {/* Identity Tile — becomes a full-bleed passport-photo background
+              once one's on file (see requested documents), text sits on a
+              scrim on top; unchanged otherwise. */}
+          <Card
+            className="md:col-span-2 p-8 flex flex-col justify-between min-h-[220px] relative overflow-hidden bg-cover bg-center"
+            style={photoDoc ? { backgroundImage: `url(${photoDoc.url})` } : undefined}
+          >
+            {photoDoc && (
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/10" />
+            )}
+            <div className="relative z-10 flex flex-col gap-2">
+              <span className={cn('text-xs font-bold tracking-widest uppercase', photoDoc ? 'text-white/70' : 'text-muted-foreground')}>
+                EMPLOYEE PROFILE
+              </span>
+              <h1 className={cn('text-4xl md:text-6xl font-extrabold uppercase tracking-tighter', photoDoc ? 'text-white' : 'text-foreground')}>
                 {employee.firstName} {employee.lastName}
               </h1>
-              <p className="font-mono text-base font-semibold text-muted-foreground mt-1 uppercase tracking-wider">{employee.employeeCode}</p>
+              <p className={cn('font-mono text-base font-semibold mt-1 uppercase tracking-wider', photoDoc ? 'text-white/70' : 'text-muted-foreground')}>
+                {employee.employeeCode}
+              </p>
             </div>
-            <div className="mt-4 flex gap-2">
+            <div className="relative z-10 mt-4 flex flex-wrap items-center gap-3">
               <StatusBadge status={employee.status} />
+              <FlagStrip flags={employee.flags ?? []} />
+              {isAdmin && <EmployeeFlagsManager employeeId={employeeId} flags={employee.flags ?? []} />}
             </div>
           </Card>
 

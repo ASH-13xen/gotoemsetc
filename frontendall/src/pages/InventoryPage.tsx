@@ -11,7 +11,7 @@ import { ItemFormDialog } from '@/components/inventory/ItemFormDialog'
 
 export default function InventoryPage() {
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'hr'
   const { data: items, isLoading } = useInventoryItems()
   const [addOpen, setAddOpen] = useState(false)
 

@@ -13,4 +13,8 @@ const generate = {
 const listForEmployee = { params: idParam };
 const getOrDelete = { params: idParam };
 
-module.exports = { generate, listForEmployee, getOrDelete };
+const uploadSigned = {
+  params: z.object({ id: z.string().min(1), docId: z.string().min(1) }),
+};
+
+module.exports = { generate, listForEmployee, getOrDelete, uploadSigned };

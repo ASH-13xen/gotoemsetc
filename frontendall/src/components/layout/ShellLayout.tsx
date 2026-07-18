@@ -21,7 +21,7 @@ export function ShellLayout({ children, section }: { children: ReactNode; sectio
   const { user, signOut } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
 
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'hr'
 
   const links = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },

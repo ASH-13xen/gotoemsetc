@@ -2,15 +2,16 @@ const bcrypt = require('bcryptjs');
 const ApiError = require('../utils/ApiError');
 const userRepository = require('../repositories/user.repository');
 const { USER_ROLES } = require('../config/constants');
+const { isAdminLike } = require('../utils/roles');
 
 // A non-admin granting permissions (via their own add_credentials grant)
 // can only ever hand out a subset of what they themselves hold — otherwise
 // a worker with just add_credentials could mint a credential with, say,
 // view_salary_slip and hand it to someone (or reuse it), which is a real
-// privilege-escalation path. Admins are unrestricted.
+// privilege-escalation path. Admins (and HR, admin-equivalent) are unrestricted.
 function assertNoEscalation(requestedPermissions, actingUser) {
   if (!requestedPermissions || requestedPermissions.length === 0) return;
-  if (actingUser.role === USER_ROLES.ADMIN) return;
+  if (isAdminLike(actingUser)) return;
   const granted = new Set(actingUser.permissions || []);
   const overreach = requestedPermissions.filter((p) => !granted.has(p));
   if (overreach.length > 0) {
@@ -78,7 +79,7 @@ async function updateCredential(userId, { username, password, permissions }, act
   // Only an admin may change an existing credential's permissions — a
   // non-admin add_credentials holder can grant permissions at creation
   // time (within their own limit) but can't later escalate one further.
-  if (permissions !== undefined && actingUser.role === USER_ROLES.ADMIN) {
+  if (permissions !== undefined && isAdminLike(actingUser)) {
     patch.permissions = permissions;
   }
 

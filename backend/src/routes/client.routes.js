@@ -54,7 +54,7 @@ router.post(
 // whatever the quotation template auto-generated.
 router.post(
   '/:id/tasks',
-  requireRole(USER_ROLES.ADMIN),
+  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
   validate(taskValidator.createManualTask),
   requireClientAccess(),
   taskController.createManualTask
@@ -76,7 +76,7 @@ router.post(
 );
 router.patch(
   '/:id/chat/access',
-  requireRole(USER_ROLES.ADMIN),
+  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
   validate(clientChatValidator.updateChatAccess),
   clientChatController.updateChatAccess
 );

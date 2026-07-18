@@ -30,6 +30,21 @@ const resumeSchema = new Schema(
   { _id: false }
 );
 
+// Freeform performance markers HR/admin can drop on any date, any number —
+// red for poor work, green for good work. Deliberately not tied to a
+// specific incident/task record; just a lightweight running log shown on
+// the employee's profile. Keeps its own _id (default) so a single flag can
+// be individually removed.
+const flagSchema = new Schema(
+  {
+    color: { type: String, enum: ['red', 'green'], required: true },
+    note: { type: String, trim: true },
+    date: { type: Date, default: Date.now },
+    addedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+  },
+  { timestamps: true }
+);
+
 const employeeSchema = new Schema(
   {
     // Numeric-looking string, starting at 1001 — see
@@ -124,6 +139,8 @@ const employeeSchema = new Schema(
     // Why they were selected — filled in on the Hire dialog in Applicants,
     // copied here so it's visible on the employee record too.
     selectionNotes: String,
+
+    flags: [flagSchema],
   },
   { timestamps: true }
 );

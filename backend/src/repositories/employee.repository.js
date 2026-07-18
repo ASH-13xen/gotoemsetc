@@ -85,6 +85,22 @@ function softDeleteById(id) {
   );
 }
 
+function addFlag(id, flag) {
+  return Employee.findOneAndUpdate(
+    { _id: id, isDeleted: false },
+    { $push: { flags: flag } },
+    { returnDocument: 'after', runValidators: true }
+  );
+}
+
+function removeFlag(id, flagId) {
+  return Employee.findOneAndUpdate(
+    { _id: id, isDeleted: false },
+    { $pull: { flags: { _id: flagId } } },
+    { returnDocument: 'after' }
+  );
+}
+
 module.exports = {
   list,
   findById,
@@ -93,6 +109,8 @@ module.exports = {
   create,
   updateById,
   softDeleteById,
+  addFlag,
+  removeFlag,
   count,
   countByStatus,
   listAllWithDob,

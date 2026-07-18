@@ -33,6 +33,12 @@ const listForEmployee = {
   }),
 };
 
-const getSummary = { params: idParam };
+const getSummary = {
+  params: idParam,
+  query: z.object({
+    from: dateStringSchema.optional(),
+    to: dateStringSchema.optional(),
+  }),
+};
 
 module.exports = { mark, listForEmployee, getSummary };
