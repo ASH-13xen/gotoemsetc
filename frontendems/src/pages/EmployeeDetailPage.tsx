@@ -29,10 +29,9 @@ import { RequestHistoryTable } from '@/components/uploadRequests/RequestHistoryT
 import { ActivityTimeline } from '@/components/employees/ActivityTimeline'
 import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummaryCard'
 import { useAuth } from '@/hooks/useAuth'
-import { hasPermission, isAdminLike } from '@/lib/permissions'
+import { hasAnyPermission, hasPermission, isAdminLike } from '@/lib/permissions'
 import { useDeleteEmployee, useEmployee, useUpdateEmployee } from '@/hooks/useEmployees'
 import { useUploadedDocuments } from '@/hooks/useUploadRequests'
-import { cn } from '@/lib/utils'
 import { BLOOD_GROUPS, type Address, type Employee, type EmployeeStatus, type EmploymentType } from '@/api/employees.api'
 
 type AddressForm = {
@@ -195,6 +194,11 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   const navigate = useNavigate()
   const { user } = useAuth()
   const isAdmin = isAdminLike(user)
+  // A plain employee with no granted permissions always lands back on this
+  // exact page (see frontendems/App.tsx's Home()), so "Back to Portal"
+  // would just loop them right back here — only worth showing to someone
+  // who actually has somewhere else to go.
+  const canBackToPortal = hasAnyPermission(user)
   const canGenerateDocs = hasPermission(user, 'generate_documents')
   const canRequestDocs = hasPermission(user, 'request_documents')
   const canAddCredentials = hasPermission(user, 'add_credentials')
@@ -258,28 +262,30 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
       <main className="mx-auto max-w-4xl space-y-8">
         {/* HERO DETAIL HEADER */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3 bg-transparent">
-          {/* Identity Tile — becomes a full-bleed passport-photo background
-              once one's on file (see requested documents), text sits on a
-              scrim on top; unchanged otherwise. */}
-          <Card
-            className="md:col-span-2 p-8 flex flex-col justify-between min-h-[220px] relative overflow-hidden bg-cover bg-center"
-            style={photoDoc ? { backgroundImage: `url(${photoDoc.url})` } : undefined}
-          >
-            {photoDoc && (
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/45 to-black/10" />
-            )}
-            <div className="relative z-10 flex flex-col gap-2">
-              <span className={cn('text-xs font-bold tracking-widest uppercase', photoDoc ? 'text-white/70' : 'text-muted-foreground')}>
+          {/* Identity Tile — the passport photo (once one's on file, see
+              requested documents) renders as a fixed-size portrait right
+              below the name, not a background — same box for both an
+              admin/HR viewer and the employee viewing their own profile. */}
+          <Card className="md:col-span-2 p-8 flex flex-col justify-between min-h-55 gap-4">
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
                 EMPLOYEE PROFILE
               </span>
-              <h1 className={cn('text-4xl md:text-6xl font-extrabold uppercase tracking-tighter', photoDoc ? 'text-white' : 'text-foreground')}>
+              <h1 className="text-4xl md:text-6xl font-extrabold uppercase tracking-tighter text-foreground">
                 {employee.firstName} {employee.lastName}
               </h1>
-              <p className={cn('font-mono text-base font-semibold mt-1 uppercase tracking-wider', photoDoc ? 'text-white/70' : 'text-muted-foreground')}>
+              <p className="font-mono text-base font-semibold text-muted-foreground mt-1 uppercase tracking-wider">
                 {employee.employeeCode}
               </p>
+              {photoDoc && (
+                <img
+                  src={photoDoc.url}
+                  alt={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
+                  className="w-24 h-32 mt-2 rounded-xl border border-border/20 object-cover shadow-diffuse"
+                />
+              )}
             </div>
-            <div className="relative z-10 mt-4 flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <StatusBadge status={employee.status} />
               <FlagStrip flags={employee.flags ?? []} />
               {isAdmin && <EmployeeFlagsManager employeeId={employeeId} flags={employee.flags ?? []} />}
@@ -289,13 +295,15 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
           {/* Action Tiles */}
           <div className="flex flex-col gap-4">
             {/* Back Button */}
-            <div
-              onClick={() => navigate('/')}
-              className="bg-primary/10 text-primary p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
-            >
-              <span className="text-[10px] font-bold tracking-widest text-primary/70 uppercase">NAVIGATION</span>
-              <span className="text-2xl font-extrabold uppercase tracking-wide">BACK TO PORTAL</span>
-            </div>
+            {canBackToPortal && (
+              <div
+                onClick={() => navigate('/')}
+                className="bg-primary/10 text-primary p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
+              >
+                <span className="text-[10px] font-bold tracking-widest text-primary/70 uppercase">NAVIGATION</span>
+                <span className="text-2xl font-extrabold uppercase tracking-wide">BACK TO PORTAL</span>
+              </div>
+            )}
 
             {/* Generate Documents */}
             {canGenerateDocs && (

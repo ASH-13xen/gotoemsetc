@@ -45,22 +45,21 @@ const COLOR_STYLE: Record<
 // Compact, always-visible "scoreboard" — a trophy tally for good work and a
 // flag tally for poor work, not a per-flag dot strip (doesn't scale once
 // there are more than a couple of flags, and reads flat/uninteresting).
+// Hovering reveals every flag's note (not just the latest) in a small card —
+// invisible/inert until hovered, same behavior for an employee viewing their
+// own profile as for an admin/HR viewer.
 export function FlagStrip({ flags }: { flags: EmployeeFlag[] }) {
   if (flags.length === 0) return null
   const greenCount = flags.filter((f) => f.color === 'green').length
   const redCount = flags.filter((f) => f.color === 'red').length
   const sorted = [...flags].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-  const latest = sorted[0]
 
   return (
-    <div
-      className="flex items-center gap-1.5"
-      title={latest ? `Latest: ${COLOR_STYLE[latest.color].label} · ${new Date(latest.date).toLocaleDateString()} — ${latest.note}` : undefined}
-    >
+    <div className="group/flags relative inline-flex items-center gap-1.5">
       {greenCount > 0 && (
         <span
           className={cn(
-            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-black tabular-nums transition-transform hover:scale-105',
+            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-black tabular-nums transition-transform group-hover/flags:scale-105',
             COLOR_STYLE.green.badgePill
           )}
         >
@@ -71,7 +70,7 @@ export function FlagStrip({ flags }: { flags: EmployeeFlag[] }) {
       {redCount > 0 && (
         <span
           className={cn(
-            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-black tabular-nums transition-transform hover:scale-105',
+            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-black tabular-nums transition-transform group-hover/flags:scale-105',
             COLOR_STYLE.red.badgePill
           )}
         >
@@ -79,6 +78,33 @@ export function FlagStrip({ flags }: { flags: EmployeeFlag[] }) {
           {redCount}
         </span>
       )}
+
+      {/* Hover-only note panel — opacity/scale rather than unmounting, so it
+          animates in instead of popping, and never intercepts clicks until
+          actually shown. */}
+      <div
+        className="pointer-events-none absolute left-0 top-full z-30 mt-2 w-72 origin-top-left scale-95 opacity-0 transition-all duration-150 group-hover/flags:pointer-events-auto group-hover/flags:scale-100 group-hover/flags:opacity-100"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="max-h-60 overflow-y-auto rounded-xl border border-border/10 bg-card p-2 shadow-xl">
+          {sorted.map((flag) => {
+            const Icon = COLOR_STYLE[flag.color].icon
+            return (
+              <div key={flag._id} className="flex items-start gap-2 rounded-lg p-2 text-xs">
+                <Icon
+                  className={cn('mt-0.5 size-3 shrink-0 fill-current', flag.color === 'green' ? 'text-emerald-500' : 'text-red-500')}
+                />
+                <div className="min-w-0">
+                  <p className="font-bold text-foreground">
+                    {flag.color === 'green' ? 'Good work' : 'Poor work'} · {new Date(flag.date).toLocaleDateString()}
+                  </p>
+                  <p className="text-muted-foreground">{flag.note}</p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
