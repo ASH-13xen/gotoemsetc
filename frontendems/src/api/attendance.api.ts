@@ -63,6 +63,11 @@ export async function listAttendance(
 export interface AttendanceSummary {
   dateOfJoining: string | null
   asOfDate: string
+  // The actual start of the counted range — equals date of joining for
+  // "Overall", but for Current/Previous Month this is clamped forward to
+  // date of joining if the calendar month started before they were hired
+  // (so a pre-employment period never gets counted as unmarked working days).
+  periodStart: string
   totalWorkingDays: number
   unmarkedDays: number
   counts: Record<AttendanceStatus, number>

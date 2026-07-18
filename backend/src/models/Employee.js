@@ -38,7 +38,7 @@ const resumeSchema = new Schema(
 const flagSchema = new Schema(
   {
     color: { type: String, enum: ['red', 'green'], required: true },
-    note: { type: String, trim: true },
+    note: { type: String, trim: true, required: true },
     date: { type: Date, default: Date.now },
     addedBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },

@@ -61,9 +61,11 @@ export function AttendanceSummaryCard({
         <div>
           <h2 className="text-lg font-bold text-foreground">Attendance</h2>
           <p className="mt-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            {summary?.dateOfJoining
-              ? `Since ${new Date(summary.dateOfJoining).toLocaleDateString()} · as of ${new Date(summary.asOfDate).toLocaleDateString()}`
-              : 'No date of joining on file'}
+            {period === 'overall' && !summary?.dateOfJoining
+              ? 'No date of joining on file'
+              : summary
+                ? `${new Date(summary.periodStart).toLocaleDateString()} – ${new Date(summary.asOfDate).toLocaleDateString()}`
+                : ''}
           </p>
         </div>
         {showViewFullButton && (

@@ -58,7 +58,7 @@ export function useDeleteEmployee() {
 export function useAddFlag(employeeId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (input: { color: 'red' | 'green'; note?: string; date?: string }) =>
+    mutationFn: (input: { color: 'red' | 'green'; note: string; date?: string }) =>
       employeesApi.addFlag(employeeId, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY })

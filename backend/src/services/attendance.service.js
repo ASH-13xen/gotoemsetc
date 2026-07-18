@@ -86,11 +86,12 @@ function startOfUTCDate(date) {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
 
-function emptySummary(dateOfJoining, asOfDate) {
+function emptySummary(dateOfJoining, asOfDate, periodStart) {
   const counts = Object.fromEntries(Object.values(ATTENDANCE_STATUS).map((s) => [s, 0]));
   return {
     dateOfJoining,
     asOfDate,
+    periodStart: periodStart ?? asOfDate,
     totalWorkingDays: 0,
     unmarkedDays: 0,
     counts,
@@ -118,11 +119,23 @@ async function computeLifetimeSummary(employeeId, { from: fromOverride, to: toOv
     return emptySummary(null, to);
   }
 
-  const from = fromOverride
+  let from = fromOverride
     ? startOfUTCDate(fromOverride)
     : startOfUTCDate(new Date(employee.dateOfJoining));
+  // Clamp to the employee's actual date of joining — a Current/Previous
+  // Month range that starts before they were hired would otherwise count
+  // pre-employment days as "working days" they left unmarked (inflating
+  // totalWorkingDays/unmarkedDays past what the correctly-anchored
+  // "Overall" view shows for the same employee).
+  if (employee.dateOfJoining) {
+    const joinDate = startOfUTCDate(new Date(employee.dateOfJoining));
+    if (joinDate.getTime() > from.getTime()) from = joinDate;
+  }
   if (from.getTime() > to.getTime()) {
-    return emptySummary(employee.dateOfJoining, to);
+    // The whole requested period is before they joined (e.g. "Previous
+    // Month" for someone hired this month) — nothing to report, not 0
+    // days worked out of some inflated working-day count.
+    return emptySummary(employee.dateOfJoining, to, from);
   }
 
   const [records, holidays] = await Promise.all([
@@ -160,6 +173,7 @@ async function computeLifetimeSummary(employeeId, { from: fromOverride, to: toOv
   return {
     dateOfJoining: employee.dateOfJoining,
     asOfDate: to,
+    periodStart: from,
     totalWorkingDays,
     unmarkedDays,
     counts,

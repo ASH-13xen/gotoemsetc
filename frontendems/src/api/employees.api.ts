@@ -146,7 +146,7 @@ export async function deleteEmployee(id: string): Promise<void> {
 
 export async function addFlag(
   employeeId: string,
-  input: { color: 'red' | 'green'; note?: string; date?: string }
+  input: { color: 'red' | 'green'; note: string; date?: string }
 ): Promise<{ employee: Employee }> {
   const { data } = await apiClient.post(`/employees/${employeeId}/flags`, input)
   return data

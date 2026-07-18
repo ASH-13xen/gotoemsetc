@@ -171,7 +171,7 @@ const addFlag = {
   ...idParam,
   body: z.object({
     color: z.enum(['red', 'green']),
-    note: z.string().optional(),
+    note: z.string().trim().min(1, 'A note is required for every flag'),
     date: z.coerce.date().optional(),
   }),
 };
