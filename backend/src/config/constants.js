@@ -137,11 +137,17 @@ module.exports = {
   EVENT_STATUS: { UPCOMING: 'upcoming', COMPLETED: 'completed', CANCELLED: 'cancelled' },
   EVENT_RESPONSIBILITY_STATUS: { PENDING: 'pending', DONE: 'done' },
 
-  // Manually-entered recurring calendar events (see CompanyEvent) — distinct
-  // from employee birthdays, which are derived from Employee.dob instead.
+  // Manually-entered calendar events (see CompanyEvent) — distinct from
+  // employee birthdays, which are derived from Employee.dob instead.
+  // CLIENT_BIRTHDAY/CLIENT_ANNIVERSARY/BRAND_ANNIVERSARY recur yearly
+  // (month/day only, year on the stored date is never compared) — same as
+  // an employee's DOB. IMPORTANT does NOT recur — it's a one-off marker
+  // for a specific date (e.g. "board meeting"), matched on the full date.
+  // See companyEvent.service.js#listForRange.
   COMPANY_EVENT_TYPE: {
     CLIENT_BIRTHDAY: 'client_birthday',
     CLIENT_ANNIVERSARY: 'client_anniversary',
     BRAND_ANNIVERSARY: 'brand_anniversary',
+    IMPORTANT: 'important',
   },
 };

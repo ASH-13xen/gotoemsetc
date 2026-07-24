@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Controller, useFieldArray, useForm } from 'react-hook-form'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Loader2, Plus, Trash2 } from 'lucide-react'
+import { CalendarDays, Loader2, Plus, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -318,6 +318,19 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 <span className="text-2xl font-extrabold uppercase tracking-wide">BACK TO PORTAL</span>
               </div>
             )}
+
+            {/* Calendar — visible to every employee, not just admin/HR, so
+                someone with no dashboard access can still reach it. */}
+            <div
+              onClick={() => navigate('/calendar')}
+              className="bg-amber-600/10 text-amber-600 p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
+            >
+              <span className="text-[10px] font-bold tracking-widest text-amber-600/70 uppercase flex items-center gap-1.5">
+                <CalendarDays className="size-3.5" />
+                HOLIDAYS & EVENTS
+              </span>
+              <span className="text-2xl font-extrabold uppercase tracking-wide">CALENDAR</span>
+            </div>
 
             {/* Generate Documents */}
             {canGenerateDocs && (

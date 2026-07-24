@@ -2,7 +2,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const companyEventService = require('../services/companyEvent.service');
 
 const list = asyncHandler(async (req, res) => {
-  const events = await companyEventService.listForMonth(req.query.month);
+  const events = await companyEventService.listForMonth(req.query.month, req.query.year);
   res.json({ events });
 });
 

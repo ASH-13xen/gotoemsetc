@@ -10,6 +10,7 @@ const COMPANY_EVENT_LABEL = {
   [COMPANY_EVENT_TYPE.CLIENT_BIRTHDAY]: 'birthday',
   [COMPANY_EVENT_TYPE.CLIENT_ANNIVERSARY]: 'anniversary',
   [COMPANY_EVENT_TYPE.BRAND_ANNIVERSARY]: 'anniversary',
+  [COMPANY_EVENT_TYPE.IMPORTANT]: 'reminder',
 };
 
 function isMonthDay(date, month, day) {
@@ -69,7 +70,9 @@ async function sendDueBirthdayNotifications() {
 // Same "today or in two days" pattern as sendDueBirthdayNotifications above,
 // just sourced from CompanyEvent (client birthdays/anniversaries, brand
 // anniversary) instead of Employee.dob — manually entered rather than
-// derived, but notified identically.
+// derived, but notified identically. IMPORTANT markers are the one
+// exception — they don't recur yearly (see companyEvent.service.js), so
+// they additionally require this year to match, not just month/day.
 async function sendDueCompanyEventNotifications() {
   const events = await companyEventRepository.list();
   if (!events.length) return;
@@ -86,19 +89,27 @@ async function sendDueCompanyEventNotifications() {
   for (const event of events) {
     const date = new Date(event.date);
     const label = COMPANY_EVENT_LABEL[event.type] || 'event';
+    const isImportant = event.type === COMPANY_EVENT_TYPE.IMPORTANT;
+    if (isImportant && date.getFullYear() !== today.getFullYear()) continue;
+
+    const title = label === 'birthday' ? 'Birthday' : label === 'anniversary' ? 'Anniversary' : 'Reminder';
 
     if (isMonthDay(date, today.getMonth(), today.getDate())) {
       await notificationService.createForUsers(recipientIds, {
         type: NOTIFICATION_TYPES.COMPANY_EVENT_TODAY,
-        title: `${label === 'birthday' ? 'Birthday' : 'Anniversary'} today`,
-        message: `It's ${event.name}'s ${label} today${event.notes ? ` — ${event.notes}` : ''}.`,
+        title: `${title} today`,
+        message: isImportant
+          ? `${event.name}${event.notes ? ` — ${event.notes}` : ''}`
+          : `It's ${event.name}'s ${label} today${event.notes ? ` — ${event.notes}` : ''}.`,
       });
       sent += 1;
     } else if (isMonthDay(date, inTwoDays.getMonth(), inTwoDays.getDate())) {
       await notificationService.createForUsers(recipientIds, {
         type: NOTIFICATION_TYPES.COMPANY_EVENT_UPCOMING,
-        title: `Upcoming ${label}`,
-        message: `${event.name}'s ${label} is coming up on ${formatMonthDay(date)}.`,
+        title: `Upcoming ${title.toLowerCase()}`,
+        message: isImportant
+          ? `${event.name} is coming up on ${formatMonthDay(date)}${event.notes ? ` — ${event.notes}` : ''}.`
+          : `${event.name}'s ${label} is coming up on ${formatMonthDay(date)}.`,
       });
       sent += 1;
     }
