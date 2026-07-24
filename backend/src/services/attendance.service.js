@@ -2,9 +2,11 @@ const ApiError = require('../utils/ApiError');
 const employeeRepository = require('../repositories/employee.repository');
 const attendanceRepository = require('../repositories/attendance.repository');
 const holidayRepository = require('../repositories/holiday.repository');
+const userRepository = require('../repositories/user.repository');
 const activityService = require('./activity.service');
+const notificationService = require('./notification.service');
 const { dateKey, isOffDay } = require('../utils/attendanceDays');
-const { ATTENDANCE_STATUS, USER_ROLES } = require('../config/constants');
+const { ATTENDANCE_STATUS, USER_ROLES, NOTIFICATION_TYPES } = require('../config/constants');
 const { computeEffectiveUnits } = require('../utils/attendancePenalties');
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -28,6 +30,18 @@ function assertCanEditAttendanceDate(actingUserRole, date) {
   }
 }
 
+// HR (not admin) must justify every manual attendance edit — a required
+// reason, surfaced to admins as a notification for oversight. Admin edits
+// need no reason: admin already has unrestricted access (see
+// assertCanEditAttendanceDate), so this is specifically about HR being
+// answerable for changes within the trust admin has extended to them.
+function assertReasonProvidedForHr(actingUserRole, notes) {
+  if (actingUserRole !== USER_ROLES.HR) return;
+  if (!notes || !notes.trim()) {
+    throw ApiError.badRequest('HR must provide a reason when marking attendance manually');
+  }
+}
+
 // `dateStr` is a plain 'YYYY-MM-DD' string, which the spec guarantees parses
 // as UTC midnight — kept consistent with todayUTCMidnight() so the backdated
 // comparison never drifts by a day depending on the server's local timezone.
@@ -43,6 +57,7 @@ async function markAttendance(employeeId, dateStr, { status, overtimeHours, note
     throw ApiError.badRequest('Cannot mark attendance for a future date');
   }
   assertCanEditAttendanceDate(actingUserRole, date);
+  assertReasonProvidedForHr(actingUserRole, notes);
 
   const isBackdated = date.getTime() < today.getTime();
 
@@ -59,7 +74,23 @@ async function markAttendance(employeeId, dateStr, { status, overtimeHours, note
     isLate,
     earlyDeparture,
     isBackdated,
+    notes,
   });
+
+  if (actingUserRole === USER_ROLES.HR) {
+    const employeeName = `${employee.firstName} ${employee.lastName || ''}`.trim();
+    const admins = await userRepository.findAdmins();
+    await notificationService.createForUsers(
+      admins.map((a) => a._id),
+      {
+        type: NOTIFICATION_TYPES.ATTENDANCE_MANUAL_EDIT,
+        title: 'HR edited attendance',
+        message: `HR marked ${employeeName}'s attendance for ${dateStr}. Reason: ${notes}`,
+        employee: employeeId,
+      }
+    );
+  }
+
   return record;
 }
 

@@ -31,6 +31,9 @@ module.exports = {
     LATE: 'L',
     SHORT_LEAVE: 'SL',
     WORK_FROM_HOME: 'W',
+    // Auto-assigned only — see attendanceClassifier.service.js: zero valid
+    // scans all day, or the first scan of the day is at/after 2pm.
+    ABSENT: 'A',
   },
   APPLICANT_STATUS: {
     PENDING: 'pending',
@@ -80,6 +83,15 @@ module.exports = {
     ATTENDANCE_SINGLE_SCAN: 'attendance_single_scan',
     ATTENDANCE_UNCLASSIFIED: 'attendance_unclassified',
     ATTENDANCE_MODIFICATION_REQUESTED: 'attendance_modification_requested',
+    // Fired whenever HR (not admin) manually marks/edits an attendance day —
+    // carries HR's required reason, notified to admins for oversight. See
+    // attendance.service.js#markAttendance.
+    ATTENDANCE_MANUAL_EDIT: 'attendance_manual_edit',
+    // Client birthday/anniversary or brand anniversary — manually entered
+    // (see CompanyEvent) rather than derived from an Employee record, unlike
+    // BIRTHDAY_TODAY/UPCOMING above.
+    COMPANY_EVENT_TODAY: 'company_event_today',
+    COMPANY_EVENT_UPCOMING: 'company_event_upcoming',
   },
   CLIENT_STATUS: { LEAD: 'lead', ONBOARDED: 'onboarded', OFFBOARDED: 'offboarded' },
   QUOTATION_STATUS: { DRAFT: 'draft', SHARED: 'shared', SIGNED: 'signed', SUPERSEDED: 'superseded' },
@@ -124,4 +136,12 @@ module.exports = {
   EVENT_MODE: { ONLINE: 'online', OFFLINE: 'offline' },
   EVENT_STATUS: { UPCOMING: 'upcoming', COMPLETED: 'completed', CANCELLED: 'cancelled' },
   EVENT_RESPONSIBILITY_STATUS: { PENDING: 'pending', DONE: 'done' },
+
+  // Manually-entered recurring calendar events (see CompanyEvent) — distinct
+  // from employee birthdays, which are derived from Employee.dob instead.
+  COMPANY_EVENT_TYPE: {
+    CLIENT_BIRTHDAY: 'client_birthday',
+    CLIENT_ANNIVERSARY: 'client_anniversary',
+    BRAND_ANNIVERSARY: 'brand_anniversary',
+  },
 };

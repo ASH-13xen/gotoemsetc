@@ -50,7 +50,7 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
   const holidayDateKeys = new Set(holidays.map((h) => dateKey(h.date)));
   const recordByDate = new Map(records.map((r) => [dateKey(r.date), r]));
 
-  const counts = { P: 0, O: 0, H: 0, L: 0, SL: 0, W: 0 };
+  const counts = { P: 0, O: 0, H: 0, L: 0, SL: 0, W: 0, A: 0 };
   let totalOvertimeHours = 0;
   // isLate is independent of status (see attendanceClassifier.service.js) —
   // a day can be e.g. Short Leave AND late at once, so it's tallied
@@ -77,7 +77,12 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
       offDaysInPeriod += 1;
       continue;
     }
-    if (!recordByDate.has(dateKey(date))) unpaidAbsentDays += 1;
+    // A day with no record at all (never marked) and a day auto-marked
+    // Absent (see attendanceClassifier.service.js) both cost a full day's
+    // pay — Absent still has a record, so it wouldn't otherwise be caught
+    // by the "no record" check alone.
+    const record = recordByDate.get(dateKey(date));
+    if (!record || record.status === ATTENDANCE_STATUS.ABSENT) unpaidAbsentDays += 1;
   }
 
   const workingDaysInPeriod = totalDaysInPeriod - offDaysInPeriod;

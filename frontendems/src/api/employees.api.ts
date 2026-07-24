@@ -164,3 +164,16 @@ export async function removeFlag(employeeId: string, flagId: string): Promise<{ 
   const { data } = await apiClient.delete(`/employees/${employeeId}/flags/${flagId}`)
   return data
 }
+
+export interface EmployeeBirthday {
+  _id: string
+  firstName: string
+  lastName?: string
+  employeeCode: string
+  dob: string
+}
+
+export async function listBirthdays(): Promise<{ employees: EmployeeBirthday[] }> {
+  const { data } = await apiClient.get('/employees/birthdays')
+  return data
+}

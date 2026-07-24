@@ -75,3 +75,12 @@ export function useRemoveFlag(employeeId: string) {
     },
   })
 }
+
+// Every active employee with a DOB on file — unbounded by month, filtered
+// client-side (see CalendarPage) since the list is small and recurs yearly.
+export function useEmployeeBirthdays() {
+  return useQuery({
+    queryKey: [...EMPLOYEES_KEY, 'birthdays'],
+    queryFn: () => employeesApi.listBirthdays(),
+  })
+}

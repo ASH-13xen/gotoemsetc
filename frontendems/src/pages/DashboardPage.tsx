@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { FileUp, Search, Users } from 'lucide-react'
+import { Bell, Cake, CalendarDays, FileUp, Gift, PartyPopper, Search, Users } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -24,11 +24,20 @@ import { StatusBadge } from '@/components/employees/StatusBadge'
 import { AddEmployeeDialog } from '@/components/employees/AddEmployeeDialog'
 import { FlagStrip } from '@/components/employees/EmployeeFlags'
 import { StatCard } from '@/components/dashboard/StatCard'
-import { useEmployees } from '@/hooks/useEmployees'
+import { useEmployeeBirthdays, useEmployees } from '@/hooks/useEmployees'
 import { useDashboardStats } from '@/hooks/useDashboardStats'
+import { useCompanyEvents } from '@/hooks/useCompanyEvents'
+import { useUnreadNotificationCount } from '@/hooks/useNotifications'
 import { useAuth } from '@/hooks/useAuth'
 import { hasPermission, isAdmin } from '@/lib/permissions'
+import { cn } from '@/lib/utils'
 import type { EmployeeStatus } from '@/api/employees.api'
+
+function isTodayMonthDay(dateStr: string) {
+  const d = new Date(dateStr)
+  const now = new Date()
+  return d.getUTCMonth() === now.getUTCMonth() && d.getUTCDate() === now.getUTCDate()
+}
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value)
@@ -43,7 +52,7 @@ export default function DashboardPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<EmployeeStatus | 'all'>('all')
+  const [status, setStatus] = useState<EmployeeStatus | 'all'>('active')
   const debouncedSearch = useDebouncedValue(search, 350)
   const { data, isLoading } = useEmployees({
     search: debouncedSearch || undefined,
@@ -52,6 +61,13 @@ export default function DashboardPage() {
   })
   const employees = data?.items ?? []
   const { data: stats } = useDashboardStats()
+  const { data: unreadData } = useUnreadNotificationCount()
+  const { data: birthdaysData } = useEmployeeBirthdays()
+  const { data: eventsData } = useCompanyEvents(new Date().getUTCMonth() + 1)
+
+  const todaysBirthdays = (birthdaysData?.employees ?? []).filter((e) => e.dob && isTodayMonthDay(e.dob))
+  const todaysEvents = (eventsData?.events ?? []).filter((e) => isTodayMonthDay(e.date))
+  const hasTodayEvents = todaysBirthdays.length > 0 || todaysEvents.length > 0
 
   return (
     <div className="space-y-8 py-4">
@@ -86,6 +102,27 @@ export default function DashboardPage() {
             >
               <span className="text-xs font-bold tracking-wider opacity-90 uppercase">WORKFORCE TRACKING</span>
               <span className="text-2xl font-extrabold tracking-wide">ATTENDANCE</span>
+            </div>
+
+            {/* Go to Calendar Tile */}
+            <div
+              onClick={() => navigate('/calendar')}
+              className="bg-amber-600 text-white p-6 rounded-xl flex flex-col justify-between cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
+            >
+              <span className="text-xs font-bold tracking-wider opacity-90 uppercase">HOLIDAYS & EVENTS</span>
+              <span className="text-2xl font-extrabold tracking-wide">CALENDAR</span>
+            </div>
+
+            {/* Go to Notifications Tile */}
+            <div
+              onClick={() => navigate('/notifications')}
+              className="bg-slate-700 text-white p-6 rounded-xl flex flex-col justify-between cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
+            >
+              <span className="text-xs font-bold tracking-wider opacity-90 uppercase flex items-center gap-1.5">
+                <Bell className="size-3.5" />
+                {unreadData?.count ? `${unreadData.count} UNREAD` : 'ALL CAUGHT UP'}
+              </span>
+              <span className="text-2xl font-extrabold tracking-wide">NOTIFICATIONS</span>
             </div>
 
             {/* Go to Upload Documents Tile — admin only */}
@@ -135,6 +172,42 @@ export default function DashboardPage() {
             value={stats?.documentsGeneratedThisMonth}
           />
         </motion.div>
+
+        {/* TODAY'S EVENTS */}
+        {hasTodayEvents && (
+          <div className="bg-card/90 backdrop-blur-md rounded-2xl p-6 shadow-diffuse border-0 space-y-3">
+            <h3 className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              <CalendarDays className="size-4" />
+              Today
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {todaysBirthdays.map((e) => (
+                <span
+                  key={e._id}
+                  className="flex items-center gap-1.5 rounded-full bg-yellow-500/10 text-yellow-600 px-3 py-1.5 text-xs font-bold"
+                >
+                  <Cake className="size-3.5" />
+                  {e.firstName} {e.lastName}'s birthday
+                </span>
+              ))}
+              {todaysEvents.map((e) => (
+                <span
+                  key={e._id}
+                  className={cn(
+                    'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold',
+                    e.type === 'brand_anniversary' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-blue-500/10 text-blue-600'
+                  )}
+                >
+                  {e.type === 'brand_anniversary' ? <PartyPopper className="size-3.5" /> : <Gift className="size-3.5" />}
+                  {e.name}
+                  {e.type === 'client_birthday' && "'s birthday"}
+                  {e.type === 'client_anniversary' && "'s anniversary"}
+                  {e.type === 'brand_anniversary' && ' anniversary'}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* FILTERS & CONTROLS */}
         <div className="bg-card/90 backdrop-blur-md rounded-2xl p-5 grid grid-cols-1 md:grid-cols-3 gap-4 shadow-diffuse border-0">

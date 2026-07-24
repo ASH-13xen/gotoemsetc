@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { CalendarOff, ChevronLeft, ChevronRight, Clock3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
@@ -71,6 +72,9 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
   const { user } = useAuth()
   const isAdmin = isAdminLike(user)
   const canMark = hasPermission(user, 'mark_attendance')
+  // HR must justify every manual edit with a reason; admin doesn't need to
+  // (see attendance.service.js#assertReasonProvidedForHr).
+  const reasonRequired = user?.role === 'hr'
 
   const [monthDate, setMonthDate] = useState(() => {
     const now = new Date()
@@ -81,6 +85,7 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
   const [pendingOvertimeHours, setPendingOvertimeHours] = useState('')
   const [pendingIsLate, setPendingIsLate] = useState(false)
   const [pendingEarlyDeparture, setPendingEarlyDeparture] = useState(false)
+  const [pendingNotes, setPendingNotes] = useState('')
 
   const month = monthDate.getUTCMonth() + 1
   const year = monthDate.getUTCFullYear()
@@ -108,8 +113,19 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
       toast.error('Set a status, overtime hours, late flag, or early-departure flag (or a combination)')
       return
     }
+    if (reasonRequired && !pendingNotes.trim()) {
+      toast.error('Reason is required when HR marks or changes attendance')
+      return
+    }
     markAttendance.mutate(
-      { date: dateKey, status, overtimeHours, isLate: pendingIsLate, earlyDeparture: pendingEarlyDeparture },
+      {
+        date: dateKey,
+        status,
+        overtimeHours,
+        isLate: pendingIsLate,
+        earlyDeparture: pendingEarlyDeparture,
+        notes: pendingNotes.trim() || undefined,
+      },
       {
         onSuccess: () => {
           toast.success('Attendance saved')
@@ -208,6 +224,7 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                       setPendingOvertimeHours(record?.overtimeHours ? String(record.overtimeHours) : '')
                       setPendingIsLate(record?.isLate ?? false)
                       setPendingEarlyDeparture(record?.earlyDeparture ?? false)
+                      setPendingNotes(record?.notes ?? '')
                     }}
                   >
                     <PopoverTrigger asChild>
@@ -291,6 +308,12 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                             {record?.overtimeHours ? <p>Overtime: {record.overtimeHours}h</p> : null}
                           </div>
                         )}
+                        {canMark && record?.notes && (
+                          <div className="grid gap-1 rounded-xl bg-secondary/40 p-2.5">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Reason on file</p>
+                            <p className="text-xs font-semibold text-foreground">{record.notes}</p>
+                          </div>
+                        )}
                         {canMark && (
                           <>
                             <Select value={pendingStatus} onValueChange={setPendingStatus}>
@@ -346,6 +369,18 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                               />
                               Early departure
                             </label>
+                            <div className="grid gap-1.5">
+                              <Label htmlFor={`notes-${dateKey}`} className="text-xs font-black uppercase tracking-widest text-neutral-400">
+                                Reason{reasonRequired ? ' (required)' : ' (optional)'}
+                              </Label>
+                              <Textarea
+                                id={`notes-${dateKey}`}
+                                value={pendingNotes}
+                                onChange={(e) => setPendingNotes(e.target.value)}
+                                placeholder={reasonRequired ? 'Why are you marking/changing this day?' : 'Optional note'}
+                                className="rounded-xl min-h-16"
+                              />
+                            </div>
                             <Button
                               size="sm"
                               className="bg-emerald-600 text-white hover:bg-emerald-500 rounded-xl"

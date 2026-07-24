@@ -19,6 +19,8 @@ import ApplicantsPage from '@/pages/ApplicantsPage'
 import ApplicantDetailPage from '@/pages/ApplicantDetailPage'
 import AttendancePage from '@/pages/AttendancePage'
 import UploadDocumentsPage from '@/pages/UploadDocumentsPage'
+import CalendarPage from '@/pages/CalendarPage'
+import NotificationsPage from '@/pages/NotificationsPage'
 
 // A worker with no granted permissions has no use for the admin dashboard
 // (it's an all-employees browser) — send them straight to their own
@@ -132,6 +134,22 @@ export default function App({ basename }: AppProps = {}) {
                   <RequireAdmin>
                     <UploadDocumentsPage />
                   </RequireAdmin>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/calendar"
+              element={
+                <RequireAuth>
+                  <CalendarPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/notifications"
+              element={
+                <RequireAuth>
+                  <NotificationsPage />
                 </RequireAuth>
               }
             />

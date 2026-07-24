@@ -43,4 +43,10 @@ export const STATUS_CONFIG: Record<
     solid: 'bg-violet-500/10 text-violet-700',
     dot: 'bg-violet-500',
   },
+  A: {
+    label: 'A — Absent',
+    cell: 'border-neutral-500/30 bg-neutral-500/15 text-neutral-500 hover:bg-neutral-500/25',
+    solid: 'bg-neutral-500/15 text-neutral-500',
+    dot: 'bg-neutral-500',
+  },
 }

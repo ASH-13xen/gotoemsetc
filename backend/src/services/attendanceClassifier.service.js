@@ -81,6 +81,13 @@ function validPunches(punches) {
   return punches.filter((p) => !isDeadZoneMinute(istMinutesOfDay(p.timestamp)));
 }
 
+// Only the night dead zone (pre-7am junk scans) filtered out — used solely
+// to find the day's earliest real activity for the 2pm auto-absent gate
+// below, before the midday dead zone even comes into play.
+function nonNightPunches(punches) {
+  return punches.filter((p) => istMinutesOfDay(p.timestamp) > NIGHT_DEAD_ZONE_END);
+}
+
 // Sundays only exclude the night dead zone (bogus pre-7am scans) — the
 // midday dead zone exists specifically to ignore lunch-break ambiguity on a
 // structured workday, which doesn't apply to a Sunday's raw duration
@@ -96,15 +103,26 @@ function validPunchesForSunday(punches) {
 // departure windows apply there).
 //
 // Returns one of:
-//   { outcome: 'no-scan' }
+//   { outcome: 'no-scan' }               — zero non-night-junk scans all day
+//   { outcome: 'late-absent' }            — first real scan at/after 2pm
 //   { outcome: 'single-scan' }
-//   { outcome: 'unclassified' }          — 2+ valid scans, but arrival or
-//                                           departure falls outside every
-//                                           window this employee has
+//   { outcome: 'unclassified' }          — 2+ valid scans, but departure
+//                                           falls outside every window this
+//                                           employee has
 //   { outcome: 'classified', status, earlyDeparture, overtimeHours }
 function classifyPunches(punches, employee) {
+  // Gate on the day's earliest real activity first — a first scan at/after
+  // 2pm auto-absents the whole day regardless of what happens later, same
+  // as truly never scanning at all. Both write an Absent record (see
+  // settleDay) rather than leaving the day for manual review.
+  const early = nonNightPunches(punches);
+  if (early.length === 0) return { outcome: 'no-scan' };
+  const firstPunchMinutes = Math.min(...early.map((p) => istMinutesOfDay(p.timestamp)));
+  if (firstPunchMinutes >= MIDDAY_DEAD_ZONE_START) return { outcome: 'late-absent' };
+
+  // First punch is before 2pm, so it survives the midday-dead-zone filter
+  // too — valid.length is guaranteed >= 1 here.
   const valid = validPunches(punches);
-  if (valid.length === 0) return { outcome: 'no-scan' };
   if (valid.length === 1) return { outcome: 'single-scan' };
 
   const { graceCutoff, lateCutoff, shiftEnd, normalEnd } = employeeBoundaries(employee);
@@ -115,8 +133,7 @@ function classifyPunches(punches, employee) {
   if (arrivalMinutes <= graceCutoff) status = ATTENDANCE_STATUS.PRESENT;
   else if (arrivalMinutes <= lateCutoff) status = ATTENDANCE_STATUS.LATE;
   else if (arrivalMinutes < HALF_DAY_ARRIVAL_START) status = ATTENDANCE_STATUS.SHORT_LEAVE;
-  else if (arrivalMinutes <= HALF_DAY_ARRIVAL_END) status = ATTENDANCE_STATUS.HALF_DAY;
-  else status = null; // arrival landed at/after the midday dead zone with no earlier valid scan
+  else status = ATTENDANCE_STATUS.HALF_DAY; // arrivalMinutes <= HALF_DAY_ARRIVAL_END, guaranteed by the 2pm gate above
 
   let earlyDeparture = false;
   let overtimeHours = 0;
@@ -130,7 +147,7 @@ function classifyPunches(punches, employee) {
   }
   // else: within [shiftEnd, normalEnd] — normal, no penalty, no overtime.
 
-  if (!status || !departureOk) return { outcome: 'unclassified' };
+  if (!departureOk) return { outcome: 'unclassified' };
   return { outcome: 'classified', status, earlyDeparture, overtimeHours };
 }
 
@@ -210,7 +227,24 @@ async function handlePunchEvent(employeeId, timestamp) {
 
   const result = classifyPunches(punches, employee);
 
-  if (result.outcome !== 'classified') return; // not enough info yet — leave it for settlement to decide
+  // no-scan/late-absent resolve to Absent immediately, same as a classified
+  // day — provisional, since a later scan today can still turn this into a
+  // real classification (a stray pre-7am scan alone looks like "no-scan"
+  // until a real arrival scan comes in and this gets recomputed).
+  if (result.outcome === 'no-scan' || result.outcome === 'late-absent') {
+    await attendanceRepository.upsertForDate(
+      employeeId,
+      dateLabel,
+      { status: ATTENDANCE_STATUS.ABSENT, earlyDeparture: false, overtimeHours: 0 },
+      false,
+      true,
+      undefined,
+      false
+    );
+    return;
+  }
+
+  if (result.outcome !== 'classified') return; // single-scan/unclassified — not enough info yet, leave for settlement
 
   await attendanceRepository.upsertForDate(
     employeeId,
@@ -275,19 +309,37 @@ async function settleDay(employeeId, dateLabel) {
     return;
   }
 
-  // Anomalies are never written as a record — same as before, this is what
-  // lets the day fall through to payroll's unpaid-absent bucket rather than
-  // silently looking "handled." No isSettled marker to flip, so there's a
-  // small window for a duplicate notification if this races with the
-  // nightly backstop on the exact same day; accepted as harmless.
-  if (result.outcome === 'no-scan') {
+  // No-scan and first-scan-after-2pm both auto-resolve to a real Absent
+  // record rather than being left for manual review — still worth notifying
+  // admins so a pattern of absences doesn't go unnoticed.
+  if (result.outcome === 'no-scan' || result.outcome === 'late-absent') {
+    await attendanceRepository.upsertForDate(
+      employeeId,
+      dateLabel,
+      { status: ATTENDANCE_STATUS.ABSENT, earlyDeparture: false, overtimeHours: 0 },
+      false,
+      true,
+      undefined,
+      true
+    );
     await notifyAdmins(
       NOTIFICATION_TYPES.ATTENDANCE_NO_SCAN,
-      'No biometric scan today',
-      `${employeeName} has not scanned in at all today.`,
+      result.outcome === 'no-scan' ? 'No biometric scan today' : 'First scan after 2pm',
+      result.outcome === 'no-scan'
+        ? `${employeeName} did not scan in at all today — marked as absent.`
+        : `${employeeName}'s first scan today was after 2:00pm — marked as absent.`,
       employeeId
     );
-  } else if (result.outcome === 'single-scan') {
+    return;
+  }
+
+  // single-scan/unclassified are never auto-written as a record — this is
+  // what lets the day fall through to payroll's unpaid-absent bucket rather
+  // than silently looking "handled," while still flagging it for a human to
+  // check rather than guessing. No isSettled marker to flip, so there's a
+  // small window for a duplicate notification if this races with the
+  // nightly backstop on the exact same day; accepted as harmless.
+  if (result.outcome === 'single-scan') {
     await notifyAdmins(
       NOTIFICATION_TYPES.ATTENDANCE_SINGLE_SCAN,
       'Only one scan today',
@@ -306,49 +358,25 @@ async function settleDay(employeeId, dateLabel) {
 
 // Nightly backstop (see attendanceClassifier.job.js) — no longer the
 // primary classifier, just catches the one thing that can never be
-// event-driven (zero scans all day) and settles any stragglers real-time
-// processing didn't get to (e.g. an employee's last working day, with no
-// "tomorrow" scan to trigger settlement naturally). Sundays still run (to
-// settle any pending Sunday-OT records), just without the no-scan
-// notification — see the `sunday` check below.
+// event-driven (zero scans all day, so no punch ever fired handlePunchEvent)
+// and settles any stragglers real-time processing didn't get to (e.g. an
+// employee's last working day, with no "tomorrow" scan to trigger
+// settlement naturally). Delegates every employee straight to settleDay,
+// which already knows how to turn a zero-scan weekday into a settled Absent
+// record + notification, and how to stay silent on a quiet Sunday.
 async function runNightlyBackstop(dateLabel = todayUTCMidnight()) {
   if (await isHolidayLabel(dateLabel)) {
     logger.info({ date: dateKey(dateLabel) }, 'Attendance backstop: holiday, skipping entirely');
-    return { settled: 0, noScan: 0 };
+    return { settled: 0 };
   }
 
-  const sunday = isSunday(dateLabel);
   const employees = await employeeRepository.listActive();
-  const { start, end } = istDayBoundsUTC(dateLabel);
-
   let settled = 0;
-  let noScan = 0;
 
   for (const employee of employees) {
     // eslint-disable-next-line no-await-in-loop
-    const punches = await devicePunchRepository.listForEmployeeOnDay(employee._id, start, end);
-    if (punches.length === 0) {
-      // A quiet Sunday is expected, not an anomaly — no notification.
-      if (!sunday) {
-        // eslint-disable-next-line no-await-in-loop
-        const existing = await attendanceRepository.findForDate(employee._id, dateLabel);
-        if (!existing) {
-          const employeeName = `${employee.firstName} ${employee.lastName || ''}`.trim();
-          // eslint-disable-next-line no-await-in-loop
-          await notifyAdmins(
-            NOTIFICATION_TYPES.ATTENDANCE_NO_SCAN,
-            'No biometric scan today',
-            `${employeeName} has not scanned in at all today.`,
-            employee._id
-          );
-          noScan += 1;
-        }
-      }
-    } else {
-      // eslint-disable-next-line no-await-in-loop
-      await settleDay(employee._id, dateLabel);
-      settled += 1;
-    }
+    await settleDay(employee._id, dateLabel);
+    settled += 1;
 
     // Catch any older straggler days too (e.g. no scan yesterday or the day
     // before, and nothing since to trigger settlement naturally).
@@ -361,8 +389,8 @@ async function runNightlyBackstop(dateLabel = todayUTCMidnight()) {
     }
   }
 
-  logger.info({ date: dateKey(dateLabel), settled, noScan }, 'Attendance backstop run complete');
-  return { settled, noScan };
+  logger.info({ date: dateKey(dateLabel), settled }, 'Attendance backstop run complete');
+  return { settled };
 }
 
 module.exports = { handlePunchEvent, settleDay, runNightlyBackstop, classifyPunches, computeSundayOvertime };

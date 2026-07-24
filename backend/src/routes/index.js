@@ -20,6 +20,7 @@ const teamRoutes = require('./team.routes');
 const taskRoutes = require('./task.routes');
 const stepLibraryRoutes = require('./stepLibrary.routes');
 const holidayRoutes = require('./holiday.routes');
+const companyEventRoutes = require('./companyEvent.routes');
 const salarySlipRoutes = require('./salarySlip.routes');
 const userRoutes = require('./user.routes');
 const auditLogRoutes = require('./auditLog.routes');
@@ -65,6 +66,7 @@ router.use('/teams', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), teamRoutes);
 router.use('/tasks', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), taskRoutes);
 router.use('/step-library', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), stepLibraryRoutes);
 router.use('/holidays', holidayRoutes);
+router.use('/company-events', companyEventRoutes);
 router.use('/salary-slips', salarySlipRoutes);
 router.use('/notifications', notificationRoutes);
 // Inventory / Event Management — admin/HR only.

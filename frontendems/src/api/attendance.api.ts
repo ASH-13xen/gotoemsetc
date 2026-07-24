@@ -1,6 +1,6 @@
 import { apiClient } from './client'
 
-export type AttendanceStatus = 'P' | 'O' | 'H' | 'L' | 'SL' | 'W'
+export type AttendanceStatus = 'P' | 'O' | 'H' | 'L' | 'SL' | 'W' | 'A'
 
 export interface AttendanceRecord {
   _id: string
