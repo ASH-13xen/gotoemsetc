@@ -190,6 +190,47 @@ async function listUploadedForEmployee(employeeId) {
   return uploadedDocumentRepository.listByEmployee(employeeId);
 }
 
+// Admin attaches a document directly — no UploadRequest/access-code dance,
+// distinct from attachDocuments (the employee-facing link flow) above.
+// Fixed doc types still replace any prior version of themselves, same as
+// attachDocuments; 'other' never does, since two different custom documents
+// can legitimately coexist under that one generic type.
+async function adminUpload(employeeId, { docType, otherLabel }, file) {
+  const employee = await employeeRepository.findById(employeeId);
+  if (!employee) throw ApiError.notFound('Employee not found');
+
+  if (docType !== 'other') {
+    const previous = await uploadedDocumentRepository.findByEmployeeAndDocType(employeeId, docType);
+    for (const prior of previous) {
+      // eslint-disable-next-line no-await-in-loop
+      if (prior.publicId) await cloudinaryUploadService.destroy(prior.publicId, { resourceType: prior.resourceType });
+      // eslint-disable-next-line no-await-in-loop
+      await uploadedDocumentRepository.deleteById(prior._id);
+    }
+  }
+
+  const upload = await cloudinaryUploadService.uploadBuffer(file.buffer, {
+    folder: `ems/employees/${employeeId}/uploaded`,
+    publicId: `${docType}-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
+    resourceType: 'auto',
+  });
+  const doc = await uploadedDocumentRepository.create({
+    employee: employeeId,
+    docType,
+    otherLabel: docType === 'other' ? otherLabel : undefined,
+    originalFilename: file.originalname,
+    mimeType: file.mimetype,
+    sizeBytes: file.size,
+    url: upload.secure_url,
+    publicId: upload.public_id,
+    resourceType: upload.resource_type,
+  });
+
+  await activityService.log(employeeId, 'DOCUMENT_UPLOADED_BY_ADMIN', { docType, otherLabel });
+
+  return doc;
+}
+
 async function deleteUploadedDocument(id) {
   const doc = await uploadedDocumentRepository.findById(id);
   if (!doc) throw ApiError.notFound('Uploaded document not found');
@@ -206,4 +247,5 @@ module.exports = {
   attachDocuments,
   listUploadedForEmployee,
   deleteUploadedDocument,
+  adminUpload,
 };

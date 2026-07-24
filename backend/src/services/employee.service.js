@@ -40,25 +40,22 @@ const DEFAULT_EXTRA_DETAILS = [
 async function createEmployee(data) {
   // Plain incrementing number, starting at 1001 — see
   // scripts/seedEmployeeCounter.js, which seeds the counter to 1000 so the
-  // first call here returns 1001.
+  // first call here returns 1001. Doubles as the biometric device PIN,
+  // editable afterward via updateEmployee (admin/HR only) to match whatever
+  // PIN actually gets set on the physical device.
   const seq = await counterRepository.nextSequence('employeeCode');
   const employeeCode = String(seq);
-  // Biometric device PIN — auto-generated sequentially starting at 1000 (see
-  // scripts/seedEcoIdCounter.js), editable afterward via updateEmployee
-  // (admin/HR only).
-  const ecoIdSeq = await counterRepository.nextSequence('ecoId');
-  const ecoId = String(ecoIdSeq);
   const extraDetails = data.extraDetails?.length ? data.extraDetails : DEFAULT_EXTRA_DETAILS;
-  const employee = await employeeRepository.create({ ...data, employeeCode, ecoId, extraDetails });
-  await activityService.log(employee._id, 'EMPLOYEE_CREATED', { employeeCode, ecoId });
+  const employee = await employeeRepository.create({ ...data, employeeCode, extraDetails });
+  await activityService.log(employee._id, 'EMPLOYEE_CREATED', { employeeCode });
   return employee;
 }
 
 async function updateEmployee(id, data, actingUserRole) {
-  // ecoId (the biometric device PIN) is admin/HR-only — silently dropped for
-  // anyone else rather than erroring, so the rest of a non-admin's edit
-  // still goes through.
-  const payload = isAdminLike({ role: actingUserRole }) ? data : { ...data, ecoId: undefined };
+  // employeeCode (the biometric device PIN) is admin/HR-only — silently
+  // dropped for anyone else rather than erroring, so the rest of a
+  // non-admin's edit still goes through.
+  const payload = isAdminLike({ role: actingUserRole }) ? data : { ...data, employeeCode: undefined };
   const employee = await employeeRepository.updateById(id, payload);
   if (!employee) throw ApiError.notFound('Employee not found');
   await activityService.log(employee._id, 'EMPLOYEE_UPDATED', { fields: Object.keys(payload) });

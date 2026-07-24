@@ -34,10 +34,10 @@ function findById(id) {
 }
 
 // Maps a biometric device's enrollment PIN to an employee via the
-// admin-set ecoId field — the device sends this exact PIN as the "user ID"
+// employeeCode field — the device sends this exact PIN as the "user ID"
 // on every punch.
 function findByCode(devicePin) {
-  return Employee.findOne({ ecoId: devicePin, isDeleted: false });
+  return Employee.findOne({ employeeCode: devicePin, isDeleted: false });
 }
 
 function findByIds(ids) {

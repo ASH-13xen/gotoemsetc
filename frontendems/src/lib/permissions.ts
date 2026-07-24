@@ -8,6 +8,13 @@ export function isAdminLike(user: StoredUser | null | undefined): boolean {
   return user?.role === 'admin' || user?.role === 'hr'
 }
 
+// Strictly the admin role — unlike isAdminLike, HR does NOT pass. Only for
+// the handful of things product explicitly wants admin-only (e.g. the
+// Upload Documents section), not the general admin/HR equivalence above.
+export function isAdmin(user: StoredUser | null | undefined): boolean {
+  return user?.role === 'admin'
+}
+
 // Admin (and HR) always have everything implicitly — every check in this
 // app should go through this helper rather than reading user.permissions
 // directly.

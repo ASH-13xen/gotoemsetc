@@ -22,8 +22,12 @@ export interface UploadRequest {
 export interface UploadedDocument {
   _id: string
   employee: string
-  uploadRequest: string
+  // Absent for documents an admin attached directly rather than an employee
+  // fulfilling a request link — see uploadDocumentDirect below.
+  uploadRequest?: string
   docType: string
+  // Only set when docType is 'other' — the custom name typed in for it.
+  otherLabel?: string
   originalFilename?: string
   mimeType?: string
   sizeBytes?: number
@@ -63,4 +67,22 @@ export async function listUploadedDocuments(
 
 export async function deleteUploadedDocument(id: string): Promise<void> {
   await apiClient.delete(`/uploaded-documents/${id}`)
+}
+
+// Admin attaching a document straight to an employee's file — no request
+// link/access-code round trip, distinct from the employee-facing flow above.
+export async function uploadDocumentDirect(
+  employeeId: string,
+  docType: string,
+  file: File,
+  otherLabel?: string
+): Promise<{ document: UploadedDocument }> {
+  const formData = new FormData()
+  formData.append('docType', docType)
+  if (otherLabel) formData.append('otherLabel', otherLabel)
+  formData.append('file', file)
+  const { data } = await apiClient.post(`/employees/${employeeId}/uploaded-documents`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
 }

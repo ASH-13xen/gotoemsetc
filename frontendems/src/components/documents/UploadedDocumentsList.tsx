@@ -16,7 +16,8 @@ export function UploadedDocumentsList({ employeeId }: { employeeId: string }) {
   const [previewDoc, setPreviewDoc] = useState<UploadedDocument | null>(null)
 
   const documents = data?.uploadedDocuments ?? []
-  const labelFor = (key: string) => config?.docTypes.find((d) => d.key === key)?.label ?? key
+  const labelFor = (doc: UploadedDocument) =>
+    doc.otherLabel || config?.docTypes.find((d) => d.key === doc.docType)?.label || doc.docType
 
   return (
     <Card>
@@ -34,7 +35,7 @@ export function UploadedDocumentsList({ employeeId }: { employeeId: string }) {
         ) : (
           documents.map((doc) => (
             <div key={doc._id} className="flex items-center justify-between gap-4 rounded-lg border p-3">
-              <span className="text-sm font-medium">{labelFor(doc.docType)}</span>
+              <span className="text-sm font-medium">{labelFor(doc)}</span>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => setPreviewDoc(doc)}>
                   <Eye className="size-3.5" />
@@ -60,7 +61,7 @@ export function UploadedDocumentsList({ employeeId }: { employeeId: string }) {
 
       <DocumentPreviewDialog
         doc={previewDoc}
-        label={previewDoc ? labelFor(previewDoc.docType) : ''}
+        label={previewDoc ? labelFor(previewDoc) : ''}
         onClose={() => setPreviewDoc(null)}
       />
     </Card>

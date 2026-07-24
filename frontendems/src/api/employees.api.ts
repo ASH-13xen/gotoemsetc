@@ -35,9 +35,9 @@ export interface EmployeeFlag {
 
 export interface Employee {
   _id: string
+  // The employee's one and only code — also the biometric device enrollment
+  // PIN, admin-only to edit.
   employeeCode: string
-  // Biometric device enrollment PIN — admin-only, set manually.
-  ecoId?: string
   firstName: string
   lastName?: string
   personalEmail?: string
@@ -75,6 +75,14 @@ export interface Employee {
   companyLoginAdded?: boolean
   officePhoneAdded?: boolean
   personalPhoneAdded?: boolean
+  assetAccessAdded?: boolean
+  updatedIn12345?: boolean
+
+  // Offboarding-only — meaningful once status is 'offboarded'.
+  endDate?: string
+  reasonForLeaving?: string
+  removedFromGroupsAndReels?: boolean
+  mailDeactivated?: boolean
 
   // Carried over from the application at hire time — present only on
   // employees created by hiring an applicant (sourceApplicant set).

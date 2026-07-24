@@ -3,8 +3,14 @@ const { Schema, model } = require('mongoose');
 const uploadedDocumentSchema = new Schema(
   {
     employee: { type: Schema.Types.ObjectId, ref: 'Employee', required: true, index: true },
-    uploadRequest: { type: Schema.Types.ObjectId, ref: 'UploadRequest', required: true },
+    // Absent for documents an admin attached directly (see
+    // uploadedDocument.service.js#adminUpload) rather than an employee
+    // fulfilling a request link.
+    uploadRequest: { type: Schema.Types.ObjectId, ref: 'UploadRequest' },
     docType: { type: String, required: true },
+    // Only meaningful when docType is 'other' — the free-text name the
+    // uploader typed in place of a fixed doc type label.
+    otherLabel: { type: String, trim: true },
     originalFilename: String,
     mimeType: String,
     sizeBytes: Number,

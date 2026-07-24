@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Search, Users } from 'lucide-react'
+import { FileUp, Search, Users } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -27,7 +27,7 @@ import { StatCard } from '@/components/dashboard/StatCard'
 import { useEmployees } from '@/hooks/useEmployees'
 import { useDashboardStats } from '@/hooks/useDashboardStats'
 import { useAuth } from '@/hooks/useAuth'
-import { hasPermission } from '@/lib/permissions'
+import { hasPermission, isAdmin } from '@/lib/permissions'
 import type { EmployeeStatus } from '@/api/employees.api'
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -87,6 +87,20 @@ export default function DashboardPage() {
               <span className="text-xs font-bold tracking-wider opacity-90 uppercase">WORKFORCE TRACKING</span>
               <span className="text-2xl font-extrabold tracking-wide">ATTENDANCE</span>
             </div>
+
+            {/* Go to Upload Documents Tile — admin only */}
+            {isAdmin(user) && (
+              <div
+                onClick={() => navigate('/upload-documents')}
+                className="bg-violet-600 text-white p-6 rounded-xl flex flex-col justify-between cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
+              >
+                <span className="text-xs font-bold tracking-wider opacity-90 uppercase flex items-center gap-1.5">
+                  <FileUp className="size-3.5" />
+                  ADMIN ONLY
+                </span>
+                <span className="text-2xl font-extrabold tracking-wide">UPLOAD DOCUMENTS</span>
+              </div>
+            )}
 
             {/* Add Employee Tile */}
             {hasPermission(user, 'add_employee') && (

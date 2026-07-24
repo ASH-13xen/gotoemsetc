@@ -52,9 +52,10 @@ const extraDetailSchema = z.object({
 });
 
 const mutableFields = {
-  // Admin-only — see employee.service.js#updateEmployee, which strips this
-  // from the payload for non-admin callers regardless of what's sent here.
-  ecoId: z.string().trim().min(1).optional(),
+  // The employee's code / biometric device PIN — admin-only, see
+  // employee.service.js#updateEmployee, which strips this from the payload
+  // for non-admin callers regardless of what's sent here.
+  employeeCode: z.string().trim().min(1).optional(),
 
   firstName: z.string().min(1),
   lastName: z.string().optional(),
@@ -93,6 +94,14 @@ const mutableFields = {
   companyLoginAdded: z.boolean().optional(),
   officePhoneAdded: z.boolean().optional(),
   personalPhoneAdded: z.boolean().optional(),
+  assetAccessAdded: z.boolean().optional(),
+  updatedIn12345: z.boolean().optional(),
+
+  // Offboarding-only — meaningful once status is 'offboarded'.
+  endDate: z.coerce.date().optional(),
+  reasonForLeaving: z.string().optional(),
+  removedFromGroupsAndReels: z.boolean().optional(),
+  mailDeactivated: z.boolean().optional(),
 
   // Carried over from the application at hire time — editable here too in
   // case HR needs to correct something after the fact.
@@ -148,6 +157,8 @@ const create = {
     companyLoginAdded: true,
     officePhoneAdded: true,
     personalPhoneAdded: true,
+    assetAccessAdded: true,
+    updatedIn12345: true,
   }).superRefine(assertWorkingHoursSane),
 };
 

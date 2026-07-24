@@ -44,7 +44,7 @@ type AddressForm = {
 }
 
 type FormValues = {
-  ecoId: string
+  employeeCode: string
   firstName: string
   lastName: string
   personalEmail: string
@@ -76,6 +76,12 @@ type FormValues = {
   companyLoginAdded: boolean
   officePhoneAdded: boolean
   personalPhoneAdded: boolean
+  assetAccessAdded: boolean
+  updatedIn12345: boolean
+  endDate: string
+  reasonForLeaving: string
+  removedFromGroupsAndReels: boolean
+  mailDeactivated: boolean
   extraDetails: { key: string; value: string }[]
 }
 
@@ -103,7 +109,7 @@ function addressesEqual(a: AddressForm, b: AddressForm): boolean {
 
 function toFormValues(employee: Employee): FormValues {
   return {
-    ecoId: employee.ecoId ?? '',
+    employeeCode: employee.employeeCode ?? '',
     firstName: employee.firstName ?? '',
     lastName: employee.lastName ?? '',
     personalEmail: employee.personalEmail ?? '',
@@ -135,6 +141,12 @@ function toFormValues(employee: Employee): FormValues {
     companyLoginAdded: employee.companyLoginAdded ?? false,
     officePhoneAdded: employee.officePhoneAdded ?? false,
     personalPhoneAdded: employee.personalPhoneAdded ?? false,
+    assetAccessAdded: employee.assetAccessAdded ?? false,
+    updatedIn12345: employee.updatedIn12345 ?? false,
+    endDate: toDateInputValue(employee.endDate),
+    reasonForLeaving: employee.reasonForLeaving ?? '',
+    removedFromGroupsAndReels: employee.removedFromGroupsAndReels ?? false,
+    mailDeactivated: employee.mailDeactivated ?? false,
     extraDetails: (employee.extraDetails ?? []).map((d) => ({ key: d.key, value: d.value ?? '' })),
   }
 }
@@ -215,6 +227,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   const extraDetails = useFieldArray({ control, name: 'extraDetails' })
 
   const permanentAddress = watch('permanentAddress')
+  const status = watch('status')
   const [sameAsPermanent, setSameAsPermanent] = useState(() => addressesEqual(toFormValues(employee).permanentAddress, toFormValues(employee).localAddress))
 
   const onToggleSameAsPermanent = (checked: boolean) => {
@@ -228,13 +241,14 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
     updateEmployee.mutate(
       {
         ...values,
-        ecoId: values.ecoId || undefined,
+        employeeCode: values.employeeCode || undefined,
         ctcAnnual: values.ctcAnnual ? Number(values.ctcAnnual) : undefined,
         monthlyPay: values.monthlyPay ? Number(values.monthlyPay) : undefined,
         payDate: values.payDate ? Number(values.payDate) : undefined,
         dob: values.dob || undefined,
         dateOfJoining: values.dateOfJoining || undefined,
         dateOfHiring: values.dateOfHiring || undefined,
+        endDate: values.endDate || undefined,
         permanentAddress: values.permanentAddress,
         localAddress: sameAsPermanent ? values.permanentAddress : values.localAddress,
         extraDetails: values.extraDetails?.filter((d) => d.key.trim().length > 0),
@@ -624,8 +638,57 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   <CheckboxRow label="GOTO PERSONAL PHONE NUMBER ADDED?" checked={field.value} onChange={field.onChange} />
                 )}
               />
+              <Controller
+                control={control}
+                name="assetAccessAdded"
+                render={({ field }) => (
+                  <CheckboxRow label="ACCESS OF ASSET (MAILS + GRPS) ADDED?" checked={field.value} onChange={field.onChange} />
+                )}
+              />
+              <Controller
+                control={control}
+                name="updatedIn12345"
+                render={({ field }) => (
+                  <CheckboxRow label="UPDATED IN 12345?" checked={field.value} onChange={field.onChange} />
+                )}
+              />
             </div>
           </Card>
+
+          {/* Offboarding — only meaningful once status is set to Offboarded */}
+          {status === 'offboarded' && (
+            <Card className="p-6 space-y-6">
+              <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
+                OFFBOARDING
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="endDate" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">END DATE</Label>
+                  <Input id="endDate" type="date" {...register('endDate')} />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="reasonForLeaving" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">REASON FOR LEAVING</Label>
+                  <Input id="reasonForLeaving" {...register('reasonForLeaving')} className="uppercase" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Controller
+                  control={control}
+                  name="removedFromGroupsAndReels"
+                  render={({ field }) => (
+                    <CheckboxRow label="REMOVED FROM GROUPS + GO-TO REELS" checked={field.value} onChange={field.onChange} />
+                  )}
+                />
+                <Controller
+                  control={control}
+                  name="mailDeactivated"
+                  render={({ field }) => (
+                    <CheckboxRow label="MAIL DEACTIVATED" checked={field.value} onChange={field.onChange} />
+                  )}
+                />
+              </div>
+            </Card>
+          )}
 
           {/* Compensation & IDs — admin-only */}
           {isAdmin && (
@@ -635,8 +698,8 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="grid gap-1.5">
-                  <Label htmlFor="ecoId" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">BIOMETRIC DEVICE PIN (ECO ID)</Label>
-                  <Input id="ecoId" {...register('ecoId')} />
+                  <Label htmlFor="employeeCode" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">CODE (BIOMETRIC DEVICE PIN)</Label>
+                  <Input id="employeeCode" {...register('employeeCode')} />
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="ctcAnnual" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">ANNUAL CTC</Label>

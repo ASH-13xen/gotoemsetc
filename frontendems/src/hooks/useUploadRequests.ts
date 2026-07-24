@@ -52,3 +52,26 @@ export function useDeleteUploadedDocument(employeeId: string) {
     },
   })
 }
+
+// Admin-only direct upload — employeeId isn't fixed at hook-creation time
+// like the other mutations here, since the Upload Documents page picks the
+// employee as part of the same form the file comes from.
+export function useUploadDocumentDirect() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      employeeId,
+      docType,
+      file,
+      otherLabel,
+    }: {
+      employeeId: string
+      docType: string
+      file: File
+      otherLabel?: string
+    }) => uploadRequestsApi.uploadDocumentDirect(employeeId, docType, file, otherLabel),
+    onSuccess: (_data, { employeeId }) => {
+      queryClient.invalidateQueries({ queryKey: ['uploadedDocuments', employeeId] })
+    },
+  })
+}

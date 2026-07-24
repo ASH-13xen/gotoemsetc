@@ -98,6 +98,16 @@ router.get(
   validate(uploadedDocumentValidator.listForEmployee),
   uploadedDocumentController.listForEmployee
 );
+// Admin attaching a document directly (no request link/access-code flow) —
+// strictly admin-only per product ask, not part of the grantable permission
+// set like the rest of the Document System.
+router.post(
+  '/:id/uploaded-documents',
+  requireRole(USER_ROLES.ADMIN),
+  upload.single('file'),
+  validate(uploadedDocumentValidator.adminUpload),
+  uploadedDocumentController.adminUpload
+);
 
 router.get(
   '/:id/activity',

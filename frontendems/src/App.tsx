@@ -7,6 +7,7 @@ import { RequireAuth } from '@/components/auth/RequireAuth'
 import { RequireOwnEmployee } from '@/components/auth/RequireOwnEmployee'
 import { RequireOwnAttendance } from '@/components/auth/RequireOwnAttendance'
 import { RequirePermission } from '@/components/auth/RequirePermission'
+import { RequireAdmin } from '@/components/auth/RequireAdmin'
 import { useAuth } from '@/hooks/useAuth'
 import { hasAnyPermission } from '@/lib/permissions'
 import LoginPage from '@/pages/LoginPage'
@@ -17,6 +18,7 @@ import PublicUploadPage from '@/pages/PublicUploadPage'
 import ApplicantsPage from '@/pages/ApplicantsPage'
 import ApplicantDetailPage from '@/pages/ApplicantDetailPage'
 import AttendancePage from '@/pages/AttendancePage'
+import UploadDocumentsPage from '@/pages/UploadDocumentsPage'
 
 // A worker with no granted permissions has no use for the admin dashboard
 // (it's an all-employees browser) — send them straight to their own
@@ -120,6 +122,16 @@ export default function App({ basename }: AppProps = {}) {
                   <RequireOwnAttendance>
                     <AttendancePage />
                   </RequireOwnAttendance>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/upload-documents"
+              element={
+                <RequireAuth>
+                  <RequireAdmin>
+                    <UploadDocumentsPage />
+                  </RequireAdmin>
                 </RequireAuth>
               }
             />

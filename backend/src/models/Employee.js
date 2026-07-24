@@ -47,13 +47,12 @@ const flagSchema = new Schema(
 
 const employeeSchema = new Schema(
   {
-    // Numeric-looking string, starting at 1001 — see
-    // scripts/seedEmployeeCounter.js and employee.service.js.
-    employeeCode: { type: String, unique: true, sparse: true },
-    // The biometric device's enrollment PIN for this employee — admin-only
-    // (see employee.service.js#updateEmployee), set manually since the PIN
-    // is assigned on the physical device, not derivable from anything else.
-    ecoId: { type: String, trim: true, unique: true, sparse: true },
+    // The employee's one and only code — also the biometric device's
+    // enrollment PIN, since the device sends this exact value on every
+    // punch (see employeeRepository.findByCode). Auto-assigned sequentially
+    // at creation (see employee.service.js) but admin/HR can edit it
+    // afterward to match the PIN actually set on the physical device.
+    employeeCode: { type: String, trim: true, unique: true, sparse: true },
 
     firstName: { type: String, required: true, trim: true },
     lastName: { type: String, trim: true },
@@ -109,6 +108,8 @@ const employeeSchema = new Schema(
     companyLoginAdded: { type: Boolean, default: false },
     officePhoneAdded: { type: Boolean, default: false },
     personalPhoneAdded: { type: Boolean, default: false },
+    assetAccessAdded: { type: Boolean, default: false },
+    updatedIn12345: { type: Boolean, default: false },
 
     status: {
       type: String,
@@ -116,6 +117,13 @@ const employeeSchema = new Schema(
       default: EMPLOYEE_STATUS.DRAFT,
     },
     isDeleted: { type: Boolean, default: false },
+
+    // Offboarding-only fields — meaningful only once status is 'offboarded';
+    // left blank/false while the employee is active or draft.
+    endDate: Date,
+    reasonForLeaving: { type: String, trim: true },
+    removedFromGroupsAndReels: { type: Boolean, default: false },
+    mailDeactivated: { type: Boolean, default: false },
 
     // Set when this employee record was auto-created by hiring an applicant.
     sourceApplicant: { type: Schema.Types.ObjectId, ref: 'Applicant' },
