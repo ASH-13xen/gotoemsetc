@@ -31,7 +31,6 @@ export interface UploadedDocument {
   originalFilename?: string
   mimeType?: string
   sizeBytes?: number
-  url: string
   createdAt: string
 }
 
@@ -67,6 +66,27 @@ export async function listUploadedDocuments(
 
 export async function deleteUploadedDocument(id: string): Promise<void> {
   await apiClient.delete(`/uploaded-documents/${id}`)
+}
+
+// Stored on our own disk and served through an authenticated route rather
+// than a direct URL (Cloudinary blocks unauthenticated PDF delivery) — fetch
+// as a blob through the authenticated axios instance, same pattern as
+// fetchGeneratedFileBlob.
+export async function fetchUploadedFileBlob(id: string): Promise<Blob> {
+  const { data } = await apiClient.get(`/uploaded-documents/${id}/file`, { responseType: 'blob' })
+  return data
+}
+
+export async function downloadUploadedDocument(id: string, filename: string): Promise<void> {
+  const blob = await fetchUploadedFileBlob(id)
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
 }
 
 // Admin attaching a document straight to an employee's file — no request

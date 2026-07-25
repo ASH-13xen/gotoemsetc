@@ -20,6 +20,7 @@ import {
 import { StatusBadge } from '@/components/employees/StatusBadge'
 import { GeneratedDocumentsList } from '@/components/documents/GeneratedDocumentsList'
 import { UploadedDocumentsList } from '@/components/documents/UploadedDocumentsList'
+import { UploadedDocumentImage } from '@/components/documents/UploadedDocumentImage'
 import { RequestDocumentsModal } from '@/components/uploadRequests/RequestDocumentsModal'
 import { CredentialsDialog } from '@/components/employees/CredentialsDialog'
 import { FlagStrip, EmployeeFlagsManager } from '@/components/employees/EmployeeFlags'
@@ -292,8 +293,8 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 {employee.employeeCode}
               </p>
               {photoDoc && (
-                <img
-                  src={photoDoc.url}
+                <UploadedDocumentImage
+                  documentId={photoDoc._id}
                   alt={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
                   className="w-24 h-32 mt-2 rounded-xl border border-border/20 object-cover shadow-diffuse"
                 />

@@ -5,6 +5,7 @@ const uploadedDocumentController = require('../controllers/uploadedDocument.cont
 
 const router = Router();
 
+router.get('/:id/file', validate(uploadedDocumentValidator.remove), uploadedDocumentController.downloadFile);
 router.delete('/:id', validate(uploadedDocumentValidator.remove), uploadedDocumentController.remove);
 
 module.exports = router;

@@ -1,5 +1,9 @@
 const { Schema, model } = require('mongoose');
 
+// Stored on local disk rather than Cloudinary, same reasoning as generated
+// documents/salary slips/client documents: PDFs delivered without our own
+// auth gate hit Cloudinary's raw-file delivery restriction. Served back
+// through an authenticated route instead of a direct URL.
 const uploadedDocumentSchema = new Schema(
   {
     employee: { type: Schema.Types.ObjectId, ref: 'Employee', required: true, index: true },
@@ -14,11 +18,7 @@ const uploadedDocumentSchema = new Schema(
     originalFilename: String,
     mimeType: String,
     sizeBytes: Number,
-    url: { type: String, required: true },
-    publicId: { type: String, required: true },
-    // Cloudinary's actual resolved type (image/video/raw) — 'auto' is an
-    // upload-time hint only and isn't a valid value when destroying an asset.
-    resourceType: { type: String, required: true },
+    filePath: { type: String, required: true },
   },
   { timestamps: true }
 );

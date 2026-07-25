@@ -1,4 +1,5 @@
 const crypto = require('node:crypto');
+const path = require('node:path');
 
 const ApiError = require('../utils/ApiError');
 const { UPLOAD_REQUEST_STATUS, DEFAULT_UPLOAD_REQUEST_EXPIRY_HOURS } = require('../config/constants');
@@ -6,11 +7,13 @@ const DOC_TYPES = require('../config/docTypes');
 const employeeRepository = require('../repositories/employee.repository');
 const uploadRequestRepository = require('../repositories/uploadRequest.repository');
 const uploadedDocumentRepository = require('../repositories/uploadedDocument.repository');
-const cloudinaryUploadService = require('./cloudinaryUpload.service');
+const localFileStorage = require('./localFileStorage.service');
 const activityService = require('./activity.service');
 const emailService = require('./email.service');
 const env = require('../config/env');
 const logger = require('../utils/logger');
+
+const NAMESPACE = 'employee-uploaded-documents';
 
 // 6-digit numeric — short enough to read out over a phone call or retype
 // from a WhatsApp message, delivered separately from (and required in
@@ -131,22 +134,23 @@ async function attachDocuments(rawToken, code, files) {
   for (const file of validFiles) {
     // A re-upload of a doc type that's already on file is a replace, not an
     // addition — destroy the prior version(s) so this never leaves an
-    // orphaned Cloudinary asset or a duplicate row in the employee's
-    // document list (see uploadedDocument.repository.js#findByEmployeeAndDocType).
+    // orphaned file on disk or a duplicate row in the employee's document
+    // list (see uploadedDocument.repository.js#findByEmployeeAndDocType).
     // eslint-disable-next-line no-await-in-loop
     const previous = await uploadedDocumentRepository.findByEmployeeAndDocType(uploadRequest.employee, file.fieldname);
     for (const prior of previous) {
       // eslint-disable-next-line no-await-in-loop
-      if (prior.publicId) await cloudinaryUploadService.destroy(prior.publicId, { resourceType: prior.resourceType });
+      await localFileStorage.deleteFile(prior.filePath, NAMESPACE);
       // eslint-disable-next-line no-await-in-loop
       await uploadedDocumentRepository.deleteById(prior._id);
     }
 
-    const upload = await cloudinaryUploadService.uploadBuffer(file.buffer, {
-      folder: `ems/employees/${uploadRequest.employee}/uploaded`,
-      publicId: `${file.fieldname}-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
-      resourceType: 'auto',
-    });
+    const relativePath = path.join(
+      String(uploadRequest.employee),
+      `${file.fieldname}-${Date.now()}-${Math.round(Math.random() * 1e6)}-${file.originalname}`
+    );
+    // eslint-disable-next-line no-await-in-loop
+    const filePath = await localFileStorage.saveBuffer(file.buffer, relativePath, NAMESPACE);
     const doc = await uploadedDocumentRepository.create({
       employee: uploadRequest.employee,
       uploadRequest: uploadRequest._id,
@@ -154,9 +158,7 @@ async function attachDocuments(rawToken, code, files) {
       originalFilename: file.originalname,
       mimeType: file.mimetype,
       sizeBytes: file.size,
-      url: upload.secure_url,
-      publicId: upload.public_id,
-      resourceType: upload.resource_type,
+      filePath,
     });
     saved.push(doc);
   }
@@ -203,17 +205,17 @@ async function adminUpload(employeeId, { docType, otherLabel }, file) {
     const previous = await uploadedDocumentRepository.findByEmployeeAndDocType(employeeId, docType);
     for (const prior of previous) {
       // eslint-disable-next-line no-await-in-loop
-      if (prior.publicId) await cloudinaryUploadService.destroy(prior.publicId, { resourceType: prior.resourceType });
+      await localFileStorage.deleteFile(prior.filePath, NAMESPACE);
       // eslint-disable-next-line no-await-in-loop
       await uploadedDocumentRepository.deleteById(prior._id);
     }
   }
 
-  const upload = await cloudinaryUploadService.uploadBuffer(file.buffer, {
-    folder: `ems/employees/${employeeId}/uploaded`,
-    publicId: `${docType}-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
-    resourceType: 'auto',
-  });
+  const relativePath = path.join(
+    String(employeeId),
+    `${docType}-${Date.now()}-${Math.round(Math.random() * 1e6)}-${file.originalname}`
+  );
+  const filePath = await localFileStorage.saveBuffer(file.buffer, relativePath, NAMESPACE);
   const doc = await uploadedDocumentRepository.create({
     employee: employeeId,
     docType,
@@ -221,9 +223,7 @@ async function adminUpload(employeeId, { docType, otherLabel }, file) {
     originalFilename: file.originalname,
     mimeType: file.mimetype,
     sizeBytes: file.size,
-    url: upload.secure_url,
-    publicId: upload.public_id,
-    resourceType: upload.resource_type,
+    filePath,
   });
 
   await activityService.log(employeeId, 'DOCUMENT_UPLOADED_BY_ADMIN', { docType, otherLabel });
@@ -231,10 +231,16 @@ async function adminUpload(employeeId, { docType, otherLabel }, file) {
   return doc;
 }
 
+async function getUploadedFilePath(id) {
+  const doc = await uploadedDocumentRepository.findById(id);
+  if (!doc) throw ApiError.notFound('Document not found');
+  return { filePath: doc.filePath, namespace: NAMESPACE, filename: doc.originalFilename };
+}
+
 async function deleteUploadedDocument(id) {
   const doc = await uploadedDocumentRepository.findById(id);
   if (!doc) throw ApiError.notFound('Uploaded document not found');
-  if (doc.publicId) await cloudinaryUploadService.destroy(doc.publicId, { resourceType: doc.resourceType });
+  await localFileStorage.deleteFile(doc.filePath, NAMESPACE);
   await uploadedDocumentRepository.deleteById(id);
 }
 
@@ -246,6 +252,7 @@ module.exports = {
   getPublicStatus,
   attachDocuments,
   listUploadedForEmployee,
+  getUploadedFilePath,
   deleteUploadedDocument,
   adminUpload,
 };
