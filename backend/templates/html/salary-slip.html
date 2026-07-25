@@ -76,6 +76,7 @@
     <div>
       <table class="pay">
         <tr><th colspan="3">Earnings</th></tr>
+        <tr><th></th><th>Master</th><th>Earnings</th></tr>
         <tr><td>Basic</td><td class="num">{basicMaster}</td><td class="num">{basicEarnings}</td></tr>
         <tr><td>Overtime</td><td class="num">{otMaster}</td><td class="num">{otEarnings}</td></tr>
         <tr><td>Compensation Off</td><td class="num">{compensationOff}</td><td class="num">{compensationOff}</td></tr>
@@ -107,11 +108,9 @@
 
   <div class="netpay">
     <div class="netpay-row"><span>Gross Earnings</span><span>{grossEarnings}</span></div>
-    <div class="netpay-row"><span>Total Deductions</span><span>{totalDeductions}</span></div>
     <div class="netpay-row"><span>Total Reimbursements</span><span>{totalReimbursements}</span></div>
     <div class="netpay-row final"><span>Total Net Payable</span><span>Rs. {netPayable}</span></div>
     <div class="netpay-words">Total Net Payable (Amount in Words): {netPayableWords}</div>
-    <div class="netpay-words">**Total Net Payable = Gross Earnings - Total Deductions + Total Reimbursements</div>
   </div>
 
   <div class="attendance-page">

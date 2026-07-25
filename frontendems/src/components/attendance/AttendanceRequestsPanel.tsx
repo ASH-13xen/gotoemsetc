@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 import { useAttendanceRequests, useResolveAttendanceRequest } from '@/hooks/useAttendanceRequests'
 import { STATUS_CONFIG } from './statusConfig'
 import type { AttendanceStatus } from '@/api/attendance.api'
@@ -65,7 +66,16 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
         <div className="flex flex-wrap items-end gap-2">
           <div className="grid gap-1">
             <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Status</label>
-            <Select value={status} onValueChange={setStatus}>
+            <Select
+              value={status}
+              onValueChange={(value) => {
+                setStatus(value)
+                // The L status already means "arrived late" — leaving the
+                // checkbox on too would double-count this day in the
+                // Late→Short-Leave payroll pool (see attendancePenalties.js).
+                if (value === 'L') setIsLate(false)
+              }}
+            >
               <SelectTrigger className="w-40 rounded-xl">
                 <SelectValue />
               </SelectTrigger>
@@ -90,15 +100,26 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
               className="w-24 rounded-xl"
             />
           </div>
-          <label className="flex items-center gap-2 pb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={isLate}
-              onChange={(e) => setIsLate(e.target.checked)}
-              className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
-            />
-            Late
-          </label>
+          <div className="grid gap-1 pb-2">
+            <label
+              className={cn(
+                'flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground select-none',
+                status === 'L' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={isLate}
+                disabled={status === 'L'}
+                onChange={(e) => setIsLate(e.target.checked)}
+                className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary disabled:cursor-not-allowed"
+              />
+              Late
+            </label>
+            {status === 'L' && (
+              <p className="text-[10px] font-semibold text-muted-foreground">Already covered by the L status</p>
+            )}
+          </div>
           <Button size="sm" className="rounded-xl" onClick={onResolve} disabled={resolve.isPending}>
             <CheckCircle2 className="size-4" />
             Resolve

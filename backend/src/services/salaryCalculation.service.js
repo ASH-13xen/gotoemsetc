@@ -87,15 +87,18 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
 
   const workingDaysInPeriod = totalDaysInPeriod - offDaysInPeriod;
 
-  const daysWorkedTotal = counts.P + counts.O + counts.W + counts.L + counts.SL + counts.H * 0.5;
+  // At most 2 Lates and 2 Short-Leave units count in full; the overflow
+  // demotes down to Half-Day units (see attendancePenalties.js).
+  const { lateToSLUnits, effectiveSLUnits, cappedLateUnits, cappedSLUnits, halfDayPenaltyUnits } =
+    computeEffectiveUnits({ counts, lateFlagCount, earlyDepartureCount });
 
-  // Every 2 lates = 1 short leave; every 2 short leave units (incl.
-  // converted lates and early-departure days) = 1 half day.
-  const { lateToSLUnits, effectiveSLUnits, halfDayPenaltyUnits } = computeEffectiveUnits({
-    counts,
-    lateFlagCount,
-    earlyDepartureCount,
-  });
+  // Actual Half-Day-status days plus every day demoted down to Half-Day by
+  // the cap above — one unified pool for both Days Worked credit and the
+  // Half Day Deductions line.
+  const totalHalfDayUnits = counts.H + halfDayPenaltyUnits;
+
+  const daysWorkedTotal =
+    counts.P + counts.O + counts.W + cappedLateUnits + cappedSLUnits + totalHalfDayUnits * 0.5;
 
   return {
     totalDaysInPeriod,
@@ -107,7 +110,10 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
     earlyDepartureCount,
     lateToSLUnits,
     effectiveSLUnits,
+    cappedLateUnits,
+    cappedSLUnits,
     halfDayPenaltyUnits,
+    totalHalfDayUnits,
     unpaidAbsentDays,
     totalOvertimeHours,
     records,
@@ -133,7 +139,6 @@ function computeSalary(employee, summary, manualInputs) {
   // See minDaysAcrossTouchedMonths — the smallest calendar month touched by
   // the period, not the period's own length.
   const dailyRate = summary.dailyRateDivisor > 0 ? basicMaster / summary.dailyRateDivisor : 0;
-  const basicEarnings = dailyRate * summary.daysWorkedTotal;
 
   // Overtime's hourly base stays on the same footing it always had —
   // basicMaster spread over this period's actual working days, not the
@@ -141,14 +146,21 @@ function computeSalary(employee, summary, manualInputs) {
   const otMaster = summary.workingDaysInPeriod > 0 ? basicMaster / summary.workingDaysInPeriod / 8 : 0;
   const otEarnings = otMaster * summary.totalOvertimeHours;
 
-  const halfDayDeductions = summary.halfDayPenaltyUnits * (dailyRate / 2);
+  const halfDayDeductions = summary.totalHalfDayUnits * (dailyRate / 2);
   const unpaidOffDeductions = summary.unpaidAbsentDays * dailyRate;
-
-  const grossEarnings = basicEarnings + otEarnings + compensationOff + incentives + travelAllowance + otherEarning1;
   const totalDeductions =
     incomeTaxDeduction + professionTax + pf + halfDayDeductions + unpaidOffDeductions + otherDeduction3;
+
+  // Basic's Earnings column is now Master minus the period's Total
+  // Deductions (rather than a days-worked proration), and Gross Earnings is
+  // that figure plus every other Earnings row's Master-column amount.
+  const basicEarnings = basicMaster - totalDeductions;
+  const grossEarnings = basicEarnings + otMaster + compensationOff + incentives + travelAllowance + otherEarning1;
+
   const totalReimbursements = reimbursement1 + reimbursement2;
-  const netPayable = grossEarnings - totalDeductions + totalReimbursements;
+  // Deductions are already netted into Basic Earnings above, so the final
+  // Net Payable is just Gross + Reimbursements.
+  const netPayable = grossEarnings + totalReimbursements;
 
   return {
     basicMaster,

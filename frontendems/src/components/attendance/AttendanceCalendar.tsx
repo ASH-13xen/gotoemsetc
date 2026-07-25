@@ -316,7 +316,17 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                         )}
                         {canMark && (
                           <>
-                            <Select value={pendingStatus} onValueChange={setPendingStatus}>
+                            <Select
+                              value={pendingStatus}
+                              onValueChange={(value) => {
+                                setPendingStatus(value)
+                                // The L status already means "arrived late" —
+                                // leaving the checkbox on too would double-count
+                                // this one day in the Late→Short-Leave payroll
+                                // pool (see attendancePenalties.js).
+                                if (value === 'L') setPendingIsLate(false)
+                              }}
+                            >
                               <SelectTrigger className="w-full">
                                 <SelectValue />
                               </SelectTrigger>
@@ -339,36 +349,69 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                                 min="0"
                                 step="0.5"
                                 value={pendingOvertimeHours}
-                                onChange={(e) => setPendingOvertimeHours(e.target.value)}
-                                className="rounded-xl"
+                                disabled={pendingEarlyDeparture}
+                                onChange={(e) => {
+                                  setPendingOvertimeHours(e.target.value)
+                                  // Overtime and an early departure are opposite
+                                  // ends of the same departure scan — can't both
+                                  // be true for the same day.
+                                  if (Number(e.target.value) > 0) setPendingEarlyDeparture(false)
+                                }}
+                                className="rounded-xl disabled:opacity-50"
                               />
+                              {pendingEarlyDeparture && (
+                                <p className="text-[10px] font-semibold text-muted-foreground">
+                                  Can't combine with Early departure
+                                </p>
+                              )}
                             </div>
                             <label
                               htmlFor={`late-${dateKey}`}
-                              className="flex items-center gap-2 cursor-pointer select-none text-xs font-black uppercase tracking-widest text-neutral-400"
+                              className={cn(
+                                'flex items-center gap-2 select-none text-xs font-black uppercase tracking-widest text-neutral-400',
+                                pendingStatus === 'L' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                              )}
                             >
                               <input
                                 id={`late-${dateKey}`}
                                 type="checkbox"
                                 checked={pendingIsLate}
+                                disabled={pendingStatus === 'L'}
                                 onChange={(e) => setPendingIsLate(e.target.checked)}
-                                className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
+                                className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary disabled:cursor-not-allowed"
                               />
                               Late arrival
                             </label>
+                            {pendingStatus === 'L' && (
+                              <p className="-mt-2 text-[10px] font-semibold text-muted-foreground">
+                                Already covered by the L status
+                              </p>
+                            )}
                             <label
                               htmlFor={`early-${dateKey}`}
-                              className="flex items-center gap-2 cursor-pointer select-none text-xs font-black uppercase tracking-widest text-neutral-400"
+                              className={cn(
+                                'flex items-center gap-2 select-none text-xs font-black uppercase tracking-widest text-neutral-400',
+                                Number(pendingOvertimeHours) > 0 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                              )}
                             >
                               <input
                                 id={`early-${dateKey}`}
                                 type="checkbox"
                                 checked={pendingEarlyDeparture}
-                                onChange={(e) => setPendingEarlyDeparture(e.target.checked)}
-                                className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
+                                disabled={Number(pendingOvertimeHours) > 0}
+                                onChange={(e) => {
+                                  setPendingEarlyDeparture(e.target.checked)
+                                  if (e.target.checked) setPendingOvertimeHours('')
+                                }}
+                                className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary disabled:cursor-not-allowed"
                               />
                               Early departure
                             </label>
+                            {Number(pendingOvertimeHours) > 0 && (
+                              <p className="-mt-2 text-[10px] font-semibold text-muted-foreground">
+                                Can't combine with Overtime Hours
+                              </p>
+                            )}
                             <div className="grid gap-1.5">
                               <Label htmlFor={`notes-${dateKey}`} className="text-xs font-black uppercase tracking-widest text-neutral-400">
                                 Reason{reasonRequired ? ' (required)' : ' (optional)'}
