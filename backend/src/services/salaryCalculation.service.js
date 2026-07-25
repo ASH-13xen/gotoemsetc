@@ -153,16 +153,14 @@ function computeSalary(employee, summary, manualInputs) {
   const totalDeductions =
     incomeTaxDeduction + professionTax + pf + halfDayDeductions + unpaidOffDeductions + otherDeduction3;
 
-  // Basic's Earnings column is now Master minus the period's Total
-  // Deductions (rather than a days-worked proration), and Gross Earnings is
-  // that figure plus every other Earnings row's Master-column amount.
-  const basicEarnings = basicMaster - totalDeductions;
-  const grossEarnings = basicEarnings + otMaster + compensationOff + incentives + travelAllowance + otherEarning1;
+  // Every Earnings row's Master and Earnings columns are identical,
+  // including Basic — no deduction is baked into any individual row.
+  // Gross Earnings is simply the sum of the Master column.
+  const basicEarnings = basicMaster;
+  const grossEarnings = basicMaster + otMaster + compensationOff + incentives + travelAllowance + otherEarning1;
 
   const totalReimbursements = reimbursement1 + reimbursement2;
-  // Deductions are already netted into Basic Earnings above, so the final
-  // Net Payable is just Gross + Reimbursements.
-  const netPayable = grossEarnings + totalReimbursements;
+  const netPayable = grossEarnings - totalDeductions + totalReimbursements;
 
   return {
     basicMaster,
