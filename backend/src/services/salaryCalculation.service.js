@@ -140,11 +140,13 @@ function computeSalary(employee, summary, manualInputs) {
   // the period, not the period's own length.
   const dailyRate = summary.dailyRateDivisor > 0 ? basicMaster / summary.dailyRateDivisor : 0;
 
-  // Overtime's hourly base stays on the same footing it always had —
-  // basicMaster spread over this period's actual working days, not the
-  // dailyRate above.
-  const otMaster = summary.workingDaysInPeriod > 0 ? basicMaster / summary.workingDaysInPeriod / 8 : 0;
-  const otEarnings = otMaster * summary.totalOvertimeHours;
+  // Hourly rate = the daily rate (basicMaster / days in the month) / 9.
+  // Overtime is purely hours actually worked × that rate — no baseline
+  // amount shows up when totalOvertimeHours is 0. Like every Earnings row
+  // except Basic, Master and Earnings carry the same value here.
+  const otHourlyRate = dailyRate / 9;
+  const otEarnings = otHourlyRate * summary.totalOvertimeHours;
+  const otMaster = otEarnings;
 
   const halfDayDeductions = summary.totalHalfDayUnits * (dailyRate / 2);
   const unpaidOffDeductions = summary.unpaidAbsentDays * dailyRate;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Bell, FileUp, Search, Users } from 'lucide-react'
+import { FileUp, Search, Users } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -26,7 +26,6 @@ import { FlagStrip } from '@/components/employees/EmployeeFlags'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { useEmployees } from '@/hooks/useEmployees'
 import { useDashboardStats } from '@/hooks/useDashboardStats'
-import { useUnreadNotificationCount } from '@/hooks/useNotifications'
 import { useAuth } from '@/hooks/useAuth'
 import { hasPermission, isAdmin } from '@/lib/permissions'
 import type { EmployeeStatus } from '@/api/employees.api'
@@ -53,7 +52,6 @@ export default function DashboardPage() {
   })
   const employees = data?.items ?? []
   const { data: stats } = useDashboardStats()
-  const { data: unreadData } = useUnreadNotificationCount()
 
   return (
     <div className="space-y-8 py-4">
@@ -62,19 +60,6 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-transparent">
           {/* Logo/Branding Tile */}
           <div className="relative md:col-span-2 bg-card/90 backdrop-blur-md p-8 rounded-2xl flex flex-col justify-between min-h-[180px] shadow-diffuse hover:-translate-y-0.5 transition-all duration-300">
-            <button
-              type="button"
-              onClick={() => navigate('/notifications')}
-              className="absolute top-6 right-6 flex size-10 items-center justify-center rounded-full bg-secondary/60 text-foreground hover:bg-secondary transition-colors"
-              title="Notifications"
-            >
-              <Bell className="size-4.5" />
-              {Boolean(unreadData?.count) && (
-                <span className="absolute -top-1 -right-1 flex size-4.5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-                  {unreadData!.count > 9 ? '9+' : unreadData!.count}
-                </span>
-              )}
-            </button>
             <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">EMPLOYEE MANAGEMENT SYSTEM</span>
             <h1 className="text-5xl font-extrabold tracking-tight text-foreground select-none">
               EMS
