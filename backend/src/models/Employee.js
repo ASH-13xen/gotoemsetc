@@ -75,7 +75,7 @@ const employeeSchema = new Schema(
     dateOfHiring: Date,
     employmentType: {
       type: String,
-      enum: ['full-time', 'part-time', 'contract', 'intern'],
+      enum: ['full-time', 'part-time', 'contract', 'intern', 'hybrid'],
       default: 'full-time',
     },
     reportingManager: String,

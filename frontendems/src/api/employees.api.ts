@@ -1,7 +1,7 @@
 import { apiClient } from './client'
 import type { Availability, ExperienceLevel, Resume, WorkStyle } from './applicants.api'
 
-export type EmploymentType = 'full-time' | 'part-time' | 'contract' | 'intern'
+export type EmploymentType = 'full-time' | 'part-time' | 'contract' | 'intern' | 'hybrid'
 export type EmployeeStatus = 'draft' | 'active' | 'offboarded'
 
 export const BLOOD_GROUPS = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as const

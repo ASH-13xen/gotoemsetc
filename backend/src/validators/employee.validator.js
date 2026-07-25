@@ -12,7 +12,7 @@ const addressSchema = z
   })
   .partial();
 
-const employmentTypeEnum = z.enum(['full-time', 'part-time', 'contract', 'intern']);
+const employmentTypeEnum = z.enum(['full-time', 'part-time', 'contract', 'intern', 'hybrid']);
 const statusEnum = z.enum(['draft', 'active', 'offboarded']);
 const timeStringSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Must be HH:mm (24h)');
 

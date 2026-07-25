@@ -506,6 +506,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                             <SelectItem value="part-time">PART-TIME</SelectItem>
                             <SelectItem value="contract">CONTRACT</SelectItem>
                             <SelectItem value="intern">INTERN</SelectItem>
+                            <SelectItem value="hybrid">HYBRID</SelectItem>
                           </SelectContent>
                         </Select>
                       )}
@@ -873,14 +874,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
           {canViewSalary && (
             <SalarySlipsList employeeId={employeeId} employeeName={`${employee.firstName} ${employee.lastName ?? ''}`} />
           )}
-          {canGenerateDocs && (
-            <GeneratedDocumentsList
-              employeeId={employeeId}
-              employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
-              employeeEmail={employee.personalEmail}
-              employeePhone={employee.phone}
-            />
-          )}
+          {canGenerateDocs && <GeneratedDocumentsList employeeId={employeeId} />}
           {canRequestDocs && (
             <>
               <UploadedDocumentsList employeeId={employeeId} />

@@ -43,7 +43,7 @@ const workLocation = {
 const employmentType = {
   key: 'employmentType', label: 'Employment type', type: 'select', required: true,
   source: 'employee', mapsTo: 'employmentType', group: 'Employment', order: 15,
-  options: ['full-time', 'part-time', 'contract', 'intern'],
+  options: ['full-time', 'part-time', 'contract', 'intern', 'hybrid'],
 };
 const jobDescription = {
   key: 'jobDescription', label: 'Job description', type: 'textarea', required: true,
@@ -70,6 +70,11 @@ const tenureDuration = {
   key: 'tenureDuration', label: 'Tenure (e.g. "2 years 3 months")', type: 'text', required: true,
   source: 'manual', group: 'Relieving Details', order: 50,
 };
+const hrExecutiveName = {
+  key: 'hrExecutiveName', label: 'HR Executive name (signatory)', type: 'text', required: true,
+  source: 'manual', group: 'Signatory', order: 90,
+  helpText: 'Printed under the company signature block, above "HR Executive".',
+};
 
 const templates = [
   {
@@ -77,11 +82,14 @@ const templates = [
     title: 'Letter of Appointment',
     description: 'Formal appointment letter with compensation structure, issued at onboarding.',
     category: 'onboarding',
-    templateType: 'html',
-    htmlFilePath: 'appointment-letter.html',
+    // .docx (via docxtemplater), not HTML->PDF — lets the signed copy be
+    // lightly edited afterward, and matches the styled Calibri/blue-heading
+    // template in templates/files/appointment-letter.docx.
+    templateType: 'docx',
+    docxFilePath: 'appointment-letter.docx',
     fields: [
       employeeName, employeeAddress, designation, workLocation, jobDescription,
-      dateOfJoining, annualCTC, annualCTCInWords, todayDate,
+      dateOfJoining, annualCTC, annualCTCInWords, todayDate, hrExecutiveName,
     ],
     // Explicit empty array, not just an absent key — findOneAndUpdate's
     // implicit $set on a plain object only sets keys that are present, so
@@ -210,6 +218,7 @@ const templates = [
         key: 'farewellContactDetails', label: 'Farewell contact details (name / phone / email)', type: 'text', required: true,
         source: 'manual', group: 'Offboarding Details', order: 45,
       },
+      hrExecutiveName,
     ],
   },
   {
@@ -229,6 +238,7 @@ const templates = [
         key: 'assetsReturned', label: 'Assets returned (e.g. laptop, access card)', type: 'text', required: false,
         source: 'manual', group: 'Relieving Details', order: 52,
       },
+      hrExecutiveName,
     ],
   },
   {
