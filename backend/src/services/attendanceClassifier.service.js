@@ -88,11 +88,11 @@ function nonNightPunches(punches) {
   return punches.filter((p) => istMinutesOfDay(p.timestamp) > NIGHT_DEAD_ZONE_END);
 }
 
-// Sundays only exclude the night dead zone (bogus pre-7am scans) — the
-// midday dead zone exists specifically to ignore lunch-break ambiguity on a
-// structured workday, which doesn't apply to a Sunday's raw duration
-// calculation (a 3pm scan is a perfectly valid endpoint there).
-function validPunchesForSunday(punches) {
+// Sundays and Holidays only exclude the night dead zone (bogus pre-7am
+// scans) — the midday dead zone exists specifically to ignore lunch-break
+// ambiguity on a structured workday, which doesn't apply to either day's raw
+// duration calculation (a 3pm scan is a perfectly valid endpoint there).
+function validPunchesForOffDay(punches) {
   return punches.filter((p) => istMinutesOfDay(p.timestamp) > NIGHT_DEAD_ZONE_END);
 }
 
@@ -151,17 +151,18 @@ function classifyPunches(punches, employee) {
   return { outcome: 'classified', status, earlyDeparture, overtimeHours };
 }
 
-// Sundays don't use the weekday arrival/departure windows at all — any time
-// actually spent (first valid scan to last) becomes overtime directly,
-// rounded to the nearest 0.5h, with no baseline subtraction and no 1h
-// minimum (unlike weekday overtime). Only the night dead zone is filtered
-// (see validPunchesForSunday) — a 3pm scan is a normal, valid Sunday
-// endpoint, unlike on a weekday. Returns null when there aren't at least two
-// valid scans to measure a span from — same "not enough info yet" treatment
-// as the weekday single-scan/no-scan cases, just without a notification
-// (see settleDay — a quiet Sunday is expected, not an anomaly).
-function computeSundayOvertime(punches) {
-  const valid = validPunchesForSunday(punches);
+// Sundays and Holidays don't use the weekday arrival/departure windows at
+// all — any time actually spent (first valid scan to last) becomes overtime
+// directly, rounded to the nearest 0.5h, with no baseline subtraction and no
+// 1h minimum (unlike weekday overtime). Only the night dead zone is filtered
+// (see validPunchesForOffDay) — a 3pm scan is a normal, valid endpoint on
+// either day, unlike on a weekday. Returns null when there aren't at least
+// two valid scans to measure a span from — same "not enough info yet"
+// treatment as the weekday single-scan/no-scan cases, just without a
+// notification (see settleDay — a quiet Sunday/Holiday is expected, not an
+// anomaly).
+function computeOffDayOvertime(punches) {
+  const valid = validPunchesForOffDay(punches);
   if (valid.length < 2) return null;
   const first = istMinutesOfDay(valid[0].timestamp);
   const last = istMinutesOfDay(valid[valid.length - 1].timestamp);
@@ -177,12 +178,69 @@ async function notifyAdmins(type, title, message, employeeId) {
   );
 }
 
-// Company holidays are always fully skipped (unchanged). Sundays are NOT an
-// "off day" here anymore — see computeSundayOvertime — this now checks
-// holidays only.
+// Sundays are NOT an "off day" here anymore — see computeOffDayOvertime —
+// this now checks admin-marked holidays only.
 async function isHolidayLabel(dateLabel) {
   const holidays = await holidayRepository.list({ from: dateLabel, to: dateLabel });
   return holidays.some((h) => dateKey(h.date) === dateKey(dateLabel));
+}
+
+// Writes (or refreshes) one employee's Holiday record for `dateLabel` —
+// status is always Holiday, and any time actually scanned that day becomes
+// overtime via the same whole-span computation as a Sunday (see
+// computeOffDayOvertime). Written as settled immediately: unlike a normal
+// workday there's no arrival/departure window left to wait on, so there's
+// nothing provisional about it. Never touches a day an admin/HR already
+// decided manually (existing.isAutoMarked === false) — same guard every
+// other auto-classification path uses. Called both right when a holiday is
+// created (applyHolidayToAllEmployees, below) and from the regular
+// punch/settlement paths, so a scan on an already-marked holiday still gets
+// its overtime recomputed.
+async function applyHolidayForEmployee(employeeId, dateLabel) {
+  const existing = await attendanceRepository.findForDate(employeeId, dateLabel);
+  if (existing && !existing.isAutoMarked) return existing; // an admin already decided this day — never touch it
+
+  const { start, end } = istDayBoundsUTC(dateLabel);
+  const punches = await devicePunchRepository.listForEmployeeOnDay(employeeId, start, end);
+  const offDayResult = computeOffDayOvertime(punches);
+
+  return attendanceRepository.upsertForDate(
+    employeeId,
+    dateLabel,
+    { status: ATTENDANCE_STATUS.HOLIDAY, earlyDeparture: false, overtimeHours: offDayResult?.overtimeHours ?? 0 },
+    false,
+    true,
+    undefined,
+    true
+  );
+}
+
+// Called once, immediately, from holiday.service.js#createHoliday — this is
+// what makes "mark a day as a holiday" instantly apply to every active
+// employee rather than waiting for each of them to scan in/out.
+async function applyHolidayToAllEmployees(dateLabel) {
+  const employees = await employeeRepository.listActive();
+  for (const employee of employees) {
+    // eslint-disable-next-line no-await-in-loop
+    await applyHolidayForEmployee(employee._id, dateLabel);
+  }
+}
+
+// Called from holiday.service.js#removeHoliday — undoes applyHolidayForEmployee
+// by deleting the auto-written Holiday record outright (never a manually-set
+// one) so the day falls back into the normal unclassified pool and gets
+// picked up fresh by the next scan or nightly backstop, exactly like any
+// other previously-unmarked day.
+async function revertHolidayForAllEmployees(dateLabel) {
+  const employees = await employeeRepository.listActive();
+  for (const employee of employees) {
+    // eslint-disable-next-line no-await-in-loop
+    const existing = await attendanceRepository.findForDate(employee._id, dateLabel);
+    if (existing && existing.isAutoMarked && existing.status === ATTENDANCE_STATUS.HOLIDAY) {
+      // eslint-disable-next-line no-await-in-loop
+      await attendanceRepository.deleteForDate(employee._id, dateLabel);
+    }
+  }
 }
 
 // Called fire-and-forget right after a punch is recorded (see
@@ -202,7 +260,10 @@ async function handlePunchEvent(employeeId, timestamp) {
     await settleDay(employeeId, record.date);
   }
 
-  if (await isHolidayLabel(dateLabel)) return; // company holidays are never auto-classified
+  if (await isHolidayLabel(dateLabel)) {
+    await applyHolidayForEmployee(employeeId, dateLabel);
+    return;
+  }
 
   const existing = await attendanceRepository.findForDate(employeeId, dateLabel);
   if (existing && !existing.isAutoMarked) return; // an admin already decided this day — never touch it
@@ -211,7 +272,7 @@ async function handlePunchEvent(employeeId, timestamp) {
   const punches = await devicePunchRepository.listForEmployeeOnDay(employeeId, start, end);
 
   if (isSunday(dateLabel)) {
-    const sundayResult = computeSundayOvertime(punches);
+    const sundayResult = computeOffDayOvertime(punches);
     if (!sundayResult) return; // not enough scans yet — leave it for settlement to decide
     await attendanceRepository.upsertForDate(
       employeeId,
@@ -270,13 +331,16 @@ async function settleDay(employeeId, dateLabel) {
   if (existing && !existing.isAutoMarked) return;
   if (existing && existing.isSettled) return;
 
-  if (await isHolidayLabel(dateLabel)) return;
+  if (await isHolidayLabel(dateLabel)) {
+    await applyHolidayForEmployee(employeeId, dateLabel);
+    return;
+  }
 
   const { start, end } = istDayBoundsUTC(dateLabel);
   const punches = await devicePunchRepository.listForEmployeeOnDay(employeeId, start, end);
 
   if (isSunday(dateLabel)) {
-    const sundayResult = computeSundayOvertime(punches);
+    const sundayResult = computeOffDayOvertime(punches);
     if (sundayResult) {
       await attendanceRepository.upsertForDate(
         employeeId,
@@ -363,13 +427,11 @@ async function settleDay(employeeId, dateLabel) {
 // employee's last working day, with no "tomorrow" scan to trigger
 // settlement naturally). Delegates every employee straight to settleDay,
 // which already knows how to turn a zero-scan weekday into a settled Absent
-// record + notification, and how to stay silent on a quiet Sunday.
+// record + notification, stay silent on a quiet Sunday, and auto-mark a
+// company holiday for everyone (normally already done the instant the
+// holiday was created — this just catches anyone that missed, e.g. a new
+// hire added after the holiday was marked).
 async function runNightlyBackstop(dateLabel = todayUTCMidnight()) {
-  if (await isHolidayLabel(dateLabel)) {
-    logger.info({ date: dateKey(dateLabel) }, 'Attendance backstop: holiday, skipping entirely');
-    return { settled: 0 };
-  }
-
   const employees = await employeeRepository.listActive();
   let settled = 0;
 
@@ -393,4 +455,12 @@ async function runNightlyBackstop(dateLabel = todayUTCMidnight()) {
   return { settled };
 }
 
-module.exports = { handlePunchEvent, settleDay, runNightlyBackstop, classifyPunches, computeSundayOvertime };
+module.exports = {
+  handlePunchEvent,
+  settleDay,
+  runNightlyBackstop,
+  classifyPunches,
+  computeOffDayOvertime,
+  applyHolidayToAllEmployees,
+  revertHolidayForAllEmployees,
+};

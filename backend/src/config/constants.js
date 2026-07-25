@@ -22,8 +22,8 @@ module.exports = {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   ],
   // Short codes match how they're printed on the salary slip and the
-  // attendance calendar — P/O/H/L/SL/W are the only marks; a day off
-  // (Sunday or an admin-marked Holiday) needs no status at all.
+  // attendance calendar — a Sunday still needs no status at all, but an
+  // admin-marked Holiday now does (see HOLIDAY below).
   ATTENDANCE_STATUS: {
     PRESENT: 'P',
     PAID_LEAVE: 'O',
@@ -34,6 +34,12 @@ module.exports = {
     // Auto-assigned only — see attendanceClassifier.service.js: zero valid
     // scans all day, or the first scan of the day is at/after 2pm.
     ABSENT: 'A',
+    // Auto-assigned only, to every active employee, the moment an admin
+    // marks a day as a company Holiday — see
+    // attendanceClassifier.service.js#applyHolidayForEmployee. Any time
+    // actually scanned that day becomes overtime (same whole-span
+    // computation as a Sunday), not a normal working day.
+    HOLIDAY: 'HL',
   },
   APPLICANT_STATUS: {
     PENDING: 'pending',

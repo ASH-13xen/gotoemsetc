@@ -5,7 +5,6 @@ import {
   Users,
   DollarSign,
   CalendarClock,
-  Cake,
   ShieldAlert,
   LogOut,
   Menu,
@@ -30,7 +29,6 @@ export function ShellLayout({ children, section }: { children: ReactNode; sectio
     ...(isAdmin ? [{ to: '/followups', label: 'Task Management', icon: CalendarClock }] : []),
     ...(isAdmin ? [{ to: '/inventory', label: 'Inventory Management', icon: Package }] : []),
     ...(isAdmin ? [{ to: '/events', label: 'Event Management', icon: PartyPopper }] : []),
-    { to: '/birthdays', label: 'Birthdays', icon: Cake },
     ...(isAdmin ? [{ to: '/audit-log', label: 'Audit Log', icon: ShieldAlert }] : []),
   ]
 

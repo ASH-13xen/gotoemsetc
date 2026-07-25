@@ -49,4 +49,10 @@ export const STATUS_CONFIG: Record<
     solid: 'bg-neutral-500/15 text-neutral-500',
     dot: 'bg-neutral-500',
   },
+  HL: {
+    label: 'HL — Holiday',
+    cell: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-700 hover:bg-cyan-500/20',
+    solid: 'bg-cyan-500/10 text-cyan-700',
+    dot: 'bg-cyan-500',
+  },
 }

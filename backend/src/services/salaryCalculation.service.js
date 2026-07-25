@@ -50,7 +50,7 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
   const holidayDateKeys = new Set(holidays.map((h) => dateKey(h.date)));
   const recordByDate = new Map(records.map((r) => [dateKey(r.date), r]));
 
-  const counts = { P: 0, O: 0, H: 0, L: 0, SL: 0, W: 0, A: 0 };
+  const counts = { P: 0, O: 0, H: 0, L: 0, SL: 0, W: 0, A: 0, HL: 0 };
   let totalOvertimeHours = 0;
   // isLate is independent of status (see attendanceClassifier.service.js) —
   // a day can be e.g. Short Leave AND late at once, so it's tallied

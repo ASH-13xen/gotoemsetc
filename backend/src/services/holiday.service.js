@@ -1,5 +1,6 @@
 const ApiError = require('../utils/ApiError');
 const holidayRepository = require('../repositories/holiday.repository');
+const attendanceClassifierService = require('./attendanceClassifier.service');
 
 async function listHolidays({ month, year }) {
   const now = new Date();
@@ -16,17 +17,25 @@ async function createHoliday({ date, label }, createdBy) {
   const normalized = new Date(date);
   if (Number.isNaN(normalized.getTime())) throw ApiError.badRequest('Invalid date');
 
+  let holiday;
   try {
-    return await holidayRepository.create({ date: normalized, label, createdBy });
+    holiday = await holidayRepository.create({ date: normalized, label, createdBy });
   } catch (err) {
     if (err.code === 11000) throw ApiError.conflict('This date is already marked as a holiday');
     throw err;
   }
+
+  // Instantly applies to every active employee — see
+  // attendanceClassifier.service.js#applyHolidayToAllEmployees — rather than
+  // waiting for each of them to scan in/out before it shows up.
+  await attendanceClassifierService.applyHolidayToAllEmployees(normalized);
+  return holiday;
 }
 
 async function removeHoliday(id) {
   const holiday = await holidayRepository.removeById(id);
   if (!holiday) throw ApiError.notFound('Holiday not found');
+  await attendanceClassifierService.revertHolidayForAllEmployees(holiday.date);
   return holiday;
 }
 

@@ -8,6 +8,7 @@ const localFileStorage = require('../services/localFileStorage.service');
 const salaryCalculation = require('./salaryCalculation.service');
 const { fillTemplate, renderPdfFromHtml } = require('./htmlRender.service');
 const { dateKey } = require('../utils/attendanceDays');
+const { ATTENDANCE_STATUS } = require('../config/constants');
 
 const NAMESPACE = 'salary-slips';
 const TEMPLATE_FILE = 'salary-slip.html';
@@ -55,7 +56,13 @@ function buildAttendanceDays(startDate, summary) {
 
     let bg = '#ffffff';
     let statusText = '';
-    if (record?.status) {
+    if (record?.status === ATTENDANCE_STATUS.HOLIDAY) {
+      // Auto-marked on every employee the instant a day is marked a company
+      // holiday (see attendanceClassifier.service.js#applyHolidayForEmployee)
+      // — still reads as a plain off day here, same as before that existed.
+      bg = OFF_BG;
+      statusText = 'HOL';
+    } else if (record?.status) {
       bg = STATUS_BG[record.status] || bg;
       statusText = record.status;
     } else if (isSunday || isHoliday) {

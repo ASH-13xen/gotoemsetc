@@ -10,7 +10,6 @@ import { RequireRole } from '@/components/auth/RequireRole'
 import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
 import AuditLogPage from '@/pages/AuditLogPage'
-import BirthdaysPage from '@/pages/BirthdaysPage'
 import InventoryPage from '@/pages/InventoryPage'
 import InventoryItemDetailPage from '@/pages/InventoryItemDetailPage'
 import EventsPage from '@/pages/EventsPage'
@@ -45,16 +44,6 @@ export default function App() {
                   <RequireAuth>
                     <ShellLayout section="Dashboard">
                       <DashboardPage />
-                    </ShellLayout>
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/birthdays"
-                element={
-                  <RequireAuth>
-                    <ShellLayout section="Birthdays">
-                      <BirthdaysPage />
                     </ShellLayout>
                   </RequireAuth>
                 }

@@ -36,6 +36,13 @@ function findForDate(employeeId, date) {
   return AttendanceRecord.findOne({ employee: employeeId, date });
 }
 
+// Used only to undo an auto-written Holiday record when the holiday itself
+// is removed (see attendanceClassifier.service.js#revertHolidayForAllEmployees)
+// — never called on a manually-set record.
+function deleteForDate(employeeId, date) {
+  return AttendanceRecord.deleteOne({ employee: employeeId, date });
+}
+
 // Every auto-marked, not-yet-settled record for this employee strictly
 // before `beforeDate` — used to settle "yesterday" (or older stragglers)
 // the moment a new scan proves that day is over.
@@ -66,4 +73,11 @@ async function listEmployeeIdsForDate(date) {
   return records.map((r) => r.employee.toString());
 }
 
-module.exports = { upsertForDate, findForDate, findUnsettledBefore, listForEmployee, listEmployeeIdsForDate };
+module.exports = {
+  upsertForDate,
+  findForDate,
+  deleteForDate,
+  findUnsettledBefore,
+  listForEmployee,
+  listEmployeeIdsForDate,
+};
