@@ -30,7 +30,7 @@ async function list({ search, status, page = 1, limit = 20 }) {
 }
 
 function findById(id) {
-  return Employee.findOne({ _id: id, isDeleted: false });
+  return Employee.findOne({ _id: id, isDeleted: false }).populate('manager', 'firstName lastName designation');
 }
 
 // Maps a biometric device's enrollment PIN to an employee via the
@@ -74,7 +74,7 @@ function updateById(id, data) {
   return Employee.findOneAndUpdate({ _id: id, isDeleted: false }, data, {
     returnDocument: 'after',
     runValidators: true,
-  });
+  }).populate('manager', 'firstName lastName designation');
 }
 
 function softDeleteById(id) {

@@ -41,6 +41,42 @@ module.exports = {
     // computation as a Sunday), not a normal working day.
     HOLIDAY: 'HL',
   },
+  // Categories the daily attendance report can log a "not informed" warning
+  // against. Deliberately separate from ATTENDANCE_STATUS — early departure
+  // is a boolean flag on AttendanceRecord, not a status value, so it can't
+  // reuse that enum. See attendanceWarning.service.js#computeDailyReport.
+  ATTENDANCE_WARNING_CATEGORY: {
+    LATE: 'late',
+    EARLY_DEPARTURE: 'early_departure',
+    HALF_DAY: 'half_day',
+    SHORT_LEAVE: 'short_leave',
+    ABSENT: 'absent',
+  },
+  // Canned messages HR/admin can pick from when logging a not-informed
+  // warning, alongside free-typing their own. Adding/editing a message here
+  // is a code change, not a DB migration — see attendanceWarning.routes.js.
+  ATTENDANCE_WARNING_TEMPLATES: {
+    late: [
+      'You arrived late without informing your manager or HR in advance.',
+      'This is a repeated instance of uninformed late arrival — please inform HR/your manager beforehand if you expect to be late.',
+    ],
+    early_departure: [
+      'You left before your shift ended without informing your manager or HR in advance.',
+      'Repeated uninformed early departure — please seek approval before leaving early.',
+    ],
+    half_day: [
+      'You were marked Half Day without prior information to your manager or HR.',
+      'Please inform HR in advance if you plan to work only half a day.',
+    ],
+    short_leave: [
+      'You took a short leave without informing your manager or HR in advance.',
+      'Please request short leave in advance rather than after the fact.',
+    ],
+    absent: [
+      'You were absent without informing your manager or HR in advance.',
+      'Repeated uninformed absence — please inform HR/your manager as early as possible if you cannot come in.',
+    ],
+  },
   APPLICANT_STATUS: {
     PENDING: 'pending',
     INTERVIEW_SCHEDULED: 'interview_scheduled',
@@ -98,6 +134,19 @@ module.exports = {
     // BIRTHDAY_TODAY/UPCOMING above.
     COMPANY_EVENT_TODAY: 'company_event_today',
     COMPANY_EVENT_UPCOMING: 'company_event_upcoming',
+    // Employee Task Management — distinct from TASK_ASSIGNED/STEP_OVERDUE
+    // above, which belong to the unrelated CMS Task/TaskCycle system.
+    EMPLOYEE_TASK_ASSIGNED: 'employee_task_assigned',
+    EMPLOYEE_TASK_FOR_REVIEW: 'employee_task_for_review',
+    EMPLOYEE_TASK_COMPLETED: 'employee_task_completed',
+    EMPLOYEE_TASK_FOLLOWUP_REMINDER: 'employee_task_followup_reminder',
+    // Fired when a for_review task is sent back to pending instead of
+    // approved — see employeeTask.service.js#rejectTask.
+    EMPLOYEE_TASK_REJECTED: 'employee_task_rejected',
+    // Sent to the employee themself when HR/admin logs a "not informed"
+    // warning against them on the daily attendance report — see
+    // attendanceWarning.service.js#sendWarning.
+    ATTENDANCE_NOT_INFORMED_WARNING: 'attendance_not_informed_warning',
   },
   CLIENT_STATUS: { LEAD: 'lead', ONBOARDED: 'onboarded', OFFBOARDED: 'offboarded' },
   QUOTATION_STATUS: { DRAFT: 'draft', SHARED: 'shared', SIGNED: 'signed', SUPERSEDED: 'superseded' },
@@ -121,6 +170,20 @@ module.exports = {
     VIEW_SALARY_SLIP: 'view_salary_slip',
     EDIT_EMPLOYEE_DETAILS: 'edit_employee_details',
     MARK_ATTENDANCE: 'mark_attendance',
+    // Task Management permissions — deliberately kept as two separate
+    // grants rather than one blanket permission, so HR can hand out
+    // top-level task/team authority independently of subtask authority.
+    // See taskAccess.js#hasFullTaskAccess / #hasSubtaskManageAccess for
+    // every place each is checked.
+    //
+    // Top-level task authority: create/edit/delete top-level team/client/
+    // event tasks, manage the WorkTeam/TaskClient/TaskEvent registries,
+    // approve/reject reviews on top-level tasks.
+    MANAGE_TASKS: 'manage_tasks',
+    // Subtask authority: create subtasks, approve/reject subtask reviews,
+    // continue a completed subtask, toggle follow-ups — independent of
+    // MANAGE_TASKS above (a holder of one does not imply the other).
+    MANAGE_SUBTASKS: 'manage_subtasks',
   },
   // Default seed for the shared step library (admin can add/edit/remove
   // freely afterward — these just give a new install something to start from).
@@ -156,4 +219,11 @@ module.exports = {
     BRAND_ANNIVERSARY: 'brand_anniversary',
     IMPORTANT: 'important',
   },
+
+  // Employee Task Management — distinct from TASK_STATUS/STEP_STATUS above,
+  // which belong to the unrelated CMS Task/TaskCycle content-workflow
+  // system (see EmployeeTask.js for why this couldn't reuse that system).
+  EMPLOYEE_TASK_TYPE: { PERSONAL: 'personal', TEAM: 'team', CLIENT: 'client', EVENT: 'event' },
+  EMPLOYEE_TASK_STATUS: { PENDING: 'pending', FOR_REVIEW: 'for_review', COMPLETED: 'completed' },
+  EMPLOYEE_TASK_COMPLETION_FLAG: { ON_TIME: 'on_time', LATE: 'late' },
 };

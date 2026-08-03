@@ -25,6 +25,18 @@ export interface ExtraDetail {
   value?: string
 }
 
+export interface Inventory {
+  deviceName?: string
+  imeiOrSerialNumber?: string
+  deviceColor?: string
+  simProvider?: string
+  simPhoneNumber?: string
+  screenGuard?: boolean
+  backCover?: boolean
+  powerAdapter?: boolean
+  cable?: boolean
+}
+
 export interface EmployeeFlag {
   _id: string
   color: 'red' | 'green'
@@ -55,6 +67,10 @@ export interface Employee {
   dateOfHiring?: string
   employmentType: EmploymentType
   reportingManager?: string
+  // Real relational link to another Employee — distinct from
+  // reportingManager above (free text, used only on the Promotion Letter).
+  // Source of truth for who can complete this employee's Personal tasks.
+  manager?: { _id: string; firstName: string; lastName?: string; designation?: string } | string | null
   workLocation?: string
   // "HH:mm" 24h — drives the attendance classifier's arrival/departure
   // boundaries for this employee. Defaults to '09:30'/'18:30'.
@@ -70,6 +86,7 @@ export interface Employee {
   panNumber?: string
   aadharNumber?: string
   extraDetails?: ExtraDetail[]
+  inventory?: Inventory
 
   biometricVerificationAdded?: boolean
   companyLoginAdded?: boolean

@@ -31,6 +31,11 @@ const inventoryRoutes = require('./inventory.routes');
 const eventRoutes = require('./event.routes');
 const devicePunchRoutes = require('./devicePunch.routes');
 const attendanceRequestRoutes = require('./attendanceRequest.routes');
+const workTeamRoutes = require('./workTeam.routes');
+const taskClientRoutes = require('./taskClient.routes');
+const taskEventRoutes = require('./taskEvent.routes');
+const employeeTaskRoutes = require('./employeeTask.routes');
+const attendanceWarningRoutes = require('./attendanceWarning.routes');
 
 const router = Router();
 
@@ -74,6 +79,15 @@ router.use('/inventory', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), inventory
 router.use('/events', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), eventRoutes);
 router.use('/device-punches', devicePunchRoutes);
 router.use('/attendance-requests', attendanceRequestRoutes);
+// Employee Task Management — distinct from the CMS Task/Team/Client/Event
+// system above (/teams, /tasks, /clients, /events). Every employee needs
+// access here; admin/HR-only vs. self-service capability differences are
+// branched per-route inside each router rather than gated at the mount.
+router.use('/work-teams', workTeamRoutes);
+router.use('/task-clients', taskClientRoutes);
+router.use('/task-events', taskEventRoutes);
+router.use('/employee-tasks', employeeTaskRoutes);
+router.use('/attendance-warnings', attendanceWarningRoutes);
 // Gated per-route inside user.routes.js — some actions there are reachable
 // by a worker with add_credentials, not just admins.
 router.use('/users', userRoutes);

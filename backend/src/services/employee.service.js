@@ -14,6 +14,24 @@ async function getEmployee(id) {
   return employee;
 }
 
+// Same active-employee source the attendance classifier cron reads from —
+// reshaped down to just enough for a "pick a colleague" list. Deliberately
+// separate from listEmployees(), which is gated behind directory-access
+// permissions most plain workers don't have; Task Management needs every
+// employee to browse this to assign tasks/subtasks, so it stays open to
+// any authenticated user (see employee.routes.js) and only ever exposes
+// these few non-sensitive fields.
+async function listDirectory() {
+  const employees = await employeeRepository.listActive();
+  return employees.map((e) => ({
+    _id: e._id,
+    firstName: e.firstName,
+    lastName: e.lastName,
+    designation: e.designation,
+    employeeCode: e.employeeCode,
+  }));
+}
+
 // Same active-employee-with-dob source the birthday reminder cron reads
 // from — reshaped down to just what a calendar view needs, not the full
 // employee document.
@@ -86,6 +104,7 @@ async function removeFlag(id, flagId) {
 module.exports = {
   listEmployees,
   getEmployee,
+  listDirectory,
   listBirthdays,
   createEmployee,
   updateEmployee,

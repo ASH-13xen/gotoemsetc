@@ -6,12 +6,12 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { AuthProvider } from '@/context/AuthContext'
 import { RequireAuth } from '@/components/auth/RequireAuth'
 import LoginPage from '@/pages/LoginPage'
-import ClientsPage from '@/pages/ClientsPage'
-import ClientDetailPage from '@/pages/ClientDetailPage'
-import TeamsPage from '@/pages/TeamsPage'
-import DashboardPage from '@/pages/DashboardPage'
-import WorkloadPage from '@/pages/WorkloadPage'
-import ContentCalendarPage from '@/pages/ContentCalendarPage'
+import TaskListPage from '@/pages/TaskListPage'
+import ReviewTasksPage from '@/pages/ReviewTasksPage'
+import TaskDetailPage from '@/pages/TaskDetailPage'
+import WorkTeamsPage from '@/pages/WorkTeamsPage'
+import TaskClientsPage from '@/pages/TaskClientsPage'
+import TaskEventsPage from '@/pages/TaskEventsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,55 +33,15 @@ export default function App({ basename }: AppProps = {}) {
           <BrowserRouter basename={basename}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/" element={<Navigate to="/clients" replace />} />
-              <Route
-                path="/clients"
-                element={
-                  <RequireAuth>
-                    <ClientsPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/clients/:id"
-                element={
-                  <RequireAuth>
-                    <ClientDetailPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/teams"
-                element={
-                  <RequireAuth>
-                    <TeamsPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/dashboard"
-                element={
-                  <RequireAuth>
-                    <DashboardPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/workload"
-                element={
-                  <RequireAuth>
-                    <WorkloadPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/calendar"
-                element={
-                  <RequireAuth>
-                    <ContentCalendarPage />
-                  </RequireAuth>
-                }
-              />
+              <Route path="/" element={<Navigate to="/tasks" replace />} />
+
+              <Route path="/tasks" element={<RequireAuth><TaskListPage /></RequireAuth>} />
+              <Route path="/review" element={<RequireAuth><ReviewTasksPage /></RequireAuth>} />
+              <Route path="/tasks/:id" element={<RequireAuth><TaskDetailPage /></RequireAuth>} />
+
+              <Route path="/teams" element={<RequireAuth><WorkTeamsPage /></RequireAuth>} />
+              <Route path="/clients" element={<RequireAuth><TaskClientsPage /></RequireAuth>} />
+              <Route path="/events" element={<RequireAuth><TaskEventsPage /></RequireAuth>} />
             </Routes>
           </BrowserRouter>
           <Toaster richColors position="top-right" />

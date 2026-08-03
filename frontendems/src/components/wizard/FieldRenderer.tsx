@@ -20,6 +20,26 @@ interface FieldRendererProps {
 export function FieldRenderer({ field, value, error, onChange }: FieldRendererProps) {
   const inputId = `field-${field.key}`
 
+  if (field.type === 'boolean') {
+    return (
+      <div className="grid gap-1.5">
+        <label htmlFor={inputId} className="flex cursor-pointer items-center gap-2 select-none text-sm">
+          <input
+            id={inputId}
+            type="checkbox"
+            checked={value === 'true'}
+            onChange={(e) => onChange(e.target.checked ? 'true' : 'false')}
+            className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
+          />
+          {field.label}
+        </label>
+        {field.helpText && !error && (
+          <p className="text-xs text-muted-foreground">{field.helpText}</p>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={inputId}>

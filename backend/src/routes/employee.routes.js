@@ -34,6 +34,11 @@ router.post('/', requirePermission(PERMISSIONS.ADD_EMPLOYEE), validate(employeeV
 // Left open to any authenticated user, unlike everything else here — the
 // birthdays widget is meant to stay visible platform-wide.
 router.get('/birthdays', employeeController.birthdays);
+// Same carve-out — Task Management needs every employee (not just those
+// granted directory-access permissions) to browse a lightweight colleague
+// list for task/subtask assignment. Deliberately minimal fields, see
+// employee.service.js#listDirectory.
+router.get('/directory', employeeController.directory);
 router.get('/attendance-today', requirePermission(PERMISSIONS.MARK_ATTENDANCE), attendanceController.markedToday);
 router.get('/:id', requireSelfOrDirectoryAccess(), validate(employeeValidator.getOrDelete), employeeController.getById);
 router.patch(

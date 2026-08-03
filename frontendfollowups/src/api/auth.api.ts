@@ -3,8 +3,9 @@ import { apiClient } from './client'
 export interface AuthUser {
   id: string
   username: string
-  role: 'admin' | 'worker'
-  employeeLink?: string | null
+  role: 'admin' | 'worker' | 'hr'
+  employeeLink: string | null
+  permissions: string[]
 }
 
 export interface LoginInput {

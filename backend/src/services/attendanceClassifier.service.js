@@ -463,4 +463,5 @@ module.exports = {
   computeOffDayOvertime,
   applyHolidayToAllEmployees,
   revertHolidayForAllEmployees,
+  istDayBoundsUTC,
 };

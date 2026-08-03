@@ -18,6 +18,11 @@ const birthdays = asyncHandler(async (req, res) => {
   res.json({ employees });
 });
 
+const directory = asyncHandler(async (req, res) => {
+  const items = await employeeService.listDirectory();
+  res.json({ items });
+});
+
 const create = asyncHandler(async (req, res) => {
   const employee = await employeeService.createEmployee(req.body);
   req.auditContext = {
@@ -73,4 +78,4 @@ const removeFlag = asyncHandler(async (req, res) => {
   res.json({ employee: shapeForRole('Employee', employee, req.user.role) });
 });
 
-module.exports = { list, getById, birthdays, create, update, remove, activity, addFlag, removeFlag };
+module.exports = { list, getById, birthdays, directory, create, update, remove, activity, addFlag, removeFlag };

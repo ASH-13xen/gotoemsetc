@@ -12,6 +12,8 @@ const notificationSchema = new Schema(
     employee: { type: Schema.Types.ObjectId, ref: 'Employee' },
     client: { type: Schema.Types.ObjectId, ref: 'Client' },
     task: { type: Schema.Types.ObjectId, ref: 'Task' },
+    employeeTask: { type: Schema.Types.ObjectId, ref: 'EmployeeTask' },
+    attendanceWarning: { type: Schema.Types.ObjectId, ref: 'AttendanceWarning' },
     isRead: { type: Boolean, default: false },
   },
   { timestamps: true }

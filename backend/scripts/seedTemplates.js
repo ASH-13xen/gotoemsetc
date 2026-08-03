@@ -76,6 +76,46 @@ const hrExecutiveName = {
   helpText: 'Printed under the company signature block, above "HR Executive".',
 };
 
+// Equipment Inventory — sourced from Employee.inventory (see Employee.js),
+// editable both on the Employee Details "Inventory" section and inline in
+// this wizard step, same two-way pattern as designation/department.
+const deviceName = {
+  key: 'deviceName', label: 'Mobile/laptop name', type: 'text', required: false,
+  source: 'employee', mapsTo: 'inventory.deviceName', group: 'Equipment Inventory', order: 60,
+};
+const imeiOrSerialNumber = {
+  key: 'imeiOrSerialNumber', label: 'Mobile IMEI / laptop serial number', type: 'text', required: false,
+  source: 'employee', mapsTo: 'inventory.imeiOrSerialNumber', group: 'Equipment Inventory', order: 61,
+};
+const deviceColor = {
+  key: 'deviceColor', label: 'Mobile/laptop color', type: 'text', required: false,
+  source: 'employee', mapsTo: 'inventory.deviceColor', group: 'Equipment Inventory', order: 62,
+};
+const simProvider = {
+  key: 'simProvider', label: 'SIM provider', type: 'text', required: false,
+  source: 'employee', mapsTo: 'inventory.simProvider', group: 'Equipment Inventory', order: 63,
+};
+const simPhoneNumber = {
+  key: 'simPhoneNumber', label: 'Phone number', type: 'text', required: false,
+  source: 'employee', mapsTo: 'inventory.simPhoneNumber', group: 'Equipment Inventory', order: 64,
+};
+const screenGuard = {
+  key: 'screenGuard', label: 'Screen guard issued', type: 'boolean', required: false,
+  source: 'employee', mapsTo: 'inventory.screenGuard', group: 'Equipment Inventory', order: 65,
+};
+const backCover = {
+  key: 'backCover', label: 'Back cover issued', type: 'boolean', required: false,
+  source: 'employee', mapsTo: 'inventory.backCover', group: 'Equipment Inventory', order: 66,
+};
+const powerAdapter = {
+  key: 'powerAdapter', label: 'Power adapter issued', type: 'boolean', required: false,
+  source: 'employee', mapsTo: 'inventory.powerAdapter', group: 'Equipment Inventory', order: 67,
+};
+const cable = {
+  key: 'cable', label: 'Cable issued', type: 'boolean', required: false,
+  source: 'employee', mapsTo: 'inventory.cable', group: 'Equipment Inventory', order: 68,
+};
+
 const templates = [
   {
     key: 'appointment-letter',
@@ -302,7 +342,11 @@ const templates = [
     category: 'compliance',
     templateType: 'html',
     htmlFilePath: 'hardware-consent-form.html',
-    fields: [employeeName, designation, department, todayDate],
+    fields: [
+      employeeName, designation, department, todayDate,
+      deviceName, imeiOrSerialNumber, deviceColor, simProvider, simPhoneNumber,
+      screenGuard, backCover, powerAdapter, cable,
+    ],
     loops: [],
   },
   {

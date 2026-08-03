@@ -151,6 +151,10 @@ function buildMergeData(template, employee, overrides = {}) {
       if (field.type === 'select' && typeof value === 'string') {
         value = value.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
       }
+      if (field.type === 'boolean') {
+        if (value === true) value = 'Yes';
+        else if (value === false) value = 'No';
+      }
     }
 
     if (value !== undefined && value !== null && value !== '') {

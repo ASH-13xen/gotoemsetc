@@ -29,11 +29,25 @@ import { SalarySlipsList } from '@/components/salary/SalarySlipsList'
 import { RequestHistoryTable } from '@/components/uploadRequests/RequestHistoryTable'
 import { ActivityTimeline } from '@/components/employees/ActivityTimeline'
 import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummaryCard'
+import { NotInformedWarningsCard } from '@/components/attendance/NotInformedWarningsCard'
+import { PendingWarningsModal } from '@/components/attendance/PendingWarningsModal'
 import { useAuth } from '@/hooks/useAuth'
 import { hasAnyPermission, hasPermission, isAdminLike } from '@/lib/permissions'
-import { useDeleteEmployee, useEmployee, useUpdateEmployee } from '@/hooks/useEmployees'
+import { useDeleteEmployee, useEmployee, useEmployees, useUpdateEmployee } from '@/hooks/useEmployees'
 import { useUploadedDocuments } from '@/hooks/useUploadRequests'
-import { BLOOD_GROUPS, type Address, type Employee, type EmployeeStatus, type EmploymentType } from '@/api/employees.api'
+import { BLOOD_GROUPS, type Address, type Employee, type EmployeeStatus, type EmploymentType, type Inventory } from '@/api/employees.api'
+
+type InventoryForm = {
+  deviceName: string
+  imeiOrSerialNumber: string
+  deviceColor: string
+  simProvider: string
+  simPhoneNumber: string
+  screenGuard: boolean
+  backCover: boolean
+  powerAdapter: boolean
+  cable: boolean
+}
 
 type AddressForm = {
   line1: string
@@ -58,6 +72,7 @@ type FormValues = {
   designation: string
   department: string
   reportingManager: string
+  manager: string
   workLocation: string
   workingHoursStart: string
   workingHoursEnd: string
@@ -84,7 +99,10 @@ type FormValues = {
   removedFromGroupsAndReels: boolean
   mailDeactivated: boolean
   extraDetails: { key: string; value: string }[]
+  inventory: InventoryForm
 }
+
+const NO_MANAGER = '__none__'
 
 function toDateInputValue(value: string | undefined): string {
   if (!value) return ''
@@ -108,6 +126,20 @@ function addressesEqual(a: AddressForm, b: AddressForm): boolean {
   return a.line1 === b.line1 && a.line2 === b.line2 && a.city === b.city && a.state === b.state && a.pincode === b.pincode && a.country === b.country
 }
 
+function toInventoryForm(inventory: Inventory | undefined): InventoryForm {
+  return {
+    deviceName: inventory?.deviceName ?? '',
+    imeiOrSerialNumber: inventory?.imeiOrSerialNumber ?? '',
+    deviceColor: inventory?.deviceColor ?? '',
+    simProvider: inventory?.simProvider ?? '',
+    simPhoneNumber: inventory?.simPhoneNumber ?? '',
+    screenGuard: inventory?.screenGuard ?? false,
+    backCover: inventory?.backCover ?? false,
+    powerAdapter: inventory?.powerAdapter ?? false,
+    cable: inventory?.cable ?? false,
+  }
+}
+
 function toFormValues(employee: Employee): FormValues {
   return {
     employeeCode: employee.employeeCode ?? '',
@@ -123,6 +155,7 @@ function toFormValues(employee: Employee): FormValues {
     designation: employee.designation ?? '',
     department: employee.department ?? '',
     reportingManager: employee.reportingManager ?? '',
+    manager: typeof employee.manager === 'object' && employee.manager ? employee.manager._id : (employee.manager ?? ''),
     workLocation: employee.workLocation ?? '',
     workingHoursStart: employee.workingHoursStart ?? '09:30',
     workingHoursEnd: employee.workingHoursEnd ?? '18:30',
@@ -149,6 +182,7 @@ function toFormValues(employee: Employee): FormValues {
     removedFromGroupsAndReels: employee.removedFromGroupsAndReels ?? false,
     mailDeactivated: employee.mailDeactivated ?? false,
     extraDetails: (employee.extraDetails ?? []).map((d) => ({ key: d.key, value: d.value ?? '' })),
+    inventory: toInventoryForm(employee.inventory),
   }
 }
 
@@ -219,6 +253,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   const { data: uploadedDocsData } = useUploadedDocuments(employeeId)
   const photoDoc = uploadedDocsData?.uploadedDocuments.find((d) => d.docType === 'photo')
   const canEditDetails = hasPermission(user, 'edit_employee_details')
+  const isOwnRecord = user?.employeeLink === employeeId
   const updateEmployee = useUpdateEmployee(employeeId)
   const deleteEmployee = useDeleteEmployee()
 
@@ -226,6 +261,10 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
     defaultValues: toFormValues(employee),
   })
   const extraDetails = useFieldArray({ control, name: 'extraDetails' })
+  // For the Manager picker below — active roster minus this employee
+  // themself (can't be their own manager).
+  const { data: managerOptionsData } = useEmployees({ status: 'active', limit: 100 })
+  const managerOptions = (managerOptionsData?.items ?? []).filter((e) => e._id !== employeeId)
 
   const permanentAddress = watch('permanentAddress')
   const status = watch('status')
@@ -250,6 +289,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         dateOfJoining: values.dateOfJoining || undefined,
         dateOfHiring: values.dateOfHiring || undefined,
         endDate: values.endDate || undefined,
+        manager: values.manager || null,
         permanentAddress: values.permanentAddress,
         localAddress: sameAsPermanent ? values.permanentAddress : values.localAddress,
         extraDetails: values.extraDetails?.filter((d) => d.key.trim().length > 0),
@@ -274,6 +314,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
 
   return (
     <div className="space-y-8 py-4">
+      {isOwnRecord && <PendingWarningsModal employeeId={employeeId} />}
       <main className="mx-auto max-w-4xl space-y-8">
         {/* HERO DETAIL HEADER */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3 bg-transparent">
@@ -453,6 +494,31 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 <div className="grid gap-1.5">
                   <Label htmlFor="reportingManager" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">REPORTING MANAGER</Label>
                   <Input id="reportingManager" {...register('reportingManager')} className="uppercase" />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">MANAGER (TASK MANAGEMENT)</Label>
+                  <Controller
+                    control={control}
+                    name="manager"
+                    render={({ field }) => (
+                      <Select
+                        value={field.value || NO_MANAGER}
+                        onValueChange={(value) => field.onChange(value === NO_MANAGER ? '' : value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="SELECT" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={NO_MANAGER}>— None —</SelectItem>
+                          {managerOptions.map((option) => (
+                            <SelectItem key={option._id} value={option._id}>
+                              {`${option.firstName} ${option.lastName ?? ''}`.trim().toUpperCase()}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="workLocation" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">WORK LOCATION</Label>
@@ -652,6 +718,67 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 name="updatedIn12345"
                 render={({ field }) => (
                   <CheckboxRow label="UPDATED IN 12345?" checked={field.value} onChange={field.onChange} />
+                )}
+              />
+            </div>
+          </Card>
+
+          {/* Inventory — company-issued hardware/SIM, auto-fills the
+              Hardware Consent Form's Equipment Inventory section in the
+              document wizard the same way Designation/Department do. */}
+          <Card className="p-6 space-y-6">
+            <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
+              INVENTORY
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid gap-1.5">
+                <Label htmlFor="inventory.deviceName" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">MOBILE/LAPTOP NAME</Label>
+                <Input id="inventory.deviceName" {...register('inventory.deviceName')} className="uppercase" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="inventory.imeiOrSerialNumber" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">MOBILE IMEI NUM / LAPTOP SERIAL NUM</Label>
+                <Input id="inventory.imeiOrSerialNumber" {...register('inventory.imeiOrSerialNumber')} className="uppercase" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="inventory.deviceColor" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">MOBILE/LAPTOP COLOR</Label>
+                <Input id="inventory.deviceColor" {...register('inventory.deviceColor')} className="uppercase" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="inventory.simProvider" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">SIM PROVIDER</Label>
+                <Input id="inventory.simProvider" {...register('inventory.simProvider')} className="uppercase" />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="inventory.simPhoneNumber" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">PHONE NUMBER</Label>
+                <Input id="inventory.simPhoneNumber" {...register('inventory.simPhoneNumber')} />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Controller
+                control={control}
+                name="inventory.screenGuard"
+                render={({ field }) => (
+                  <CheckboxRow label="SCREEN GUARD" checked={field.value} onChange={field.onChange} />
+                )}
+              />
+              <Controller
+                control={control}
+                name="inventory.backCover"
+                render={({ field }) => (
+                  <CheckboxRow label="BACK COVER" checked={field.value} onChange={field.onChange} />
+                )}
+              />
+              <Controller
+                control={control}
+                name="inventory.powerAdapter"
+                render={({ field }) => (
+                  <CheckboxRow label="POWER ADAPTER" checked={field.value} onChange={field.onChange} />
+                )}
+              />
+              <Controller
+                control={control}
+                name="inventory.cable"
+                render={({ field }) => (
+                  <CheckboxRow label="CABLE" checked={field.value} onChange={field.onChange} />
                 )}
               />
             </div>
@@ -859,6 +986,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
 
         <div className="mt-8 grid gap-8">
           <AttendanceSummaryCard employeeId={employeeId} />
+          {isAdmin && <NotInformedWarningsCard employeeId={employeeId} />}
           {canViewSalary && (
             <SalarySlipsList employeeId={employeeId} employeeName={`${employee.firstName} ${employee.lastName ?? ''}`} />
           )}

@@ -55,6 +55,14 @@ function findUnsettledBefore(employeeId, beforeDate) {
   });
 }
 
+// Every employee's record for one exact date — backs the daily attendance
+// report (attendanceWarning.service.js#computeDailyReport). isDeleted
+// employees are filtered out by the caller after populate, same reasoning
+// as employee.repository.js's other list queries.
+function listForDate(date) {
+  return AttendanceRecord.find({ date }).populate('employee', 'firstName lastName employeeCode designation isDeleted status');
+}
+
 function listForEmployee(employeeId, { from, to } = {}) {
   const query = { employee: employeeId };
   if (from || to) {
@@ -76,6 +84,7 @@ async function listEmployeeIdsForDate(date) {
 module.exports = {
   upsertForDate,
   findForDate,
+  listForDate,
   deleteForDate,
   findUnsettledBefore,
   listForEmployee,

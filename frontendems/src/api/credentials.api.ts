@@ -11,8 +11,10 @@ export type Permission =
   | 'view_salary_slip'
   | 'edit_employee_details'
   | 'mark_attendance'
+  | 'manage_tasks'
+  | 'manage_subtasks'
 
-export const PERMISSION_OPTIONS: { value: Permission; label: string }[] = [
+export const PERMISSION_OPTIONS: { value: Permission; label: string; group?: string }[] = [
   { value: 'view_applicants', label: 'View recruitment / applicants' },
   { value: 'add_employee', label: 'Add employee' },
   { value: 'generate_documents', label: 'Generate documents' },
@@ -21,6 +23,11 @@ export const PERMISSION_OPTIONS: { value: Permission; label: string }[] = [
   { value: 'view_salary_slip', label: 'View / generate salary slip' },
   { value: 'edit_employee_details', label: "Edit employees' details" },
   { value: 'mark_attendance', label: "Mark employees' attendance" },
+  // Employee Task Management (frontendfollowups) — kept as two independent
+  // grants rather than one, so HR can hand out top-level task/team
+  // authority separately from subtask authority.
+  { value: 'manage_tasks', label: 'Create/manage top-level tasks & teams/clients/events', group: 'Task Management' },
+  { value: 'manage_subtasks', label: 'Create/manage subtasks', group: 'Task Management' },
 ]
 
 export interface Credential {

@@ -1,5 +1,6 @@
 const { Schema, model } = require('mongoose');
 const { EMPLOYEE_STATUS } = require('../config/constants');
+const { attachExtraDetailsEncryption } = require('../utils/extraDetailsCrypto');
 
 const addressSchema = new Schema(
   {
@@ -27,6 +28,25 @@ const extraDetailSchema = new Schema(
 
 const resumeSchema = new Schema(
   { url: String, publicId: String, originalFilename: String },
+  { _id: false }
+);
+
+// Company-issued hardware/SIM, filled in once at issuance — this is the
+// source of truth the Hardware Consent Form's Equipment Inventory section
+// auto-fills from (see mergeData.service.js), same as every other
+// employee-sourced document field.
+const inventorySchema = new Schema(
+  {
+    deviceName: { type: String, trim: true },
+    imeiOrSerialNumber: { type: String, trim: true },
+    deviceColor: { type: String, trim: true },
+    simProvider: { type: String, trim: true },
+    simPhoneNumber: { type: String, trim: true },
+    screenGuard: Boolean,
+    backCover: Boolean,
+    powerAdapter: Boolean,
+    cable: Boolean,
+  },
   { _id: false }
 );
 
@@ -79,6 +99,12 @@ const employeeSchema = new Schema(
       default: 'full-time',
     },
     reportingManager: String,
+    // Real relational link to another Employee, distinct from
+    // reportingManager above (which stays free text, used only for display
+    // on the Promotion Letter template). This is the source of truth Task
+    // Management uses to route "who can complete this employee's Personal
+    // tasks."
+    manager: { type: Schema.Types.ObjectId, ref: 'Employee', default: null },
     workLocation: String,
     // "HH:mm" 24h strings — drives the attendance classifier's arrival/
     // departure boundaries for this specific employee (see
@@ -102,6 +128,7 @@ const employeeSchema = new Schema(
     panNumber: String,
     aadharNumber: String,
     extraDetails: [extraDetailSchema],
+    inventory: inventorySchema,
 
     // Onboarding checklist — plain manual checkboxes, ticked off by HR.
     biometricVerificationAdded: { type: Boolean, default: false },
@@ -154,5 +181,10 @@ const employeeSchema = new Schema(
 );
 
 employeeSchema.index({ firstName: 'text', lastName: 'text', personalEmail: 'text' });
+
+// Any extraDetails entry whose key looks like a password (e.g. "COMPANY
+// MAIL PASSWORD") is encrypted at rest and transparently decrypted on read
+// — see utils/extraDetailsCrypto.js.
+attachExtraDetailsEncryption(employeeSchema);
 
 module.exports = model('Employee', employeeSchema);

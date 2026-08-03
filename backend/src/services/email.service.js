@@ -4,14 +4,14 @@ const logger = require('../utils/logger');
 
 const client = env.resendConfigured ? new Resend(env.resend.apiKey) : null;
 
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, subject, html, from }) {
   if (!client) {
     logger.warn({ to, subject }, 'Resend not configured — skipping email send');
     return;
   }
 
   const { error } = await client.emails.send({
-    from: env.resend.fromEmail,
+    from: from || env.resend.fromEmail,
     to,
     subject,
     html,

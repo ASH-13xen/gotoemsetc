@@ -1,5 +1,6 @@
 const { Schema, model } = require('mongoose');
 const { CLIENT_STATUS } = require('../config/constants');
+const { attachExtraDetailsEncryption } = require('../utils/extraDetailsCrypto');
 
 // Freeform key/value pairs, mirroring Employee's extraDetails — lets admin
 // record anything about a client that doesn't have its own field, without a
@@ -55,5 +56,9 @@ const clientSchema = new Schema(
 );
 
 clientSchema.index({ clientName: 'text', brandName: 'text' });
+
+// Same freeform extraDetails shape as Employee — any password-like key gets
+// encrypted at rest too, see utils/extraDetailsCrypto.js.
+attachExtraDetailsEncryption(clientSchema);
 
 module.exports = model('Client', clientSchema);

@@ -3,14 +3,11 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
   Users,
-  DollarSign,
   CalendarClock,
   ShieldAlert,
   LogOut,
   Menu,
   ChevronLeft,
-  Package,
-  PartyPopper
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
@@ -25,10 +22,9 @@ export function ShellLayout({ children, section }: { children: ReactNode; sectio
   const links = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
     { to: '/ems', label: 'EMS', icon: Users },
-    ...(isAdmin ? [{ to: '/sales', label: 'Client Management', icon: DollarSign }] : []),
-    ...(isAdmin ? [{ to: '/followups', label: 'Task Management', icon: CalendarClock }] : []),
-    ...(isAdmin ? [{ to: '/inventory', label: 'Inventory Management', icon: Package }] : []),
-    ...(isAdmin ? [{ to: '/events', label: 'Event Management', icon: PartyPopper }] : []),
+    // Every employee needs Task Management — role-dependent capability
+    // differences are handled inside the feature itself, not at the nav.
+    { to: '/followups', label: 'Task Management', icon: CalendarClock },
     ...(isAdmin ? [{ to: '/audit-log', label: 'Audit Log', icon: ShieldAlert }] : []),
   ]
 

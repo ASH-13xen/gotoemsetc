@@ -22,6 +22,11 @@ const env = {
   jwtSecret: required('JWT_SECRET'),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '12h',
 
+  // Used to encrypt sensitive Extra Details values at rest (see
+  // utils/extraDetailsCrypto.js) — deliberately separate from JWT_SECRET so
+  // rotating one doesn't affect the other.
+  extraDetailsEncryptionKey: required('EXTRA_DETAILS_ENCRYPTION_KEY'),
+
   cloudinary: {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
     apiKey: process.env.CLOUDINARY_API_KEY || '',

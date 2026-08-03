@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Cake, CalendarClock, CalendarDays, CalendarOff, PartyPopper, Star, Users } from 'lucide-react'
+import { Cake, CalendarClock, CalendarDays, CalendarOff, ListChecks, PartyPopper, Star, Users } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { apiClient } from '@/api/client'
 import { useQuery } from '@tanstack/react-query'
@@ -11,6 +11,8 @@ import { useMyEventResponsibilities } from '@/hooks/useEvents'
 import { useBirthdays } from '@/hooks/useBirthdays'
 import { useCompanyEvents } from '@/hooks/useCompanyEvents'
 import { useHolidays } from '@/hooks/useHolidays'
+import { useMyUpcomingTasks } from '@/hooks/useEmployeeTasks'
+import { PendingWarningsModal } from '@/components/attendance/PendingWarningsModal'
 import type { CompanyEvent, CompanyEventType } from '@/api/companyEvents.api'
 
 interface DashboardStats {
@@ -78,16 +80,19 @@ export default function DashboardPage() {
   if (!isAdminLike) {
     return (
       <div className="space-y-8 py-4">
+        <PendingWarningsModal />
         <h1 className="text-3xl font-light tracking-tight text-foreground/90">
           Welcome, <span className="font-semibold text-primary">{user?.username}</span>
         </h1>
         <UpcomingCalendarWidget />
+        <MyUpcomingTasksWidget />
       </div>
     )
   }
 
   return (
     <div className="space-y-8 py-4">
+      <PendingWarningsModal />
       <div>
         <h1 className="text-3xl font-light tracking-tight text-foreground/90">
           Welcome, <span className="font-semibold text-primary">{user?.username}</span>
@@ -111,6 +116,8 @@ export default function DashboardPage() {
       </motion.div>
 
       <UpcomingCalendarWidget />
+
+      <MyUpcomingTasksWidget />
 
       <MyEventResponsibilitiesWidget />
     </div>
@@ -227,6 +234,79 @@ function UpcomingCalendarWidget() {
             </div>
           ))}
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+const TASK_TYPE_LABEL: Record<string, string> = {
+  personal: 'Personal',
+  team: 'Team',
+  client: 'Client',
+  event: 'Event',
+}
+
+// Upcoming Employee Task Management tasks for the logged-in employee,
+// soonest-due first — self-scoped via /employee-tasks/mine/upcoming, same
+// "mine" convention as MyEventResponsibilitiesWidget below. Full task
+// management (create/review/complete, past tasks) lives in the Task
+// Management remote at /followups; this is just a glance from the
+// dashboard.
+function MyUpcomingTasksWidget() {
+  const { data, isLoading } = useMyUpcomingTasks()
+  const tasks = data?.tasks ?? []
+
+  return (
+    <Card className="bg-card/90 backdrop-blur-md rounded-2xl border border-border/10 shadow-diffuse p-6">
+      <CardContent className="p-0">
+        <div className="flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-widest text-muted-foreground">
+            <ListChecks className="size-4 text-primary" />
+            Upcoming tasks
+          </h2>
+          <Link to="/followups" className="text-xs font-semibold text-primary hover:underline">
+            View all tasks →
+          </Link>
+        </div>
+
+        {isLoading ? (
+          <div className="mt-4 grid gap-2">
+            <Skeleton className="h-12 w-full rounded-xl" />
+            <Skeleton className="h-12 w-full rounded-xl" />
+          </div>
+        ) : tasks.length === 0 ? (
+          <p className="mt-4 text-sm text-muted-foreground">Nothing pending — you're all caught up.</p>
+        ) : (
+          <div className="mt-4 grid gap-2">
+            {tasks.slice(0, 6).map((task) => {
+              const isOverdue = new Date(task.endAt) < new Date()
+              const subtitle = task.client?.name ?? task.event?.name ?? task.team?.name
+              return (
+                <Link
+                  key={task._id}
+                  to="/followups"
+                  className="flex items-center justify-between gap-3 rounded-xl bg-secondary/30 p-3 hover:bg-secondary/50"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">{task.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {TASK_TYPE_LABEL[task.type]}
+                      {subtitle && ` · ${subtitle}`}
+                    </p>
+                  </div>
+                  <span
+                    className={`flex shrink-0 items-center gap-1 text-xs font-bold uppercase tracking-wide ${
+                      isOverdue ? 'text-destructive' : 'text-primary'
+                    }`}
+                  >
+                    <CalendarClock className="size-3" />
+                    {new Date(task.endAt).toLocaleDateString()}
+                  </span>
+                </Link>
+              )
+            })}
+          </div>
+        )}
       </CardContent>
     </Card>
   )

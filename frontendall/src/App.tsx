@@ -138,13 +138,11 @@ export default function App() {
                 path="/followups/*"
                 element={
                   <RequireAuth>
-                    <RequireRole role="admin">
-                      <ShellLayout section="Task Management">
-                        <Suspense fallback={<RemoteFallback />}>
-                          <RemoteFollowups basename="/followups" />
-                        </Suspense>
-                      </ShellLayout>
-                    </RequireRole>
+                    <ShellLayout section="Task Management">
+                      <Suspense fallback={<RemoteFallback />}>
+                        <RemoteFollowups basename="/followups" />
+                      </Suspense>
+                    </ShellLayout>
                   </RequireAuth>
                 }
               />

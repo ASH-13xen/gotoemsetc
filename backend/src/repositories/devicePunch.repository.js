@@ -27,4 +27,14 @@ function listForEmployeeOnDay(employeeId, dayStart, dayEnd) {
   }).sort({ timestamp: 1 });
 }
 
-module.exports = { create, listRecent, listForEmployeeOnDay };
+// Same as above, batched across many employees at once (one query instead
+// of one per row) — backs the daily attendance report's "time of
+// biometric" column. See attendanceWarning.service.js#computeDailyReport.
+function listForEmployeesOnDay(employeeIds, dayStart, dayEnd) {
+  return DevicePunch.find({
+    employee: { $in: employeeIds },
+    timestamp: { $gte: dayStart, $lte: dayEnd },
+  }).sort({ timestamp: 1 });
+}
+
+module.exports = { create, listRecent, listForEmployeeOnDay, listForEmployeesOnDay };

@@ -1,21 +1,31 @@
 import { apiClient } from './client'
 
-// Read-only view into the shared EMS employee directory — used to pick
-// meeting attendees. Employee records themselves are owned/managed by EMS.
+// Thin directory-lookup surface — just enough for assignment pickers.
+// Full employee CRUD lives in frontendems.
 export interface EmployeeSummary {
   _id: string
-  employeeCode: string
   firstName: string
   lastName?: string
-  designation: string
+  designation?: string
+  employeeCode?: string
 }
 
-export interface ListEmployeesResponse {
-  items: EmployeeSummary[]
-  total: number
+export interface ListEmployeesParams {
+  search?: string
+  status?: 'draft' | 'active' | 'offboarded'
+  limit?: number
+  page?: number
 }
 
-export async function listEmployees(search?: string): Promise<ListEmployeesResponse> {
-  const { data } = await apiClient.get('/employees', { params: { search, limit: 100 } })
-  return data
+// GET /employees itself is gated behind directory-access permissions most
+// plain workers don't have (correct for HR's full directory) — a team
+// leader with zero granted permissions still needs to pick colleagues for
+// task/subtask assignment, so this hits the dedicated, open-to-everyone
+// /employees/directory endpoint instead. `params` is accepted for call-site
+// compatibility but unused — that endpoint is always active-only/unpaginated.
+export async function listEmployees(
+  _params: ListEmployeesParams = {}
+): Promise<{ items: EmployeeSummary[]; total: number }> {
+  const { data } = await apiClient.get('/employees/directory')
+  return { items: data.items, total: data.items.length }
 }

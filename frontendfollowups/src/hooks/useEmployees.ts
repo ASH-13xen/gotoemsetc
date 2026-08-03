@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import * as employeesApi from '@/api/employees.api'
+import type { ListEmployeesParams } from '@/api/employees.api'
 
-export function useEmployeeDirectory(search?: string) {
+export function useEmployees(params: ListEmployeesParams = {}) {
   return useQuery({
-    queryKey: ['employee-directory', search],
-    queryFn: () => employeesApi.listEmployees(search),
+    queryKey: ['employees', params],
+    queryFn: () => employeesApi.listEmployees(params),
+    staleTime: 60_000,
   })
 }

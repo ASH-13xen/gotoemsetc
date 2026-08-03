@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { KeyRound, Loader2 } from 'lucide-react'
+import { Info, KeyRound, Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,6 +23,7 @@ import {
 import { PERMISSION_OPTIONS, type Permission } from '@/api/credentials.api'
 import { useAuth } from '@/hooks/useAuth'
 import { isAdminLike } from '@/lib/permissions'
+import { useWorkTeams } from '@/hooks/useWorkTeams'
 
 function slugifyUsername(name: string): string {
   return name
@@ -53,6 +54,26 @@ export function CredentialsDialog({
   const grantableOptions = isAdmin
     ? PERMISSION_OPTIONS
     : PERMISSION_OPTIONS.filter((opt) => actingUser?.permissions?.includes(opt.value))
+  // Grouped options (e.g. "Task Management") rendered as their own labeled
+  // sub-section below the ungrouped list, which keeps its exact original markup.
+  const groupedOptions = Array.from(
+    grantableOptions
+      .filter((opt) => opt.group)
+      .reduce((map, opt) => {
+        const list = map.get(opt.group as string) ?? []
+        list.push(opt)
+        map.set(opt.group as string, list)
+        return map
+      }, new Map<string, typeof grantableOptions>())
+  )
+
+  // A team leader (Task Management, frontendfollowups) gets real
+  // task-creation/edit authority for their own team dynamically — not
+  // through manage_tasks/manage_subtasks — so those checkboxes can look
+  // unchecked here even though the person already has task authority. See
+  // backend/src/middlewares/taskAccess.middleware.js#requireCanCreateTopLevelTask.
+  const { data: workTeamsData } = useWorkTeams()
+  const ledTeams = (workTeamsData?.teams ?? []).filter((t) => t.leader._id === employeeId)
 
   const { data, isLoading } = useEmployeeCredential(employeeId)
   const credential = data?.credential
@@ -166,6 +187,16 @@ export function CredentialsDialog({
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
+            {ledTeams.length > 0 && (
+              <div className="flex items-start gap-2 rounded-xl bg-primary/5 p-3 text-xs text-foreground/80">
+                <Info className="mt-0.5 size-3.5 shrink-0 text-primary" />
+                <p>
+                  Also leads: <span className="font-semibold">{ledTeams.map((t) => t.name).join(', ')}</span>. Team
+                  leaders can create/edit Task Management tasks for their own team regardless of the checkboxes
+                  below — that's separate from Manage Tasks/Manage Subtasks, which grant it org-wide.
+                </p>
+              </div>
+            )}
             {(isAdmin || !credential) && (
               <div className="grid gap-1.5">
                 <Label>Permissions</Label>
@@ -174,22 +205,47 @@ export function CredentialsDialog({
                     You don't hold any permissions yourself, so you can't grant any.
                   </p>
                 ) : (
-                  <div className="grid gap-2 rounded-xl border border-border/40 p-3">
-                    {grantableOptions.map((opt) => (
-                      <label
-                        key={opt.value}
-                        className="flex items-center gap-2 cursor-pointer select-none text-sm"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={permissions.includes(opt.value)}
-                          onChange={() => togglePermission(opt.value)}
-                          className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
-                        />
-                        {opt.label}
-                      </label>
+                  <>
+                    <div className="grid gap-2 rounded-xl border border-border/40 p-3">
+                      {grantableOptions
+                        .filter((opt) => !opt.group)
+                        .map((opt) => (
+                          <label
+                            key={opt.value}
+                            className="flex items-center gap-2 cursor-pointer select-none text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={permissions.includes(opt.value)}
+                              onChange={() => togglePermission(opt.value)}
+                              className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
+                            />
+                            {opt.label}
+                          </label>
+                        ))}
+                    </div>
+                    {groupedOptions.map(([group, options]) => (
+                      <div key={group} className="grid gap-2 rounded-xl border border-border/40 p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                          {group}
+                        </p>
+                        {options.map((opt) => (
+                          <label
+                            key={opt.value}
+                            className="flex items-center gap-2 cursor-pointer select-none text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={permissions.includes(opt.value)}
+                              onChange={() => togglePermission(opt.value)}
+                              className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
+                            />
+                            {opt.label}
+                          </label>
+                        ))}
+                      </div>
                     ))}
-                  </div>
+                  </>
                 )}
               </div>
             )}

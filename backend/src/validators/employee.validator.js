@@ -51,6 +51,20 @@ const extraDetailSchema = z.object({
   value: z.string().optional(),
 });
 
+const inventorySchema = z
+  .object({
+    deviceName: z.string().optional(),
+    imeiOrSerialNumber: z.string().optional(),
+    deviceColor: z.string().optional(),
+    simProvider: z.string().optional(),
+    simPhoneNumber: z.string().optional(),
+    screenGuard: z.boolean().optional(),
+    backCover: z.boolean().optional(),
+    powerAdapter: z.boolean().optional(),
+    cable: z.boolean().optional(),
+  })
+  .partial();
+
 const mutableFields = {
   // The employee's code / biometric device PIN — admin-only, see
   // employee.service.js#updateEmployee, which strips this from the payload
@@ -75,6 +89,7 @@ const mutableFields = {
   dateOfHiring: z.coerce.date().optional(),
   employmentType: employmentTypeEnum.optional(),
   reportingManager: z.string().optional(),
+  manager: z.string().min(1).optional().nullable(),
   workLocation: z.string().optional(),
   workingHoursStart: timeStringSchema.optional(),
   workingHoursEnd: timeStringSchema.optional(),
@@ -88,6 +103,7 @@ const mutableFields = {
   panNumber: z.string().optional(),
   aadharNumber: z.string().optional(),
   extraDetails: z.array(extraDetailSchema).optional(),
+  inventory: inventorySchema.optional(),
 
   // Onboarding checklist.
   biometricVerificationAdded: z.boolean().optional(),
@@ -141,6 +157,7 @@ const create = {
     dateOfHiring: true,
     employmentType: true,
     reportingManager: true,
+    manager: true,
     workLocation: true,
     workingHoursStart: true,
     workingHoursEnd: true,

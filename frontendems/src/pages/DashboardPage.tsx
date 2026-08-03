@@ -24,10 +24,11 @@ import { StatusBadge } from '@/components/employees/StatusBadge'
 import { AddEmployeeDialog } from '@/components/employees/AddEmployeeDialog'
 import { FlagStrip } from '@/components/employees/EmployeeFlags'
 import { StatCard } from '@/components/dashboard/StatCard'
+import { DailyReportModal } from '@/components/attendance/DailyReportModal'
 import { useEmployees } from '@/hooks/useEmployees'
 import { useDashboardStats } from '@/hooks/useDashboardStats'
 import { useAuth } from '@/hooks/useAuth'
-import { hasPermission, isAdmin } from '@/lib/permissions'
+import { hasPermission, isAdmin, isAdminLike } from '@/lib/permissions'
 import type { EmployeeStatus } from '@/api/employees.api'
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -96,6 +97,18 @@ export default function DashboardPage() {
               <span className="text-xs font-bold tracking-wider opacity-90 uppercase">HOLIDAYS & EVENTS</span>
               <span className="text-2xl font-extrabold tracking-wide">CALENDAR</span>
             </div>
+
+            {/* Daily Attendance Report Tile — admin/HR only */}
+            {isAdminLike(user) && (
+              <DailyReportModal
+                trigger={
+                  <div className="bg-rose-600 text-white p-6 rounded-xl flex flex-col justify-between cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]">
+                    <span className="text-xs font-bold tracking-wider opacity-90 uppercase">LATES, ABSENTS & MORE</span>
+                    <span className="text-2xl font-extrabold tracking-wide">DAILY REPORT</span>
+                  </div>
+                }
+              />
+            )}
 
             {/* Go to Upload Documents Tile — admin only */}
             {isAdmin(user) && (

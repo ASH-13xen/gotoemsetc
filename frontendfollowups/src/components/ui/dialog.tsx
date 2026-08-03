@@ -38,9 +38,11 @@ function DialogContent({
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="ring-offset-background focus:ring-ring absolute top-4 right-4 rounded-full p-1 opacity-70 transition-all hover:bg-secondary hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-none">
-          <X className="size-4" />
-          <span className="sr-only">Close</span>
+        <DialogPrimitive.Close
+          aria-label="Close"
+          className="ring-offset-background focus:ring-ring absolute top-4 right-4 rounded-full p-1 opacity-70 transition-all hover:bg-secondary hover:opacity-100 focus:ring-2 focus:ring-offset-2 focus:outline-none"
+        >
+          <X className="size-4" aria-hidden="true" />
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPortal>
@@ -67,7 +69,6 @@ function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
   )
 }
 
-// Dialog title customization
 function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
   return (
     <DialogPrimitive.Title

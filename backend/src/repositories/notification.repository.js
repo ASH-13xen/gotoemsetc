@@ -14,6 +14,16 @@ function unreadCount(recipientId) {
   return Notification.countDocuments({ recipient: recipientId, isRead: false });
 }
 
+// Unread notifications of a specific type for one recipient, oldest first —
+// backs the login-time "pending attendance warnings" check. Populating
+// attendanceWarning gives the caller the category/date/message it needs
+// without a second round-trip.
+function listUnreadByType(recipientId, type) {
+  return Notification.find({ recipient: recipientId, type, isRead: false })
+    .populate('attendanceWarning')
+    .sort({ createdAt: 1 });
+}
+
 function markRead(id, recipientId) {
   return Notification.findOneAndUpdate(
     { _id: id, recipient: recipientId },
@@ -26,4 +36,4 @@ function markAllRead(recipientId) {
   return Notification.updateMany({ recipient: recipientId, isRead: false }, { isRead: true });
 }
 
-module.exports = { createMany, listForRecipient, unreadCount, markRead, markAllRead };
+module.exports = { createMany, listForRecipient, unreadCount, listUnreadByType, markRead, markAllRead };
