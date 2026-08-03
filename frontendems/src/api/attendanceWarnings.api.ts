@@ -63,6 +63,9 @@ export interface DailyReport {
   short_leave: DailyReportRow[]
   absent: DailyReportRow[]
   present_overtime: DailyReportRow[]
+  // Employees who only tapped the biometric device once that day (in or
+  // out, not both) — informational, independent of status classification.
+  single_scan: DailyReportRow[]
 }
 
 export async function getDailyReport(date?: string): Promise<{ report: DailyReport }> {

@@ -2,6 +2,7 @@ const ApiError = require('../utils/ApiError');
 const attendanceWarningRepository = require('../repositories/attendanceWarning.repository');
 const attendanceRepository = require('../repositories/attendance.repository');
 const devicePunchRepository = require('../repositories/devicePunch.repository');
+const employeeRepository = require('../repositories/employee.repository');
 const userRepository = require('../repositories/user.repository');
 const notificationService = require('./notification.service');
 const { istDayBoundsUTC } = require('./attendanceClassifier.service');
@@ -70,10 +71,10 @@ async function resolveTargetDate(dateStr) {
 
 // Buckets the previous working day's (or an explicit override's)
 // AttendanceRecords into Late/Early Departure/Half Day/Short Leave/Absent/
-// Present+Overtime tables, merging in any warnings already sent for that
-// date so each warnable row can render as locked/sent instead of a fresh
-// checkbox. See taskAccess's sibling comment style — this is the daily HR
-// exception report, not a per-employee calendar.
+// Present+Overtime/Single Scan tables, merging in any warnings already sent
+// for that date so each warnable row can render as locked/sent instead of a
+// fresh checkbox. See taskAccess's sibling comment style — this is the
+// daily HR exception report, not a per-employee calendar.
 async function computeDailyReport({ date } = {}) {
   // recentWorkingDays is always relative to today (not to the currently
   // viewed date), so the picker's two options stay stable no matter which
@@ -83,9 +84,10 @@ async function computeDailyReport({ date } = {}) {
     recentWorkingDays(RECENT_WORKING_DAYS_COUNT),
   ]);
 
-  const [records, warnings] = await Promise.all([
+  const [records, warnings, activeEmployees] = await Promise.all([
     attendanceRepository.listForDate(targetDate),
     attendanceWarningRepository.findForDate(targetDate),
+    employeeRepository.listActive(),
   ]);
 
   const liveRecords = records.filter((r) => r.employee && !r.employee.isDeleted);
@@ -95,7 +97,15 @@ async function computeDailyReport({ date } = {}) {
   }
 
   const { start, end } = istDayBoundsUTC(targetDate);
-  const employeeIds = liveRecords.map((r) => r.employee._id);
+  // Union of everyone who might need a punch lookup: anyone with a record
+  // today (may include an offboarded employee's final working day) plus
+  // every currently active employee — the latter is needed for the
+  // single-scan bucket below, which has to work for employees the
+  // classifier left without a record at all.
+  const employeeIdMap = new Map();
+  for (const r of liveRecords) employeeIdMap.set(r.employee._id.toString(), r.employee._id);
+  for (const e of activeEmployees) employeeIdMap.set(e._id.toString(), e._id);
+  const employeeIds = [...employeeIdMap.values()];
   const punches = await devicePunchRepository.listForEmployeesOnDay(employeeIds, start, end);
   const punchesByEmployee = new Map();
   for (const punch of punches) {
@@ -113,6 +123,29 @@ async function computeDailyReport({ date } = {}) {
   result.present_overtime = liveRecords
     .filter((r) => r.status === ATTENDANCE_STATUS.PRESENT && r.overtimeHours > 0)
     .map((r) => toRow(r, new Map(), punchesByEmployee));
+
+  // The classifier deliberately never writes an AttendanceRecord for a
+  // single-scan day (see attendanceClassifier.service.js's "single-scan/
+  // unclassified are never auto-written as a record") — so unlike every
+  // other bucket above, this can't be derived from liveRecords at all; it
+  // has to scan every active employee's raw punches directly. Informational
+  // only, same as Present+Overtime — no "not informed" warning category
+  // exists for this.
+  const recordedEmployeeIds = new Set(liveRecords.map((r) => r.employee._id.toString()));
+  result.single_scan = activeEmployees
+    .filter((e) => !recordedEmployeeIds.has(e._id.toString()))
+    .filter((e) => (punchesByEmployee.get(e._id.toString()) || []).length === 1)
+    .map((e) => {
+      const punch = punchesByEmployee.get(e._id.toString())[0];
+      return {
+        employee: { _id: e._id, firstName: e.firstName, lastName: e.lastName, designation: e.designation },
+        record: { overtimeHours: 0, isLate: false, earlyDeparture: false },
+        firstPunchAt: punch.timestamp,
+        lastPunchAt: punch.timestamp,
+        provisional: true,
+        alreadyWarned: null,
+      };
+    });
 
   return result;
 }

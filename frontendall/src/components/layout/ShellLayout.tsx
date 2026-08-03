@@ -13,6 +13,10 @@ import { useAuth } from '@/hooks/useAuth'
 import { Button } from '@/components/ui/button'
 import { NotificationBell } from './NotificationBell'
 
+// 'worker' is the underlying role name (permissions/auth logic stays
+// keyed on it) — "Employee" is just the friendlier label shown in the UI.
+const ROLE_LABEL: Record<string, string> = { admin: 'admin', hr: 'hr', worker: 'employee' }
+
 export function ShellLayout({ children, section }: { children: ReactNode; section?: string }) {
   const { user, signOut } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
@@ -88,7 +92,7 @@ export function ShellLayout({ children, section }: { children: ReactNode; sectio
                   {user?.username}
                 </span>
                 <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
-                  {user?.role}
+                  {user?.role ? (ROLE_LABEL[user.role] ?? user.role) : ''}
                 </span>
               </div>
             )}

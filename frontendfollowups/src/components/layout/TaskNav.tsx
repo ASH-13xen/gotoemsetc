@@ -6,6 +6,10 @@ import { useReviewTasks } from '@/hooks/useEmployeeTasks'
 import { canManageTasks } from '@/lib/permissions'
 import { cn } from '@/lib/utils'
 
+// 'worker' is the underlying role name (permissions/auth logic stays
+// keyed on it) — "Employee" is just the friendlier label shown in the UI.
+const ROLE_LABEL: Record<string, string> = { admin: 'admin', hr: 'hr', worker: 'employee' }
+
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   cn(
     'text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg transition-all text-muted-foreground hover:text-foreground hover:bg-secondary/50',
@@ -57,7 +61,7 @@ export function TaskNav() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs font-semibold text-muted-foreground bg-secondary/80 px-3 py-1.5 rounded-full uppercase tracking-wider">
-            {user?.username} • {user?.role}
+            {user?.username} • {user?.role ? (ROLE_LABEL[user.role] ?? user.role) : ''}
           </span>
           <Button variant="ghost" size="icon" onClick={signOut}>
             <LogOut className="size-4" />

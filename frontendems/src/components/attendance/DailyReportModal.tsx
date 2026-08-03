@@ -127,6 +127,36 @@ export function DailyReportModal({ trigger }: { trigger: React.ReactNode }) {
                 </Table>
               )}
             </section>
+
+            <section className="space-y-2">
+              <h3 className="text-sm font-extrabold uppercase tracking-widest text-foreground">
+                Single Scan ({report.single_scan.length})
+              </h3>
+              {report.single_scan.length === 0 ? (
+                <p className="text-xs text-muted-foreground">None.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee</TableHead>
+                      <TableHead>Designation</TableHead>
+                      <TableHead>Scan time</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {report.single_scan.map((row) => (
+                      <TableRow key={row.employee._id}>
+                        <TableCell className="font-semibold text-foreground">
+                          {row.employee.firstName} {row.employee.lastName ?? ''}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{row.employee.designation}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{formatPunchTime(row.firstPunchAt)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </section>
           </div>
         )}
       </DialogContent>

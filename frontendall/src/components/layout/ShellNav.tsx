@@ -5,6 +5,10 @@ import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { NotificationBell } from './NotificationBell'
 
+// 'worker' is the underlying role name (permissions/auth logic stays
+// keyed on it) — "Employee" is just the friendlier label shown in the UI.
+const ROLE_LABEL: Record<string, string> = { admin: 'admin', hr: 'hr', worker: 'employee' }
+
 export function ShellNav() {
   const { user, signOut } = useAuth()
 
@@ -44,7 +48,7 @@ export function ShellNav() {
         <div className="flex items-center gap-3">
           <NotificationBell />
           <span className="text-xs font-semibold text-muted-foreground bg-secondary/80 px-3 py-1.5 rounded-full uppercase tracking-wider">
-            {user?.username} • {user?.role}
+            {user?.username} • {user?.role ? (ROLE_LABEL[user.role] ?? user.role) : ''}
           </span>
           <Button variant="ghost" size="icon" onClick={signOut}>
             <LogOut className="size-4" />
