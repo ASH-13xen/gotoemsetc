@@ -9,13 +9,34 @@ function required(name) {
   return value;
 }
 
+// Each *_FRONTEND_URL env var may list more than one origin, comma-
+// separated (e.g. both a project's default vercel.app URL and a custom
+// domain pointed at it) — CORS has to allow whichever one a browser is
+// actually sitting on. Link-building code (emails, share tokens) still
+// wants a single canonical URL, so that stays a plain string — the first
+// configured origin.
+function parseOrigins(value, fallback) {
+  const raw = value || fallback;
+  return raw.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+const frontendUrls = parseOrigins(process.env.FRONTEND_URL, 'http://localhost:5173');
+const salesFrontendUrls = parseOrigins(process.env.SALES_FRONTEND_URL, 'http://localhost:5174');
+const followupsFrontendUrls = parseOrigins(process.env.FOLLOWUPS_FRONTEND_URL, 'http://localhost:5175');
+const allFrontendUrls = parseOrigins(process.env.ALL_FRONTEND_URL, 'http://localhost:5176');
+
 const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT) || 5000,
-  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
-  salesFrontendUrl: process.env.SALES_FRONTEND_URL || 'http://localhost:5174',
-  followupsFrontendUrl: process.env.FOLLOWUPS_FRONTEND_URL || 'http://localhost:5175',
-  allFrontendUrl: process.env.ALL_FRONTEND_URL || 'http://localhost:5176',
+  frontendUrl: frontendUrls[0],
+  salesFrontendUrl: salesFrontendUrls[0],
+  followupsFrontendUrl: followupsFrontendUrls[0],
+  allFrontendUrl: allFrontendUrls[0],
+  // Every allowed origin per app, for CORS (see app.js / websocket/clientChat.js).
+  frontendUrls,
+  salesFrontendUrls,
+  followupsFrontendUrls,
+  allFrontendUrls,
 
   mongodbUri: required('MONGODB_URI'),
 

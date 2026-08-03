@@ -13,7 +13,7 @@ let io = null;
 // re-verified server-side rather than trusted from the client.
 function init(httpServer) {
   io = new Server(httpServer, {
-    cors: { origin: [env.frontendUrl, env.salesFrontendUrl, env.followupsFrontendUrl, env.allFrontendUrl] },
+    cors: { origin: [...env.frontendUrls, ...env.salesFrontendUrls, ...env.followupsFrontendUrls, ...env.allFrontendUrls] },
   });
 
   io.use((socket, next) => {

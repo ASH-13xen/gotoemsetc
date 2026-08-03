@@ -20,7 +20,7 @@ if (env.nodeEnv === 'production') {
 
 app.use(
   cors({
-    origin: [env.frontendUrl, env.salesFrontendUrl, env.followupsFrontendUrl, env.allFrontendUrl],
+    origin: [...env.frontendUrls, ...env.salesFrontendUrls, ...env.followupsFrontendUrls, ...env.allFrontendUrls],
   })
 );
 
