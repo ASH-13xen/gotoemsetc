@@ -20,6 +20,7 @@ const {
   requireSelfOrPermission,
   requireDirectoryAccess,
   requireSelfOrDirectoryAccess,
+  requireHrWorkAccess,
 } = require('../middlewares/auth.middleware');
 const { USER_ROLES, PERMISSIONS } = require('../config/constants');
 
@@ -40,6 +41,9 @@ router.get('/birthdays', employeeController.birthdays);
 // employee.service.js#listDirectory.
 router.get('/directory', employeeController.directory);
 router.get('/attendance-today', requirePermission(PERMISSIONS.MARK_ATTENDANCE), attendanceController.markedToday);
+// Performance Flags history (frontendall) — same admin/hr/ceo audience the
+// flag milestone notifications go to. Must come before /:id.
+router.get('/flags/history', requireHrWorkAccess(), employeeController.flagHistory);
 router.get('/:id', requireSelfOrDirectoryAccess(), validate(employeeValidator.getOrDelete), employeeController.getById);
 router.patch(
   '/:id',
@@ -73,7 +77,10 @@ router.post(
 );
 router.get(
   '/:id/documents',
-  requirePermission(PERMISSIONS.GENERATE_DOCUMENTS),
+  // Self-access: an employee can always see their own generated documents
+  // (e.g. the frontendall self-service dashboard's Offer Letter/Letter of
+  // Appointment card) — HR/admin/generate_documents holders can see anyone's.
+  requireSelfOrPermission(PERMISSIONS.GENERATE_DOCUMENTS),
   validate(documentGenerationValidator.listForEmployee),
   documentController.listForEmployee
 );
@@ -84,6 +91,15 @@ router.post(
   validate(documentGenerationValidator.uploadSigned),
   documentController.uploadSigned
 );
+router.get(
+  '/:id/documents/:docId/signed-file',
+  // Self-access, scoped under the employee (unlike the flat admin-only
+  // /documents/:id/signed-file route) so an employee can download only the
+  // signed copy of their own document, never the bare unsigned original.
+  requireSelfOrPermission(PERMISSIONS.GENERATE_DOCUMENTS),
+  validate(documentGenerationValidator.uploadSigned),
+  documentController.downloadOwnSignedFile
+);
 
 router.post(
   '/:id/upload-requests',
@@ -93,7 +109,11 @@ router.post(
 );
 router.get(
   '/:id/upload-requests',
-  requirePermission(PERMISSIONS.REQUEST_DOCUMENTS),
+  // Self-access: an employee can see their own outstanding document
+  // requests (frontendall self-service dashboard) — this is read-only
+  // visibility, they still fulfill these through the existing public
+  // upload-link flow, not through this route.
+  requireSelfOrPermission(PERMISSIONS.REQUEST_DOCUMENTS),
   validate(uploadRequestValidator.listForEmployee),
   uploadRequestController.listForEmployee
 );
@@ -153,6 +173,21 @@ router.get(
   requirePermission(PERMISSIONS.VIEW_SALARY_SLIP),
   validate(salarySlipValidator.listForEmployee),
   salarySlipController.listForEmployee
+);
+router.get(
+  '/:id/salary-slips/recent-months',
+  // Self-access: an employee can see which of their last 3 completed
+  // months already have an HR-generated slip (frontendall dashboard) —
+  // independent of whether they hold view_salary_slip themselves.
+  requireSelfOrPermission(PERMISSIONS.VIEW_SALARY_SLIP),
+  validate(salarySlipValidator.recentMonths),
+  salarySlipController.listRecentMonths
+);
+router.get(
+  '/:id/salary-slips/:slipId/file',
+  requireSelfOrPermission(PERMISSIONS.VIEW_SALARY_SLIP),
+  validate(salarySlipValidator.ownFile),
+  salarySlipController.downloadOwnFile
 );
 
 module.exports = router;

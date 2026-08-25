@@ -17,6 +17,17 @@ function listByEmployee(employeeId) {
   return UploadRequest.find({ employee: employeeId }).sort({ createdAt: -1 });
 }
 
+// Global, cross-employee — backs the Dashboard's "Pending document requests"
+// stat click-through. Same status filter as countPending below, so the
+// number and the list it opens into always agree.
+function listPending() {
+  return UploadRequest.find({
+    status: { $in: [UPLOAD_REQUEST_STATUS.PENDING, UPLOAD_REQUEST_STATUS.PARTIALLY_FULFILLED] },
+  })
+    .sort({ createdAt: -1 })
+    .populate('employee', 'firstName lastName employeeCode designation');
+}
+
 function updateStatus(id, status, extra = {}) {
   return UploadRequest.findByIdAndUpdate(id, { status, ...extra }, { returnDocument: 'after' });
 }
@@ -47,6 +58,7 @@ module.exports = {
   findByToken,
   findById,
   listByEmployee,
+  listPending,
   updateStatus,
   clearAccessCode,
   clearExpiredAccessCodes,

@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { CheckCircle2, Download, Eye, Loader2, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import { GeneratedFilePreviewDialog } from '@/components/documents/GeneratedFilePreviewDialog'
 import { downloadGeneratedFile } from '@/api/documents.api'
 import type { DocumentTemplate } from '@/api/templates.api'
@@ -96,7 +97,7 @@ export function ReviewGenerateStep({
               .map((field) => (
                 <div key={field.key} className="flex items-baseline justify-between gap-4">
                   <span className="text-muted-foreground">{field.label}</span>
-                  <span className="truncate font-medium">
+                  <span className={cn('truncate font-medium', !field.key.toLowerCase().includes('email') && 'uppercase')}>
                     {fieldValues[field.key] || <span className="text-muted-foreground">—</span>}
                   </span>
                 </div>

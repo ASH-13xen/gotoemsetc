@@ -10,7 +10,11 @@ const eventResponsibilitySchema = new Schema(
     event: { type: Schema.Types.ObjectId, ref: 'Event', required: true, index: true },
     title: { type: String, required: true, trim: true },
     assignedEmployees: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
-    assignedTeam: { type: Schema.Types.ObjectId, ref: 'Team' },
+    // WorkTeam, the single team registry shared by Task Management and the
+    // Client Management System (the old `Team` model this referenced was
+    // removed in the CMS rebuild — see
+    // scripts/migrateEventResponsibilityTeam.js).
+    assignedTeam: { type: Schema.Types.ObjectId, ref: 'WorkTeam' },
     // Both independently optional — a responsibility can have neither, one,
     // or both of a due date and a time window.
     dueDate: { type: Date },

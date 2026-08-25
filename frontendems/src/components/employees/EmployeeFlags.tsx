@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { extractApiErrorMessage } from '@/lib/errors'
 import { useAddFlag, useRemoveFlag } from '@/hooks/useEmployees'
 import type { EmployeeFlag } from '@/api/employees.api'
 
@@ -59,7 +60,7 @@ export function FlagStrip({ flags }: { flags: EmployeeFlag[] }) {
       {greenCount > 0 && (
         <span
           className={cn(
-            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-black tabular-nums transition-transform group-hover/flags:scale-105',
+            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums transition-transform group-hover/flags:scale-105',
             COLOR_STYLE.green.badgePill
           )}
         >
@@ -70,7 +71,7 @@ export function FlagStrip({ flags }: { flags: EmployeeFlag[] }) {
       {redCount > 0 && (
         <span
           className={cn(
-            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-black tabular-nums transition-transform group-hover/flags:scale-105',
+            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums transition-transform group-hover/flags:scale-105',
             COLOR_STYLE.red.badgePill
           )}
         >
@@ -142,7 +143,7 @@ export function EmployeeFlagsManager({
           toast.success('Flag added')
           setNote('')
         },
-        onError: () => toast.error('Could not add flag'),
+        onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not add flag')),
       }
     )
   }
@@ -150,7 +151,7 @@ export function EmployeeFlagsManager({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="rounded-xl gap-1.5">
+        <Button variant="outline" size="sm" className="gap-1.5">
           <Trophy className="size-3.5" />
           Flags
           {flags.length > 0 && <span className="text-xs text-muted-foreground">({flags.length})</span>}
@@ -166,30 +167,30 @@ export function EmployeeFlagsManager({
         </DialogHeader>
 
         {/* Scoreboard */}
-        <div className="grid grid-cols-3 gap-2 rounded-xl border bg-secondary/30 p-3 text-center">
+        <div className="grid grid-cols-3 gap-2 rounded-lg border border-border p-3 text-center">
           <div>
-            <p className="flex items-center justify-center gap-1 text-2xl font-black text-emerald-600">
+            <p className="flex items-center justify-center gap-1 text-2xl font-semibold text-emerald-600">
               <Trophy className="size-4 fill-current" />
               {greenCount}
             </p>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Good work</p>
+            <p className="text-xs text-muted-foreground">Good work</p>
           </div>
           <div>
-            <p className={cn('text-2xl font-black', netScore > 0 ? 'text-emerald-600' : netScore < 0 ? 'text-red-600' : 'text-muted-foreground')}>
+            <p className={cn('text-2xl font-semibold', netScore > 0 ? 'text-emerald-600' : netScore < 0 ? 'text-red-600' : 'text-muted-foreground')}>
               {netScore > 0 ? `+${netScore}` : netScore}
             </p>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Net score</p>
+            <p className="text-xs text-muted-foreground">Net score</p>
           </div>
           <div>
-            <p className="flex items-center justify-center gap-1 text-2xl font-black text-red-600">
+            <p className="flex items-center justify-center gap-1 text-2xl font-semibold text-red-600">
               <Flag className="size-4 fill-current" />
               {redCount}
             </p>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Poor work</p>
+            <p className="text-xs text-muted-foreground">Poor work</p>
           </div>
         </div>
 
-        <div className="grid gap-3 rounded-xl border p-3">
+        <div className="grid gap-3 rounded-lg border border-border p-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label>Color</Label>
@@ -244,7 +245,7 @@ export function EmployeeFlagsManager({
                     onClick={() =>
                       removeFlag.mutate(flag._id, {
                         onSuccess: () => toast.success('Flag removed'),
-                        onError: () => toast.error('Could not remove flag'),
+                        onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not remove flag')),
                       })
                     }
                   >

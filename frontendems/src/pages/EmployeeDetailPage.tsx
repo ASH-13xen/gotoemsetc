@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Controller, useFieldArray, useForm } from 'react-hook-form'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Loader2, Plus, Trash2 } from 'lucide-react'
+import { FileText, KeyRound, Loader2, Plus, Send, Trash2, Wallet } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { QuickActions, QuickActionItem } from '@/components/layout/QuickActions'
 import { StatusBadge } from '@/components/employees/StatusBadge'
 import { GeneratedDocumentsList } from '@/components/documents/GeneratedDocumentsList'
 import { UploadedDocumentsList } from '@/components/documents/UploadedDocumentsList'
@@ -32,6 +33,8 @@ import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummary
 import { NotInformedWarningsCard } from '@/components/attendance/NotInformedWarningsCard'
 import { PendingWarningsModal } from '@/components/attendance/PendingWarningsModal'
 import { useAuth } from '@/hooks/useAuth'
+import { cn } from '@/lib/utils'
+import { extractApiErrorMessage } from '@/lib/errors'
 import { hasAnyPermission, hasPermission, isAdminLike } from '@/lib/permissions'
 import { useDeleteEmployee, useEmployee, useEmployees, useUpdateEmployee } from '@/hooks/useEmployees'
 import { useUploadedDocuments } from '@/hooks/useUploadRequests'
@@ -188,11 +191,15 @@ function toFormValues(employee: Employee): FormValues {
 
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
-    <div className="border-b border-border/40 pb-3">
-      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className="text-base font-bold text-foreground mt-1 uppercase tracking-wide">{value || '—'}</p>
+    <div className="flex flex-col gap-1 border-b border-border pb-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm font-medium text-foreground">{value || '—'}</p>
     </div>
   )
+}
+
+function SectionTitle({ children }: { children: ReactNode }) {
+  return <h2 className="border-b border-border pb-3 text-base font-semibold text-foreground">{children}</h2>
 }
 
 function CheckboxRow({
@@ -205,14 +212,14 @@ function CheckboxRow({
   onChange: (checked: boolean) => void
 }) {
   return (
-    <label className="flex items-center gap-3 cursor-pointer select-none rounded-xl border border-border/40 bg-secondary/30 p-3 hover:bg-secondary/50 transition-colors">
+    <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-secondary/30 p-3 transition-colors select-none hover:bg-secondary/50">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="size-5 shrink-0 rounded border-border accent-primary cursor-pointer"
+        className="size-4 shrink-0 cursor-pointer rounded border-border accent-primary"
       />
-      <span className="text-sm font-bold uppercase tracking-wide text-foreground">{label}</span>
+      <span className="text-sm font-medium text-foreground">{label}</span>
     </label>
   )
 }
@@ -223,9 +230,9 @@ export default function EmployeeDetailPage() {
 
   if (isLoading || !data) {
     return (
-      <div className="mx-auto max-w-3xl space-y-4 py-4 bg-transparent">
-        <Skeleton className="h-8 w-48 bg-secondary/40 rounded-xl" />
-        <Skeleton className="h-64 w-full bg-secondary/40 rounded-xl" />
+      <div className="mx-auto max-w-3xl space-y-4 py-8">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-64 w-full" />
       </div>
     )
   }
@@ -296,7 +303,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
       },
       {
         onSuccess: () => toast.success('Employee updated'),
-        onError: () => toast.error('Could not save changes'),
+        onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not save changes')),
       }
     )
   }
@@ -308,161 +315,122 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         toast.success('Employee removed')
         navigate('/')
       },
-      onError: () => toast.error('Could not remove employee'),
+      onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not remove employee')),
     })
   }
 
   return (
-    <div className="space-y-8 py-4">
+    <div className="mx-auto flex max-w-4xl flex-col gap-8 py-8">
       {isOwnRecord && <PendingWarningsModal employeeId={employeeId} />}
-      <main className="mx-auto max-w-4xl space-y-8">
-        {/* HERO DETAIL HEADER */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 bg-transparent">
-          {/* Identity Tile — the passport photo (once one's on file, see
-              requested documents) renders as a fixed-size portrait right
-              below the name, not a background — same box for both an
-              admin/HR viewer and the employee viewing their own profile. */}
-          <Card className="md:col-span-2 p-8 flex flex-col justify-between min-h-55 gap-4">
-            <div className="flex flex-col gap-2">
-              <span className="text-xs font-bold tracking-widest text-muted-foreground uppercase">
-                EMPLOYEE PROFILE
-              </span>
-              <h1 className="text-4xl md:text-6xl font-extrabold uppercase tracking-tighter text-foreground">
-                {employee.firstName} {employee.lastName}
-              </h1>
-              <p className="font-mono text-base font-semibold text-muted-foreground mt-1 uppercase tracking-wider">
-                {employee.employeeCode}
-              </p>
-              {photoDoc && (
-                <UploadedDocumentImage
-                  documentId={photoDoc._id}
-                  alt={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
-                  className="w-24 h-32 mt-2 rounded-xl border border-border/20 object-cover shadow-diffuse"
-                />
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
+
+      {/* PROFILE HEADER — the passport photo (once one's on file, see
+          requested documents) renders as a fixed-size portrait beside the
+          name, not a background — same layout for both an admin/HR viewer
+          and the employee viewing their own profile. */}
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex gap-4">
+          {photoDoc && (
+            <UploadedDocumentImage
+              documentId={photoDoc._id}
+              alt={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
+              className="h-28 w-20 shrink-0 rounded-lg border border-border object-cover"
+            />
+          )}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Employee profile</span>
+            <h1 className="text-3xl font-semibold uppercase tracking-tight text-foreground sm:text-4xl">
+              {employee.firstName} {employee.lastName}
+            </h1>
+            <p className="font-mono text-xs text-muted-foreground">{employee.employeeCode}</p>
+            <div className="flex flex-wrap items-center gap-3 pt-1">
               <StatusBadge status={employee.status} />
               <FlagStrip flags={employee.flags ?? []} />
               {isAdmin && <EmployeeFlagsManager employeeId={employeeId} flags={employee.flags ?? []} />}
             </div>
-          </Card>
-
-          {/* Action Tiles */}
-          <div className="flex flex-col gap-4">
-            {/* Back Button */}
-            {canBackToPortal && (
-              <div
-                onClick={() => navigate('/')}
-                className="bg-primary/10 text-primary p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
-              >
-                <span className="text-[10px] font-bold tracking-widest text-primary/70 uppercase">NAVIGATION</span>
-                <span className="text-2xl font-extrabold uppercase tracking-wide">BACK TO PORTAL</span>
-              </div>
-            )}
-
-            {/* Generate Documents */}
-            {canGenerateDocs && (
-              <div
-                onClick={() => navigate(`/employees/${employeeId}/wizard`)}
-                className="bg-secondary text-secondary-foreground p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
-              >
-                <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">DOCUMENT SYSTEM</span>
-                <span className="text-2xl font-extrabold uppercase tracking-wide">GENERATE DOCS</span>
-              </div>
-            )}
-
-            {/* Request Documents */}
-            {canRequestDocs && (
-              <RequestDocumentsModal
-                employeeId={employeeId}
-                employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
-                employeePhone={employee.phone}
-                trigger={
-                  <div
-                    className="bg-secondary text-secondary-foreground p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
-                  >
-                    <span className="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">HR COLLECTION</span>
-                    <span className="text-2xl font-extrabold uppercase tracking-wide">REQUEST FILES</span>
-                  </div>
-                }
-              />
-            )}
-
-            {/* Add/Manage Credentials */}
-            {canAddCredentials && (
-              <CredentialsDialog
-                employeeId={employeeId}
-                employeeName={`${employee.firstName} ${employee.lastName ?? ''}`}
-                trigger={
-                  <div className="bg-purple-500/10 text-purple-700 p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]">
-                    <span className="text-[10px] font-bold tracking-widest text-purple-700/70 uppercase">PLATFORM ACCESS</span>
-                    <span className="text-2xl font-extrabold uppercase tracking-wide">ADD CREDENTIALS</span>
-                  </div>
-                }
-              />
-            )}
-
-            {/* Generate Salary Slip */}
-            {canViewSalary && (
-              <GenerateSalarySlipDialog
-                employeeId={employeeId}
-                employeeName={`${employee.firstName} ${employee.lastName ?? ''}`}
-                trigger={
-                  <div className="bg-emerald-500/10 text-emerald-700 p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]">
-                    <span className="text-[10px] font-bold tracking-widest text-emerald-700/70 uppercase">PAYROLL</span>
-                    <span className="text-2xl font-extrabold uppercase tracking-wide">GENERATE SALARY SLIP</span>
-                  </div>
-                }
-              />
-            )}
           </div>
         </div>
+        {canBackToPortal && (
+          <Button variant="outline" onClick={() => navigate('/')}>
+            Back to dashboard
+          </Button>
+        )}
+      </div>
 
-        {/* DETAILS FORM */}
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-8">
+      <QuickActions>
+        {canGenerateDocs && (
+          <QuickActionItem
+            icon={<FileText className="size-4" />}
+            label="Generate docs"
+            description="Document system"
+            onClick={() => navigate(`/employees/${employeeId}/wizard`)}
+          />
+        )}
+        {canRequestDocs && (
+          <RequestDocumentsModal
+            employeeId={employeeId}
+            employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
+            employeePhone={employee.phone}
+            trigger={<QuickActionItem icon={<Send className="size-4" />} label="Request files" description="HR collection" />}
+          />
+        )}
+        {canAddCredentials && (
+          <CredentialsDialog
+            employeeId={employeeId}
+            employeeName={`${employee.firstName} ${employee.lastName ?? ''}`}
+            trigger={<QuickActionItem icon={<KeyRound className="size-4" />} label="Add credentials" description="Platform access" />}
+          />
+        )}
+        {canViewSalary && (
+          <GenerateSalarySlipDialog
+            employeeId={employeeId}
+            employeeName={`${employee.firstName} ${employee.lastName ?? ''}`}
+            trigger={<QuickActionItem icon={<Wallet className="size-4" />} label="Generate salary slip" description="Payroll" />}
+          />
+        )}
+      </QuickActions>
+
+      {/* DETAILS FORM */}
+      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-8">
         <fieldset disabled={!canEditDetails} className="contents">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             {/* Personal Details */}
-            <Card className="p-6 space-y-6">
-              <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
-                PERSONAL DETAILS
-              </h2>
+            <Card className="gap-6 p-6">
+              <SectionTitle>Personal details</SectionTitle>
               <div className="grid grid-cols-1 gap-4">
                 <div className="grid gap-1.5">
-                  <Label htmlFor="firstName" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">FIRST NAME</Label>
-                  <Input id="firstName" {...register('firstName', { required: true })} className="uppercase" />
+                  <Label htmlFor="firstName" className="text-xs text-muted-foreground">First name</Label>
+                  <Input id="firstName" className="uppercase" {...register('firstName', { required: true })} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="lastName" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">LAST NAME</Label>
-                  <Input id="lastName" {...register('lastName')} className="uppercase" />
+                  <Label htmlFor="lastName" className="text-xs text-muted-foreground">Last name</Label>
+                  <Input id="lastName" className="uppercase" {...register('lastName')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="personalEmail" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">PERSONAL EMAIL</Label>
-                  <Input id="personalEmail" type="email" {...register('personalEmail')} className="uppercase" />
+                  <Label htmlFor="personalEmail" className="text-xs text-muted-foreground">Personal email</Label>
+                  <Input id="personalEmail" type="email" {...register('personalEmail')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="phone" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">PHONE</Label>
-                  <Input id="phone" {...register('phone')} className="uppercase" />
+                  <Label htmlFor="phone" className="text-xs text-muted-foreground">Phone</Label>
+                  <Input id="phone" {...register('phone')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="instagramId" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">INSTAGRAM ID</Label>
-                  <Input id="instagramId" {...register('instagramId')} className="uppercase" />
+                  <Label htmlFor="instagramId" className="text-xs text-muted-foreground">Instagram ID</Label>
+                  <Input id="instagramId" className="uppercase" {...register('instagramId')} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-1.5">
-                    <Label htmlFor="dob" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">DATE OF BIRTH</Label>
+                    <Label htmlFor="dob" className="text-xs text-muted-foreground">Date of birth</Label>
                     <Input id="dob" type="date" {...register('dob')} />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">BLOOD GROUP</Label>
+                    <Label className="text-xs text-muted-foreground">Blood group</Label>
                     <Controller
                       control={control}
                       name="bloodGroup"
                       render={({ field }) => (
                         <Select value={field.value} onValueChange={field.onChange}>
                           <SelectTrigger>
-                            <SelectValue placeholder="SELECT" />
+                            <SelectValue placeholder="Select" />
                           </SelectTrigger>
                           <SelectContent>
                             {BLOOD_GROUPS.map((bg) => (
@@ -478,25 +446,23 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
             </Card>
 
             {/* Employment */}
-            <Card className="p-6 space-y-6">
-              <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
-                EMPLOYMENT
-              </h2>
+            <Card className="gap-6 p-6">
+              <SectionTitle>Employment</SectionTitle>
               <div className="grid grid-cols-1 gap-4">
                 <div className="grid gap-1.5">
-                  <Label htmlFor="designation" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">DESIGNATION</Label>
-                  <Input id="designation" {...register('designation', { required: true })} className="uppercase" />
+                  <Label htmlFor="designation" className="text-xs text-muted-foreground">Designation</Label>
+                  <Input id="designation" className="uppercase" {...register('designation', { required: true })} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="department" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">DEPARTMENT</Label>
-                  <Input id="department" {...register('department')} className="uppercase" />
+                  <Label htmlFor="department" className="text-xs text-muted-foreground">Department</Label>
+                  <Input id="department" className="uppercase" {...register('department')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="reportingManager" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">REPORTING MANAGER</Label>
-                  <Input id="reportingManager" {...register('reportingManager')} className="uppercase" />
+                  <Label htmlFor="reportingManager" className="text-xs text-muted-foreground">Reporting manager</Label>
+                  <Input id="reportingManager" className="uppercase" {...register('reportingManager')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">MANAGER (TASK MANAGEMENT)</Label>
+                  <Label className="text-xs text-muted-foreground">Manager (task management)</Label>
                   <Controller
                     control={control}
                     name="manager"
@@ -506,7 +472,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                         onValueChange={(value) => field.onChange(value === NO_MANAGER ? '' : value)}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="SELECT" />
+                          <SelectValue placeholder="Select" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value={NO_MANAGER}>— None —</SelectItem>
@@ -521,32 +487,32 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="workLocation" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">WORK LOCATION</Label>
-                  <Input id="workLocation" {...register('workLocation')} className="uppercase" />
+                  <Label htmlFor="workLocation" className="text-xs text-muted-foreground">Work location</Label>
+                  <Input id="workLocation" className="uppercase" {...register('workLocation')} />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-1.5">
-                    <Label htmlFor="workingHoursStart" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">SHIFT START</Label>
+                    <Label htmlFor="workingHoursStart" className="text-xs text-muted-foreground">Shift start</Label>
                     <Input id="workingHoursStart" type="time" {...register('workingHoursStart')} />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label htmlFor="workingHoursEnd" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">SHIFT END</Label>
+                    <Label htmlFor="workingHoursEnd" className="text-xs text-muted-foreground">Shift end</Label>
                     <Input id="workingHoursEnd" type="time" {...register('workingHoursEnd')} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-1.5">
-                    <Label htmlFor="dateOfHiring" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">DATE OF HIRING</Label>
+                    <Label htmlFor="dateOfHiring" className="text-xs text-muted-foreground">Date of hiring</Label>
                     <Input id="dateOfHiring" type="date" {...register('dateOfHiring')} />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label htmlFor="dateOfJoining" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">DATE OF JOINING</Label>
+                    <Label htmlFor="dateOfJoining" className="text-xs text-muted-foreground">Date of joining</Label>
                     <Input id="dateOfJoining" type="date" {...register('dateOfJoining')} />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-1.5">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">EMPLOYMENT TYPE</Label>
+                    <Label className="text-xs text-muted-foreground">Employment type</Label>
                     <Controller
                       control={control}
                       name="employmentType"
@@ -556,18 +522,18 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="full-time">FULL-TIME</SelectItem>
-                            <SelectItem value="part-time">PART-TIME</SelectItem>
-                            <SelectItem value="contract">CONTRACT</SelectItem>
-                            <SelectItem value="intern">INTERN</SelectItem>
-                            <SelectItem value="hybrid">HYBRID</SelectItem>
+                            <SelectItem value="full-time">Full-time</SelectItem>
+                            <SelectItem value="part-time">Part-time</SelectItem>
+                            <SelectItem value="contract">Contract</SelectItem>
+                            <SelectItem value="intern">Intern</SelectItem>
+                            <SelectItem value="hybrid">Hybrid</SelectItem>
                           </SelectContent>
                         </Select>
                       )}
                     />
                   </div>
                   <div className="grid gap-1.5">
-                    <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">STATUS</Label>
+                    <Label className="text-xs text-muted-foreground">Status</Label>
                     <Controller
                       control={control}
                       name="status"
@@ -577,9 +543,9 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="draft">DRAFT</SelectItem>
-                            <SelectItem value="active">ACTIVE</SelectItem>
-                            <SelectItem value="offboarded">OFFBOARDED</SelectItem>
+                            <SelectItem value="draft">Draft</SelectItem>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="offboarded">Offboarded</SelectItem>
                           </SelectContent>
                         </Select>
                       )}
@@ -591,47 +557,39 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
           </div>
 
           {/* Addresses */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card className="p-6 space-y-4">
-              <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
-                PERMANENT ADDRESS
-              </h2>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <Card className="gap-4 p-6">
+              <SectionTitle>Permanent address</SectionTitle>
               <div className="grid grid-cols-1 gap-4">
-                <Textarea {...register('permanentAddress.line1')} placeholder="ADDRESS LINE 1" />
-                <Input {...register('permanentAddress.line2')} placeholder="ADDRESS LINE 2" className="uppercase" />
+                <Textarea {...register('permanentAddress.line1')} placeholder="Address line 1" className="uppercase" />
+                <Input {...register('permanentAddress.line2')} placeholder="Address line 2" className="uppercase" />
                 <div className="grid grid-cols-2 gap-4">
-                  <Input {...register('permanentAddress.city')} placeholder="CITY" className="uppercase" />
-                  <Input {...register('permanentAddress.state')} placeholder="STATE" className="uppercase" />
+                  <Input {...register('permanentAddress.city')} placeholder="City" className="uppercase" />
+                  <Input {...register('permanentAddress.state')} placeholder="State" className="uppercase" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <Input {...register('permanentAddress.pincode')} placeholder="PINCODE" />
-                  <Input {...register('permanentAddress.country')} placeholder="COUNTRY" className="uppercase" />
+                  <Input {...register('permanentAddress.pincode')} placeholder="Pincode" />
+                  <Input {...register('permanentAddress.country')} placeholder="Country" className="uppercase" />
                 </div>
               </div>
             </Card>
 
-            <Card className="p-6 space-y-4">
-              <div className="flex items-center justify-between border-b border-border/15 pb-3 flex-wrap gap-2">
-                <h2 className="text-2xl font-bold uppercase tracking-widest text-foreground">
-                  LOCAL ADDRESS
-                </h2>
-                <CheckboxRow
-                  label="SAME AS PERMANENT?"
-                  checked={sameAsPermanent}
-                  onChange={onToggleSameAsPermanent}
-                />
+            <Card className="gap-4 p-6">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+                <h2 className="text-base font-semibold text-foreground">Local address</h2>
+                <CheckboxRow label="Same as permanent?" checked={sameAsPermanent} onChange={onToggleSameAsPermanent} />
               </div>
               <div className="grid grid-cols-1 gap-4">
                 <Textarea
                   {...register('localAddress.line1')}
-                  placeholder="ADDRESS LINE 1"
+                  placeholder="Address line 1"
                   disabled={sameAsPermanent}
                   value={sameAsPermanent ? permanentAddress?.line1 : undefined}
-                  className="disabled:opacity-50"
+                  className="uppercase disabled:opacity-50"
                 />
                 <Input
                   {...register('localAddress.line2')}
-                  placeholder="ADDRESS LINE 2"
+                  placeholder="Address line 2"
                   disabled={sameAsPermanent}
                   value={sameAsPermanent ? permanentAddress?.line2 : undefined}
                   className="uppercase disabled:opacity-50"
@@ -639,14 +597,14 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 <div className="grid grid-cols-2 gap-4">
                   <Input
                     {...register('localAddress.city')}
-                    placeholder="CITY"
+                    placeholder="City"
                     disabled={sameAsPermanent}
                     value={sameAsPermanent ? permanentAddress?.city : undefined}
                     className="uppercase disabled:opacity-50"
                   />
                   <Input
                     {...register('localAddress.state')}
-                    placeholder="STATE"
+                    placeholder="State"
                     disabled={sameAsPermanent}
                     value={sameAsPermanent ? permanentAddress?.state : undefined}
                     className="uppercase disabled:opacity-50"
@@ -655,14 +613,14 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 <div className="grid grid-cols-2 gap-4">
                   <Input
                     {...register('localAddress.pincode')}
-                    placeholder="PINCODE"
+                    placeholder="Pincode"
                     disabled={sameAsPermanent}
                     value={sameAsPermanent ? permanentAddress?.pincode : undefined}
                     className="disabled:opacity-50"
                   />
                   <Input
                     {...register('localAddress.country')}
-                    placeholder="COUNTRY"
+                    placeholder="Country"
                     disabled={sameAsPermanent}
                     value={sameAsPermanent ? permanentAddress?.country : undefined}
                     className="uppercase disabled:opacity-50"
@@ -673,51 +631,49 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
           </div>
 
           {/* Onboarding Checklist */}
-          <Card className="p-6 space-y-6">
-            <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
-              ONBOARDING CHECKLIST
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="gap-6 p-6">
+            <SectionTitle>Onboarding checklist</SectionTitle>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <Controller
                 control={control}
                 name="biometricVerificationAdded"
                 render={({ field }) => (
-                  <CheckboxRow label="BIOMETRIC VERIFICATION ADDED" checked={field.value} onChange={field.onChange} />
+                  <CheckboxRow label="Biometric verification added" checked={field.value} onChange={field.onChange} />
                 )}
               />
               <Controller
                 control={control}
                 name="companyLoginAdded"
                 render={({ field }) => (
-                  <CheckboxRow label={`GOTOFRIEND_${employee.employeeCode} LOG IN?`} checked={field.value} onChange={field.onChange} />
+                  <CheckboxRow label={`Gotofriend_${employee.employeeCode} log in?`} checked={field.value} onChange={field.onChange} />
                 )}
               />
               <Controller
                 control={control}
                 name="officePhoneAdded"
                 render={({ field }) => (
-                  <CheckboxRow label="GOTO OFFICE PHONE NUMBER ADDED?" checked={field.value} onChange={field.onChange} />
+                  <CheckboxRow label="Goto office phone number added?" checked={field.value} onChange={field.onChange} />
                 )}
               />
               <Controller
                 control={control}
                 name="personalPhoneAdded"
                 render={({ field }) => (
-                  <CheckboxRow label="GOTO PERSONAL PHONE NUMBER ADDED?" checked={field.value} onChange={field.onChange} />
+                  <CheckboxRow label="Goto personal phone number added?" checked={field.value} onChange={field.onChange} />
                 )}
               />
               <Controller
                 control={control}
                 name="assetAccessAdded"
                 render={({ field }) => (
-                  <CheckboxRow label="ACCESS OF ASSET (MAILS + GRPS) ADDED?" checked={field.value} onChange={field.onChange} />
+                  <CheckboxRow label="Access of asset (mails + grps) added?" checked={field.value} onChange={field.onChange} />
                 )}
               />
               <Controller
                 control={control}
                 name="updatedIn12345"
                 render={({ field }) => (
-                  <CheckboxRow label="UPDATED IN 12345?" checked={field.value} onChange={field.onChange} />
+                  <CheckboxRow label="Updated in 12345?" checked={field.value} onChange={field.onChange} />
                 )}
               />
             </div>
@@ -726,94 +682,80 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
           {/* Inventory — company-issued hardware/SIM, auto-fills the
               Hardware Consent Form's Equipment Inventory section in the
               document wizard the same way Designation/Department do. */}
-          <Card className="p-6 space-y-6">
-            <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
-              INVENTORY
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="gap-6 p-6">
+            <SectionTitle>Inventory</SectionTitle>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="grid gap-1.5">
-                <Label htmlFor="inventory.deviceName" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">MOBILE/LAPTOP NAME</Label>
-                <Input id="inventory.deviceName" {...register('inventory.deviceName')} className="uppercase" />
+                <Label htmlFor="inventory.deviceName" className="text-xs text-muted-foreground">Mobile/laptop name</Label>
+                <Input id="inventory.deviceName" className="uppercase" {...register('inventory.deviceName')} />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="inventory.imeiOrSerialNumber" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">MOBILE IMEI NUM / LAPTOP SERIAL NUM</Label>
-                <Input id="inventory.imeiOrSerialNumber" {...register('inventory.imeiOrSerialNumber')} className="uppercase" />
+                <Label htmlFor="inventory.imeiOrSerialNumber" className="text-xs text-muted-foreground">Mobile IMEI num / laptop serial num</Label>
+                <Input id="inventory.imeiOrSerialNumber" className="uppercase" {...register('inventory.imeiOrSerialNumber')} />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="inventory.deviceColor" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">MOBILE/LAPTOP COLOR</Label>
-                <Input id="inventory.deviceColor" {...register('inventory.deviceColor')} className="uppercase" />
+                <Label htmlFor="inventory.deviceColor" className="text-xs text-muted-foreground">Mobile/laptop color</Label>
+                <Input id="inventory.deviceColor" className="uppercase" {...register('inventory.deviceColor')} />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="inventory.simProvider" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">SIM PROVIDER</Label>
-                <Input id="inventory.simProvider" {...register('inventory.simProvider')} className="uppercase" />
+                <Label htmlFor="inventory.simProvider" className="text-xs text-muted-foreground">SIM provider</Label>
+                <Input id="inventory.simProvider" className="uppercase" {...register('inventory.simProvider')} />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="inventory.simPhoneNumber" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">PHONE NUMBER</Label>
+                <Label htmlFor="inventory.simPhoneNumber" className="text-xs text-muted-foreground">Phone number</Label>
                 <Input id="inventory.simPhoneNumber" {...register('inventory.simPhoneNumber')} />
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <Controller
                 control={control}
                 name="inventory.screenGuard"
-                render={({ field }) => (
-                  <CheckboxRow label="SCREEN GUARD" checked={field.value} onChange={field.onChange} />
-                )}
+                render={({ field }) => <CheckboxRow label="Screen guard" checked={field.value} onChange={field.onChange} />}
               />
               <Controller
                 control={control}
                 name="inventory.backCover"
-                render={({ field }) => (
-                  <CheckboxRow label="BACK COVER" checked={field.value} onChange={field.onChange} />
-                )}
+                render={({ field }) => <CheckboxRow label="Back cover" checked={field.value} onChange={field.onChange} />}
               />
               <Controller
                 control={control}
                 name="inventory.powerAdapter"
-                render={({ field }) => (
-                  <CheckboxRow label="POWER ADAPTER" checked={field.value} onChange={field.onChange} />
-                )}
+                render={({ field }) => <CheckboxRow label="Power adapter" checked={field.value} onChange={field.onChange} />}
               />
               <Controller
                 control={control}
                 name="inventory.cable"
-                render={({ field }) => (
-                  <CheckboxRow label="CABLE" checked={field.value} onChange={field.onChange} />
-                )}
+                render={({ field }) => <CheckboxRow label="Cable" checked={field.value} onChange={field.onChange} />}
               />
             </div>
           </Card>
 
           {/* Offboarding — only meaningful once status is set to Offboarded */}
           {status === 'offboarded' && (
-            <Card className="p-6 space-y-6">
-              <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
-                OFFBOARDING
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="gap-6 p-6">
+              <SectionTitle>Offboarding</SectionTitle>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="grid gap-1.5">
-                  <Label htmlFor="endDate" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">END DATE</Label>
+                  <Label htmlFor="endDate" className="text-xs text-muted-foreground">End date</Label>
                   <Input id="endDate" type="date" {...register('endDate')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="reasonForLeaving" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">REASON FOR LEAVING</Label>
-                  <Input id="reasonForLeaving" {...register('reasonForLeaving')} className="uppercase" />
+                  <Label htmlFor="reasonForLeaving" className="text-xs text-muted-foreground">Reason for leaving</Label>
+                  <Input id="reasonForLeaving" className="uppercase" {...register('reasonForLeaving')} />
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <Controller
                   control={control}
                   name="removedFromGroupsAndReels"
                   render={({ field }) => (
-                    <CheckboxRow label="REMOVED FROM GROUPS + GO-TO REELS" checked={field.value} onChange={field.onChange} />
+                    <CheckboxRow label="Removed from groups + Go-To Reels" checked={field.value} onChange={field.onChange} />
                   )}
                 />
                 <Controller
                   control={control}
                   name="mailDeactivated"
-                  render={({ field }) => (
-                    <CheckboxRow label="MAIL DEACTIVATED" checked={field.value} onChange={field.onChange} />
-                  )}
+                  render={({ field }) => <CheckboxRow label="Mail deactivated" checked={field.value} onChange={field.onChange} />}
                 />
               </div>
             </Card>
@@ -821,45 +763,43 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
 
           {/* Compensation & IDs — admin-only */}
           {isAdmin && (
-            <Card className="p-6 space-y-6">
-              <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
-                COMPENSATION & IDENTIFICATION
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <Card className="gap-6 p-6">
+              <SectionTitle>Compensation & identification</SectionTitle>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
                 <div className="grid gap-1.5">
-                  <Label htmlFor="employeeCode" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">CODE (BIOMETRIC DEVICE PIN)</Label>
-                  <Input id="employeeCode" {...register('employeeCode')} />
+                  <Label htmlFor="employeeCode" className="text-xs text-muted-foreground">Code (biometric device PIN)</Label>
+                  <Input id="employeeCode" className="uppercase" {...register('employeeCode')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="ctcAnnual" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">ANNUAL CTC</Label>
+                  <Label htmlFor="ctcAnnual" className="text-xs text-muted-foreground">Annual CTC</Label>
                   <Input id="ctcAnnual" type="number" {...register('ctcAnnual')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="monthlyPay" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">MONTHLY PAY</Label>
+                  <Label htmlFor="monthlyPay" className="text-xs text-muted-foreground">Monthly pay</Label>
                   <Input id="monthlyPay" type="number" {...register('monthlyPay')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="panNumber" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">PAN NUMBER</Label>
-                  <Input id="panNumber" {...register('panNumber')} className="uppercase" />
+                  <Label htmlFor="panNumber" className="text-xs text-muted-foreground">PAN number</Label>
+                  <Input id="panNumber" className="uppercase" {...register('panNumber')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="aadharNumber" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">AADHAR NUMBER</Label>
-                  <Input id="aadharNumber" {...register('aadharNumber')} className="uppercase" />
+                  <Label htmlFor="aadharNumber" className="text-xs text-muted-foreground">Aadhar number</Label>
+                  <Input id="aadharNumber" {...register('aadharNumber')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="bankName" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">BANK NAME</Label>
-                  <Input id="bankName" {...register('bankName')} className="uppercase" />
+                  <Label htmlFor="bankName" className="text-xs text-muted-foreground">Bank name</Label>
+                  <Input id="bankName" className="uppercase" {...register('bankName')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="bankAccountNumber" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">BANK A/C NUMBER</Label>
+                  <Label htmlFor="bankAccountNumber" className="text-xs text-muted-foreground">Bank A/C number</Label>
                   <Input id="bankAccountNumber" {...register('bankAccountNumber')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="bankIFSC" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">IFSC CODE</Label>
-                  <Input id="bankIFSC" {...register('bankIFSC')} className="uppercase" />
+                  <Label htmlFor="bankIFSC" className="text-xs text-muted-foreground">IFSC code</Label>
+                  <Input id="bankIFSC" className="uppercase" {...register('bankIFSC')} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="payDate" className="text-xs font-bold uppercase tracking-widest text-muted-foreground">PAY DATE (DAY OF MONTH)</Label>
+                  <Label htmlFor="payDate" className="text-xs text-muted-foreground">Pay date (day of month)</Label>
                   <Input id="payDate" type="number" min="1" max="31" {...register('payDate')} />
                 </div>
               </div>
@@ -867,143 +807,129 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
           )}
 
           {/* Extra Details — freeform key/value pairs, like Render's env vars */}
-          <Card className="p-6 space-y-6">
-            <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
-              EXTRA DETAILS
-            </h2>
+          <Card className="gap-6 p-6">
+            <SectionTitle>Extra details</SectionTitle>
             <div className="space-y-3">
               {extraDetails.fields.length === 0 && (
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   No extra details yet. Add anything that doesn't have its own field below.
                 </p>
               )}
-              {extraDetails.fields.map((field, index) => (
-                <div key={field.id} className="flex items-center gap-3">
-                  <Input
-                    placeholder="KEY"
-                    {...register(`extraDetails.${index}.key` as const)}
-                    className="flex-1 font-mono uppercase"
-                  />
-                  <Input
-                    placeholder="VALUE"
-                    {...register(`extraDetails.${index}.value` as const)}
-                    className="flex-1 font-mono"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => extraDetails.remove(index)}
-                    className="h-10 w-10 shrink-0 text-muted-foreground hover:text-destructive rounded-xl p-0"
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-              ))}
+              {extraDetails.fields.map((field, index) => {
+                // Mirrors backend/src/utils/extraDetailsCrypto.js#isPasswordKey
+                // exactly — a password-like value stays normal-case here the
+                // same way it stays out of the uppercase sweep everywhere else.
+                const isPasswordKey = /password/i.test(watch(`extraDetails.${index}.key`) || '')
+                return (
+                  <div key={field.id} className="flex items-center gap-3">
+                    <Input
+                      placeholder="Key"
+                      {...register(`extraDetails.${index}.key` as const)}
+                      className="flex-1 font-mono uppercase"
+                    />
+                    <Input
+                      placeholder="Value"
+                      {...register(`extraDetails.${index}.value` as const)}
+                      className={cn('flex-1 font-mono', !isPasswordKey && 'uppercase')}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => extraDetails.remove(index)}
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                )
+              })}
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => extraDetails.append({ key: '', value: '' })}
-              className="rounded-xl uppercase tracking-widest font-bold"
-            >
+            <Button type="button" variant="outline" onClick={() => extraDetails.append({ key: '', value: '' })}>
               <Plus className="size-4" />
-              Add Variable
+              Add variable
             </Button>
           </Card>
-
         </fieldset>
 
-          {/* Form Action Buttons — Save needs edit_employee_details, Delete stays admin-only */}
-          {(canEditDetails || isAdmin) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {canEditDetails && (
-                <Button
-                  type="submit"
-                  disabled={updateEmployee.isPending}
-                  className="bg-emerald-500/10 text-emerald-700 text-lg font-bold h-14 rounded-xl tracking-wider border-0 hover:bg-emerald-500/25 transition-all cursor-pointer shadow-none"
-                >
-                  {updateEmployee.isPending && <Loader2 className="size-5 animate-spin" />}
-                  SAVE PROFILE CHANGES
-                </Button>
-              )}
-              {isAdmin && (
-                <Button
-                  type="button"
-                  onClick={onDelete}
-                  disabled={deleteEmployee.isPending}
-                  variant="ghost"
-                  className="text-destructive hover:bg-destructive/10 text-lg font-bold h-14 rounded-xl tracking-wider cursor-pointer"
-                >
-                  {deleteEmployee.isPending && <Loader2 className="size-5 animate-spin" />}
-                  DELETE PROFILE
-                </Button>
-              )}
-            </div>
-          )}
-        </form>
-
-        {/* Recruitment Details — carried over from the application, only present on employees hired through the pipeline */}
-        {employee.sourceApplicant && (
-          <Card className="p-6 space-y-6">
-            <h2 className="text-2xl font-bold uppercase tracking-widest border-b border-border/15 pb-3 text-foreground">
-              RECRUITMENT DETAILS
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Field label="Experience" value={employee.experienceLevel} />
-              <Field label="Availability at application" value={employee.availability} />
-              <Field label="Own laptop?" value={employee.hasLaptop === undefined ? undefined : employee.hasLaptop ? 'Yes' : 'No'} />
-              <Field label="Was willing to relocate?" value={employee.willingToRelocate === undefined ? undefined : employee.willingToRelocate ? 'Yes' : 'No'} />
-              <Field label="How they found us" value={employee.howDidYouFindUs} />
-              <Field label="Work style preference" value={employee.workStylePreference} />
-              <Field label="Salary at time of application" value={employee.currentSalary} />
-              <Field label="Expected salary" value={employee.expectedSalary} />
-            </div>
-            <div className="grid grid-cols-1 gap-6">
-              <Field label="Why they wanted to join" value={employee.whyJoinCompany} />
-              <Field label="Why they were hired" value={employee.whyHireYou} />
-              <Field label="Why they were selected" value={employee.selectionNotes} />
-            </div>
-            {employee.resumes && employee.resumes.length > 0 && (
-              <div className="pt-2">
-                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-2">RESUME FILE(S)</p>
-                <div className="flex flex-wrap gap-3">
-                  {employee.resumes.map((resume, i) => (
-                    <a
-                      key={i}
-                      href={resume.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex h-10 items-center gap-2 rounded-xl bg-secondary/50 px-4 text-sm font-semibold uppercase tracking-wider text-foreground hover:bg-secondary transition-all"
-                    >
-                      {resume.originalFilename || `RESUME ${i + 1}`}
-                    </a>
-                  ))}
-                </div>
-              </div>
+        {/* Form Action Buttons — Save needs edit_employee_details, Delete stays admin-only */}
+        {(canEditDetails || isAdmin) && (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {canEditDetails && (
+              <Button type="submit" size="lg" disabled={updateEmployee.isPending}>
+                {updateEmployee.isPending && <Loader2 className="size-4 animate-spin" />}
+                Save changes
+              </Button>
             )}
-          </Card>
+            {isAdmin && (
+              <Button type="button" size="lg" variant="destructive" onClick={onDelete} disabled={deleteEmployee.isPending}>
+                {deleteEmployee.isPending && <Loader2 className="size-4 animate-spin" />}
+                Delete employee
+              </Button>
+            )}
+          </div>
         )}
+      </form>
 
-        <div className="mt-8 grid gap-8">
-          <AttendanceSummaryCard employeeId={employeeId} />
-          {isAdmin && <NotInformedWarningsCard employeeId={employeeId} />}
-          {canViewSalary && (
-            <SalarySlipsList employeeId={employeeId} employeeName={`${employee.firstName} ${employee.lastName ?? ''}`} />
+      {/* Recruitment Details — carried over from the application, only present on employees hired through the pipeline */}
+      {employee.sourceApplicant && (
+        <Card className="gap-6 p-6">
+          <SectionTitle>Recruitment details</SectionTitle>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <Field label="Experience" value={employee.experienceLevel} />
+            <Field label="Availability at application" value={employee.availability} />
+            <Field label="Own laptop?" value={employee.hasLaptop === undefined ? undefined : employee.hasLaptop ? 'Yes' : 'No'} />
+            <Field label="Was willing to relocate?" value={employee.willingToRelocate === undefined ? undefined : employee.willingToRelocate ? 'Yes' : 'No'} />
+            <Field label="How they found us" value={employee.howDidYouFindUs} />
+            <Field label="Work style preference" value={employee.workStylePreference} />
+            <Field label="Salary at time of application" value={employee.currentSalary} />
+            <Field label="Expected salary" value={employee.expectedSalary} />
+          </div>
+          <div className="grid grid-cols-1 gap-6">
+            <Field label="Why they wanted to join" value={employee.whyJoinCompany} />
+            <Field label="Why they were hired" value={employee.whyHireYou} />
+            <Field label="Why they were selected" value={employee.selectionNotes} />
+          </div>
+          {employee.resumes && employee.resumes.length > 0 && (
+            <div className="pt-2">
+              <p className="mb-2 text-xs text-muted-foreground">Resume file(s)</p>
+              <div className="flex flex-wrap gap-2">
+                {employee.resumes.map((resume, i) => (
+                  <a
+                    key={i}
+                    href={resume.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-secondary/40 px-4 text-sm font-medium text-foreground transition-colors hover:bg-secondary/70"
+                  >
+                    {resume.originalFilename || `Resume ${i + 1}`}
+                  </a>
+                ))}
+              </div>
+            </div>
           )}
-          {canGenerateDocs && <GeneratedDocumentsList employeeId={employeeId} />}
-          {canRequestDocs && (
-            <>
-              <UploadedDocumentsList employeeId={employeeId} />
-              <RequestHistoryTable
-                employeeId={employeeId}
-                employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
-                employeePhone={employee.phone}
-              />
-            </>
-          )}
-          <ActivityTimeline employeeId={employeeId} />
-        </div>
-      </main>
+        </Card>
+      )}
+
+      <div className="grid gap-8">
+        <AttendanceSummaryCard employeeId={employeeId} />
+        {isAdmin && <NotInformedWarningsCard employeeId={employeeId} />}
+        {canViewSalary && (
+          <SalarySlipsList employeeId={employeeId} employeeName={`${employee.firstName} ${employee.lastName ?? ''}`} />
+        )}
+        {canGenerateDocs && <GeneratedDocumentsList employeeId={employeeId} />}
+        {canRequestDocs && (
+          <>
+            <UploadedDocumentsList employeeId={employeeId} />
+            <RequestHistoryTable
+              employeeId={employeeId}
+              employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
+              employeePhone={employee.phone}
+            />
+          </>
+        )}
+        {!isOwnRecord && <ActivityTimeline employeeId={employeeId} />}
+      </div>
     </div>
   )
 }

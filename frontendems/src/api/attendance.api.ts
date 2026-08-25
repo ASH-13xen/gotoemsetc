@@ -7,7 +7,7 @@ export interface AttendanceRecord {
   employee: string
   date: string
   status?: AttendanceStatus
-  overtimeHours: number
+  overtimeMinutes: number
   isBackdated: boolean
   // True when the daily biometric classifier wrote this record rather than
   // an admin — an admin save always flips this back to false.
@@ -32,7 +32,7 @@ export async function markAttendance(
   date: string,
   input: {
     status?: AttendanceStatus
-    overtimeHours?: number
+    overtimeMinutes?: number
     isLate?: boolean
     earlyDeparture?: boolean
     notes?: string
@@ -76,6 +76,7 @@ export interface AttendanceSummary {
   lateToSLUnits: number
   effectiveSLUnits: number
   halfDayPenaltyUnits: number
+  totalOvertimeMinutes: number
 }
 
 export async function getAttendanceSummary(

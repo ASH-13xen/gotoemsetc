@@ -8,10 +8,7 @@ import { RequireAuth } from '@/components/auth/RequireAuth'
 import LoginPage from '@/pages/LoginPage'
 import ClientsPage from '@/pages/ClientsPage'
 import ClientDetailPage from '@/pages/ClientDetailPage'
-import QuotationTemplatesPage from '@/pages/QuotationTemplatesPage'
-import QuotationTemplateMapperPage from '@/pages/QuotationTemplateMapperPage'
-import PublicQuotationPage from '@/pages/PublicQuotationPage'
-import PublicClientUploadPage from '@/pages/PublicClientUploadPage'
+import CalendarPage from '@/pages/CalendarPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,6 +22,10 @@ interface AppProps {
   basename?: string
 }
 
+// No role gate on the routes themselves: every logged-in employee may reach
+// Client Management, and what they can see and do is narrowed per-client and
+// per-team server-side (see backend utils/cmsAccess.js). A role check here
+// couldn't express "your own team's clients only".
 export default function App({ basename }: AppProps = {}) {
   return (
     <ErrorBoundary>
@@ -33,10 +34,6 @@ export default function App({ basename }: AppProps = {}) {
           <BrowserRouter basename={basename}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
-              {/* Public, share-token-gated signing link sent to clients — no login required. */}
-              <Route path="/quotation/:token" element={<PublicQuotationPage />} />
-              {/* Public, token+access-code-gated document upload link sent to clients. */}
-              <Route path="/client-documents/:token" element={<PublicClientUploadPage />} />
               <Route
                 path="/"
                 element={
@@ -54,18 +51,10 @@ export default function App({ basename }: AppProps = {}) {
                 }
               />
               <Route
-                path="/quotation-templates"
+                path="/calendars/:id"
                 element={
                   <RequireAuth>
-                    <QuotationTemplatesPage />
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/quotation-templates/:id"
-                element={
-                  <RequireAuth>
-                    <QuotationTemplateMapperPage />
+                    <CalendarPage />
                   </RequireAuth>
                 }
               />

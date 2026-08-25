@@ -1,5 +1,61 @@
 const { Schema, model } = require('mongoose');
-const { EMPLOYEE_TASK_TYPE, EMPLOYEE_TASK_STATUS, EMPLOYEE_TASK_COMPLETION_FLAG } = require('../config/constants');
+const {
+  EMPLOYEE_TASK_TYPE,
+  EMPLOYEE_TASK_STATUS,
+  EMPLOYEE_TASK_COMPLETION_FLAG,
+  CMS_TASK_ROLE,
+  MOM_PIPELINE_KIND,
+} = require('../config/constants');
+
+// Only set on a type:'client' task spawned from a meeting's "any more tasks
+// required?" step when the creator picked Pipeline — Post/Reel-style or
+// Custom. Deliberately off-calendar: no ClientCalendar/CalendarItem
+// involved, no quota impact, never appears on the calendar grid. Reuses the
+// same colours/steps/actor logic as the real pipeline engine — see
+// utils/momPipeline.js.
+const momPipelineSchema = new Schema(
+  {
+    kind: { type: String, enum: Object.values(MOM_PIPELINE_KIND), required: true },
+    stage: { type: String, default: 'created' },
+    assignments: {
+      designer: { type: Schema.Types.ObjectId, ref: 'Employee' },
+      shooter: { type: Schema.Types.ObjectId, ref: 'Employee' },
+      editor: { type: Schema.Types.ObjectId, ref: 'Employee' },
+      contentManager: { type: Schema.Types.ObjectId, ref: 'Employee' },
+    },
+    // 'custom' kind only — 2-5 user-defined steps, each with its own colour
+    // and a single directly-assigned actor (team or outside).
+    customSteps: [
+      {
+        key: { type: String, required: true },
+        label: { type: String, required: true, trim: true },
+        color: { type: String, required: true },
+        assignee: { type: Schema.Types.ObjectId, ref: 'Employee', required: true },
+      },
+    ],
+    isSentBack: { type: Boolean, default: false },
+    isRejected: { type: Boolean, default: false },
+    lastRejection: {
+      fromStage: { type: String },
+      reason: { type: String, trim: true },
+      by: { type: Schema.Types.ObjectId, ref: 'User' },
+      at: { type: Date },
+    },
+    stageHistory: [
+      {
+        from: { type: String },
+        to: { type: String, required: true },
+        action: { type: String, required: true }, // advance | send_back | reject
+        byUser: { type: Schema.Types.ObjectId, ref: 'User' },
+        byEmployee: { type: Schema.Types.ObjectId, ref: 'Employee' },
+        onBehalfOf: { type: String },
+        note: { type: String, trim: true },
+        at: { type: Date, default: Date.now },
+      },
+    ],
+  },
+  { _id: false }
+);
 
 const resourceRequiredSchema = new Schema(
   { label: { type: String, required: true, trim: true }, notes: { type: String, trim: true } },
@@ -88,6 +144,38 @@ const employeeTaskSchema = new Schema(
     // are independent: a subtask can itself be continued, carrying its own
     // parentTask forward from the original.
     continuesFrom: { type: Schema.Types.ObjectId, ref: 'EmployeeTask', default: null, index: true },
+
+    // ---- Client Management System linkage (type: client only) ----
+    // Set when this task was generated from a CMS content calendar. Its
+    // presence is what makes a task "CMS-owned": such tasks can't be created
+    // or deleted directly in Task Management, since doing so would produce
+    // client work that no calendar counts and no plan accounts for. See
+    // taskAccess.middleware.js.
+    cmsItem: { type: Schema.Types.ObjectId, ref: 'CalendarItem', index: true },
+    // Set instead of cmsItem on the one shared "Daily Stories — <Month>"
+    // parent, which spans the whole month rather than a single calendar item
+    // (each day is a subtask of it). Also marks the task CMS-owned.
+    cmsCalendar: { type: Schema.Types.ObjectId, ref: 'ClientCalendar', index: true },
+    // Set when this task was spawned from a meeting's MOM instead — see
+    // Meeting.js#spawnedTasks and meeting.service.js#addTaskFromMom. Also
+    // marks the task on personal/team MOM-spawned tasks (momPipeline stays
+    // unset for those), purely for traceability back into the manual.
+    meetingRef: { type: Schema.Types.ObjectId, ref: 'Meeting', index: true },
+    momPipeline: momPipelineSchema,
+    // Which piece of the deliverable this is — a post has one design
+    // subtask, a reel has a videographer/editor/content-manager subtask
+    // each, a story has one.
+    cmsRole: { type: String, enum: [...Object.values(CMS_TASK_ROLE), null], default: null },
+
+    // Hard dependency: this task can't be started or submitted until the
+    // referenced task is completed. Used for a reel's chain (editor waits on
+    // videographer, content manager waits on editor). Distinct from
+    // parentTask (hierarchy) and continuesFrom (chronology) — neither of
+    // those blocks anything.
+    blockedBy: { type: Schema.Types.ObjectId, ref: 'EmployeeTask', default: null },
+
+    // Where the finished work lives — a link, not an upload, per spec.
+    deliverableLink: { type: String, trim: true },
 
     createdBy: { type: Schema.Types.ObjectId, ref: 'Employee' },
     isDeleted: { type: Boolean, default: false },

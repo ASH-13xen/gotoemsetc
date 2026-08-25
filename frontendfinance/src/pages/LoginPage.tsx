@@ -1,0 +1,95 @@
+import { useState, type FormEvent } from 'react'
+import { Navigate, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
+import { useAuth, useLogin } from '@/hooks/useAuth'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { canEnterFinance } from '@/lib/roles'
+
+export default function LoginPage() {
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const navigate = useNavigate()
+  const { token, user, signOut } = useAuth()
+  const loginMutation = useLogin()
+
+  if (token && canEnterFinance(user)) {
+    return <Navigate to="/" replace />
+  }
+
+  // A valid login with no Finance access at all — shown instead of bouncing
+  // back and forth between "/" (RequireFinanceAccess) and here, which is
+  // what a blind redirect-to-"/" would do for this account.
+  if (token && !canEnterFinance(user)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-sm">
+          <CardHeader className="pb-2">
+            <span className="text-xs font-medium text-muted-foreground">Finance</span>
+            <CardTitle className="text-2xl">No access</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <p className="text-sm text-muted-foreground">
+              This account doesn't have access to Finance. Sign in with an admin, CEO, Account Manager, or
+              Operations Manager account instead.
+            </p>
+            <Button variant="outline" onClick={signOut}>
+              Sign out
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    loginMutation.mutate(
+      { username, password },
+      {
+        onSuccess: () => navigate('/', { replace: true }),
+        onError: () => toast.error('Invalid username or password'),
+      }
+    )
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <Card className="w-full max-w-sm">
+        <CardHeader className="pb-2">
+          <span className="text-xs font-medium text-muted-foreground">Finance</span>
+          <CardTitle className="text-2xl">Sign in</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoFocus
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            </div>
+            <Button type="submit" size="lg" className="mt-2" disabled={loginMutation.isPending}>
+              {loginMutation.isPending ? 'Signing in...' : 'Sign in'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

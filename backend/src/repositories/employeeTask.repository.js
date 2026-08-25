@@ -2,6 +2,7 @@ const EmployeeTask = require('../models/EmployeeTask');
 const WorkTeam = require('../models/WorkTeam');
 const Employee = require('../models/Employee');
 const { EMPLOYEE_TASK_STATUS, EMPLOYEE_TASK_TYPE } = require('../config/constants');
+const { istDayStart } = require('../utils/istDate');
 
 const EMPLOYEE_FIELDS = 'firstName lastName designation';
 
@@ -16,10 +17,11 @@ function basePopulate(query) {
     })
     .populate({
       path: 'team',
-      select: 'name leader members',
+      select: 'name leader members memberRoles',
       populate: [
         { path: 'leader', select: EMPLOYEE_FIELDS },
         { path: 'members', select: EMPLOYEE_FIELDS },
+        { path: 'memberRoles.employee', select: EMPLOYEE_FIELDS },
       ],
     })
     .populate('extraMembers', EMPLOYEE_FIELDS)
@@ -28,7 +30,10 @@ function basePopulate(query) {
     .populate('markedForReviewBy', EMPLOYEE_FIELDS)
     .populate('completedBy', EMPLOYEE_FIELDS)
     .populate('createdBy', EMPLOYEE_FIELDS)
-    .populate('continuesFrom', 'title status completedAt createdAt');
+    .populate('continuesFrom', 'title status completedAt createdAt')
+    // Enough for the UI to say "waiting on Shoot — Reel #1" and disable the
+    // submit control, without a second request per task.
+    .populate('blockedBy', 'title status endAt');
 }
 
 // Scoped to isDeleted:false — for normal reads.
@@ -163,6 +168,49 @@ async function listUpcomingForEmployee(employeeId, { limit = 6 } = {}) {
   return basePopulate(EmployeeTask.find(query).sort({ endAt: 1 }).limit(limit));
 }
 
+// Shared by the two Plan Next Day queries below: "overdue" is genuinely in
+// the past relative to `now` (already breached, whether that was yesterday
+// or earlier today), "tomorrow" is anything due somewhere in tomorrow's IST
+// civil day — a task still due later *today* falls in neither bucket, since
+// it's not late yet and isn't tomorrow's work.
+async function splitOverdueAndTomorrow(scopeQuery, now) {
+  const todayStart = istDayStart(now);
+  const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+  const tomorrowEnd = new Date(tomorrowStart.getTime() + 24 * 60 * 60 * 1000);
+  const baseQuery = { isDeleted: false, status: { $ne: EMPLOYEE_TASK_STATUS.COMPLETED }, ...scopeQuery };
+
+  const [overdue, tomorrow] = await Promise.all([
+    basePopulate(EmployeeTask.find({ ...baseQuery, endAt: { $lt: now } }).sort({ endAt: 1 })),
+    basePopulate(
+      EmployeeTask.find({ ...baseQuery, endAt: { $gte: tomorrowStart, $lt: tomorrowEnd } }).sort({ endAt: 1 })
+    ),
+  ]);
+  return { overdue, tomorrow };
+}
+
+// Plan Next Day — an employee's own overdue-and-tomorrow tasks, same $or
+// shape as listUpcomingForEmployee (assignedEmployees directly, or a
+// top-level team/client/event task on a team they're on).
+async function listDueTomorrowAndOverdueForEmployee(employeeId, now = new Date()) {
+  const teamIds = await findTeamIdsForEmployee(employeeId);
+  return splitOverdueAndTomorrow(
+    {
+      $or: [
+        { assignedEmployees: employeeId },
+        { parentTask: null, team: { $in: teamIds } },
+        { parentTask: null, extraMembers: employeeId },
+      ],
+    },
+    now
+  );
+}
+
+// Plan Next Day, team-wide view for a Team Main/Team Leader reviewing their
+// whole team's board rather than just their own tasks.
+function listDueTomorrowAndOverdueForTeam(teamId, now = new Date()) {
+  return splitOverdueAndTomorrow({ parentTask: null, team: teamId }, now);
+}
+
 // Who this employee reviews for (direct reports' personal tasks, teams
 // they lead) — independent of whether anything's currently pending, so the
 // frontend can show the Review tab even when it's momentarily empty.
@@ -190,43 +238,54 @@ function listAllForReview() {
   );
 }
 
-// Admin's "Filter by Employee" — everything this employee actually touches:
-// their personal tasks, any subtask explicitly delegated to them (any
-// parent type), and any top-level team/client/event task they're currently
-// on the roster for (member, leader, or ad-hoc extra member). Unlike
-// listMine, this is intentionally not scoped to top-level-only — a subtask
-// assigned to them belongs in this view even though its parent might not
-// (e.g. they're not on that team, just delegated the one subtask).
-async function listForEmployeeAdmin(employeeId) {
-  const teamIds = await findTeamIdsForEmployee(employeeId);
-  const query = {
-    isDeleted: false,
-    $or: [
-      { assignedEmployees: employeeId },
-      { parentTask: null, team: { $in: teamIds } },
-      { parentTask: null, extraMembers: employeeId },
-    ],
-  };
-  return basePopulate(EmployeeTask.find(query).sort({ endAt: 1 }));
-}
+// Admin unified task view — client/team/employee/date, any combination at
+// once (AND across whichever filters are active). Each active filter
+// contributes its own clause to a top-level $and; employee and team each
+// still expand to the same OR-of-conditions their standalone filters always
+// did (a subtask delegated to someone not otherwise on that team/roster
+// still has to match), so combining two filters narrows rather than losing
+// results either alone would have included.
+async function listForAdminFiltered({ clientId, teamId, employeeId, dateFrom, dateTo }) {
+  const and = [{ isDeleted: false }];
 
-// Admin's "Filter by Team" — every member's (leader included) personal
-// tasks, any subtask assigned to a member, and every top-level team/client/
-// event task tied to this team (client/event tasks carry a `team` too, so
-// the single `team: teamId` clause already covers all three).
-async function listForTeamAdmin(teamId) {
-  const team = await WorkTeam.findOne({ _id: teamId, isDeleted: false }, 'leader members');
-  if (!team) return [];
-  const memberIds = [team.leader, ...team.members];
+  if (employeeId) {
+    const teamIds = await findTeamIdsForEmployee(employeeId);
+    and.push({
+      $or: [
+        { assignedEmployees: employeeId },
+        { parentTask: null, team: { $in: teamIds } },
+        { parentTask: null, extraMembers: employeeId },
+      ],
+    });
+  }
 
-  const query = {
-    isDeleted: false,
-    $or: [
-      { type: EMPLOYEE_TASK_TYPE.PERSONAL, assignedEmployees: { $in: memberIds } },
-      { parentTask: { $ne: null }, assignedEmployees: { $in: memberIds } },
-      { parentTask: null, team: teamId },
-    ],
-  };
+  if (teamId) {
+    const team = await WorkTeam.findOne({ _id: teamId, isDeleted: false }, 'leader members');
+    if (!team) return [];
+    const memberIds = [team.leader, ...team.members];
+    and.push({
+      $or: [
+        { type: EMPLOYEE_TASK_TYPE.PERSONAL, assignedEmployees: { $in: memberIds } },
+        { parentTask: { $ne: null }, assignedEmployees: { $in: memberIds } },
+        { parentTask: null, team: teamId },
+      ],
+    });
+  }
+
+  if (clientId) {
+    and.push({ client: clientId });
+  }
+
+  // Overlap, not containment — a task spanning the whole month should still
+  // match a filter for one week inside it.
+  if (dateFrom || dateTo) {
+    and.push({
+      ...(dateFrom ? { endAt: { $gte: new Date(dateFrom) } } : {}),
+      ...(dateTo ? { startAt: { $lte: new Date(dateTo) } } : {}),
+    });
+  }
+
+  const query = and.length > 1 ? { $and: and } : and[0];
   return basePopulate(EmployeeTask.find(query).sort({ endAt: 1 }));
 }
 
@@ -255,10 +314,12 @@ module.exports = {
   findChain,
   listMine,
   listUpcomingForEmployee,
+  listDueTomorrowAndOverdueForEmployee,
+  listDueTomorrowAndOverdueForTeam,
+  findLedTeamIds,
   getReviewScope,
   listReviewForScope,
   listAllForReview,
   findWithDueFollowUps,
-  listForEmployeeAdmin,
-  listForTeamAdmin,
+  listForAdminFiltered,
 };

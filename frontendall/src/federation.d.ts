@@ -15,3 +15,21 @@ declare module 'frontendfollowups/App' {
   const App: ComponentType<{ basename?: string }>
   export default App
 }
+
+declare module 'frontendhr/App' {
+  import type { ComponentType } from 'react'
+  const App: ComponentType<{ basename?: string }>
+  export default App
+}
+
+declare module 'frontendop/App' {
+  import type { ComponentType } from 'react'
+  const App: ComponentType<{ basename?: string }>
+  export default App
+}
+
+declare module 'frontendfinance/App' {
+  import type { ComponentType } from 'react'
+  const App: ComponentType<{ basename?: string }>
+  export default App
+}

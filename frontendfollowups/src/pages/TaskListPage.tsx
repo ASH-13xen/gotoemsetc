@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TaskNav } from '@/components/layout/TaskNav'
 import { TaskCard } from '@/components/tasks/TaskCard'
+import { ClientTaskGroups } from '@/components/tasks/ClientTaskGroups'
 import { CreateTaskDialog } from '@/components/tasks/CreateTaskDialog'
 import { AdminUnifiedTaskView } from '@/components/tasks/AdminUnifiedTaskView'
 import { TaskStatusFilter, matchesStatusFilter, type StatusFilterValue } from '@/components/tasks/TaskStatusFilter'
 import { useAuth } from '@/hooks/useAuth'
-import { canManageTasks } from '@/lib/permissions'
+import { canManageTasks, canViewUnifiedTasks } from '@/lib/permissions'
 import { useMyTasks } from '@/hooks/useEmployeeTasks'
 import { useLedTeams } from '@/hooks/useLedTeams'
 import { cn } from '@/lib/utils'
@@ -22,6 +23,10 @@ const SECTIONS: { type: EmployeeTaskType; heading: string }[] = [
 export default function TaskListPage() {
   const { user } = useAuth()
   const isAdmin = canManageTasks(user)
+  // Wider than isAdmin — CEO and the global Team Leader also get the
+  // filterable, all-types-merged view (client/team/employee/date), without
+  // gaining isAdmin's broader task-management authority (e.g. WorkTeam CRUD).
+  const showUnifiedView = canViewUnifiedTasks(user)
   // A team leader can create Team tasks for their own team and Personal
   // tasks for people on it, even without the broad manage_tasks permission
   // — see backend/src/middlewares/taskAccess.middleware.js#requireCanCreateTopLevelTask.
@@ -59,7 +64,7 @@ export default function TaskListPage() {
           {canCreateTask && <CreateTaskDialog />}
         </div>
 
-        {isAdmin ? (
+        {showUnifiedView ? (
           <AdminUnifiedTaskView />
         ) : (
           <>
@@ -90,7 +95,9 @@ export default function TaskListPage() {
                 {SECTIONS.filter((section) => activeFilters.has(section.type)).map((section) => (
                   <div key={section.type} className="space-y-3">
                     <h2 className="text-lg font-extrabold uppercase tracking-wide text-foreground">{section.heading}</h2>
-                    {grouped[section.type].length === 0 ? (
+                    {section.type === 'client' ? (
+                      <ClientTaskGroups tasks={grouped.client} />
+                    ) : grouped[section.type].length === 0 ? (
                       <p className="text-sm text-muted-foreground">No {section.heading.toLowerCase()} yet.</p>
                     ) : (
                       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

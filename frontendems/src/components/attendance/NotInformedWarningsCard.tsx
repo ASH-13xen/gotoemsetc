@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useMonthlyWarnings } from '@/hooks/useAttendanceWarnings'
 import { CATEGORY_LABEL, type WarningCategory } from '@/api/attendanceWarnings.api'
 
-const CATEGORIES: WarningCategory[] = ['late', 'early_departure', 'half_day', 'short_leave', 'absent']
+const CATEGORIES: WarningCategory[] = ['late', 'early_departure', 'half_day', 'short_leave', 'absent', 'single_scan']
 
 const MONTH_LABEL = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -32,13 +32,13 @@ export function NotInformedWarningsCard({ employeeId }: { employeeId: string }) 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <h2 className="text-lg font-bold text-foreground">Not-Informed Warnings</h2>
         <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" size="icon" className="rounded-xl" onClick={goToPreviousMonth}>
+          <Button type="button" variant="outline" size="icon" onClick={goToPreviousMonth}>
             <ChevronLeft className="size-4" />
           </Button>
-          <span className="min-w-32 text-center text-sm font-bold uppercase tracking-widest text-foreground">
+          <span className="min-w-32 text-center text-sm font-medium text-foreground">
             {MONTH_LABEL[cursor.month - 1]} {cursor.year}
           </span>
-          <Button type="button" variant="outline" size="icon" className="rounded-xl" onClick={goToNextMonth}>
+          <Button type="button" variant="outline" size="icon" onClick={goToNextMonth}>
             <ChevronRight className="size-4" />
           </Button>
         </div>
@@ -48,20 +48,25 @@ export function NotInformedWarningsCard({ employeeId }: { employeeId: string }) 
         <Skeleton className="h-20 w-full" />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 md:grid-cols-6">
             {CATEGORIES.map((category) => (
-              <div key={category} className="rounded-xl bg-amber-500/10 text-amber-700 p-4">
-                <p className="text-3xl font-extrabold leading-none tracking-tight">{data?.counts[category] ?? 0}</p>
-                <p className="mt-2 text-xs font-bold uppercase tracking-widest">{CATEGORY_LABEL[category]}</p>
+              <div key={category} className="flex flex-col gap-1">
+                <p className="text-2xl font-semibold tracking-tight text-foreground tabular-nums">
+                  {data?.counts[category] ?? 0}
+                </p>
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <span className="size-1.5 shrink-0 rounded-full bg-amber-500" />
+                  {CATEGORY_LABEL[category]}
+                </p>
               </div>
             ))}
           </div>
 
           {data && data.warnings.length > 0 && (
-            <div className="space-y-2 border-t border-border/15 pt-4">
+            <div className="space-y-2 border-t border-border pt-4">
               {data.warnings.map((warning) => (
-                <div key={warning._id} className="rounded-xl bg-secondary/40 p-3 text-sm">
-                  <p className="font-bold text-foreground">
+                <div key={warning._id} className="rounded-lg bg-secondary/40 p-3 text-sm">
+                  <p className="font-medium text-foreground">
                     {CATEGORY_LABEL[warning.category]} — {new Date(warning.date).toLocaleDateString()}
                     {warning.sentBy && <span className="font-normal text-muted-foreground"> · by {warning.sentBy.username}</span>}
                   </p>

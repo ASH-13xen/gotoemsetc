@@ -23,6 +23,7 @@ export function EmployeeMultiSelect({
   value,
   onChange,
   excludeIds = [],
+  includeIds,
   priorityIds,
   priorityLabel = 'Team',
   restLabel = 'Other Employees',
@@ -30,6 +31,9 @@ export function EmployeeMultiSelect({
   value: string[]
   onChange: (value: string[]) => void
   excludeIds?: string[]
+  // When set, restricts the list to only these ids (e.g. a team leader's
+  // own team roster) instead of every active employee.
+  includeIds?: string[]
   // When set, splits the list into two labeled groups (e.g. the parent
   // task's team roster vs. everyone else) instead of one flat list — so
   // any employee can still be picked, but the team is easy to spot first.
@@ -38,7 +42,12 @@ export function EmployeeMultiSelect({
   restLabel?: string
 }) {
   const { data } = useEmployees({ status: 'active', limit: 100 })
-  const options = (data?.items ?? []).filter((employee) => !excludeIds.includes(employee._id))
+  const options = (data?.items ?? [])
+    .filter((employee) => !excludeIds.includes(employee._id))
+    .filter((employee) => !includeIds || includeIds.includes(employee._id))
+    .sort((a, b) =>
+      `${a.firstName} ${a.lastName ?? ''}`.trim().localeCompare(`${b.firstName} ${b.lastName ?? ''}`.trim())
+    )
 
   const toggle = (id: string) => {
     onChange(value.includes(id) ? value.filter((v) => v !== id) : [...value, id])

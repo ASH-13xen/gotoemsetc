@@ -19,8 +19,9 @@ import ApplicantsPage from '@/pages/ApplicantsPage'
 import ApplicantDetailPage from '@/pages/ApplicantDetailPage'
 import AttendancePage from '@/pages/AttendancePage'
 import UploadDocumentsPage from '@/pages/UploadDocumentsPage'
-import CalendarPage from '@/pages/CalendarPage'
 import NotificationsPage from '@/pages/NotificationsPage'
+import PendingRequestsPage from '@/pages/PendingRequestsPage'
+import RecentDocumentsPage from '@/pages/RecentDocumentsPage'
 
 // A worker with no granted permissions has no use for the admin dashboard
 // (it's an all-employees browser) — send them straight to their own
@@ -138,18 +139,30 @@ export default function App({ basename }: AppProps = {}) {
               }
             />
             <Route
-              path="/calendar"
-              element={
-                <RequireAuth>
-                  <CalendarPage />
-                </RequireAuth>
-              }
-            />
-            <Route
               path="/notifications"
               element={
                 <RequireAuth>
                   <NotificationsPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/upload-requests"
+              element={
+                <RequireAuth>
+                  <RequirePermission permission="request_documents">
+                    <PendingRequestsPage />
+                  </RequirePermission>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/documents"
+              element={
+                <RequireAuth>
+                  <RequirePermission permission="generate_documents">
+                    <RecentDocumentsPage />
+                  </RequirePermission>
                 </RequireAuth>
               }
             />

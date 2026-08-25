@@ -19,3 +19,14 @@ export async function listEmployees(search?: string): Promise<ListEmployeesRespo
   const { data } = await apiClient.get('/employees', { params: { search, limit: 100 } })
   return data
 }
+
+// GET /employees is gated (admin/HR or a granted permission) and would 403
+// for a CEO or global-Team-Leader account, both of whom hold zero
+// permissions by design (see backend/src/config/constants.js) — the same
+// gap Office Keys hit in frontendall. GET /employees/directory has no
+// permission gate at all, so this is what "assign to anyone, team or
+// outside" pickers should use instead.
+export async function listOpenEmployeeDirectory(): Promise<EmployeeSummary[]> {
+  const { data } = await apiClient.get('/employees/directory')
+  return data.items ?? []
+}

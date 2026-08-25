@@ -24,6 +24,7 @@ import { PERMISSION_OPTIONS, type Permission } from '@/api/credentials.api'
 import { useAuth } from '@/hooks/useAuth'
 import { isAdminLike } from '@/lib/permissions'
 import { useWorkTeams } from '@/hooks/useWorkTeams'
+import { extractApiErrorMessage } from '@/lib/errors'
 
 function slugifyUsername(name: string): string {
   return name
@@ -101,12 +102,7 @@ export function CredentialsDialog({
       { username: username.trim(), password, permissions },
       {
         onSuccess: () => toast.success('Credentials created'),
-        onError: (err: unknown) => {
-          const message =
-            (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-            'Could not create credentials'
-          toast.error(message)
-        },
+        onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not create credentials')),
       }
     )
   }
@@ -127,12 +123,7 @@ export function CredentialsDialog({
           toast.success('Credentials updated')
           setPassword('')
         },
-        onError: (err: unknown) => {
-          const message =
-            (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-            'Could not update credentials'
-          toast.error(message)
-        },
+        onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not update credentials')),
       }
     )
   }
@@ -142,7 +133,7 @@ export function CredentialsDialog({
     if (!window.confirm(`Revoke ${credential.username}'s login access?`)) return
     deleteCredential.mutate(credential._id, {
       onSuccess: () => toast.success('Access revoked'),
-      onError: () => toast.error('Could not revoke access'),
+      onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not revoke access')),
     })
   }
 
@@ -226,9 +217,7 @@ export function CredentialsDialog({
                     </div>
                     {groupedOptions.map(([group, options]) => (
                       <div key={group} className="grid gap-2 rounded-xl border border-border/40 p-3">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                          {group}
-                        </p>
+                        <p className="text-xs font-medium text-muted-foreground">{group}</p>
                         {options.map((opt) => (
                           <label
                             key={opt.value}

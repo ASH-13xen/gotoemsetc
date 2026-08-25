@@ -1,13 +1,15 @@
 const { Router } = require('express');
 const validate = require('../middlewares/validate.middleware');
-const { requirePermission } = require('../middlewares/auth.middleware');
-const { PERMISSIONS } = require('../config/constants');
+const { requireUnifiedTaskViewAccess } = require('../middlewares/auth.middleware');
 const {
   requireTaskAccess,
   requireCanCreateTopLevelTask,
   requireCanManageTask,
   requireCanUpdateTask,
   requireCanCreateContinuation,
+  rejectDirectClientTaskCreation,
+  rejectCmsOwnedDeletion,
+  rejectCmsOwnedDateEdit,
 } = require('../middlewares/taskAccess.middleware');
 const taskAccess = require('../utils/taskAccess');
 const employeeTaskValidator = require('../validators/employeeTask.validator');
@@ -21,10 +23,11 @@ const router = Router();
 // vs /:id).
 router.get('/mine', validate(employeeTaskValidator.listMine), employeeTaskController.listMine);
 router.get('/mine/upcoming', employeeTaskController.listUpcoming);
+router.get('/plan-next-day', employeeTaskController.planNextDay);
 router.get('/review', employeeTaskController.listReview);
 router.get(
   '/admin-filter',
-  requirePermission(PERMISSIONS.MANAGE_TASKS),
+  requireUnifiedTaskViewAccess(),
   validate(employeeTaskValidator.adminFilter),
   employeeTaskController.adminFilter
 );
@@ -39,14 +42,29 @@ router.get(
 
 // requireCanCreateTopLevelTask runs after body validation so it can read
 // the well-formed req.body.type/team — see taskAccess.middleware.js.
-router.post('/', validate(employeeTaskValidator.create), requireCanCreateTopLevelTask(), employeeTaskController.create);
+router.post(
+  '/',
+  validate(employeeTaskValidator.create),
+  // Client tasks originate from the Client Management System's calendar,
+  // which calls the service directly rather than coming through this route.
+  rejectDirectClientTaskCreation,
+  requireCanCreateTopLevelTask(),
+  employeeTaskController.create
+);
 // requireCanUpdateTask/requireCanManageTask extend the same authority a
 // leader gets at creation time to editing/deleting/following-up on their
 // own team's tasks afterward — see taskAccess.middleware.js.
-router.patch('/:id', requireCanUpdateTask(), validate(employeeTaskValidator.update), employeeTaskController.update);
+router.patch(
+  '/:id',
+  requireCanUpdateTask(),
+  rejectCmsOwnedDateEdit,
+  validate(employeeTaskValidator.update),
+  employeeTaskController.update
+);
 router.delete(
   '/:id',
   requireCanManageTask("You don't have permission to delete this task."),
+  rejectCmsOwnedDeletion,
   validate(employeeTaskValidator.getOrDelete),
   employeeTaskController.remove
 );
@@ -109,5 +127,13 @@ router.get(
   requireTaskAccess(taskAccess.canViewTask),
   employeeTaskController.getChain
 );
+
+// MOM-pipeline actions — only meaningful on a task carrying momPipeline
+// (spawned from a meeting's MOM, see meeting.service.js#addTaskFromMom).
+// Per-step authorisation happens inside momPipeline.service.js, same shape
+// as the CMS calendar's /cms/items/:id/advance et al.
+router.post('/:id/mom-pipeline/advance', validate(employeeTaskValidator.momPipelineDecision), employeeTaskController.momPipelineAdvance);
+router.post('/:id/mom-pipeline/send-back', validate(employeeTaskValidator.momPipelineDecision), employeeTaskController.momPipelineSendBack);
+router.post('/:id/mom-pipeline/reject', validate(employeeTaskValidator.momPipelineReject), employeeTaskController.momPipelineReject);
 
 module.exports = router;

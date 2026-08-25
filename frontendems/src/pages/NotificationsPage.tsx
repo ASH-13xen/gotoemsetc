@@ -4,6 +4,7 @@ import { Bell, CheckCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { cn } from '@/lib/utils'
 import {
   useMarkAllNotificationsRead,
@@ -37,67 +38,52 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="space-y-8 py-4">
-      <main className="mx-auto max-w-3xl space-y-8">
-        <div className="bg-card/90 backdrop-blur-md p-8 rounded-2xl flex items-center justify-between shadow-diffuse">
-          <div className="flex items-center gap-3">
-            <Bell className="size-6 text-foreground" />
-            <div>
-              <h1 className="text-2xl font-extrabold uppercase tracking-tight text-foreground">Notifications</h1>
-              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
-              </p>
-            </div>
-          </div>
-          {unreadCount > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-xl gap-1.5"
-              onClick={() => markAllRead.mutate()}
-              disabled={markAllRead.isPending}
-            >
+    <div className="mx-auto flex max-w-3xl flex-col gap-8 py-8">
+      <PageHeader
+        title="Notifications"
+        description={unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+        actions={
+          unreadCount > 0 && (
+            <Button variant="outline" size="sm" onClick={() => markAllRead.mutate()} disabled={markAllRead.isPending}>
               <CheckCheck className="size-4" />
               Mark all read
             </Button>
-          )}
-        </div>
+          )
+        }
+      />
 
-        {isLoading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-20 w-full rounded-2xl bg-muted/40" />
-            ))}
-          </div>
-        ) : notifications.length === 0 ? (
-          <Card className="p-16 flex flex-col items-center gap-3 text-center">
-            <Bell className="size-12 text-muted-foreground/40" />
-            <p className="text-lg font-bold text-foreground">No notifications yet</p>
-          </Card>
-        ) : (
-          <div className="space-y-2.5">
-            {notifications.map((notification) => (
-              <Card
-                key={notification._id}
-                onClick={() => onClickNotification(notification)}
-                className={cn(
-                  'p-5 flex items-start gap-4 cursor-pointer transition-colors hover:bg-secondary/40',
-                  !notification.isRead && 'border-l-4 border-l-primary bg-primary/5'
-                )}
-              >
-                <div className="flex-1 space-y-1">
-                  <p className="text-sm font-bold text-foreground">{notification.title}</p>
-                  <p className="text-sm text-muted-foreground">{notification.message}</p>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">
-                    {formatWhen(notification.createdAt)}
-                  </p>
-                </div>
-                {!notification.isRead && <span className="mt-1 size-2 rounded-full bg-primary shrink-0" />}
-              </Card>
-            ))}
-          </div>
-        )}
-      </main>
+      {isLoading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 w-full" />
+          ))}
+        </div>
+      ) : notifications.length === 0 ? (
+        <Card className="flex flex-col items-center gap-3 p-16 text-center">
+          <Bell className="size-10 text-muted-foreground/40" />
+          <p className="text-base font-semibold text-foreground">No notifications yet</p>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {notifications.map((notification) => (
+            <Card
+              key={notification._id}
+              onClick={() => onClickNotification(notification)}
+              className={cn(
+                'flex cursor-pointer items-start gap-4 p-4 transition-colors hover:bg-secondary/40',
+                !notification.isRead && 'bg-primary/5'
+              )}
+            >
+              <div className="flex-1 space-y-1">
+                <p className="text-sm font-medium text-foreground">{notification.title}</p>
+                <p className="text-sm text-muted-foreground">{notification.message}</p>
+                <p className="text-xs text-muted-foreground/70">{formatWhen(notification.createdAt)}</p>
+              </div>
+              {!notification.isRead && <span className="mt-1 size-2 shrink-0 rounded-full bg-primary" />}
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

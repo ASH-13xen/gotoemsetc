@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as api from '@/api/employeeTasks.api'
 import type {
+  AdminTaskFilter,
   CreateContinuationInput,
   CreateSubtaskInput,
   CreateTaskInput,
@@ -26,11 +27,12 @@ export function useReviewTasks() {
   return useQuery({ queryKey: [...TASKS_KEY, 'review'], queryFn: () => api.listReviewTasks() })
 }
 
-export function useAdminFilteredTasks(filter: { employeeId?: string; teamId?: string }) {
+export function useAdminFilteredTasks(filter: AdminTaskFilter) {
+  const active = Boolean(filter.clientId || filter.teamId || filter.employeeId || filter.dateFrom || filter.dateTo)
   return useQuery({
-    queryKey: [...TASKS_KEY, 'admin-filter', filter.employeeId, filter.teamId],
+    queryKey: [...TASKS_KEY, 'admin-filter', filter.clientId, filter.teamId, filter.employeeId, filter.dateFrom, filter.dateTo],
     queryFn: () => api.listAdminFilteredTasks(filter),
-    enabled: Boolean(filter.employeeId || filter.teamId),
+    enabled: active,
   })
 }
 
@@ -150,4 +152,23 @@ export function useCreateContinuation(id: string) {
     mutationFn: (input: CreateContinuationInput) => api.createContinuation(id, input),
     onSuccess: invalidate,
   })
+}
+
+// MOM-pipeline actions — only meaningful on a task carrying momPipeline
+// (spawned from a meeting's MOM). Per-step authorisation happens server
+// side; momPipelineView.canAct (from useTask) is what drives whether these
+// buttons show at all.
+export function useMomPipelineAdvance(id: string) {
+  const invalidate = useInvalidateTasks()
+  return useMutation({ mutationFn: () => api.momPipelineAdvance(id), onSuccess: invalidate })
+}
+
+export function useMomPipelineSendBack(id: string) {
+  const invalidate = useInvalidateTasks()
+  return useMutation({ mutationFn: () => api.momPipelineSendBack(id), onSuccess: invalidate })
+}
+
+export function useMomPipelineReject(id: string) {
+  const invalidate = useInvalidateTasks()
+  return useMutation({ mutationFn: (reason: string) => api.momPipelineReject(id, reason), onSuccess: invalidate })
 }

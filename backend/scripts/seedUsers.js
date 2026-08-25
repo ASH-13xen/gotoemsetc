@@ -15,9 +15,26 @@ function requiredPassword(envVar) {
   return value;
 }
 
+// Listed top-down in org-chart order (see ROLE_HIERARCHY in constants.js):
+// admin, then ceo, then the roles reporting to ceo, then plain workers.
+// Usernames match the local part of each seeded password by convention
+// (admin@… -> "admin", operationsmanager@… -> "operationsmanager").
 const users = [
   { username: 'admin', password: requiredPassword('SEED_ADMIN_PASSWORD'), role: USER_ROLES.ADMIN },
+  { username: 'ceo', password: requiredPassword('SEED_CEO_PASSWORD'), role: USER_ROLES.CEO },
+  { username: 'digitaladmin', password: requiredPassword('SEED_DIGITAL_ADMIN_PASSWORD'), role: USER_ROLES.DIGITAL_ADMIN },
   { username: 'hr', password: requiredPassword('SEED_HR_PASSWORD'), role: USER_ROLES.HR },
+  {
+    username: 'operationsmanager',
+    password: requiredPassword('SEED_OPERATIONS_MANAGER_PASSWORD'),
+    role: USER_ROLES.OPERATIONS_MANAGER,
+  },
+  {
+    username: 'accountmanager',
+    password: requiredPassword('SEED_ACCOUNT_MANAGER_PASSWORD'),
+    role: USER_ROLES.ACCOUNT_MANAGER,
+  },
+  { username: 'teamlead', password: requiredPassword('SEED_TEAM_LEAD_PASSWORD'), role: USER_ROLES.TEAM_LEAD },
   { username: 'worker1', password: requiredPassword('SEED_WORKER1_PASSWORD'), role: USER_ROLES.WORKER },
   { username: 'worker2', password: requiredPassword('SEED_WORKER2_PASSWORD'), role: USER_ROLES.WORKER },
   { username: 'worker3', password: requiredPassword('SEED_WORKER3_PASSWORD'), role: USER_ROLES.WORKER },

@@ -1,6 +1,7 @@
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const taskClientService = require('../services/taskClient.service');
+const clientManualService = require('../services/clientManual.service');
 
 const list = asyncHandler(async (req, res) => {
   const clients = await taskClientService.listTaskClients();
@@ -24,7 +25,7 @@ const create = asyncHandler(async (req, res) => {
 });
 
 const update = asyncHandler(async (req, res) => {
-  const client = await taskClientService.updateTaskClient(req.params.id, req.body);
+  const client = await taskClientService.updateTaskClient(req.params.id, req.body, req.user);
   req.auditContext = {
     action: 'taskClient.update',
     resourceType: 'TaskClient',
@@ -47,4 +48,13 @@ const uploadLogo = asyncHandler(async (req, res) => {
   res.json({ client });
 });
 
-module.exports = { list, get, create, update, remove, uploadLogo };
+// Generated fresh on every request — never stored, see clientManual.service.js.
+const downloadManual = asyncHandler(async (req, res) => {
+  const pdfBuffer = await clientManualService.generateManualPdf(req.params.id);
+  req.auditContext = { action: 'taskClient.downloadManual', resourceType: 'TaskClient', resourceId: req.params.id };
+  res.set('Content-Type', 'application/pdf');
+  res.set('Content-Disposition', `attachment; filename="client-manual-${req.params.id}.pdf"`);
+  res.send(pdfBuffer);
+});
+
+module.exports = { list, get, create, update, remove, uploadLogo, downloadManual };

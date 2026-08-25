@@ -22,8 +22,9 @@ import { hasPermission, isAdminLike } from '@/lib/permissions'
 import { useDevicePunches } from '@/hooks/useDevicePunches'
 import { STATUS_CONFIG } from './statusConfig'
 import type { AttendanceStatus } from '@/api/attendance.api'
+import type { HolidayType } from '@/api/holidays.api'
 
-const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const NO_STATUS = '__none__'
 
 function pad(n: number) {
@@ -39,20 +40,17 @@ function DayScans({ employeeId, date }: { employeeId: string; date: string }) {
 
   if (isLoading) return <p className="text-xs text-muted-foreground">Loading scans…</p>
   if (punches.length === 0) {
-    return <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">No scans this day</p>
+    return <p className="text-xs text-muted-foreground">No scans this day</p>
   }
 
   // API returns newest-first; show chronologically (arrival first).
   const chronological = [...punches].reverse()
   return (
     <div className="grid gap-1">
-      <p className="text-xs font-black uppercase tracking-widest text-neutral-400">Scans</p>
+      <p className="text-xs text-muted-foreground">Scans</p>
       <div className="flex flex-wrap gap-1.5">
         {chronological.map((punch) => (
-          <span
-            key={punch._id}
-            className="rounded-lg bg-secondary/60 px-2 py-1 text-xs font-bold text-foreground"
-          >
+          <span key={punch._id} className="rounded-md bg-secondary/60 px-2 py-1 text-xs font-medium text-foreground">
             {new Date(punch.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
         ))}
@@ -82,7 +80,7 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
   })
   const [openDay, setOpenDay] = useState<string | null>(null)
   const [pendingStatus, setPendingStatus] = useState<string>(NO_STATUS)
-  const [pendingOvertimeHours, setPendingOvertimeHours] = useState('')
+  const [pendingOvertimeMinutes, setPendingOvertimeMinutes] = useState('')
   const [pendingIsLate, setPendingIsLate] = useState(false)
   const [pendingEarlyDeparture, setPendingEarlyDeparture] = useState(false)
   const [pendingNotes, setPendingNotes] = useState('')
@@ -107,10 +105,10 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
   ]
 
   const onSave = (dateKey: string) => {
-    const overtimeHours = pendingOvertimeHours.trim() ? Number(pendingOvertimeHours) : undefined
+    const overtimeMinutes = pendingOvertimeMinutes.trim() ? Number(pendingOvertimeMinutes) : undefined
     const status = pendingStatus === NO_STATUS ? undefined : (pendingStatus as AttendanceStatus)
-    if (status === undefined && overtimeHours === undefined && !pendingIsLate && !pendingEarlyDeparture) {
-      toast.error('Set a status, overtime hours, late flag, or early-departure flag (or a combination)')
+    if (status === undefined && overtimeMinutes === undefined && !pendingIsLate && !pendingEarlyDeparture) {
+      toast.error('Set a status, overtime minutes, late flag, or early-departure flag (or a combination)')
       return
     }
     if (reasonRequired && !pendingNotes.trim()) {
@@ -121,7 +119,7 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
       {
         date: dateKey,
         status,
-        overtimeHours,
+        overtimeMinutes,
         isLate: pendingIsLate,
         earlyDeparture: pendingEarlyDeparture,
         notes: pendingNotes.trim() || undefined,
@@ -136,42 +134,45 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
     )
   }
 
-  const onToggleHoliday = (dateKey: string) => {
+  const onMarkOffDay = (dateKey: string, type: HolidayType) => {
+    const typeLabel = type === 'half_day' ? 'half day' : 'holiday'
+    const label = window.prompt(`Label for this ${typeLabel}?`, type === 'half_day' ? 'Half Day' : 'Holiday')
+    if (label === null) return
+    createHoliday.mutate(
+      { date: dateKey, label: label || (type === 'half_day' ? 'Half Day' : 'Holiday'), type },
+      {
+        onSuccess: () =>
+          toast.success(type === 'half_day' ? 'Half day marked — employees who scan in get full-day credit' : 'Holiday marked'),
+        onError: () => toast.error(`Could not mark ${typeLabel}`),
+      }
+    )
+  }
+
+  const onRemoveOffDay = (dateKey: string) => {
     const existing = holidayByDate.get(dateKey)
-    if (existing) {
-      deleteHoliday.mutate(existing._id, {
-        onSuccess: () => toast.success('Holiday removed'),
-        onError: () => toast.error('Could not remove holiday'),
-      })
-    } else {
-      const label = window.prompt('Label for this holiday?', 'Holiday')
-      if (label === null) return
-      createHoliday.mutate(
-        { date: dateKey, label: label || 'Holiday' },
-        {
-          onSuccess: () => toast.success('Holiday marked'),
-          onError: () => toast.error('Could not mark holiday'),
-        }
-      )
-    }
+    if (!existing) return
+    deleteHoliday.mutate(existing._id, {
+      onSuccess: () => toast.success(existing.type === 'half_day' ? 'Half day removed' : 'Holiday removed'),
+      onError: () => toast.error('Could not remove'),
+    })
   }
 
   return (
-    <div className="bg-card/90 backdrop-blur-md rounded-2xl shadow-diffuse border-0 overflow-hidden">
-      <div className="flex items-center justify-between border-b border-border/15 p-6 bg-card">
-        <h3 className="text-lg font-bold uppercase tracking-widest text-foreground">Calendar</h3>
+    <div className="overflow-hidden rounded-xl border border-border">
+      <div className="flex items-center justify-between border-b border-border p-5">
+        <h3 className="text-base font-semibold text-foreground">Calendar</h3>
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
             size="icon"
-            className="size-9"
+            className="size-8"
             onClick={() =>
               setMonthDate((d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)))
             }
           >
             <ChevronLeft className="size-4" />
           </Button>
-          <span className="min-w-36 text-center text-sm font-bold uppercase tracking-widest text-foreground">
+          <span className="min-w-32 text-center text-sm font-medium text-foreground">
             {monthDate.toLocaleDateString('en-US', {
               month: 'long',
               year: 'numeric',
@@ -181,7 +182,7 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
           <Button
             variant="outline"
             size="icon"
-            className="size-9"
+            className="size-8"
             onClick={() =>
               setMonthDate((d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)))
             }
@@ -190,19 +191,19 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
           </Button>
         </div>
       </div>
-      <div className="p-6">
+      <div className="p-5">
         {isLoading ? (
-          <Skeleton className="h-64 w-full bg-neutral-800" />
+          <Skeleton className="h-64 w-full" />
         ) : (
           <>
-            <div className="grid grid-cols-7 gap-1.5 text-center text-xs font-black uppercase tracking-widest text-neutral-400">
+            <div className="grid grid-cols-7 gap-2 border-b border-border pb-2 text-center text-xs font-semibold text-muted-foreground">
               {WEEKDAYS.map((d) => (
                 <div key={d} className="py-1">
                   {d}
                 </div>
               ))}
             </div>
-            <div className="mt-1.5 grid grid-cols-7 gap-1.5">
+            <div className="mt-2 grid grid-cols-7 gap-2">
               {cells.map((dateKey, i) => {
                 if (!dateKey) return <div key={`blank-${i}`} />
                 const record = recordByDate.get(dateKey)
@@ -221,7 +222,7 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                       if (isFuture) return
                       setOpenDay(open ? dateKey : null)
                       setPendingStatus(record?.status ?? NO_STATUS)
-                      setPendingOvertimeHours(record?.overtimeHours ? String(record.overtimeHours) : '')
+                      setPendingOvertimeMinutes(record?.overtimeMinutes ? String(record.overtimeMinutes) : '')
                       setPendingIsLate(record?.isLate ?? false)
                       setPendingEarlyDeparture(record?.earlyDeparture ?? false)
                       setPendingNotes(record?.notes ?? '')
@@ -232,43 +233,38 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                         type="button"
                         disabled={isFuture}
                         className={cn(
-                          'relative flex aspect-square flex-col items-center justify-center border text-sm font-bold transition-all duration-200 rounded-xl',
+                          'relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-xl border text-sm font-semibold transition-colors duration-150',
                           isFuture
-                            ? 'cursor-not-allowed border-secondary bg-secondary/20 text-muted-foreground'
-                            : 'border-border/30 bg-secondary/50 text-foreground hover:border-primary/50 hover:bg-secondary/85 hover:-translate-y-0.5',
-                          !config && isOffDay && 'border-secondary/50 bg-secondary/35 text-muted-foreground/60',
-                          config && config.cell,
-                          dateKey === today && 'ring-2 ring-primary ring-offset-2 ring-offset-background'
+                            ? 'cursor-not-allowed border-border/40 bg-secondary/10 text-muted-foreground/40'
+                            : 'border-border bg-card text-foreground hover:bg-secondary/60',
+                          !config && isOffDay && 'border-border bg-secondary/30 text-muted-foreground/60',
+                          config && cn(config.box, 'hover:brightness-95'),
+                          dateKey === today && 'ring-2 ring-inset ring-primary'
                         )}
                       >
-                        <span>{dayNum}</span>
-                        {record?.overtimeHours ? (
-                          <span className="text-[9px] font-black text-neutral-400">+{record.overtimeHours}h</span>
+                        <span className="text-base">{dayNum}</span>
+                        {config && <span className="text-[9px] font-bold tracking-wide uppercase opacity-80">{config.code}</span>}
+                        {record?.overtimeMinutes ? (
+                          <span className="text-[9px] font-medium opacity-70">+{record.overtimeMinutes}min</span>
                         ) : null}
                         {record?.isLate && (
-                          <span className="absolute bottom-0.5 right-0.5 text-[8px] font-black uppercase text-amber-500">
-                            L
-                          </span>
+                          <span className="absolute bottom-1 right-1 flex size-3.5 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-white">L</span>
                         )}
                         {record?.earlyDeparture && (
-                          <span className="absolute bottom-0.5 left-0.5 text-[8px] font-black uppercase text-red-500">
-                            E
-                          </span>
+                          <span className="absolute bottom-1 left-1 flex size-3.5 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold text-white">E</span>
                         )}
                         {record && !record.isSettled && (
-                          <span className="absolute top-0.5 left-0.5 size-1.5 rounded-full bg-yellow-500" title="Pending" />
+                          <span className="absolute top-1 left-1 size-1.5 rounded-full bg-yellow-500" title="Pending" />
                         )}
                         {record?.isBackdated && (
-                          <Clock3 className="absolute top-1 right-1 size-3 text-neutral-400" />
+                          <Clock3 className="absolute top-1 right-1 size-3 opacity-70" />
                         )}
-                        {holiday && (
-                          <CalendarOff className="absolute top-1 left-1 size-3 text-neutral-400" />
-                        )}
+                        {holiday && <CalendarOff className="absolute top-1 left-1 size-3 opacity-70" />}
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-64 rounded-2xl border-0 bg-card p-4 shadow-xl text-foreground">
+                    <PopoverContent className="w-64 p-4">
                       <div className="grid gap-3">
-                        <p className="text-sm font-bold uppercase tracking-widest text-foreground">
+                        <p className="text-sm font-semibold text-foreground">
                           {new Date(dateKey).toLocaleDateString('en-US', {
                             day: 'numeric',
                             month: 'long',
@@ -276,42 +272,37 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                             timeZone: 'UTC',
                           })}
                         </p>
-                        {isSunday && (
-                          <p className="text-xs font-bold uppercase tracking-widest text-neutral-500">Sunday — off</p>
-                        )}
+                        {isSunday && <p className="text-xs text-muted-foreground">Sunday — off</p>}
                         {holiday && (
-                          <p className="text-xs font-bold uppercase tracking-widest text-neutral-500">
-                            Holiday: {holiday.label}
+                          <p className="text-xs text-muted-foreground">
+                            {holiday.type === 'half_day' ? 'Half Day' : 'Holiday'}: {holiday.label}
                           </p>
                         )}
                         <DayScans employeeId={employeeId} date={dateKey} />
                         {record?.isAutoMarked && (
-                          <p className="text-xs font-bold uppercase tracking-widest text-primary">
-                            Auto-marked from biometric scans
-                          </p>
+                          <p className="text-xs text-primary">Auto-marked from biometric scans</p>
                         )}
-                        {record?.modifiedByRequest && (
-                          <p className="text-xs font-bold uppercase tracking-widest text-amber-500">
-                            Modified by HR
-                          </p>
-                        )}
+                        {record?.modifiedByRequest && <p className="text-xs text-amber-600">Modified by HR</p>}
                         {record && !record.isSettled && (
-                          <p className="text-xs font-bold uppercase tracking-widest text-yellow-500">
-                            Pending — may still change today
-                          </p>
+                          <p className="text-xs text-yellow-600">Pending — may still change today</p>
                         )}
                         {!canMark && (
-                          <div className="grid gap-1 text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                            <p>Status: {record?.status ? STATUS_CONFIG[record.status].label : '— none —'}</p>
-                            {record?.isLate && <p className="text-amber-500">Late arrival</p>}
-                            {record?.earlyDeparture && <p className="text-red-500">Left early</p>}
-                            {record?.overtimeHours ? <p>Overtime: {record.overtimeHours}h</p> : null}
+                          <div className="grid gap-1 text-xs text-muted-foreground">
+                            <p>
+                              Status:{' '}
+                              {record?.status
+                                ? `${STATUS_CONFIG[record.status].code} — ${STATUS_CONFIG[record.status].label}`
+                                : '— none —'}
+                            </p>
+                            {record?.isLate && <p className="text-amber-600">Late arrival</p>}
+                            {record?.earlyDeparture && <p className="text-red-600">Left early</p>}
+                            {record?.overtimeMinutes ? <p>Overtime: {record.overtimeMinutes}min</p> : null}
                           </div>
                         )}
                         {canMark && record?.notes && (
-                          <div className="grid gap-1 rounded-xl bg-secondary/40 p-2.5">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400">Reason on file</p>
-                            <p className="text-xs font-semibold text-foreground">{record.notes}</p>
+                          <div className="grid gap-1 rounded-lg bg-secondary/40 p-2.5">
+                            <p className="text-[10px] text-muted-foreground">Reason on file</p>
+                            <p className="text-xs font-medium text-foreground">{record.notes}</p>
                           </div>
                         )}
                         {canMark && (
@@ -334,41 +325,39 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                                 <SelectItem value={NO_STATUS}>— No status —</SelectItem>
                                 {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
                                   <SelectItem key={key} value={key}>
-                                    {cfg.label}
+                                    {cfg.code} — {cfg.label}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                             <div className="grid gap-1.5">
-                              <Label htmlFor={`ot-${dateKey}`} className="text-xs font-black uppercase tracking-widest text-neutral-400">
-                                Overtime Hours
+                              <Label htmlFor={`ot-${dateKey}`} className="text-xs text-muted-foreground">
+                                Overtime minutes
                               </Label>
                               <Input
                                 id={`ot-${dateKey}`}
                                 type="number"
                                 min="0"
-                                step="0.5"
-                                value={pendingOvertimeHours}
+                                step="1"
+                                value={pendingOvertimeMinutes}
                                 disabled={pendingEarlyDeparture}
                                 onChange={(e) => {
-                                  setPendingOvertimeHours(e.target.value)
+                                  setPendingOvertimeMinutes(e.target.value)
                                   // Overtime and an early departure are opposite
                                   // ends of the same departure scan — can't both
                                   // be true for the same day.
                                   if (Number(e.target.value) > 0) setPendingEarlyDeparture(false)
                                 }}
-                                className="rounded-xl disabled:opacity-50"
+                                className="disabled:opacity-50"
                               />
                               {pendingEarlyDeparture && (
-                                <p className="text-[10px] font-semibold text-muted-foreground">
-                                  Can't combine with Early departure
-                                </p>
+                                <p className="text-[10px] text-muted-foreground">Can't combine with Early departure</p>
                               )}
                             </div>
                             <label
                               htmlFor={`late-${dateKey}`}
                               className={cn(
-                                'flex items-center gap-2 select-none text-xs font-black uppercase tracking-widest text-neutral-400',
+                                'flex select-none items-center gap-2 text-xs text-muted-foreground',
                                 pendingStatus === 'L' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
                               )}
                             >
@@ -378,42 +367,38 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                                 checked={pendingIsLate}
                                 disabled={pendingStatus === 'L'}
                                 onChange={(e) => setPendingIsLate(e.target.checked)}
-                                className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary disabled:cursor-not-allowed"
+                                className="size-4 cursor-pointer rounded border-border text-primary accent-primary focus:ring-primary disabled:cursor-not-allowed"
                               />
                               Late arrival
                             </label>
                             {pendingStatus === 'L' && (
-                              <p className="-mt-2 text-[10px] font-semibold text-muted-foreground">
-                                Already covered by the L status
-                              </p>
+                              <p className="-mt-2 text-[10px] text-muted-foreground">Already covered by the L status</p>
                             )}
                             <label
                               htmlFor={`early-${dateKey}`}
                               className={cn(
-                                'flex items-center gap-2 select-none text-xs font-black uppercase tracking-widest text-neutral-400',
-                                Number(pendingOvertimeHours) > 0 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                                'flex select-none items-center gap-2 text-xs text-muted-foreground',
+                                Number(pendingOvertimeMinutes) > 0 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
                               )}
                             >
                               <input
                                 id={`early-${dateKey}`}
                                 type="checkbox"
                                 checked={pendingEarlyDeparture}
-                                disabled={Number(pendingOvertimeHours) > 0}
+                                disabled={Number(pendingOvertimeMinutes) > 0}
                                 onChange={(e) => {
                                   setPendingEarlyDeparture(e.target.checked)
-                                  if (e.target.checked) setPendingOvertimeHours('')
+                                  if (e.target.checked) setPendingOvertimeMinutes('')
                                 }}
-                                className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary disabled:cursor-not-allowed"
+                                className="size-4 cursor-pointer rounded border-border text-primary accent-primary focus:ring-primary disabled:cursor-not-allowed"
                               />
                               Early departure
                             </label>
-                            {Number(pendingOvertimeHours) > 0 && (
-                              <p className="-mt-2 text-[10px] font-semibold text-muted-foreground">
-                                Can't combine with Overtime Hours
-                              </p>
+                            {Number(pendingOvertimeMinutes) > 0 && (
+                              <p className="-mt-2 text-[10px] text-muted-foreground">Can't combine with Overtime Minutes</p>
                             )}
                             <div className="grid gap-1.5">
-                              <Label htmlFor={`notes-${dateKey}`} className="text-xs font-black uppercase tracking-widest text-neutral-400">
+                              <Label htmlFor={`notes-${dateKey}`} className="text-xs text-muted-foreground">
                                 Reason{reasonRequired ? ' (required)' : ' (optional)'}
                               </Label>
                               <Textarea
@@ -421,30 +406,46 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                                 value={pendingNotes}
                                 onChange={(e) => setPendingNotes(e.target.value)}
                                 placeholder={reasonRequired ? 'Why are you marking/changing this day?' : 'Optional note'}
-                                className="rounded-xl min-h-16"
+                                className="min-h-16"
                               />
                             </div>
-                            <Button
-                              size="sm"
-                              className="bg-emerald-600 text-white hover:bg-emerald-500 rounded-xl"
-                              onClick={() => onSave(dateKey)}
-                              disabled={markAttendance.isPending}
-                            >
+                            <Button size="sm" onClick={() => onSave(dateKey)} disabled={markAttendance.isPending}>
                               Save
                             </Button>
                           </>
                         )}
-                        {isAdmin && (
+                        {isAdmin && holiday && (
                           <Button
                             size="sm"
                             variant="outline"
-                            className="rounded-xl"
-                            onClick={() => onToggleHoliday(dateKey)}
-                            disabled={createHoliday.isPending || deleteHoliday.isPending}
+                            onClick={() => onRemoveOffDay(dateKey)}
+                            disabled={deleteHoliday.isPending}
                           >
                             <CalendarOff className="size-4" />
-                            {holiday ? 'Remove Holiday' : 'Mark as Holiday'}
+                            Remove {holiday.type === 'half_day' ? 'half day' : 'holiday'}
                           </Button>
+                        )}
+                        {isAdmin && !holiday && (
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onMarkOffDay(dateKey, 'holiday')}
+                              disabled={createHoliday.isPending}
+                            >
+                              <CalendarOff className="size-4" />
+                              Mark as holiday
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onMarkOffDay(dateKey, 'half_day')}
+                              disabled={createHoliday.isPending}
+                            >
+                              <CalendarOff className="size-4" />
+                              Mark as half day
+                            </Button>
+                          </div>
                         )}
                       </div>
                     </PopoverContent>
@@ -452,18 +453,21 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                 )
               })}
             </div>
-            <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t-2 border-neutral-900 pt-4">
+            <div className="mt-6 flex flex-wrap gap-2 border-t border-border pt-4">
               {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-                <div key={key} className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-neutral-400">
-                  <span className={cn('size-2.5', cfg.dot)} />
-                  {cfg.label}
+                <div
+                  key={key}
+                  className={cn('flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium', cfg.box)}
+                >
+                  <span className={cn('size-1.5 shrink-0 rounded-full', cfg.dot)} />
+                  {cfg.code} — {cfg.label}
                 </div>
               ))}
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-neutral-400">
+              <div className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground">
                 <Clock3 className="size-3" />
                 Backdated
               </div>
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-neutral-400">
+              <div className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground">
                 <CalendarOff className="size-3" />
                 Sunday / Holiday
               </div>

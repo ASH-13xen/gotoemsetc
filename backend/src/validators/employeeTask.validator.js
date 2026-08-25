@@ -3,6 +3,10 @@ const { EMPLOYEE_TASK_TYPE } = require('../config/constants');
 
 const idParam = { params: z.object({ id: z.string().min(1) }) };
 
+// MOM-pipeline actions on a task — see momPipeline.service.js.
+const momPipelineDecision = { ...idParam, body: z.object({ note: z.string().trim().optional() }) };
+const momPipelineReject = { ...idParam, body: z.object({ reason: z.string().trim().min(1) }) };
+
 const resourceRequiredSchema = z.object({
   label: z.string().trim().min(1),
   notes: z.string().trim().optional(),
@@ -37,6 +41,9 @@ const mutableFields = {
   followUps: z.array(followUpSchema).optional(),
   // Off by default — see EmployeeTask.js.
   reviewMandatory: z.boolean().optional(),
+  // Where the finished work lives, recorded by whoever did it. A link, not
+  // an upload — see EmployeeTask.js.
+  deliverableLink: z.string().trim().optional(),
 };
 
 // Every type has a different required shape — enforced once here rather
@@ -118,22 +125,16 @@ const listMine = {
   }),
 };
 
-// Exactly one of employeeId/teamId — mutually exclusive single-select
-// filters on the admin unified task view.
+// Client/team/employee/date — any combination, all optional, all
+// combinable at once on the admin unified task view.
 const adminFilter = {
-  query: z
-    .object({
-      employeeId: z.string().min(1).optional(),
-      teamId: z.string().min(1).optional(),
-    })
-    .superRefine((data, ctx) => {
-      if (Boolean(data.employeeId) === Boolean(data.teamId)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Provide exactly one of employeeId or teamId',
-        });
-      }
-    }),
+  query: z.object({
+    clientId: z.string().min(1).optional(),
+    teamId: z.string().min(1).optional(),
+    employeeId: z.string().min(1).optional(),
+    dateFrom: z.coerce.date().optional(),
+    dateTo: z.coerce.date().optional(),
+  }),
 };
 
 // Sends a for_review task back to pending — every field optional, since
@@ -189,4 +190,6 @@ module.exports = {
   adminFilter,
   reject,
   createContinuation,
+  momPipelineDecision,
+  momPipelineReject,
 };

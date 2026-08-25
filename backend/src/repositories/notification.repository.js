@@ -21,6 +21,7 @@ function unreadCount(recipientId) {
 function listUnreadByType(recipientId, type) {
   return Notification.find({ recipient: recipientId, type, isRead: false })
     .populate('attendanceWarning')
+    .populate('complaint')
     .sort({ createdAt: 1 });
 }
 

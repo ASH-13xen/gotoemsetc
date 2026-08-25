@@ -1,31 +1,33 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.75rem;
-  --background: oklch(0.99 0.003 240); /* Very soft clean ice/slate white backdrop */
-  --foreground: oklch(0.25 0.01 240); /* Elegant dark slate text */
-  --card: oklch(1 0 0); /* Pure white cards */
-  --card-foreground: oklch(0.25 0.01 240);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.25 0.01 240);
-  --primary: oklch(0.58 0.18 260); /* Vibrant Indigo accent */
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.965 0.005 240); /* Subtle light gray-indigo well backdrop */
-  --secondary-foreground: oklch(0.35 0.01 240);
-  --muted: oklch(0.97 0.004 240);
-  --muted-foreground: oklch(0.55 0.01 240);
-  --accent: oklch(0.95 0.005 240);
-  --accent-foreground: oklch(0.25 0.01 240);
-  --destructive: oklch(0.6 0.18 25);
-  --border: oklch(0.96 0.003 240); /* Ultra-faint light border */
-  --input: oklch(0.965 0.005 240);
-  --ring: oklch(0.58 0.18 260);
+  --radius: 0.625rem;
+  --background: oklch(0.98 0.006 85); /* Warm off-white paper backdrop */
+  --foreground: oklch(0.22 0.014 260); /* Soft ink */
+  --card: oklch(0.995 0.004 85); /* Near-white paper surface, lifted by a hairline border */
+  --card-foreground: oklch(0.22 0.014 260);
+  --popover: oklch(0.995 0.004 85);
+  --popover-foreground: oklch(0.22 0.014 260);
+  --primary: oklch(0.52 0.16 265); /* One confident ink-indigo accent */
+  --primary-foreground: oklch(0.99 0.004 85);
+  --secondary: oklch(0.955 0.006 85); /* Faint warm well, for filled inputs/hovers */
+  --secondary-foreground: oklch(0.32 0.014 260);
+  --muted: oklch(0.96 0.006 85);
+  --muted-foreground: oklch(0.5 0.012 260);
+  --accent: oklch(0.94 0.008 85);
+  --accent-foreground: oklch(0.22 0.014 260);
+  --destructive: oklch(0.58 0.19 25);
+  --border: oklch(0.9 0.007 85); /* Border that actually reads as a hairline */
+  --input: oklch(0.955 0.006 85);
+  --ring: oklch(0.52 0.16 265);
 }
 
 .dark {
-  --radius: 0.75rem;
+  --radius: 0.625rem;
   --background: oklch(0.12 0.015 250);
   --foreground: oklch(0.98 0.005 250);
   --card: oklch(0.16 0.018 250);
@@ -50,13 +52,14 @@
   --radius-sm: calc(var(--radius) - 0.25rem);
   --radius-md: calc(var(--radius) - 0.125rem);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 0.25rem);
-  --radius-2xl: calc(var(--radius) + 0.5rem);
-  --radius-3xl: calc(var(--radius) + 1rem);
+  --radius-xl: calc(var(--radius) + 0.125rem);
+  --radius-2xl: calc(var(--radius) + 0.25rem);
+  --radius-3xl: calc(var(--radius) + 0.5rem);
 
-  --shadow-diffuse: 0 10px 40px -10px rgba(0, 0, 0, 0.03), 0 20px 80px -20px rgba(0, 0, 0, 0.02);
-  --shadow-glow: 0 4px 20px rgba(79, 70, 229, 0.12);
-  --shadow-button: 0 4px 14px rgba(79, 70, 229, 0.15);
+  /* Flat by default: cards/tables/inputs use a hairline border, no shadow.
+     This is the one shadow reserved for surfaces that truly float above
+     content (Dialog, Popover, Select content). */
+  --shadow-elevated: 0 1px 2px rgba(20, 15, 10, 0.04), 0 12px 28px -10px rgba(20, 15, 10, 0.12);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -80,10 +83,13 @@
 
 @layer base {
   * {
-    @apply border-border/40 outline-ring/50 rounded-[var(--radius)];
+    @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Geist Variable', 'Inter', system-ui, 'Segoe UI', Roboto, sans-serif;
+  }
+  .font-mono {
+    font-family: 'Geist Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, monospace;
   }
 }

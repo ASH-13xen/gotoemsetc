@@ -3,7 +3,7 @@ import { apiClient } from './client'
 export interface AuthUser {
   id: string
   username: string
-  role: 'admin' | 'worker' | 'hr'
+  role: 'admin' | 'ceo' | 'digital_admin' | 'hr' | 'operations_manager' | 'account_manager' | 'team_lead' | 'worker'
   employeeLink: string | null
   permissions: string[]
 }

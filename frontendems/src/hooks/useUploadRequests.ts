@@ -33,6 +33,15 @@ export function useCreateUploadRequest(employeeId: string) {
   })
 }
 
+// Global, cross-employee — backs the Dashboard's "Pending document
+// requests" stat click-through.
+export function usePendingUploadRequests() {
+  return useQuery({
+    queryKey: ['uploadRequests', 'pending'],
+    queryFn: () => uploadRequestsApi.listPendingUploadRequests(),
+  })
+}
+
 export function useRevokeUploadRequest(employeeId: string) {
   const queryClient = useQueryClient()
   return useMutation({

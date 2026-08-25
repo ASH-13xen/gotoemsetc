@@ -1,7 +1,7 @@
 const ApiError = require('../utils/ApiError');
 const eventRepository = require('../repositories/event.repository');
 const eventResponsibilityRepository = require('../repositories/eventResponsibility.repository');
-const teamRepository = require('../repositories/team.repository');
+const workTeamRepository = require('../repositories/workTeam.repository');
 const eventNotify = require('./eventNotify.service');
 const { EVENT_STATUS } = require('../config/constants');
 
@@ -124,7 +124,7 @@ async function deleteResponsibility(id) {
 // they're on, still pending.
 async function listMyResponsibilities(employeeId) {
   if (!employeeId) return [];
-  const teams = await teamRepository.listForMember(employeeId);
+  const teams = await workTeamRepository.listForMember(employeeId);
   const all = await eventResponsibilityRepository.listForEmployeeOrTeams(employeeId, teams.map((t) => t._id));
   return all.filter((r) => r.status !== 'done');
 }

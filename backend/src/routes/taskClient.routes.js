@@ -1,39 +1,27 @@
 const { Router } = require('express');
 const validate = require('../middlewares/validate.middleware');
-const { requirePermission } = require('../middlewares/auth.middleware');
-const { PERMISSIONS } = require('../config/constants');
+const { requireCmsWrite } = require('../middlewares/cmsAccess.middleware');
 const upload = require('../middlewares/multer.middleware');
 const taskClientValidator = require('../validators/taskClient.validator');
 const taskClientController = require('../controllers/taskClient.controller');
 
 const router = Router();
 
-// Open to any logged-in employee — Client-related tasks need every employee
-// to be able to see the client registry, even though only admin/HR or a
-// manage_tasks holder can create/edit/delete clients or change their logo.
+// Reads are open to any logged-in employee — Client-related tasks need every
+// employee to be able to see the client registry. Writes go through
+// requireCmsWrite: admin/sales, plus HR and manage_tasks holders, who owned
+// this registry before the Client Management System existed.
 router.get('/', taskClientController.list);
 router.get('/:id', validate(taskClientValidator.getOrDelete), taskClientController.get);
-router.post(
-  '/',
-  requirePermission(PERMISSIONS.MANAGE_TASKS),
-  validate(taskClientValidator.create),
-  taskClientController.create
-);
-router.patch(
-  '/:id',
-  requirePermission(PERMISSIONS.MANAGE_TASKS),
-  validate(taskClientValidator.update),
-  taskClientController.update
-);
-router.delete(
-  '/:id',
-  requirePermission(PERMISSIONS.MANAGE_TASKS),
-  validate(taskClientValidator.getOrDelete),
-  taskClientController.remove
-);
+// The generated client manual — same open-read audience as everything else
+// here (downloadable by anybody who can already see the client).
+router.get('/:id/manual', validate(taskClientValidator.getOrDelete), taskClientController.downloadManual);
+router.post('/', requireCmsWrite(), validate(taskClientValidator.create), taskClientController.create);
+router.patch('/:id', requireCmsWrite(), validate(taskClientValidator.update), taskClientController.update);
+router.delete('/:id', requireCmsWrite(), validate(taskClientValidator.getOrDelete), taskClientController.remove);
 router.post(
   '/:id/logo',
-  requirePermission(PERMISSIONS.MANAGE_TASKS),
+  requireCmsWrite(),
   validate(taskClientValidator.getOrDelete),
   upload.single('logo'),
   taskClientController.uploadLogo

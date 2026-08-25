@@ -6,6 +6,11 @@ const list = asyncHandler(async (req, res) => {
   res.json({ events });
 });
 
+const listForClient = asyncHandler(async (req, res) => {
+  const events = await companyEventService.listForClient(req.params.clientId);
+  res.json({ events });
+});
+
 const create = asyncHandler(async (req, res) => {
   const event = await companyEventService.createEvent(req.body, req.user.id);
   req.auditContext = {
@@ -23,4 +28,4 @@ const remove = asyncHandler(async (req, res) => {
   res.status(204).send();
 });
 
-module.exports = { list, create, remove };
+module.exports = { list, listForClient, create, remove };

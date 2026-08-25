@@ -1,8 +1,18 @@
 const { Schema, model } = require('mongoose');
+const { PAYMENT_STATUS } = require('../config/constants');
 
 // Stored on local disk, same as quotations — Cloudinary's account-level
 // security policy blocks unauthenticated PDF delivery entirely.
 const fileRefSchema = new Schema({ filePath: { type: String, required: true } }, { _id: false });
+
+// Set once Finance actually pays the slip — see salarySlip.service.js#markSalaryPaid.
+// Kept on the slip itself rather than a parallel Finance-owned model since a
+// salary slip is already inherently a Finance record, unlike e.g. FnF's
+// GeneratedDocument (a generic, multi-purpose document store).
+const transactionDetailsSchema = new Schema(
+  { mode: String, referenceNumber: String, paidOn: Date, note: String },
+  { _id: false }
+);
 
 const salarySlipSchema = new Schema(
   {
@@ -41,6 +51,12 @@ const salarySlipSchema = new Schema(
 
     generatedFile: { type: fileRefSchema, required: true },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+
+    // Finance section — see services/salarySlip.service.js#markSalaryPaid.
+    paymentStatus: { type: String, enum: Object.values(PAYMENT_STATUS), default: PAYMENT_STATUS.DUE },
+    paidAt: Date,
+    paidBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    transactionDetails: transactionDetailsSchema,
   },
   { timestamps: true }
 );

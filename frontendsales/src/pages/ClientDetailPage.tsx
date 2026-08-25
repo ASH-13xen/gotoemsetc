@@ -1,224 +1,182 @@
-import { useNavigate, useParams } from 'react-router-dom'
-import { toast } from 'sonner'
-import { Mail, Phone, Trash2, Users } from 'lucide-react'
+import { useState } from 'react'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { ArrowLeft, CalendarDays, Download, Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ClientStatusBadge } from '@/components/clients/ClientStatusBadge'
-import { AddContactDialog } from '@/components/clients/AddContactDialog'
-import { OffboardConfirmDialog } from '@/components/clients/OffboardConfirmDialog'
-import { AssignEmployeesDialog } from '@/components/clients/AssignEmployeesDialog'
-import { ClientLogoUpload } from '@/components/clients/ClientLogoUpload'
-import { ActivityTimeline } from '@/components/clients/ActivityTimeline'
-import { ClientNotes } from '@/components/clients/ClientNotes'
-import { ClientExtraDetails } from '@/components/clients/ClientExtraDetails'
-import { RequestClientDocumentsModal } from '@/components/clients/RequestClientDocumentsModal'
-import { ClientDocumentRequestHistory } from '@/components/clients/ClientDocumentRequestHistory'
-import { ClientUploadedDocumentsList } from '@/components/clients/ClientUploadedDocumentsList'
-import { QuotationsSection } from '@/components/quotations/QuotationsSection'
-import { MeetingList } from '@/components/meetings/MeetingList'
-import { ScheduleMeetingDialog } from '@/components/meetings/ScheduleMeetingDialog'
-import { useClient, useRemoveContact } from '@/hooks/useClients'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useCalendars, useClient } from '@/hooks/useCms'
+import { useCmsAccess } from '@/hooks/useCmsAccess'
+import { PlanBadge } from '@/components/clients/PlanBadge'
+import { ClientBasicsCard } from '@/components/clients/ClientBasicsCard'
+import { ClientContactsCard } from '@/components/clients/ClientContactsCard'
+import { ClientPlanCard } from '@/components/clients/ClientPlanCard'
+import { ClientManualProfileCard } from '@/components/clients/ClientManualProfileCard'
+import { ImportantDatesCard } from '@/components/clients/ImportantDatesCard'
+import { MeetingsPanel } from '@/components/meetings/MeetingsPanel'
+import { CreateCalendarDialog } from '@/components/calendar/CreateCalendarDialog'
+import { MONTH_NAMES } from '@/lib/istDate'
+import { apiClient } from '@/api/client'
 
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { data, isLoading } = useClient(id)
-  const removeContact = useRemoveContact(id ?? '')
+  const [searchParams] = useSearchParams()
+  const { data: client, isLoading } = useClient(id)
+  const { data: calendars } = useCalendars(id)
+  const { canManageCalendar, isReadOnly } = useCmsAccess()
+  const [createOpen, setCreateOpen] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
-  if (isLoading || !data) {
+  if (isLoading || !client) {
     return (
-      <div className="mx-auto max-w-4xl space-y-4 p-6">
-        <Skeleton className="h-32 w-full" />
-        <Skeleton className="h-64 w-full" />
+      <div className="space-y-4 p-6 md:p-8">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-64 rounded-2xl" />
       </div>
     )
   }
 
-  const { client } = data
-  const primaryContact = client.contacts[0]
+  const defaultTab = searchParams.get('tab') === 'calendars' ? 'calendars' : 'overview'
+
+  // Downloadable by anybody who can already see this client — same audience
+  // as the rest of Client Management, no extra gate.
+  async function downloadManual() {
+    setDownloading(true)
+    try {
+      const { data } = await apiClient.get(`/task-clients/${id}/manual`, { responseType: 'blob' })
+      const url = URL.createObjectURL(data as Blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${client!.brandName || client!.name} — Client Manual.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-background p-6 text-foreground">
-      <main className="mx-auto max-w-4xl space-y-8">
-        {/* HERO HEADER */}
-        <div className="grid grid-cols-1 gap-6 bg-transparent md:grid-cols-3">
-          <div className="flex min-h-[220px] flex-col justify-between bg-card border border-border p-8 rounded-2xl md:col-span-2 shadow-sm">
-            <div className="flex items-start gap-4">
-              <ClientLogoUpload clientId={client._id} logoUrl={client.logoUrl} clientName={client.clientName} />
-              <div className="flex flex-col gap-2">
-                <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-                  CLIENT PROFILE
-                </span>
-                <h1 className="text-4xl font-extrabold tracking-tight text-foreground md:text-5xl">
-                  {client.clientName}
-                </h1>
-                <p className="mt-1 text-base font-semibold tracking-wide text-muted-foreground">
-                  {client.brandName}
+    <div className="space-y-6 p-6 md:p-8">
+      <button
+        onClick={() => navigate('/')}
+        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="size-4" />
+        All clients
+      </button>
+
+      <div className="flex flex-wrap items-center gap-4">
+        {client.logoUrl ? (
+          <img src={client.logoUrl} alt="" className="size-14 rounded-2xl object-cover" />
+        ) : (
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-secondary text-lg font-semibold">
+            {client.name.slice(0, 2).toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-semibold tracking-tight">{client.name}</h1>
+          {client.brandName && <p className="text-sm text-muted-foreground">{client.brandName}</p>}
+        </div>
+        <PlanBadge plan={client.currentPlan} />
+        <Button variant="outline" onClick={downloadManual} disabled={downloading}>
+          <Download className="mr-2 size-4" />
+          {downloading ? 'Preparing…' : 'Download manual'}
+        </Button>
+      </div>
+
+      {isReadOnly && (
+        <p className="rounded-xl bg-secondary/60 px-4 py-2 text-xs text-muted-foreground">
+          You have read-only access to Client Management.
+        </p>
+      )}
+
+      <Tabs defaultValue={defaultTab}>
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="calendars">Calendars</TabsTrigger>
+          <TabsTrigger value="manual">Manual</TabsTrigger>
+          <TabsTrigger value="meetings">Meetings</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <ClientBasicsCard client={client} />
+            <ClientContactsCard client={client} />
+            <ClientPlanCard client={client} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="calendars">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between gap-3 pt-6">
+              <CardTitle className="flex items-center gap-2">
+                <CalendarDays className="size-4" />
+                Content calendars
+              </CardTitle>
+              {canManageCalendar && (
+                <Button size="sm" onClick={() => setCreateOpen(true)}>
+                  <Plus className="mr-2 size-4" />
+                  New month
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="pb-6">
+              {!calendars || calendars.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  No calendars yet. A month with no calendar means no content is owed —
+                  including no daily stories.
                 </p>
-              </div>
-            </div>
-            <div className="mt-4 flex items-center gap-3">
-              <ClientStatusBadge status={client.status} />
-              <span className="font-mono text-xs text-muted-foreground">
-                Registered {new Date(client.dateRegistered).toLocaleDateString()}
-              </span>
-            </div>
-          </div>
-          <div className="flex flex-col gap-4">
-            <div
-              onClick={() => navigate('/')}
-              className="flex min-h-[100px] cursor-pointer flex-col justify-between bg-primary p-6 rounded-xl text-primary-foreground transition-all hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99]"
-            >
-              <span className="text-xs font-bold tracking-wider opacity-90 uppercase">NAVIGATION</span>
-              <span className="text-xl font-extrabold tracking-wide">BACK TO PORTAL</span>
-            </div>
-            {client.status !== 'offboarded' && (
-              <div className="flex min-h-[100px] flex-col justify-between bg-card border border-border p-6 rounded-xl shadow-sm">
-                <span className="text-xs font-bold tracking-wider text-muted-foreground uppercase">DANGER ZONE</span>
-                <OffboardConfirmDialog clientId={client._id} clientName={client.clientName} />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ASSIGNED EMPLOYEES */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Users className="size-4" />
-              Assigned employees
-            </CardTitle>
-            <AssignEmployeesDialog
-              clientId={client._id}
-              currentAssigned={client.assignedEmployees}
-              currentMain={client.mainEmployee}
-            />
-          </CardHeader>
-          <CardContent>
-            {client.assignedEmployees.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No employees assigned yet.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {client.assignedEmployees.map((emp) => {
-                  const isMain = emp._id === client.mainEmployee?._id
-                  return (
-                    <span
-                      key={emp._id}
-                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                        isMain
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-border bg-secondary/40 text-foreground'
-                      }`}
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {calendars.map((cal) => (
+                    <button
+                      key={cal._id}
+                      onClick={() => navigate(`/calendars/${cal._id}`)}
+                      className="rounded-xl border border-border/40 px-4 py-3 text-left transition-colors hover:bg-secondary/60"
                     >
-                      {emp.firstName} {emp.lastName}
-                      {isMain && ' · Main'}
-                    </span>
-                  )
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* CONTACTS */}
-        <div className="space-y-6 bg-card border border-border rounded-xl p-6 shadow-sm">
-          <div className="flex items-center justify-between border-b border-border pb-3">
-            <h2 className="text-2xl font-bold tracking-tight text-foreground">Contacts</h2>
-            <AddContactDialog clientId={client._id} />
-          </div>
-          {client.contacts.length === 0 ? (
-            <p className="text-sm font-medium text-muted-foreground">
-              No contacts added yet.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {client.contacts.map((contact) => (
-                <div key={contact._id} className="flex items-start justify-between gap-3 border border-border bg-background p-4 rounded-xl">
-                  <div>
-                    <p className="font-bold tracking-wide text-foreground">{contact.name}</p>
-                    {contact.role && (
-                      <p className="text-xs font-medium text-muted-foreground">{contact.role}</p>
-                    )}
-                    <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
-                      {contact.email && (
-                        <span className="flex items-center gap-1.5">
-                          <Mail className="size-3" /> {contact.email}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">
+                          {MONTH_NAMES[cal.month - 1]} {cal.year}
                         </span>
+                        <PlanBadge plan={cal.plan} />
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">{cal.team?.name}</p>
+                      {cal.closedAt && (
+                        <Badge variant="outline" className="mt-2 font-normal">
+                          Closed
+                        </Badge>
                       )}
-                      {contact.phone && (
-                        <span className="flex items-center gap-1.5">
-                          <Phone className="size-3" /> {contact.phone}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() =>
-                      removeContact.mutate(contact._id, {
-                        onSuccess: () => toast.success('Contact removed'),
-                        onError: () => toast.error('Could not remove contact'),
-                      })
-                    }
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
+                    </button>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        {/* QUOTATIONS */}
-        <QuotationsSection
-          clientId={client._id}
-          clientName={client.clientName}
-          contactEmail={primaryContact?.email}
-          contactPhone={primaryContact?.phone}
-        />
-
-        {/* MEETINGS */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-            <CardTitle className="text-base">Meetings</CardTitle>
-            <ScheduleMeetingDialog clientId={client._id} trigger={<Button size="sm">Schedule Meeting</Button>} />
-          </CardHeader>
-          <CardContent>
-            <MeetingList clientId={client._id} />
-          </CardContent>
-        </Card>
-
-        {/* DOCUMENT REQUESTS */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-end">
-            <RequestClientDocumentsModal
-              clientId={client._id}
-              clientName={client.clientName}
-              contactEmail={primaryContact?.email}
-              contactPhone={primaryContact?.phone}
-            />
+        <TabsContent value="manual">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <ClientManualProfileCard client={client} />
+            <ImportantDatesCard clientId={client._id} />
           </div>
-          <ClientDocumentRequestHistory
-            clientId={client._id}
-            clientName={client.clientName}
-            contactEmail={primaryContact?.email}
-            contactPhone={primaryContact?.phone}
-          />
-          <ClientUploadedDocumentsList clientId={client._id} />
-        </div>
+        </TabsContent>
 
-        {/* NOTES */}
-        <ClientNotes clientId={client._id} />
+        <TabsContent value="meetings">
+          <MeetingsPanel client={client} />
+        </TabsContent>
+      </Tabs>
 
-        {/* EXTRA DETAILS */}
-        <ClientExtraDetails clientId={client._id} extraDetails={client.extraDetails} />
-
-        {/* ACTIVITY */}
-        <ActivityTimeline clientId={client._id} />
-      </main>
+      <CreateCalendarDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        client={client}
+        existing={calendars ?? []}
+      />
     </div>
   )
 }

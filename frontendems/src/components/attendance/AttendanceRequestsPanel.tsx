@@ -22,9 +22,23 @@ import type { AttendanceModificationRequest } from '@/api/attendanceRequests.api
 
 const NO_STATUS = '__none__'
 
+const REQUEST_STATUS_BADGE_VARIANT: Record<AttendanceModificationRequest['status'], 'warning' | 'success' | 'destructive'> = {
+  pending: 'warning',
+  resolved: 'success',
+  rejected: 'destructive',
+  revoked: 'destructive',
+}
+
+const LEAVE_TYPE_LABEL: Record<'SL' | 'L' | 'H' | 'O', string> = {
+  SL: 'Short Leave',
+  L: 'Late',
+  H: 'Half Day',
+  O: 'Leave',
+}
+
 function RequestRow({ request }: { request: AttendanceModificationRequest }) {
   const [status, setStatus] = useState<string>(NO_STATUS)
-  const [overtimeHours, setOvertimeHours] = useState('')
+  const [overtimeMinutes, setOvertimeMinutes] = useState('')
   const [isLate, setIsLate] = useState(false)
   const resolve = useResolveAttendanceRequest()
 
@@ -38,7 +52,7 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
       {
         id: request._id,
         status: status === NO_STATUS ? undefined : (status as AttendanceStatus),
-        overtimeHours: overtimeHours.trim() ? Number(overtimeHours) : undefined,
+        overtimeMinutes: overtimeMinutes.trim() ? Number(overtimeMinutes) : undefined,
         isLate,
       },
       {
@@ -49,23 +63,26 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
   }
 
   return (
-    <div className="grid gap-3 rounded-xl bg-secondary/30 p-4 border border-border/5">
+    <div className="grid gap-3 rounded-lg border border-border bg-secondary/30 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="font-bold text-foreground">{employeeName}</p>
+          <p className="font-medium text-foreground">{employeeName}</p>
           <p className="text-xs text-muted-foreground">
             {new Date(request.date).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })}
           </p>
         </div>
-        <Badge variant={request.status === 'pending' ? 'warning' : 'success'} className="rounded-lg">
-          {request.status}
-        </Badge>
+        <Badge variant={REQUEST_STATUS_BADGE_VARIANT[request.status]}>{request.status}</Badge>
       </div>
+      {request.requestedStatus && (
+        <p className="text-xs font-semibold text-primary">
+          Employee applied for: {LEAVE_TYPE_LABEL[request.requestedStatus]}
+        </p>
+      )}
       <p className="text-sm text-foreground/80">{request.reason}</p>
       {request.status === 'pending' && (
         <div className="flex flex-wrap items-end gap-2">
           <div className="grid gap-1">
-            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Status</label>
+            <label className="text-xs text-muted-foreground">Status</label>
             <Select
               value={status}
               onValueChange={(value) => {
@@ -76,34 +93,34 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
                 if (value === 'L') setIsLate(false)
               }}
             >
-              <SelectTrigger className="w-40 rounded-xl">
+              <SelectTrigger className="w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NO_STATUS}>— No change —</SelectItem>
                 {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
                   <SelectItem key={key} value={key}>
-                    {cfg.label}
+                    {cfg.code} — {cfg.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
           <div className="grid gap-1">
-            <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">OT Hours</label>
+            <label className="text-xs text-muted-foreground">OT minutes</label>
             <Input
               type="number"
               min="0"
-              step="0.5"
-              value={overtimeHours}
-              onChange={(e) => setOvertimeHours(e.target.value)}
-              className="w-24 rounded-xl"
+              step="1"
+              value={overtimeMinutes}
+              onChange={(e) => setOvertimeMinutes(e.target.value)}
+              className="w-24"
             />
           </div>
           <div className="grid gap-1 pb-2">
             <label
               className={cn(
-                'flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground select-none',
+                'flex items-center gap-2 text-xs text-muted-foreground select-none',
                 status === 'L' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
               )}
             >
@@ -117,10 +134,10 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
               Late
             </label>
             {status === 'L' && (
-              <p className="text-[10px] font-semibold text-muted-foreground">Already covered by the L status</p>
+              <p className="text-[10px] text-muted-foreground">Already covered by the L status</p>
             )}
           </div>
-          <Button size="sm" className="rounded-xl" onClick={onResolve} disabled={resolve.isPending}>
+          <Button size="sm" onClick={onResolve} disabled={resolve.isPending}>
             <CheckCircle2 className="size-4" />
             Resolve
           </Button>

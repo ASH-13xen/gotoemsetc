@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { ShellNav } from '@/components/layout/ShellNav'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { AuditLogRow } from '@/components/auditLog/AuditLogRow'
@@ -14,10 +15,10 @@ export default function AuditLogPage() {
     <div className="min-h-screen bg-background">
       <ShellNav />
       <main className="mx-auto max-w-6xl space-y-6 p-6">
-        <h1 className="text-3xl font-black tracking-tighter uppercase">Audit Log</h1>
-        <p className="text-sm text-muted-foreground">
-          Every action taken by a logged-in worker or admin, across every app.
-        </p>
+        <PageHeader
+          title="Audit Log"
+          description="Every action taken by a logged-in worker or admin, across every app."
+        />
 
         <Input
           placeholder="Filter by username…"
@@ -29,11 +30,11 @@ export default function AuditLogPage() {
           className="max-w-sm"
         />
 
-        <div className="overflow-x-auto border-2 border-foreground">
+        <div className="overflow-hidden rounded-xl border border-border">
           {isLoading ? (
             <p className="p-6 text-sm text-muted-foreground">Loading…</p>
           ) : (data?.items.length ?? 0) === 0 ? (
-            <p className="p-10 text-center text-sm text-muted-foreground uppercase">No activity recorded yet.</p>
+            <p className="p-10 text-center text-sm text-muted-foreground">No activity recorded yet.</p>
           ) : (
             <Table>
               <TableHeader>

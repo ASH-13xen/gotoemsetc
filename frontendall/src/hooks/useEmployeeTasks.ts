@@ -7,3 +7,10 @@ export function useMyUpcomingTasks() {
     queryFn: () => employeeTasksApi.listMyUpcomingTasks(),
   })
 }
+
+export function usePlanNextDay() {
+  return useQuery({
+    queryKey: ['employee-tasks', 'plan-next-day'],
+    queryFn: () => employeeTasksApi.getPlanNextDay(),
+  })
+}

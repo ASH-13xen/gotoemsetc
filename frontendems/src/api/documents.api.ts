@@ -57,6 +57,26 @@ export async function deleteDocument(id: string): Promise<void> {
   await apiClient.delete(`/documents/${id}`)
 }
 
+export interface EmployeeSummary {
+  _id: string
+  firstName: string
+  lastName?: string
+  employeeCode: string
+  designation: string
+}
+
+export interface GeneratedDocumentWithEmployee extends Omit<GeneratedDocument, 'employee'> {
+  employee: EmployeeSummary
+}
+
+// Global, cross-employee — backs the Dashboard's "Documents generated this
+// month" stat click-through. Omit `since` for the same "start of this
+// month" default the stat itself uses.
+export async function listRecentDocuments(since?: string): Promise<{ documents: GeneratedDocumentWithEmployee[] }> {
+  const { data } = await apiClient.get('/documents', { params: since ? { since } : undefined })
+  return data
+}
+
 // The download route is admin-gated (needs the Bearer token), so a plain
 // <a href> can't be used — fetch it as a blob through the authenticated
 // axios instance instead (same pattern as downloadSalarySlip).

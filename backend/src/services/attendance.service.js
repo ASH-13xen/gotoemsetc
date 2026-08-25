@@ -45,7 +45,7 @@ function assertReasonProvidedForHr(actingUserRole, notes) {
 // `dateStr` is a plain 'YYYY-MM-DD' string, which the spec guarantees parses
 // as UTC midnight — kept consistent with todayUTCMidnight() so the backdated
 // comparison never drifts by a day depending on the server's local timezone.
-async function markAttendance(employeeId, dateStr, { status, overtimeHours, notes, isLate, earlyDeparture }, actingUserRole) {
+async function markAttendance(employeeId, dateStr, { status, overtimeMinutes, notes, isLate, earlyDeparture }, actingUserRole) {
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) throw ApiError.notFound('Employee not found');
 
@@ -64,13 +64,13 @@ async function markAttendance(employeeId, dateStr, { status, overtimeHours, note
   const record = await attendanceRepository.upsertForDate(
     employeeId,
     date,
-    { status, overtimeHours, notes, isLate, earlyDeparture },
+    { status, overtimeMinutes, notes, isLate, earlyDeparture },
     isBackdated
   );
   await activityService.log(employeeId, 'ATTENDANCE_MARKED', {
     date: dateStr,
     status,
-    overtimeHours,
+    overtimeMinutes,
     isLate,
     earlyDeparture,
     isBackdated,
@@ -131,6 +131,7 @@ function emptySummary(dateOfJoining, asOfDate, periodStart) {
     lateToSLUnits: 0,
     effectiveSLUnits: 0,
     halfDayPenaltyUnits: 0,
+    totalOvertimeMinutes: 0,
   };
 }
 
@@ -195,6 +196,15 @@ async function computeLifetimeSummary(employeeId, { from: fromOverride, to: toOv
     if (record?.earlyDeparture) earlyDepartureCount += 1;
   }
 
+  // Summed straight off every fetched record, not the working-days-only
+  // cursor loop above — overtime can be earned on a Sunday/Holiday too (see
+  // attendanceClassifier.service.js#computeOffDayOvertime), which that loop
+  // deliberately skips.
+  let totalOvertimeMinutes = 0;
+  for (const record of records) {
+    totalOvertimeMinutes += record.overtimeMinutes || 0;
+  }
+
   const { lateToSLUnits, effectiveSLUnits, halfDayPenaltyUnits } = computeEffectiveUnits({
     counts,
     lateFlagCount,
@@ -213,6 +223,7 @@ async function computeLifetimeSummary(employeeId, { from: fromOverride, to: toOv
     lateToSLUnits,
     effectiveSLUnits,
     halfDayPenaltyUnits,
+    totalOvertimeMinutes,
   };
 }
 
@@ -222,10 +233,58 @@ async function listMarkedTodayEmployeeIds() {
   return attendanceRepository.listEmployeeIdsForDate(todayUTCMidnight());
 }
 
+// HR Work's org-wide "All merged attendance" monthly overview (frontendhr) —
+// every employee's records for one calendar month in a single flat list.
+// Deliberately returns raw records rather than a pre-grouped-by-date
+// structure: the frontend already has day-grid-building logic (see
+// CalendarPage.tsx's pattern) and also needs to apply its own overtime-toggle
+// filtering, so grouping here would just be redone client-side anyway.
+async function getMonthlyOverview({ month, year }) {
+  const from = new Date(Date.UTC(year, month - 1, 1));
+  const to = new Date(Date.UTC(year, month, 0));
+  const records = await attendanceRepository.listAllForRange(from, to);
+  return records.filter((r) => r.employee && !r.employee.isDeleted);
+}
+
+// The company calendar's "who's out" layer — open to every logged-in user,
+// unlike getMonthlyOverview above (HR-only). Deliberately narrower than a
+// full monthly overview: only the statuses that mean "not fully at their
+// desk in the normal way" (Paid Leave, Half Day, Short Leave, Work From
+// Home) plus the earlyDeparture flag, which is independent of status. Late
+// is excluded on purpose — it isn't "out" — and so is Absent, since it's
+// unapproved, not something to broadcast company-wide. Holiday is excluded
+// too — the calendar's separate Holiday marker already covers that day for
+// everyone, so repeating it here would just show "everyone is out" on every
+// holiday. Sourced from AttendanceRecord directly (not from leave requests)
+// so it also reflects leave HR marks by hand, outside the request flow.
+const WHOS_OUT_STATUSES = [
+  ATTENDANCE_STATUS.PAID_LEAVE,
+  ATTENDANCE_STATUS.HALF_DAY,
+  ATTENDANCE_STATUS.SHORT_LEAVE,
+  ATTENDANCE_STATUS.WORK_FROM_HOME,
+];
+
+async function listWhosOutForMonth({ month, year }) {
+  const from = new Date(Date.UTC(year, month - 1, 1));
+  const to = new Date(Date.UTC(year, month, 0));
+  const records = await attendanceRepository.listAllForRange(from, to);
+  return records
+    .filter((r) => r.employee && !r.employee.isDeleted)
+    .filter((r) => WHOS_OUT_STATUSES.includes(r.status) || r.earlyDeparture)
+    .map((r) => ({
+      employee: { _id: r.employee._id, firstName: r.employee.firstName, lastName: r.employee.lastName },
+      date: r.date,
+      status: WHOS_OUT_STATUSES.includes(r.status) ? r.status : null,
+      earlyDeparture: Boolean(r.earlyDeparture),
+    }));
+}
+
 module.exports = {
   markAttendance,
   listForEmployee,
   computeLifetimeSummary,
   listMarkedTodayEmployeeIds,
+  getMonthlyOverview,
+  listWhosOutForMonth,
   assertCanEditAttendanceDate,
 };

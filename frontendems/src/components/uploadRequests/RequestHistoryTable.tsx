@@ -79,7 +79,7 @@ function RequestRow({
           </div>
           {req.accessCode && (
             <div className="flex items-center gap-2 text-xs">
-              <span className="font-semibold text-muted-foreground uppercase tracking-wide">Access code</span>
+              <span className="font-medium text-muted-foreground">Access code</span>
               <code className="rounded-md bg-secondary/50 px-2 py-0.5 font-mono font-semibold text-foreground">
                 {req.accessCode}
               </code>

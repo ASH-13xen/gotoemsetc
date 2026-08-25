@@ -1,6 +1,7 @@
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const docGenerationService = require('../services/docGeneration.service');
+const documentOverviewService = require('../services/documentOverview.service');
 const generatedDocumentRepository = require('../repositories/generatedDocument.repository');
 
 const generate = asyncHandler(async (req, res) => {
@@ -15,6 +16,21 @@ const generate = asyncHandler(async (req, res) => {
 
 const listForEmployee = asyncHandler(async (req, res) => {
   const documents = await generatedDocumentRepository.listByEmployee(req.params.id);
+  res.json({ documents });
+});
+
+// Global, cross-employee — backs the Dashboard's "Documents generated this
+// month" stat click-through in frontendems. Defaults to the start of the
+// current month, same as dashboard.service.js#getStats, so the number and
+// the list it opens into always agree unless the caller overrides `since`.
+const listRecent = asyncHandler(async (req, res) => {
+  let since = req.query.since ? new Date(req.query.since) : null;
+  if (!since || Number.isNaN(since.getTime())) {
+    since = new Date();
+    since.setDate(1);
+    since.setHours(0, 0, 0, 0);
+  }
+  const documents = await generatedDocumentRepository.listCompletedSince(since);
   res.json({ documents });
 });
 
@@ -66,4 +82,37 @@ const downloadSignedFile = asyncHandler(async (req, res) => {
   res.send(document.signedFile.data);
 });
 
-module.exports = { generate, listForEmployee, getById, downloadFile, remove, uploadSigned, downloadSignedFile };
+// Self-service counterpart of downloadSignedFile above, nested under
+// /employees/:id so requireSelfOrPermission can check ownership from the
+// URL alone — this still double-checks the looked-up document actually
+// belongs to :id, since :docId on its own doesn't prove that.
+const downloadOwnSignedFile = asyncHandler(async (req, res) => {
+  const document = await generatedDocumentRepository.findByIdWithFile(req.params.docId);
+  if (!document || document.employee.toString() !== req.params.id) {
+    throw ApiError.notFound('Document not found');
+  }
+  if (!document.signedFile?.data) throw ApiError.notFound('No signed copy on file');
+
+  res.set('Content-Type', document.signedFile.contentType);
+  res.set('Content-Disposition', `attachment; filename="${document.signedFile.filename}"`);
+  res.send(document.signedFile.data);
+});
+
+// HR Work bulk tool (frontendhr) — see documentOverview.service.js.
+const overview = asyncHandler(async (req, res) => {
+  const result = await documentOverviewService.getOverviewForTemplate(req.query.templateKey);
+  res.json(result);
+});
+
+module.exports = {
+  generate,
+  listForEmployee,
+  listRecent,
+  getById,
+  downloadFile,
+  remove,
+  uploadSigned,
+  downloadSignedFile,
+  downloadOwnSignedFile,
+  overview,
+};

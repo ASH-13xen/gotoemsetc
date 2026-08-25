@@ -13,7 +13,7 @@ router.get('/pending', attendanceWarningController.pending);
 
 router.get(
   '/daily-report',
-  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
+  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR, USER_ROLES.CEO),
   validate(attendanceWarningValidator.dailyReport),
   attendanceWarningController.dailyReport
 );

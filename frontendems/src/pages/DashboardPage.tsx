@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion } from 'framer-motion'
-import { FileUp, Search, Users } from 'lucide-react'
+import { Clock, FileUp, Search, UserPlus, Users } from 'lucide-react'
 
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -20,15 +20,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { PageHeader } from '@/components/layout/PageHeader'
+import { QuickActions, QuickActionItem } from '@/components/layout/QuickActions'
 import { StatusBadge } from '@/components/employees/StatusBadge'
 import { AddEmployeeDialog } from '@/components/employees/AddEmployeeDialog'
 import { FlagStrip } from '@/components/employees/EmployeeFlags'
-import { StatCard } from '@/components/dashboard/StatCard'
-import { DailyReportModal } from '@/components/attendance/DailyReportModal'
+import { StatRow } from '@/components/dashboard/StatRow'
 import { useEmployees } from '@/hooks/useEmployees'
 import { useDashboardStats } from '@/hooks/useDashboardStats'
 import { useAuth } from '@/hooks/useAuth'
-import { hasPermission, isAdmin, isAdminLike } from '@/lib/permissions'
+import { useStaggerReveal } from '@/hooks/useStaggerReveal'
+import { hasPermission, isAdmin } from '@/lib/permissions'
 import type { EmployeeStatus } from '@/api/employees.api'
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
@@ -53,192 +55,143 @@ export default function DashboardPage() {
   })
   const employees = data?.items ?? []
   const { data: stats } = useDashboardStats()
+  const tableBodyRef = useStaggerReveal<HTMLTableSectionElement>([isLoading, employees.length])
 
   return (
-    <div className="space-y-8 py-4">
-      <main className="mx-auto max-w-6xl space-y-8">
-        {/* HERO HEADER */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-transparent">
-          {/* Logo/Branding Tile */}
-          <div className="relative md:col-span-2 bg-card/90 backdrop-blur-md p-8 rounded-2xl flex flex-col justify-between min-h-[180px] shadow-diffuse hover:-translate-y-0.5 transition-all duration-300">
-            <span className="text-xs font-semibold tracking-wider text-muted-foreground uppercase">EMPLOYEE MANAGEMENT SYSTEM</span>
-            <h1 className="text-5xl font-extrabold tracking-tight text-foreground select-none">
-              EMS
-            </h1>
-          </div>
-
-          {/* Action Tiles */}
-          <div className="flex flex-col gap-4">
-            {/* Go to Applicants Tile */}
-            {hasPermission(user, 'view_applicants') && (
-              <div
-                onClick={() => navigate('/applicants')}
-                className="bg-primary text-primary-foreground p-6 rounded-xl flex flex-col justify-between cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
-              >
-                <span className="text-xs font-bold tracking-wider opacity-90 uppercase">VIEW RECRUITMENT</span>
-                <span className="text-2xl font-extrabold tracking-wide">APPLICANTS</span>
-              </div>
-            )}
-
-            {/* Go to Attendance Tile */}
-            <div
-              onClick={() => navigate('/attendance')}
-              className="bg-blue-600 text-white p-6 rounded-xl flex flex-col justify-between cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
-            >
-              <span className="text-xs font-bold tracking-wider opacity-90 uppercase">WORKFORCE TRACKING</span>
-              <span className="text-2xl font-extrabold tracking-wide">ATTENDANCE</span>
-            </div>
-
-            {/* Go to Calendar Tile */}
-            <div
-              onClick={() => navigate('/calendar')}
-              className="bg-amber-600 text-white p-6 rounded-xl flex flex-col justify-between cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
-            >
-              <span className="text-xs font-bold tracking-wider opacity-90 uppercase">HOLIDAYS & EVENTS</span>
-              <span className="text-2xl font-extrabold tracking-wide">CALENDAR</span>
-            </div>
-
-            {/* Daily Attendance Report Tile — admin/HR only */}
-            {isAdminLike(user) && (
-              <DailyReportModal
-                trigger={
-                  <div className="bg-rose-600 text-white p-6 rounded-xl flex flex-col justify-between cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]">
-                    <span className="text-xs font-bold tracking-wider opacity-90 uppercase">LATES, ABSENTS & MORE</span>
-                    <span className="text-2xl font-extrabold tracking-wide">DAILY REPORT</span>
-                  </div>
-                }
-              />
-            )}
-
-            {/* Go to Upload Documents Tile — admin only */}
-            {isAdmin(user) && (
-              <div
-                onClick={() => navigate('/upload-documents')}
-                className="bg-violet-600 text-white p-6 rounded-xl flex flex-col justify-between cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
-              >
-                <span className="text-xs font-bold tracking-wider opacity-90 uppercase flex items-center gap-1.5">
-                  <FileUp className="size-3.5" />
-                  ADMIN ONLY
-                </span>
-                <span className="text-2xl font-extrabold tracking-wide">UPLOAD DOCUMENTS</span>
-              </div>
-            )}
-
-            {/* Add Employee Tile */}
-            {hasPermission(user, 'add_employee') && (
-              <AddEmployeeDialog
-                trigger={
-                  <div
-                    className="bg-emerald-600 text-white p-6 rounded-xl flex flex-col justify-between cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
-                  >
-                    <span className="text-xs font-bold tracking-wider opacity-90 uppercase">CREATE PROFILE</span>
-                    <span className="text-2xl font-extrabold tracking-wide">ADD EMPLOYEE</span>
-                  </div>
-                }
-              />
-            )}
-          </div>
-        </div>
-
-        {/* STATS PANEL */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, ease: 'easeOut' }}
-          className="grid gap-6 sm:grid-cols-3"
-        >
-          <StatCard label="Total employees" value={stats?.totalEmployees} />
-          <StatCard
-            label="Pending document requests"
-            value={stats?.pendingUploadRequests}
-          />
-          <StatCard
-            label="Documents generated this month"
-            value={stats?.documentsGeneratedThisMonth}
-          />
-        </motion.div>
-
-        {/* FILTERS & CONTROLS */}
-        <div className="bg-card/90 backdrop-blur-md rounded-2xl p-5 grid grid-cols-1 md:grid-cols-3 gap-4 shadow-diffuse border-0">
-          <div className="md:col-span-2 relative flex items-center">
-            <Search className="pointer-events-none absolute left-4 size-5 text-muted-foreground/60 z-10" />
-            <Input
-              placeholder="Search by name, code, designation..."
-              className="pl-12 h-12 text-base placeholder:text-muted-foreground/60 focus:border-primary"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+    <div className="mx-auto flex max-w-6xl flex-col gap-8 py-8">
+      <PageHeader
+        eyebrow="Employee Management System"
+        title="Dashboard"
+        description="An overview of your workforce, applicants, and attendance."
+        actions={
+          hasPermission(user, 'add_employee') && (
+            <AddEmployeeDialog
+              trigger={
+                <Button>
+                  <UserPlus className="size-4" />
+                  Add employee
+                </Button>
+              }
             />
-          </div>
-          <div className="relative">
-            <Select value={status} onValueChange={(v) => setStatus(v as EmployeeStatus | 'all')}>
-              <SelectTrigger className="w-full h-12 text-base border border-border bg-card text-foreground focus:border-primary font-medium rounded-lg uppercase">
-                <SelectValue placeholder="FILTER BY STATUS" />
-              </SelectTrigger>
-              <SelectContent className="border border-border bg-card text-foreground rounded-lg">
-                <SelectItem value="all">ALL STATUSES</SelectItem>
-                <SelectItem value="draft">DRAFT</SelectItem>
-                <SelectItem value="active">ACTIVE</SelectItem>
-                <SelectItem value="offboarded">OFFBOARDED</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+          )
+        }
+      />
 
-        {/* EMPLOYEES GRID TABLE */}
-        <div className="bg-card/90 backdrop-blur-md rounded-2xl overflow-hidden shadow-diffuse border-0">
-          {isLoading ? (
-            <div className="space-y-4 p-6">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full bg-muted/40 rounded-lg" />
-              ))}
-            </div>
-          ) : employees.length === 0 ? (
-            <div className="flex flex-col items-center gap-4 py-20 text-center">
-              <Users className="size-16 text-muted-foreground/40" />
-              <p className="text-xl font-bold tracking-tight text-foreground">No employees yet</p>
-              <p className="text-sm text-muted-foreground uppercase tracking-wider">
-                Add your first employee to get started.
-              </p>
-            </div>
-          ) : (
-            <Table className="w-full">
-              <TableHeader className="bg-secondary/40 border-0">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">CODE</TableHead>
-                  <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">NAME</TableHead>
-                  <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">DESIGNATION</TableHead>
-                  <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">DEPARTMENT</TableHead>
-                  <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">STATUS</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className="border-0">
-                {employees.map((employee) => (
-                  <TableRow
-                    key={employee._id}
-                    className="cursor-pointer hover:bg-secondary/40 transition-colors"
-                    onClick={() => navigate(`/employees/${employee._id}`)}
-                  >
-                    <TableCell className="font-mono text-sm text-muted-foreground p-4">
-                      {employee.employeeCode}
-                    </TableCell>
-                    <TableCell className="font-semibold text-base text-foreground p-4">
-                      <div className="flex items-center gap-2">
-                        {employee.firstName} {employee.lastName}
-                        <FlagStrip flags={employee.flags ?? []} />
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-foreground/80 p-4 font-medium">{employee.designation}</TableCell>
-                    <TableCell className="text-sm text-foreground/80 p-4 font-medium">{employee.department || '—'}</TableCell>
-                    <TableCell className="p-4">
-                      <StatusBadge status={employee.status} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+      <QuickActions>
+        {hasPermission(user, 'view_applicants') && (
+          <QuickActionItem
+            icon={<Users className="size-4" />}
+            label="Applicants"
+            description="Recruitment pipeline"
+            onClick={() => navigate('/applicants')}
+          />
+        )}
+        <QuickActionItem
+          icon={<Clock className="size-4" />}
+          label="Attendance"
+          description="Workforce tracking"
+          onClick={() => navigate('/attendance')}
+        />
+        {isAdmin(user) && (
+          <QuickActionItem
+            icon={<FileUp className="size-4" />}
+            label="Upload documents"
+            description="Admin only"
+            onClick={() => navigate('/upload-documents')}
+          />
+        )}
+      </QuickActions>
+
+      <StatRow
+        stats={[
+          { label: 'Total employees', value: stats?.totalEmployees },
+          {
+            label: 'Pending document requests',
+            value: stats?.pendingUploadRequests,
+            onClick: hasPermission(user, 'request_documents') ? () => navigate('/upload-requests') : undefined,
+          },
+          {
+            label: 'Documents generated this month',
+            value: stats?.documentsGeneratedThisMonth,
+            onClick: hasPermission(user, 'generate_documents') ? () => navigate('/documents') : undefined,
+          },
+        ]}
+      />
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex flex-1 items-center">
+          <Search className="pointer-events-none absolute left-3.5 size-4 text-muted-foreground/60" />
+          <Input
+            placeholder="Search by name, code, designation..."
+            className="pl-10"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
-      </main>
+        <Select value={status} onValueChange={(v) => setStatus(v as EmployeeStatus | 'all')}>
+          <SelectTrigger className="w-full sm:w-48">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="draft">Draft</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="offboarded">Offboarded</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-border">
+        {isLoading ? (
+          <div className="space-y-3 p-6">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : employees.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-20 text-center">
+            <Users className="size-10 text-muted-foreground/40" />
+            <p className="text-base font-semibold text-foreground">No employees yet</p>
+            <p className="text-sm text-muted-foreground">Add your first employee to get started.</p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Code</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Designation</TableHead>
+                <TableHead>Department</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody ref={tableBodyRef}>
+              {employees.map((employee) => (
+                <TableRow
+                  key={employee._id}
+                  className="cursor-pointer"
+                  onClick={() => navigate(`/employees/${employee._id}`)}
+                >
+                  <TableCell className="font-mono text-xs uppercase text-muted-foreground">
+                    {employee.employeeCode}
+                  </TableCell>
+                  <TableCell className="font-medium uppercase text-foreground">
+                    <div className="flex items-center gap-2">
+                      {employee.firstName} {employee.lastName}
+                      <FlagStrip flags={employee.flags ?? []} />
+                    </div>
+                  </TableCell>
+                  <TableCell className="uppercase">{employee.designation}</TableCell>
+                  <TableCell className="uppercase">{employee.department || '—'}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={employee.status} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
     </div>
   )
 }

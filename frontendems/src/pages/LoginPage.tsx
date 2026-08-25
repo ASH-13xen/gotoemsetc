@@ -32,8 +32,9 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-2xl uppercase tracking-wider">EMS</CardTitle>
+        <CardHeader className="pb-2">
+          <span className="text-xs font-medium text-muted-foreground">Employee Management System</span>
+          <CardTitle className="text-2xl">Sign in</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -57,7 +58,7 @@ export default function LoginPage() {
                 required
               />
             </div>
-            <Button type="submit" className="mt-2" disabled={loginMutation.isPending}>
+            <Button type="submit" size="lg" className="mt-2" disabled={loginMutation.isPending}>
               {loginMutation.isPending ? 'Signing in...' : 'Sign in'}
             </Button>
           </form>

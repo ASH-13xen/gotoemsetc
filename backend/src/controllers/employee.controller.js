@@ -78,4 +78,9 @@ const removeFlag = asyncHandler(async (req, res) => {
   res.json({ employee: shapeForRole('Employee', employee, req.user.role) });
 });
 
-module.exports = { list, getById, birthdays, directory, create, update, remove, activity, addFlag, removeFlag };
+const flagHistory = asyncHandler(async (req, res) => {
+  const entries = await employeeService.getFlagHistory();
+  res.json({ entries });
+});
+
+module.exports = { list, getById, birthdays, directory, create, update, remove, activity, addFlag, removeFlag, flagHistory };

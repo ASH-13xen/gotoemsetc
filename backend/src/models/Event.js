@@ -19,8 +19,12 @@ const eventSchema = new Schema(
   {
     title: { type: String, required: true, trim: true },
     description: { type: String, trim: true },
-    // Optional — an event doesn't have to be for a CMS client.
-    client: { type: Schema.Types.ObjectId, ref: 'Client' },
+    // Optional — an event doesn't have to be for a client. Points at
+    // TaskClient, the single client registry shared by Task Management and
+    // the Client Management System (the old CRM `Client` model it used to
+    // reference was removed in the CMS rebuild — see
+    // scripts/migrateEventClientToTaskClient.js).
+    client: { type: Schema.Types.ObjectId, ref: 'TaskClient' },
     mode: { type: String, enum: Object.values(EVENT_MODE), required: true },
     // Physical address for offline, meeting link for online.
     location: { type: String, trim: true },

@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { toast } from 'sonner'
 import { Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { DateTimePicker } from '@/components/shared/DateTimePicker'
 import { useRejectTask } from '@/hooks/useEmployeeTasks'
 import { fromDateTimeLocalValue, toDateTimeLocalValue } from '@/lib/dateTime'
 import type { EmployeeTask } from '@/api/employeeTasks.api'
@@ -18,7 +18,7 @@ type FormValues = { note: string; startAt: string; endAt: string }
 // every current assignee with whatever new dates were set.
 export function RejectTaskDialog({ task }: { task: EmployeeTask }) {
   const [open, setOpen] = useState(false)
-  const { register, handleSubmit, reset } = useForm<FormValues>({
+  const { control, register, handleSubmit, reset } = useForm<FormValues>({
     defaultValues: {
       note: '',
       startAt: toDateTimeLocalValue(task.startAt),
@@ -65,11 +65,23 @@ export function RejectTaskDialog({ task }: { task: EmployeeTask }) {
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-1.5">
               <Label>New Start</Label>
-              <Input type="datetime-local" {...register('startAt')} />
+              <Controller
+                control={control}
+                name="startAt"
+                render={({ field }) => (
+                  <DateTimePicker value={field.value} onChange={field.onChange} placeholder="SELECT DATE & TIME" />
+                )}
+              />
             </div>
             <div className="grid gap-1.5">
               <Label>New Due</Label>
-              <Input type="datetime-local" {...register('endAt')} />
+              <Controller
+                control={control}
+                name="endAt"
+                render={({ field }) => (
+                  <DateTimePicker value={field.value} onChange={field.onChange} placeholder="SELECT DATE & TIME" />
+                )}
+              />
             </div>
           </div>
           <DialogFooter>

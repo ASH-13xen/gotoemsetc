@@ -3,13 +3,12 @@ const mongoose = require('mongoose');
 const env = require('../src/config/env');
 const Employee = require('../src/models/Employee');
 const AttendanceRecord = require('../src/models/AttendanceRecord');
-const Client = require('../src/models/Client');
 const Counter = require('../src/models/Counter');
-const { EMPLOYEE_STATUS, ATTENDANCE_STATUS, CLIENT_STATUS } = require('../src/config/constants');
+const { EMPLOYEE_STATUS, ATTENDANCE_STATUS } = require('../src/config/constants');
 
-// Mock data for local/dev testing of EMS + Client Management + Birthdays.
-// Idempotent: re-running upserts by personalEmail (employees) / clientName
-// (clients) instead of duplicating. Does NOT touch Task Management.
+// Mock data for local/dev testing of EMS + Birthdays. Idempotent: re-running
+// upserts by personalEmail instead of duplicating. Does NOT touch Task
+// Management or the Client Management System.
 
 const DAY = 24 * 60 * 60 * 1000;
 function daysAgo(n) {
@@ -213,7 +212,7 @@ async function main() {
       seed = (seed * 9301 + 49297) % 233280; // deterministic pseudo-random
       const rand = seed / 233280;
       const status = STATUS_WEIGHTS[Math.floor(rand * STATUS_WEIGHTS.length)];
-      const overtimeHours = rand > 0.85 ? Math.round(rand * 4) : 0;
+      const overtimeMinutes = rand > 0.85 ? Math.round(rand * 240) : 0;
       const recordDate = new Date(cursor);
       recordDate.setHours(0, 0, 0, 0);
 
@@ -225,7 +224,7 @@ async function main() {
               employee: emp._id,
               date: recordDate,
               status,
-              overtimeHours,
+              overtimeMinutes,
               isBackdated: true,
             },
           },
@@ -242,71 +241,6 @@ async function main() {
     }
   }
   console.log(`Upserted ${attendanceCount} attendance records`);
-
-  // ---------- Clients ----------
-  const activeEmployees = savedEmployees.filter((e) => e.status === EMPLOYEE_STATUS.ACTIVE);
-
-  const CLIENT_DEFS = [
-    { clientName: 'Nova Threads Pvt Ltd', brandName: 'Nova Threads', status: CLIENT_STATUS.ONBOARDED, contacts: 2, assign: 3, registeredDaysAgo: 120 },
-    { clientName: 'Bistro Bloom Cafe', brandName: 'Bistro Bloom', status: CLIENT_STATUS.ONBOARDED, contacts: 1, assign: 2, registeredDaysAgo: 95 },
-    { clientName: 'Peak Fitness Studios', brandName: 'Peak Fitness', status: CLIENT_STATUS.ONBOARDED, contacts: 1, assign: 1, registeredDaysAgo: 80 },
-    { clientName: 'Aurelia Skincare', brandName: 'Aurelia', status: CLIENT_STATUS.ONBOARDED, contacts: 2, assign: 2, registeredDaysAgo: 60 },
-    { clientName: 'Sunridge Realty Group', brandName: 'Sunridge Realty', status: CLIENT_STATUS.LEAD, contacts: 1, assign: 0, registeredDaysAgo: 20 },
-    { clientName: 'Verve Motors', brandName: 'Verve Motors', status: CLIENT_STATUS.LEAD, contacts: 0, assign: 0, registeredDaysAgo: 10 },
-    { clientName: 'Little Sprouts Preschool', brandName: 'Little Sprouts', status: CLIENT_STATUS.LEAD, contacts: 1, assign: 1, registeredDaysAgo: 35 },
-    { clientName: 'Copper Kettle Brewhouse', brandName: 'Copper Kettle', status: CLIENT_STATUS.ONBOARDED, contacts: 1, assign: 3, registeredDaysAgo: 150 },
-    { clientName: 'Horizon Legal Associates', brandName: 'Horizon Legal', status: CLIENT_STATUS.OFFBOARDED, contacts: 1, assign: 1, registeredDaysAgo: 200 },
-    { clientName: 'Pixel Forge Studios', brandName: 'Pixel Forge', status: CLIENT_STATUS.LEAD, contacts: 0, assign: 0, registeredDaysAgo: 5 },
-  ];
-
-  const CONTACT_ROLES = ['Owner', 'Marketing Head', 'Founder', 'Manager', 'CEO'];
-  let empCursor = 0;
-
-  let clientCount = 0;
-  for (let i = 0; i < CLIENT_DEFS.length; i++) {
-    const def = CLIENT_DEFS[i];
-    const contacts = [];
-    for (let c = 0; c < def.contacts; c++) {
-      contacts.push({
-        name: `${pick(FIRST_NAMES, i + c + 5)} ${pick(LAST_NAMES, i + c + 5)}`,
-        role: pick(CONTACT_ROLES, i + c),
-        email: `contact${c}@${def.brandName.toLowerCase().replace(/\s+/g, '')}.example`,
-        phone: c === 0 ? `9${String(800000000 + i * 211).slice(0, 9)}` : undefined,
-      });
-    }
-
-    const assigned = [];
-    for (let a = 0; a < def.assign && activeEmployees.length; a++) {
-      assigned.push(activeEmployees[empCursor % activeEmployees.length]._id);
-      empCursor++;
-    }
-    const mainEmployee = assigned.length ? assigned[0] : undefined;
-    const onboardedAt = def.status === CLIENT_STATUS.ONBOARDED || def.status === CLIENT_STATUS.OFFBOARDED
-      ? daysAgo(Math.max(def.registeredDaysAgo - 10, 1))
-      : undefined;
-
-    const doc = {
-      clientName: def.clientName,
-      brandName: def.brandName,
-      dateRegistered: daysAgo(def.registeredDaysAgo),
-      logoUrl: i % 4 === 0 ? undefined : `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(def.brandName)}`,
-      contacts,
-      status: def.status,
-      onboardedAt,
-      assignedEmployees: assigned,
-      mainEmployee,
-    };
-
-    let existing = await Client.findOne({ clientName: def.clientName });
-    if (existing) {
-      Object.assign(existing, doc);
-      await existing.save();
-    } else {
-      await Client.create(doc);
-    }
-    clientCount++;
-  }
-  console.log(`Upserted ${clientCount} clients`);
 
   await mongoose.disconnect();
   console.log('Done.');

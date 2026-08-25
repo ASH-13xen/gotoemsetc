@@ -247,7 +247,7 @@ async function main() {
     if (!scenario) continue;
     const r = recordByDay.get(d);
     const summary = r
-      ? `status=${r.status ?? '—'} earlyDep=${r.earlyDeparture} ot=${r.overtimeHours}h autoMarked=${r.isAutoMarked} settled=${r.isSettled}${r.notes ? ` notes="${r.notes}"` : ''}`
+      ? `status=${r.status ?? '—'} earlyDep=${r.earlyDeparture} ot=${r.overtimeMinutes}min autoMarked=${r.isAutoMarked} settled=${r.isSettled}${r.notes ? ` notes="${r.notes}"` : ''}`
       : 'NO RECORD (as expected for this case)';
     console.log(`${iso(d)} | ${dayName(d).padEnd(10)} | ${scenario.padEnd(59)} | ${summary}`);
   }

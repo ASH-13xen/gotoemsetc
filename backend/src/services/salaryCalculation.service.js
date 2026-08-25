@@ -51,7 +51,7 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
   const recordByDate = new Map(records.map((r) => [dateKey(r.date), r]));
 
   const counts = { P: 0, O: 0, H: 0, L: 0, SL: 0, W: 0, A: 0, HL: 0 };
-  let totalOvertimeHours = 0;
+  let totalOvertimeMinutes = 0;
   // isLate is independent of status (see attendanceClassifier.service.js) —
   // a day can be e.g. Short Leave AND late at once, so it's tallied
   // separately here rather than folded into counts.L (which stays exactly
@@ -65,7 +65,7 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
     if (record.status) counts[record.status] += 1;
     if (record.isLate) lateFlagCount += 1;
     if (record.earlyDeparture) earlyDepartureCount += 1;
-    totalOvertimeHours += record.overtimeHours || 0;
+    totalOvertimeMinutes += record.overtimeMinutes || 0;
   }
 
   let offDaysInPeriod = 0;
@@ -115,7 +115,7 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
     halfDayPenaltyUnits,
     totalHalfDayUnits,
     unpaidAbsentDays,
-    totalOvertimeHours,
+    totalOvertimeMinutes,
     records,
     holidays,
   };
@@ -140,12 +140,12 @@ function computeSalary(employee, summary, manualInputs) {
   // the period, not the period's own length.
   const dailyRate = summary.dailyRateDivisor > 0 ? basicMaster / summary.dailyRateDivisor : 0;
 
-  // Hourly rate = the daily rate (basicMaster / days in the month) / 9.
-  // Overtime is purely hours actually worked × that rate — no baseline
-  // amount shows up when totalOvertimeHours is 0. Like every Earnings row
-  // except Basic, Master and Earnings carry the same value here.
-  const otHourlyRate = dailyRate / 9;
-  const otEarnings = otHourlyRate * summary.totalOvertimeHours;
+  // Per-minute rate = the daily rate (basicMaster / days in the month) / 9
+  // hours / 60. Overtime is purely minutes actually worked × that rate — no
+  // baseline amount shows up when totalOvertimeMinutes is 0. Like every
+  // Earnings row except Basic, Master and Earnings carry the same value here.
+  const otMinuteRate = dailyRate / 9 / 60;
+  const otEarnings = otMinuteRate * summary.totalOvertimeMinutes;
   const otMaster = otEarnings;
 
   const halfDayDeductions = summary.totalHalfDayUnits * (dailyRate / 2);

@@ -22,6 +22,10 @@ const EARLY_DEPARTURE_START = 16 * 60 + 30; // 4:30pm
 const NIGHT_DEAD_ZONE_END = 6 * 60 + 59; // 6:59am — valid hours resume at 7:00am
 const GRACE_MINUTES = 15;
 const LATE_WINDOW_MINUTES = 15; // grace cutoff + this = the Late cutoff
+// Overtime buffer on either side of an employee's own configured shift —
+// 15 minutes inside each boundary before a minute actually starts counting
+// as overtime, computed exact-minute (no rounding) beyond that.
+const OVERTIME_BUFFER_MINUTES = 15;
 
 function todayUTCMidnight() {
   const now = new Date();
@@ -64,7 +68,11 @@ function employeeBoundaries(employee) {
     graceCutoff,
     lateCutoff: graceCutoff + LATE_WINDOW_MINUTES,
     shiftEnd,
-    normalEnd: shiftEnd + 59,
+    // Overtime starts counting once arrival is more than the buffer before
+    // shift start, or departure is more than the buffer after shift end —
+    // e.g. the default 09:30–18:30 shift gets a 9:15am/6:45pm OT window.
+    morningOtCutoff: shiftStart - OVERTIME_BUFFER_MINUTES,
+    eveningOtCutoff: shiftEnd + OVERTIME_BUFFER_MINUTES,
   };
 }
 
@@ -109,7 +117,7 @@ function validPunchesForOffDay(punches) {
 //   { outcome: 'unclassified' }          — 2+ valid scans, but departure
 //                                           falls outside every window this
 //                                           employee has
-//   { outcome: 'classified', status, earlyDeparture, overtimeHours }
+//   { outcome: 'classified', status, earlyDeparture, overtimeMinutes }
 function classifyPunches(punches, employee) {
   // Gate on the day's earliest real activity first — a first scan at/after
   // 2pm auto-absents the whole day regardless of what happens later, same
@@ -125,7 +133,7 @@ function classifyPunches(punches, employee) {
   const valid = validPunches(punches);
   if (valid.length === 1) return { outcome: 'single-scan' };
 
-  const { graceCutoff, lateCutoff, shiftEnd, normalEnd } = employeeBoundaries(employee);
+  const { graceCutoff, lateCutoff, shiftEnd, morningOtCutoff, eveningOtCutoff } = employeeBoundaries(employee);
   const arrivalMinutes = istMinutesOfDay(valid[0].timestamp);
   const departureMinutes = istMinutesOfDay(valid[valid.length - 1].timestamp);
 
@@ -135,39 +143,43 @@ function classifyPunches(punches, employee) {
   else if (arrivalMinutes < HALF_DAY_ARRIVAL_START) status = ATTENDANCE_STATUS.SHORT_LEAVE;
   else status = ATTENDANCE_STATUS.HALF_DAY; // arrivalMinutes <= HALF_DAY_ARRIVAL_END, guaranteed by the 2pm gate above
 
+  // Morning overtime is independent of the arrival-side status above (an
+  // early arrival is still worth crediting even on a day that separately
+  // classifies as Late/Short-Leave/Half-Day) and of the departure-side
+  // checks below — exact minutes before morningOtCutoff, no rounding.
+  const morningOt = Math.max(0, morningOtCutoff - arrivalMinutes);
+
   let earlyDeparture = false;
-  let overtimeHours = 0;
+  let eveningOt = 0;
   let departureOk = true;
   if (departureMinutes < EARLY_DEPARTURE_START) {
     departureOk = false;
   } else if (departureMinutes < shiftEnd) {
     earlyDeparture = true;
-  } else if (departureMinutes > normalEnd) {
-    overtimeHours = Math.round(((departureMinutes - shiftEnd) / 60) * 2) / 2;
+  } else if (departureMinutes > eveningOtCutoff) {
+    eveningOt = departureMinutes - eveningOtCutoff;
   }
-  // else: within [shiftEnd, normalEnd] — normal, no penalty, no overtime.
+  // else: within [shiftEnd, eveningOtCutoff] — normal, no penalty, no overtime.
 
   if (!departureOk) return { outcome: 'unclassified' };
-  return { outcome: 'classified', status, earlyDeparture, overtimeHours };
+  return { outcome: 'classified', status, earlyDeparture, overtimeMinutes: morningOt + eveningOt };
 }
 
 // Sundays and Holidays don't use the weekday arrival/departure windows at
 // all — any time actually spent (first valid scan to last) becomes overtime
-// directly, rounded to the nearest 0.5h, with no baseline subtraction and no
-// 1h minimum (unlike weekday overtime). Only the night dead zone is filtered
-// (see validPunchesForOffDay) — a 3pm scan is a normal, valid endpoint on
-// either day, unlike on a weekday. Returns null when there aren't at least
-// two valid scans to measure a span from — same "not enough info yet"
-// treatment as the weekday single-scan/no-scan cases, just without a
-// notification (see settleDay — a quiet Sunday/Holiday is expected, not an
-// anomaly).
+// directly, exact minutes, with no baseline subtraction and no 1h minimum
+// (unlike weekday overtime). Only the night dead zone is filtered (see
+// validPunchesForOffDay) — a 3pm scan is a normal, valid endpoint on either
+// day, unlike on a weekday. Returns null when there aren't at least two
+// valid scans to measure a span from — same "not enough info yet" treatment
+// as the weekday single-scan/no-scan cases, just without a notification (see
+// settleDay — a quiet Sunday/Holiday is expected, not an anomaly).
 function computeOffDayOvertime(punches) {
   const valid = validPunchesForOffDay(punches);
   if (valid.length < 2) return null;
   const first = istMinutesOfDay(valid[0].timestamp);
   const last = istMinutesOfDay(valid[valid.length - 1].timestamp);
-  const overtimeHours = Math.round(((last - first) / 60) * 2) / 2;
-  return { overtimeHours };
+  return { overtimeMinutes: last - first };
 }
 
 async function notifyAdmins(type, title, message, employeeId) {
@@ -179,10 +191,14 @@ async function notifyAdmins(type, title, message, employeeId) {
 }
 
 // Sundays are NOT an "off day" here anymore — see computeOffDayOvertime —
-// this now checks admin-marked holidays only.
-async function isHolidayLabel(dateLabel) {
+// this now checks admin-marked Holiday/Half Day dates only. Returns the
+// marking's type ('holiday' | 'half_day') or null if `dateLabel` isn't
+// marked at all. A date can only ever be one or the other — Holiday.date is
+// unique.
+async function offDayTypeForLabel(dateLabel) {
   const holidays = await holidayRepository.list({ from: dateLabel, to: dateLabel });
-  return holidays.some((h) => dateKey(h.date) === dateKey(dateLabel));
+  const match = holidays.find((h) => dateKey(h.date) === dateKey(dateLabel));
+  return match ? match.type || 'holiday' : null;
 }
 
 // Writes (or refreshes) one employee's Holiday record for `dateLabel` —
@@ -207,7 +223,7 @@ async function applyHolidayForEmployee(employeeId, dateLabel) {
   return attendanceRepository.upsertForDate(
     employeeId,
     dateLabel,
-    { status: ATTENDANCE_STATUS.HOLIDAY, earlyDeparture: false, overtimeHours: offDayResult?.overtimeHours ?? 0 },
+    { status: ATTENDANCE_STATUS.HOLIDAY, earlyDeparture: false, overtimeMinutes: offDayResult?.overtimeMinutes ?? 0 },
     false,
     true,
     undefined,
@@ -243,6 +259,99 @@ async function revertHolidayForAllEmployees(dateLabel) {
   }
 }
 
+// Writes (or refreshes) one employee's record for a company-marked Half
+// Day. Unlike a Holiday, this runs the real weekday classifyPunches() and
+// upgrades whatever it finds: any actual arrival (classified, or a first
+// scan after 2pm) gets credited a full-day Present, since showing up at all
+// on a half day counts as fully present; zero scans stays Absent, exactly
+// like a normal day; an ambiguous scan pattern (single-scan/unclassified)
+// is left alone for manual review, same as a normal day. Same
+// existing.isAutoMarked guard as applyHolidayForEmployee — never touches a
+// day a human already decided.
+async function applyHalfDayForEmployee(employeeId, dateLabel) {
+  const employee = await employeeRepository.findById(employeeId);
+  if (!employee) return null;
+
+  const existing = await attendanceRepository.findForDate(employeeId, dateLabel);
+  if (existing && !existing.isAutoMarked) return existing;
+
+  const { start, end } = istDayBoundsUTC(dateLabel);
+  const punches = await devicePunchRepository.listForEmployeeOnDay(employeeId, start, end);
+  const result = classifyPunches(punches, employee);
+
+  if (result.outcome === 'no-scan') {
+    return attendanceRepository.upsertForDate(
+      employeeId,
+      dateLabel,
+      { status: ATTENDANCE_STATUS.ABSENT, earlyDeparture: false, overtimeMinutes: 0, isHalfDayBoost: false },
+      false,
+      true,
+      undefined,
+      true
+    );
+  }
+
+  if (result.outcome === 'late-absent') {
+    return attendanceRepository.upsertForDate(
+      employeeId,
+      dateLabel,
+      { status: ATTENDANCE_STATUS.PRESENT, earlyDeparture: false, overtimeMinutes: 0, isHalfDayBoost: true },
+      false,
+      true,
+      undefined,
+      true
+    );
+  }
+
+  if (result.outcome === 'classified') {
+    return attendanceRepository.upsertForDate(
+      employeeId,
+      dateLabel,
+      {
+        status: ATTENDANCE_STATUS.PRESENT,
+        earlyDeparture: false,
+        overtimeMinutes: result.overtimeMinutes,
+        isHalfDayBoost: true,
+      },
+      false,
+      true,
+      undefined,
+      true
+    );
+  }
+
+  // single-scan/unclassified — leave untouched for manual review.
+  return existing ?? null;
+}
+
+// Called once, immediately, from holiday.service.js#createHoliday (type:
+// 'half_day') — catches anyone who already has a complete scan pattern at
+// mark-time. Anyone still mid-day gets picked up naturally by settleDay
+// (tomorrow's first scan, or the nightly backstop) once their day is over.
+async function applyHalfDayToAllEmployees(dateLabel) {
+  const employees = await employeeRepository.listActive();
+  for (const employee of employees) {
+    // eslint-disable-next-line no-await-in-loop
+    await applyHalfDayForEmployee(employee._id, dateLabel);
+  }
+}
+
+// Called from holiday.service.js#removeHoliday — mirrors
+// revertHolidayForAllEmployees, but only undoes records this feature itself
+// boosted (isHalfDayBoost: true), leaving a genuine no-scan Absent record
+// (or any admin-marked day) untouched.
+async function revertHalfDayForAllEmployees(dateLabel) {
+  const employees = await employeeRepository.listActive();
+  for (const employee of employees) {
+    // eslint-disable-next-line no-await-in-loop
+    const existing = await attendanceRepository.findForDate(employee._id, dateLabel);
+    if (existing && existing.isAutoMarked && existing.isHalfDayBoost) {
+      // eslint-disable-next-line no-await-in-loop
+      await attendanceRepository.deleteForDate(employee._id, dateLabel);
+    }
+  }
+}
+
 // Called fire-and-forget right after a punch is recorded (see
 // devicePunch.service.js#recordPunch). Settles yesterday (a new scan today
 // proves it's over), then recomputes today from every valid scan so far —
@@ -260,7 +369,12 @@ async function handlePunchEvent(employeeId, timestamp) {
     await settleDay(employeeId, record.date);
   }
 
-  if (await isHolidayLabel(dateLabel)) {
+  // Half Day is deliberately NOT handled here — unlike Holiday, its correct
+  // outcome depends on the same arrival/departure classification a normal
+  // workday uses, which can still change as more scans arrive. It's finalized
+  // once, for real, in settleDay below (naturally end-of-day, same as any
+  // other workday's classification).
+  if ((await offDayTypeForLabel(dateLabel)) === 'holiday') {
     await applyHolidayForEmployee(employeeId, dateLabel);
     return;
   }
@@ -277,7 +391,7 @@ async function handlePunchEvent(employeeId, timestamp) {
     await attendanceRepository.upsertForDate(
       employeeId,
       dateLabel,
-      { status: undefined, earlyDeparture: false, overtimeHours: sundayResult.overtimeHours },
+      { status: undefined, earlyDeparture: false, overtimeMinutes: sundayResult.overtimeMinutes },
       false,
       true,
       undefined,
@@ -296,7 +410,7 @@ async function handlePunchEvent(employeeId, timestamp) {
     await attendanceRepository.upsertForDate(
       employeeId,
       dateLabel,
-      { status: ATTENDANCE_STATUS.ABSENT, earlyDeparture: false, overtimeHours: 0 },
+      { status: ATTENDANCE_STATUS.ABSENT, earlyDeparture: false, overtimeMinutes: 0 },
       false,
       true,
       undefined,
@@ -310,7 +424,7 @@ async function handlePunchEvent(employeeId, timestamp) {
   await attendanceRepository.upsertForDate(
     employeeId,
     dateLabel,
-    { status: result.status, earlyDeparture: result.earlyDeparture, overtimeHours: result.overtimeHours },
+    { status: result.status, earlyDeparture: result.earlyDeparture, overtimeMinutes: result.overtimeMinutes },
     false,
     true,
     undefined,
@@ -331,8 +445,13 @@ async function settleDay(employeeId, dateLabel) {
   if (existing && !existing.isAutoMarked) return;
   if (existing && existing.isSettled) return;
 
-  if (await isHolidayLabel(dateLabel)) {
+  const offDayType = await offDayTypeForLabel(dateLabel);
+  if (offDayType === 'holiday') {
     await applyHolidayForEmployee(employeeId, dateLabel);
+    return;
+  }
+  if (offDayType === 'half_day') {
+    await applyHalfDayForEmployee(employeeId, dateLabel);
     return;
   }
 
@@ -345,7 +464,7 @@ async function settleDay(employeeId, dateLabel) {
       await attendanceRepository.upsertForDate(
         employeeId,
         dateLabel,
-        { status: undefined, earlyDeparture: false, overtimeHours: sundayResult.overtimeHours },
+        { status: undefined, earlyDeparture: false, overtimeMinutes: sundayResult.overtimeMinutes },
         false,
         true,
         undefined,
@@ -364,7 +483,7 @@ async function settleDay(employeeId, dateLabel) {
     await attendanceRepository.upsertForDate(
       employeeId,
       dateLabel,
-      { status: result.status, earlyDeparture: result.earlyDeparture, overtimeHours: result.overtimeHours },
+      { status: result.status, earlyDeparture: result.earlyDeparture, overtimeMinutes: result.overtimeMinutes },
       false,
       true,
       undefined,
@@ -380,7 +499,7 @@ async function settleDay(employeeId, dateLabel) {
     await attendanceRepository.upsertForDate(
       employeeId,
       dateLabel,
-      { status: ATTENDANCE_STATUS.ABSENT, earlyDeparture: false, overtimeHours: 0 },
+      { status: ATTENDANCE_STATUS.ABSENT, earlyDeparture: false, overtimeMinutes: 0 },
       false,
       true,
       undefined,
@@ -463,5 +582,7 @@ module.exports = {
   computeOffDayOvertime,
   applyHolidayToAllEmployees,
   revertHolidayForAllEmployees,
+  applyHalfDayToAllEmployees,
+  revertHalfDayForAllEmployees,
   istDayBoundsUTC,
 };

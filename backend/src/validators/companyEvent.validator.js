@@ -16,6 +16,9 @@ const create = {
     name: z.string().min(1),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
     notes: z.string().optional(),
+    // Present = this event belongs to one client (see TaskClient's manual);
+    // absent = company-wide, HR's shared calendar (today's only mode).
+    client: z.string().min(1).optional(),
   }),
 };
 

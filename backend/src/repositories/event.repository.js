@@ -1,7 +1,7 @@
 const Event = require('../models/Event');
 
 const POPULATE = [
-  { path: 'client', select: 'clientName brandName logoUrl' },
+  { path: 'client', select: 'name logoUrl' },
   { path: 'coordinator', select: 'firstName lastName designation employeeCode' },
   { path: 'createdBy', select: 'firstName lastName' },
   { path: 'summary.filledBy', select: 'firstName lastName' },

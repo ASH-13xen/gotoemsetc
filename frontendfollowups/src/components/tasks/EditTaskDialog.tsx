@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { EmployeeMultiSelect } from '@/components/shared/EmployeeMultiSelect'
 import { EmployeeSingleSelect } from '@/components/shared/EmployeeSingleSelect'
+import { DateTimePicker } from '@/components/shared/DateTimePicker'
 import { useWorkTeams } from '@/hooks/useWorkTeams'
 import { useTaskClients } from '@/hooks/useTaskClients'
 import { useTaskEvents } from '@/hooks/useTaskEvents'
@@ -144,11 +145,25 @@ export function EditTaskDialog({ task }: { task: EmployeeTask }) {
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-1.5">
               <Label>Start</Label>
-              <Input type="datetime-local" {...register('startAt', { required: true })} />
+              <Controller
+                control={control}
+                name="startAt"
+                rules={{ required: true }}
+                render={({ field }) => (
+                  <DateTimePicker value={field.value} onChange={field.onChange} placeholder="SELECT START" />
+                )}
+              />
             </div>
             <div className="grid gap-1.5">
               <Label>Due (End)</Label>
-              <Input type="datetime-local" {...register('endAt', { required: true })} />
+              <Controller
+                control={control}
+                name="endAt"
+                rules={{ required: true }}
+                render={({ field }) => (
+                  <DateTimePicker value={field.value} onChange={field.onChange} placeholder="SELECT DUE" />
+                )}
+              />
             </div>
           </div>
 

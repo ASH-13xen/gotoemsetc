@@ -19,6 +19,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { useCreateEmployee } from '@/hooks/useEmployees'
+import { extractApiErrorMessage } from '@/lib/errors'
 
 const schema = z.object({
   firstName: z.string().min(1, 'First name is required'),
@@ -48,7 +49,7 @@ export function AddEmployeeDialog({ trigger }: { trigger?: React.ReactNode }) {
         setOpen(false)
         navigate(`/employees/${employee._id}`)
       },
-      onError: () => toast.error('Could not create employee'),
+      onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not create employee')),
     })
   }
 

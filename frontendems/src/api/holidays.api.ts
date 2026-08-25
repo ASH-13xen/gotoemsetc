@@ -1,9 +1,12 @@
 import { apiClient } from './client'
 
+export type HolidayType = 'holiday' | 'half_day'
+
 export interface Holiday {
   _id: string
   date: string
   label: string
+  type: HolidayType
 }
 
 export async function listHolidays(month: number, year: number): Promise<{ holidays: Holiday[] }> {
@@ -11,8 +14,8 @@ export async function listHolidays(month: number, year: number): Promise<{ holid
   return data
 }
 
-export async function createHoliday(date: string, label: string): Promise<{ holiday: Holiday }> {
-  const { data } = await apiClient.post('/holidays', { date, label })
+export async function createHoliday(date: string, label: string, type: HolidayType = 'holiday'): Promise<{ holiday: Holiday }> {
+  const { data } = await apiClient.post('/holidays', { date, label, type })
   return data
 }
 

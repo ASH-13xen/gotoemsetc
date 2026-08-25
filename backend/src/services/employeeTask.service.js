@@ -139,6 +139,47 @@ ${note ? `<p><strong>Note:</strong> ${note}</p>` : ''}
   );
 }
 
+// Client tasks send no email at all — they're generated in bulk by the
+// Client Management System's calendar (a diamond client alone produces
+// 60-90 daily stories a month, all routed to one social media manager), and
+// mailing each one would bury the recipient and burn the send quota. In-app
+// notifications still fire for every type. Personal/team/event tasks are
+// unaffected.
+function sendsEmail(task) {
+  return task.type !== EMPLOYEE_TASK_TYPE.CLIENT;
+}
+
+// A parent can't be completed while any of its subtasks is still open. The
+// Client Management System depends on this — a reel isn't done until both
+// the shoot and the edit are — and it's the natural reading of "the task is
+// finished" everywhere else too. Scoped to tasks that actually have
+// subtasks, so nothing changes for the flat ones.
+async function assertSubtasksComplete(task) {
+  if (task.parentTask) return; // subtasks have no children of their own
+
+  const subtasks = await employeeTaskRepository.listSubtasks(task._id);
+  const open = subtasks.filter(
+    (s) => !s.isDeleted && s.status !== EMPLOYEE_TASK_STATUS.COMPLETED
+  );
+  if (open.length > 0) {
+    throw ApiError.badRequest(
+      `This task still has ${open.length} incomplete subtask${open.length === 1 ? '' : 's'}: ` +
+        `${open.map((s) => s.title).join(', ')}.`
+    );
+  }
+}
+
+// A task gated on another (a reel's edit waiting on its shoot) can't move
+// until the blocker is done.
+async function assertNotBlocked(task) {
+  if (!task.blockedBy) return;
+
+  const blocker = await employeeTaskRepository.findById(task.blockedBy);
+  if (blocker && !blocker.isDeleted && blocker.status !== EMPLOYEE_TASK_STATUS.COMPLETED) {
+    throw ApiError.badRequest(`"${blocker.title}" has to be completed first.`);
+  }
+}
+
 // Only fields relevant to `type` survive — e.g. a client-type task never
 // carries a stray `event` id, and a personal task never carries a `team`.
 function normalizeForType(data) {
@@ -159,18 +200,42 @@ async function createTask(data, createdByEmployeeId) {
   const task = await employeeTaskRepository.findById(created._id);
 
   employeeTaskNotify.notifyAssigned(task).catch((err) => logger.error({ err }, 'notifyAssigned failed'));
-  if (task.type === EMPLOYEE_TASK_TYPE.PERSONAL) {
-    sendPersonalTaskAssignedEmail(task).catch((err) => logger.error({ err }, 'sendPersonalTaskAssignedEmail failed'));
-  } else {
-    sendTeamTaskAssignedEmail(task).catch((err) => logger.error({ err }, 'sendTeamTaskAssignedEmail failed'));
+  if (sendsEmail(task)) {
+    if (task.type === EMPLOYEE_TASK_TYPE.PERSONAL) {
+      sendPersonalTaskAssignedEmail(task).catch((err) => logger.error({ err }, 'sendPersonalTaskAssignedEmail failed'));
+    } else {
+      sendTeamTaskAssignedEmail(task).catch((err) => logger.error({ err }, 'sendTeamTaskAssignedEmail failed'));
+    }
   }
 
   return task;
 }
 
-async function updateTask(id, data) {
+// `actingUser` is optional (existing internal callers that don't need
+// meeting-audit logging can omit it) — when the task carries a `meetingRef`,
+// the edit is appended to that meeting's `taskEdits[]` so the client manual
+// can later say "this task was edited on X". Scoped to only MOM-spawned
+// tasks, not a system-wide task audit trail.
+async function updateTask(id, data, actingUser) {
   const task = await employeeTaskRepository.updateById(id, data);
   if (!task) throw ApiError.notFound('Task not found');
+
+  if (task.meetingRef && actingUser) {
+    const meetingRepository = require('../repositories/meeting.repository');
+    await meetingRepository
+      .updateById(task.meetingRef.toString(), {
+        $push: {
+          taskEdits: {
+            task: task._id,
+            changedFields: Object.keys(data),
+            changedAt: new Date(),
+            changedBy: actingUser.id,
+          },
+        },
+      })
+      .catch((err) => logger.error({ err, taskId: task._id }, 'Failed to log task edit to meeting'));
+  }
+
   return task;
 }
 
@@ -201,7 +266,9 @@ async function createSubtask(parentId, data, createdByEmployeeId) {
   const subtask = await employeeTaskRepository.findById(created._id);
 
   employeeTaskNotify.notifyAssigned(subtask).catch((err) => logger.error({ err }, 'notifyAssigned (subtask) failed'));
-  sendSubtaskAssignedEmail(subtask, parent).catch((err) => logger.error({ err }, 'sendSubtaskAssignedEmail failed'));
+  if (sendsEmail(subtask)) {
+    sendSubtaskAssignedEmail(subtask, parent).catch((err) => logger.error({ err }, 'sendSubtaskAssignedEmail failed'));
+  }
   return subtask;
 }
 
@@ -225,6 +292,8 @@ async function toggleFollowUp(taskId, followUpId, isDone, actingEmployeeId) {
 }
 
 async function markForReview(task, actingEmployeeId) {
+  await assertNotBlocked(task);
+  await assertSubtasksComplete(task);
   const now = new Date();
   const completionFlag =
     now <= new Date(task.endAt) ? EMPLOYEE_TASK_COMPLETION_FLAG.ON_TIME : EMPLOYEE_TASK_COMPLETION_FLAG.LATE;
@@ -240,10 +309,60 @@ async function markForReview(task, actingEmployeeId) {
   return updated;
 }
 
+// Both markCompleted and markCompletedDirect take the full acting *user*
+// (not just an employee id) — a CMS-owned subtask's completion may need to
+// trigger its linked CalendarItem's pipeline to advance, which needs the
+// acting user's role too (admin/CEO override, global Team Leader), not just
+// their employee id. See notifyCmsPipelineIfOwned below.
+function employeeIdOf(actingUser) {
+  return actingUser?.employeeLink || actingUser || null;
+}
+
+// If this task was generated by the Client Management System (task.cmsItem
+// set) OR is a subtask of a MOM-spawned pipeline task (its parent has
+// momPipeline set), completing it may be the pending action on that
+// pipeline's current step — advance it. Lazily required to dodge circular
+// imports: both the CMS services and momPipeline.service.js already import
+// this file the other direction. A mismatch (this task isn't actually the
+// pipeline's active step, or someone completed it out of band) is expected
+// and harmless — advance() simply won't have anything to do or will no-op
+// safely; genuine errors are logged, never thrown, since the task itself is
+// already saved as completed by now.
+async function notifyCmsPipelineIfOwned(task, actingUser) {
+  if (!actingUser || typeof actingUser === 'string') return;
+  try {
+    if (task.cmsItem) {
+      const pipelineBridge = require('./cms/pipelineBridge.service');
+      await pipelineBridge.onSubtaskCompleted(task, actingUser);
+      return;
+    }
+    if (task.parentTask) {
+      const parent = await employeeTaskRepository.findById(task.parentTask);
+      if (parent?.momPipeline?.kind) {
+        const momPipelineService = require('./momPipeline.service');
+        await momPipelineService.onSubtaskCompleted(parent, task, actingUser);
+      }
+    }
+  } catch (err) {
+    logger.error({ err, taskId: task._id }, 'CMS/MOM pipeline bridge failed after subtask completion');
+  }
+}
+
 // The review-optional counterpart to markForReview — same completionFlag
 // computation, but the task lands directly on COMPLETED instead of
 // FOR_REVIEW, since nobody needs to sign off on it.
-async function markCompletedDirect(task, actingEmployeeId) {
+//
+// `skipCmsBridge` is set by calendarItem.service.js when it is itself the
+// one driving this completion (the calendar-originated "advance" path,
+// which is about to handle the CalendarItem's own stage transition right
+// after this call returns) — without it, that path would complete the
+// subtask, the bridge would fire and call back into advance() to handle the
+// very same transition, and then the original caller would try to apply it
+// a second time. The Task-Management-originated path (completing a subtask
+// directly, not via the calendar) never sets this, so the bridge still runs.
+async function markCompletedDirect(task, actingUser, { skipCmsBridge = false } = {}) {
+  await assertNotBlocked(task);
+  await assertSubtasksComplete(task);
   const now = new Date();
   const completionFlag =
     now <= new Date(task.endAt) ? EMPLOYEE_TASK_COMPLETION_FLAG.ON_TIME : EMPLOYEE_TASK_COMPLETION_FLAG.LATE;
@@ -252,21 +371,24 @@ async function markCompletedDirect(task, actingEmployeeId) {
     status: EMPLOYEE_TASK_STATUS.COMPLETED,
     completionFlag,
     completedAt: now,
-    completedBy: actingEmployeeId,
+    completedBy: employeeIdOf(actingUser),
   });
 
   employeeTaskNotify.notifyCompleted(updated).catch((err) => logger.error({ err }, 'notifyCompleted (direct) failed'));
+  if (!skipCmsBridge) notifyCmsPipelineIfOwned(updated, actingUser);
   return updated;
 }
 
-async function markCompleted(task, actingEmployeeId) {
+async function markCompleted(task, actingUser, { skipCmsBridge = false } = {}) {
+  await assertSubtasksComplete(task);
   const updated = await employeeTaskRepository.updateById(task._id, {
     status: EMPLOYEE_TASK_STATUS.COMPLETED,
     completedAt: new Date(),
-    completedBy: actingEmployeeId,
+    completedBy: employeeIdOf(actingUser),
   });
 
   employeeTaskNotify.notifyCompleted(updated).catch((err) => logger.error({ err }, 'notifyCompleted failed'));
+  if (!skipCmsBridge) notifyCmsPipelineIfOwned(updated, actingUser);
   return updated;
 }
 
@@ -286,7 +408,9 @@ async function rejectTask(task, edits, actingEmployeeId) {
   });
 
   employeeTaskNotify.notifyRejected(updated, note).catch((err) => logger.error({ err }, 'notifyRejected failed'));
-  sendTaskRejectedEmail(updated, note).catch((err) => logger.error({ err }, 'sendTaskRejectedEmail failed'));
+  if (sendsEmail(updated)) {
+    sendTaskRejectedEmail(updated, note).catch((err) => logger.error({ err }, 'sendTaskRejectedEmail failed'));
+  }
   return updated;
 }
 
@@ -380,11 +504,10 @@ async function listReview(user) {
   return { isReviewer, tasks };
 }
 
-// Backs the admin unified task view's "Filter by Employee"/"Filter by Team"
-// controls — the validator guarantees exactly one of the two is present.
-function adminFilter({ employeeId, teamId }) {
-  if (employeeId) return employeeTaskRepository.listForEmployeeAdmin(employeeId);
-  return employeeTaskRepository.listForTeamAdmin(teamId);
+// Backs the admin unified task view's filter bar — client/team/employee/
+// date, any combination active at once.
+function adminFilter({ clientId, teamId, employeeId, dateFrom, dateTo }) {
+  return employeeTaskRepository.listForAdminFiltered({ clientId, teamId, employeeId, dateFrom, dateTo });
 }
 
 module.exports = {

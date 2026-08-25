@@ -19,3 +19,25 @@ export function canManageTasks(user: StoredUser | null | undefined): boolean {
 export function canManageSubtasks(user: StoredUser | null | undefined): boolean {
   return isAdminLike(user) || Boolean(user?.permissions?.includes('manage_subtasks'))
 }
+
+// The company-wide Team Leader account (the team_lead login role — not tied
+// to any one team, distinct from a WorkTeam's own "Team Main"). Owns Task
+// Management administration: creating/editing the team registry, and the
+// "team leader" step of every client-work pipeline in Client Management.
+export function isGlobalTeamLead(user: StoredUser | null | undefined): boolean {
+  return user?.role === 'team_lead'
+}
+
+// Who may create/edit/delete WorkTeams. Deliberately its own name, not
+// reused from canManageTasks — CEO/Team Leader get this without also
+// picking up canManageTasks' broader top-level-task authority, which
+// nobody asked for.
+export function canManageTeamRegistry(user: StoredUser | null | undefined): boolean {
+  return canManageTasks(user) || isGlobalTeamLead(user)
+}
+
+// Who sees the merged admin-style task board (all four types, filterable by
+// client/team/employee/date) instead of the plain self-service one.
+export function canViewUnifiedTasks(user: StoredUser | null | undefined): boolean {
+  return canManageTasks(user) || user?.role === 'ceo' || isGlobalTeamLead(user)
+}

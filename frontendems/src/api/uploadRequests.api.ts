@@ -57,6 +57,25 @@ export async function revokeUploadRequest(id: string): Promise<void> {
   await apiClient.post(`/upload-requests/${id}/revoke`)
 }
 
+export interface EmployeeSummary {
+  _id: string
+  firstName: string
+  lastName?: string
+  employeeCode: string
+  designation: string
+}
+
+export interface UploadRequestWithEmployee extends Omit<UploadRequest, 'employee'> {
+  employee: EmployeeSummary
+}
+
+// Global, cross-employee — backs the Dashboard's "Pending document
+// requests" stat click-through.
+export async function listPendingUploadRequests(): Promise<{ uploadRequests: UploadRequestWithEmployee[] }> {
+  const { data } = await apiClient.get('/upload-requests')
+  return data
+}
+
 export async function listUploadedDocuments(
   employeeId: string
 ): Promise<{ uploadedDocuments: UploadedDocument[] }> {

@@ -11,6 +11,11 @@ const companyEventSchema = new Schema(
     name: { type: String, required: true, trim: true },
     date: { type: Date, required: true },
     notes: { type: String, trim: true },
+    // null = company-wide (HR's shared calendar, today's only mode). Set =
+    // belongs to one client — excluded from the company-wide calendar and
+    // reminded to that client's team instead of everyone. See
+    // companyEvent.service.js#listForMonth/listForClient.
+    client: { type: Schema.Types.ObjectId, ref: 'TaskClient', default: null, index: true },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }

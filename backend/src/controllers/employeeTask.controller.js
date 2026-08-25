@@ -1,5 +1,8 @@
 const asyncHandler = require('../utils/asyncHandler');
 const employeeTaskService = require('../services/employeeTask.service');
+const planNextDayService = require('../services/planNextDay.service');
+const momPipelineService = require('../services/momPipeline.service');
+const momPipeline = require('../utils/momPipeline');
 
 const listMine = asyncHandler(async (req, res) => {
   const tasks = await employeeTaskService.listMine(req.user, { type: req.query.type });
@@ -11,6 +14,11 @@ const listUpcoming = asyncHandler(async (req, res) => {
   res.json({ tasks });
 });
 
+const planNextDay = asyncHandler(async (req, res) => {
+  const digest = await planNextDayService.getDigest(req.user);
+  res.json({ digest });
+});
+
 const listReview = asyncHandler(async (req, res) => {
   const { isReviewer, tasks } = await employeeTaskService.listReview(req.user);
   res.json({ isReviewer, tasks });
@@ -18,15 +26,32 @@ const listReview = asyncHandler(async (req, res) => {
 
 const adminFilter = asyncHandler(async (req, res) => {
   const tasks = await employeeTaskService.adminFilter({
-    employeeId: req.query.employeeId,
+    clientId: req.query.clientId,
     teamId: req.query.teamId,
+    employeeId: req.query.employeeId,
+    dateFrom: req.query.dateFrom,
+    dateTo: req.query.dateTo,
   });
   res.json({ tasks });
 });
 
+// Decorated with the resolved step trail/colour/canAct when this task
+// carries a momPipeline — same "resolved server-side so it can't drift"
+// principle as the CMS calendar's getItemView, and it saves the frontend
+// from porting the actor-resolution logic to TypeScript just to know
+// whether to show the advance/send-back/reject buttons.
 const get = asyncHandler(async (req, res) => {
   // req.task is loaded and access-checked by taskAccess.middleware.js.
-  res.json({ task: req.task });
+  const task = req.task;
+  let momPipelineView;
+  if (task.momPipeline?.kind) {
+    momPipelineView = {
+      trail: momPipeline.stepTrail(task.momPipeline),
+      color: momPipeline.colorFor(task.momPipeline),
+      canAct: momPipeline.canActOnCurrentStep(req.user, task.momPipeline, task.team),
+    };
+  }
+  res.json({ task, momPipelineView });
 });
 
 const listSubtasks = asyncHandler(async (req, res) => {
@@ -46,7 +71,7 @@ const create = asyncHandler(async (req, res) => {
 });
 
 const update = asyncHandler(async (req, res) => {
-  const task = await employeeTaskService.updateTask(req.params.id, req.body);
+  const task = await employeeTaskService.updateTask(req.params.id, req.body, req.user);
   req.auditContext = {
     action: 'employeeTask.update',
     resourceType: 'EmployeeTask',
@@ -101,14 +126,19 @@ const markForReview = asyncHandler(async (req, res) => {
   res.json({ task });
 });
 
+// Pass the full req.user (not just the employee id) — a CMS-owned subtask's
+// completion may need to trigger the linked CalendarItem's pipeline to
+// advance, which needs the acting user's role too (admin/CEO override,
+// global Team Leader). See employeeTaskService.markCompleted/
+// markCompletedDirect and services/cms/pipelineBridge.service.js.
 const markCompleted = asyncHandler(async (req, res) => {
-  const task = await employeeTaskService.markCompleted(req.task, req.user.employeeLink);
+  const task = await employeeTaskService.markCompleted(req.task, req.user);
   req.auditContext = { action: 'employeeTask.markCompleted', resourceType: 'EmployeeTask', resourceId: task._id };
   res.json({ task });
 });
 
 const markCompletedDirect = asyncHandler(async (req, res) => {
-  const task = await employeeTaskService.markCompletedDirect(req.task, req.user.employeeLink);
+  const task = await employeeTaskService.markCompletedDirect(req.task, req.user);
   req.auditContext = { action: 'employeeTask.markCompletedDirect', resourceType: 'EmployeeTask', resourceId: task._id };
   res.json({ task });
 });
@@ -140,9 +170,32 @@ const getChain = asyncHandler(async (req, res) => {
   res.json({ chain });
 });
 
+// MOM-pipeline actions — see momPipeline.service.js. Authorised inside the
+// service (per-step actor, same shape as the CMS calendar's advance/
+// send-back/reject), not at the route, since who may act depends on which
+// step the task's momPipeline currently sits at.
+const momPipelineAdvance = asyncHandler(async (req, res) => {
+  const task = await momPipelineService.advance(req.params.id, req.user, req.body);
+  req.auditContext = { action: 'employeeTask.momPipeline.advance', resourceType: 'EmployeeTask', resourceId: task._id };
+  res.json({ task });
+});
+
+const momPipelineSendBack = asyncHandler(async (req, res) => {
+  const task = await momPipelineService.sendBack(req.params.id, req.user, req.body);
+  req.auditContext = { action: 'employeeTask.momPipeline.sendBack', resourceType: 'EmployeeTask', resourceId: task._id };
+  res.json({ task });
+});
+
+const momPipelineReject = asyncHandler(async (req, res) => {
+  const task = await momPipelineService.reject(req.params.id, req.user, req.body);
+  req.auditContext = { action: 'employeeTask.momPipeline.reject', resourceType: 'EmployeeTask', resourceId: task._id };
+  res.json({ task });
+});
+
 module.exports = {
   listMine,
   listUpcoming,
+  planNextDay,
   listReview,
   adminFilter,
   get,
@@ -159,4 +212,7 @@ module.exports = {
   reject,
   createContinuation,
   getChain,
+  momPipelineAdvance,
+  momPipelineSendBack,
+  momPipelineReject,
 };

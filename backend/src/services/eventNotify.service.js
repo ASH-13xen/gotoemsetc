@@ -1,19 +1,22 @@
-const taskNotify = require('./taskNotify.service');
-const teamRepository = require('../repositories/team.repository');
+const notifyRecipients = require('./notifyRecipients.service');
+const workTeamRepository = require('../repositories/workTeam.repository');
 const notificationService = require('./notification.service');
 const { NOTIFICATION_TYPES } = require('../config/constants');
 
-// Reuses taskNotify's employee-ref -> User-id resolver (toId-safe against
-// populated vs raw refs) — nothing about it is task-specific.
+// Reuses the shared employee-ref -> User-id resolver (toId-safe against
+// populated vs raw refs).
 async function notifyResponsibilityAssignment(responsibility, event) {
   let employeeIds = [...(responsibility.assignedEmployees || [])];
   if (responsibility.assignedTeam) {
-    const team = await teamRepository.findById(responsibility.assignedTeam);
-    if (team) employeeIds = employeeIds.concat(team.members || []);
+    const team = await workTeamRepository.findById(responsibility.assignedTeam);
+    // A WorkTeam's leader is never listed in `members`, so notify them
+    // explicitly — otherwise the one person accountable for the team's work
+    // is the only one who doesn't hear about it.
+    if (team) employeeIds = employeeIds.concat(team.members || [], team.leader ? [team.leader] : []);
   }
   if (employeeIds.length === 0) return;
 
-  const userIds = await taskNotify.resolveUserIdsForEmployees(employeeIds);
+  const userIds = await notifyRecipients.resolveUserIdsForEmployees(employeeIds);
   await notificationService.createForUsers(userIds, {
     type: NOTIFICATION_TYPES.EVENT_RESPONSIBILITY_ASSIGNED,
     title: `New event responsibility — ${event.title}`,

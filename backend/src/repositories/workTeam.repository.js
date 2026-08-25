@@ -1,18 +1,21 @@
 const WorkTeam = require('../models/WorkTeam');
+const { TEAM_MEMBER_ROLE } = require('../config/constants');
 
 const POPULATE_FIELDS = 'firstName lastName designation';
 
-function list() {
-  return WorkTeam.find({ isDeleted: false })
-    .sort({ name: 1 })
+function withPopulation(query) {
+  return query
     .populate('leader', POPULATE_FIELDS)
-    .populate('members', POPULATE_FIELDS);
+    .populate('members', POPULATE_FIELDS)
+    .populate('memberRoles.employee', POPULATE_FIELDS);
+}
+
+function list() {
+  return withPopulation(WorkTeam.find({ isDeleted: false, isTemporary: { $ne: true } }).sort({ name: 1 }));
 }
 
 function findById(id) {
-  return WorkTeam.findOne({ _id: id, isDeleted: false })
-    .populate('leader', POPULATE_FIELDS)
-    .populate('members', POPULATE_FIELDS);
+  return withPopulation(WorkTeam.findOne({ _id: id, isDeleted: false }));
 }
 
 function create(data) {
@@ -20,12 +23,12 @@ function create(data) {
 }
 
 function updateById(id, data) {
-  return WorkTeam.findOneAndUpdate({ _id: id, isDeleted: false }, data, {
-    returnDocument: 'after',
-    runValidators: true,
-  })
-    .populate('leader', POPULATE_FIELDS)
-    .populate('members', POPULATE_FIELDS);
+  return withPopulation(
+    WorkTeam.findOneAndUpdate({ _id: id, isDeleted: false }, data, {
+      returnDocument: 'after',
+      runValidators: true,
+    })
+  );
 }
 
 function softDeleteById(id) {
@@ -44,4 +47,35 @@ function isLeaderOfMember(leaderEmployeeId, memberEmployeeId) {
   });
 }
 
-module.exports = { list, findById, create, updateById, softDeleteById, isLeaderOfMember };
+// Every team this employee belongs to, as a member OR as the leader — the
+// leader is deliberately never duplicated into `members` (see
+// workTeam.service.js), so both have to be matched. Backs the event
+// dashboard widget's "responsibilities assigned to me via a team" lookup.
+function listForMember(employeeId) {
+  return WorkTeam.find({
+    isDeleted: false,
+    $or: [{ members: employeeId }, { leader: employeeId }],
+  });
+}
+
+// Every team where this employee is tagged Content Manager — backs the CM's
+// "pending my review" leave-approval queue (see
+// attendanceRequest.service.js#listPendingForContentManager). Unpopulated,
+// same as listForMember — callers only need members/leader ids from these.
+function listWhereEmployeeIsContentManager(employeeId) {
+  return WorkTeam.find({
+    isDeleted: false,
+    memberRoles: { $elemMatch: { employee: employeeId, roles: TEAM_MEMBER_ROLE.CONTENT_MANAGER } },
+  });
+}
+
+module.exports = {
+  list,
+  findById,
+  create,
+  updateById,
+  softDeleteById,
+  isLeaderOfMember,
+  listForMember,
+  listWhereEmployeeIsContentManager,
+};

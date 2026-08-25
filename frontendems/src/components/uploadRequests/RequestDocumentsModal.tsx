@@ -179,7 +179,7 @@ export function RequestDocumentsModal({
             </div>
             {accessCode && (
               <div className="flex items-center gap-2 rounded-xl border border-border/10 bg-secondary/50 p-3 text-sm">
-                <span className="font-semibold text-muted-foreground uppercase tracking-wide text-xs">Access code</span>
+                <span className="text-xs font-medium text-muted-foreground">Access code</span>
                 <code className="rounded-md bg-background px-2 py-0.5 font-mono font-semibold text-foreground">
                   {accessCode}
                 </code>

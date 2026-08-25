@@ -4,7 +4,9 @@ const USER_KEY = 'ems_auth_user'
 export interface StoredUser {
   id: string
   username: string
-  role: 'admin' | 'worker'
+  role: 'admin' | 'ceo' | 'digital_admin' | 'hr' | 'operations_manager' | 'account_manager' | 'team_lead' | 'worker'
+  employeeLink: string | null
+  permissions: string[]
 }
 
 export function getToken(): string | null {

@@ -13,6 +13,7 @@ const create = {
   body: z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
     label: z.string().min(1),
+    type: z.enum(['holiday', 'half_day']).optional(),
   }),
 };
 

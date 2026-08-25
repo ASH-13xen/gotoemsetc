@@ -1,4 +1,5 @@
 const { isAdminLike } = require('./roles');
+const { isCmsAdmin } = require('./cmsAccess');
 const { EMPLOYEE_TASK_TYPE, EMPLOYEE_TASK_STATUS, PERMISSIONS } = require('../config/constants');
 
 // Two independently-grantable permissions, deliberately not one blanket
@@ -12,6 +13,17 @@ function hasFullTaskAccess(user) {
 
 function hasSubtaskManageAccess(user) {
   return isAdminLike(user) || Boolean(user.permissions?.includes(PERMISSIONS.MANAGE_SUBTASKS));
+}
+
+// Client tasks are generated and owned by the Client Management System, so
+// whoever runs that system has to be able to see and act on them here too —
+// otherwise the sales role, which schedules the work in the first place,
+// gets a 403 opening the very task it created.
+//
+// Deliberately scoped to type: client. It grants nothing on personal, team,
+// or event tasks, which stay outside the CMS's remit entirely.
+function isCmsOwnedClientTask(user, task) {
+  return task?.type === EMPLOYEE_TASK_TYPE.CLIENT && isCmsAdmin(user);
 }
 
 // Populated refs arrive as full documents (per employeeTask.repository.js),
@@ -64,6 +76,7 @@ function isPersonalManager(user, task) {
 
 function canViewTask(user, task) {
   if (hasFullTaskAccess(user) || hasSubtaskManageAccess(user)) return true;
+  if (isCmsOwnedClientTask(user, task)) return true;
   if (isAssignee(user, task)) return true;
   if (isTeamLeader(user, task)) return true;
   if (task.type === EMPLOYEE_TASK_TYPE.PERSONAL && isPersonalManager(user, task)) return true;
@@ -74,6 +87,7 @@ function canViewTask(user, task) {
 // (enforced by the caller passing the real parent, never a subtask).
 function canCreateSubtask(user, parentTask) {
   if (hasSubtaskManageAccess(user)) return true;
+  if (isCmsOwnedClientTask(user, parentTask)) return true;
   return parentTask.type !== EMPLOYEE_TASK_TYPE.PERSONAL && isTeamLeader(user, parentTask);
 }
 
@@ -92,6 +106,7 @@ function isReviewInitiator(user, task) {
 // leader already made the review call themselves, so sign-off isn't
 // self-servable by that same leader.
 function hasCompletionAuthority(user, task) {
+  if (isCmsOwnedClientTask(user, task)) return true;
   if (task.type === EMPLOYEE_TASK_TYPE.PERSONAL) {
     return isAdminLike(user) || isPersonalManager(user, task);
   }
@@ -130,12 +145,14 @@ function canRejectTask(user, task) {
 
 function canToggleFollowUp(user, task) {
   if (hasFullTaskAccess(user) || hasSubtaskManageAccess(user)) return true;
+  if (isCmsOwnedClientTask(user, task)) return true;
   if (isAssignee(user, task)) return true;
   return task.type !== EMPLOYEE_TASK_TYPE.PERSONAL && isTeamLeader(user, task);
 }
 
 module.exports = {
   toId,
+  isCmsOwnedClientTask,
   isAssignee,
   isTeamLeader,
   isPersonalManager,

@@ -85,6 +85,13 @@ function softDeleteById(id) {
   );
 }
 
+// Every non-deleted employee's flags, for the frontendall Performance Flags
+// history section — minimal fields, not the full Employee document (no
+// field-gating needed since this never goes through shapeForRole).
+function listAllForFlagHistory() {
+  return Employee.find({ isDeleted: false }).select('firstName lastName employeeCode status flags');
+}
+
 function addFlag(id, flag) {
   return Employee.findOneAndUpdate(
     { _id: id, isDeleted: false },
@@ -115,4 +122,5 @@ module.exports = {
   countByStatus,
   listAllWithDob,
   listActive,
+  listAllForFlagHistory,
 };

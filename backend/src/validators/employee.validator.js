@@ -79,7 +79,11 @@ const mutableFields = {
   permanentAddress: addressSchema.optional(),
   localAddress: addressSchema.optional(),
   dob: z.coerce.date().optional(),
-  bloodGroup: z.enum(BLOOD_GROUPS).optional(),
+  // .optional() alone only tolerates the key being absent — the actual
+  // payload sends '' for "not set yet" (the Select's blank default), which
+  // isn't a member of BLOOD_GROUPS, so every save for an employee with no
+  // blood group on file failed validation until this was added.
+  bloodGroup: z.enum(BLOOD_GROUPS).optional().or(z.literal('')),
   gender: z.string().optional(),
   fatherName: z.string().optional(),
 

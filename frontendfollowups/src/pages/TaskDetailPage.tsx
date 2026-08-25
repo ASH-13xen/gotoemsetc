@@ -18,6 +18,9 @@ import { TaskChain } from '@/components/tasks/TaskChain'
 import { useAuth } from '@/hooks/useAuth'
 import { useLedTeams } from '@/hooks/useLedTeams'
 import { useDeleteTask, useSubtasks, useTask } from '@/hooks/useEmployeeTasks'
+import { useCmsItem } from '@/hooks/useCmsItem'
+import { PipelineStepper } from '@/components/tasks/PipelineStepper'
+import { MomPipelinePanel } from '@/components/tasks/MomPipelinePanel'
 import {
   canCreateContinuation,
   canCreateSubtask,
@@ -41,6 +44,7 @@ export default function TaskDetailPage() {
   const { data, isLoading } = useTask(id)
   const { data: subtasksData } = useSubtasks(id)
   const deleteTask = useDeleteTask()
+  const { data: cmsItem } = useCmsItem(data?.task.cmsItem)
 
   if (isLoading || !data) {
     return (
@@ -153,6 +157,19 @@ export default function TaskDetailPage() {
                 )}
               </div>
             </div>
+          )}
+
+          {cmsItem && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                Client pipeline — {cmsItem.label}
+              </p>
+              <PipelineStepper trail={cmsItem.trail} isSentBack={cmsItem.isSentBack} isRejected={cmsItem.isRejected} />
+            </div>
+          )}
+
+          {task.momPipeline?.kind && data.momPipelineView && (
+            <MomPipelinePanel task={task} view={data.momPipelineView} />
           )}
 
           <ResourcesContactsSection resources={task.resourcesRequired} contacts={task.contactsRequired} />

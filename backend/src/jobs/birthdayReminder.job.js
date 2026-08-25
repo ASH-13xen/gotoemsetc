@@ -4,6 +4,7 @@ const employeeRepository = require('../repositories/employee.repository');
 const companyEventRepository = require('../repositories/companyEvent.repository');
 const userRepository = require('../repositories/user.repository');
 const notificationService = require('../services/notification.service');
+const notifyRecipients = require('../services/notifyRecipients.service');
 const logger = require('../utils/logger');
 
 const COMPANY_EVENT_LABEL = {
@@ -67,6 +68,21 @@ async function sendDueBirthdayNotifications() {
   if (sent) logger.info({ count: sent }, 'Sent birthday notifications');
 }
 
+// Company-wide recipients (today's only mode, still used for events with no
+// client) vs. a client-scoped event's recipients — that client's current
+// team plus Digital Admin/CEO/the global Team Leader, not the whole company.
+async function recipientIdsFor(event, allUserIds) {
+  if (!event.client) return allUserIds;
+
+  const team = event.client.defaultTeam;
+  const teamEmployeeIds = team ? [team.leader, ...(team.members || [])].filter(Boolean) : [];
+  const [teamUserIds, oversightUsers] = await Promise.all([
+    teamEmployeeIds.length ? notifyRecipients.resolveUserIdsForEmployees(teamEmployeeIds) : [],
+    userRepository.findCmsOversightUsers(),
+  ]);
+  return [...new Set([...teamUserIds, ...oversightUsers.map((u) => u._id.toString())])];
+}
+
 // Same "today or in two days" pattern as sendDueBirthdayNotifications above,
 // just sourced from CompanyEvent (client birthdays/anniversaries, brand
 // anniversary) instead of Employee.dob — manually entered rather than
@@ -78,8 +94,8 @@ async function sendDueCompanyEventNotifications() {
   if (!events.length) return;
 
   const users = await userRepository.list();
-  const recipientIds = users.map((u) => u._id);
-  if (!recipientIds.length) return;
+  const allUserIds = users.map((u) => u._id);
+  if (!allUserIds.length) return;
 
   const today = new Date();
   const inTwoDays = new Date(today);
@@ -93,6 +109,8 @@ async function sendDueCompanyEventNotifications() {
     if (isImportant && date.getFullYear() !== today.getFullYear()) continue;
 
     const title = label === 'birthday' ? 'Birthday' : label === 'anniversary' ? 'Anniversary' : 'Reminder';
+    const recipientIds = await recipientIdsFor(event, allUserIds);
+    if (!recipientIds.length) continue;
 
     if (isMonthDay(date, today.getMonth(), today.getDate())) {
       await notificationService.createForUsers(recipientIds, {

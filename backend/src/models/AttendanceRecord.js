@@ -9,7 +9,14 @@ const attendanceRecordSchema = new Schema(
     // otherwise-unmarked day (e.g. a Sunday worked only for a few OT hours).
     status: { type: String, enum: Object.values(ATTENDANCE_STATUS) },
     // Independent of status — loggable on any date, including Sundays/holidays.
+    // Superseded by overtimeMinutes below (exact-minute precision, per-employee
+    // shift-offset overtime window) — kept, unwritten, purely so no historical
+    // data is ever lost; nothing reads this anymore.
     overtimeHours: { type: Number, default: 0, min: 0 },
+    // Independent of status — loggable on any date, including Sundays/holidays.
+    // Exact minutes (no rounding) earned outside the 15-minute buffer around
+    // this employee's own shift start/end — see attendanceClassifier.service.js.
+    overtimeMinutes: { type: Number, default: 0, min: 0 },
     // True when this record was written on a day after `date` already passed —
     // a data-entry/audit flag, not a statement about the employee's punctuality.
     isBackdated: { type: Boolean, default: false },
@@ -32,11 +39,18 @@ const attendanceRecordSchema = new Schema(
     // short leaves in one day). See attendanceClassifier.service.js.
     earlyDeparture: { type: Boolean, default: false },
     // False while the day could still be revised by a later scan today (the
-    // real-time classifier keeps updating status/earlyDeparture/overtimeHours
+    // real-time classifier keeps updating status/earlyDeparture/overtimeMinutes
     // as scans arrive); true once finalized — either by tomorrow's first
     // scan proving today is over, or by the nightly backstop. Notifications
     // only fire once settled, so a mid-day guess never spams an admin.
     isSettled: { type: Boolean, default: false },
+    // True only when a company-marked Half Day upgraded this record to a
+    // full-day Present that would otherwise have been Late/Short
+    // Leave/Half-Day/Absent-after-2pm — see
+    // attendanceClassifier.service.js#applyHalfDayForEmployee. Lets removing
+    // the half-day marking revert only the records it boosted, the same way
+    // isAutoMarked lets removing a Holiday revert only its own writes.
+    isHalfDayBoost: { type: Boolean, default: false },
     notes: String,
   },
   { timestamps: true }

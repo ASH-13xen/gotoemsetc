@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card } from '@/components/ui/card'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { WizardShell } from '@/components/wizard/WizardShell'
 import { TemplateSelectStep } from '@/components/wizard/TemplateSelectStep'
 import { FieldRenderer } from '@/components/wizard/FieldRenderer'
@@ -15,6 +16,7 @@ import { ResponsibilitiesEditor } from '@/components/wizard/ResponsibilitiesEdit
 import { ReviewGenerateStep } from '@/components/wizard/ReviewGenerateStep'
 import { buildStepSchema } from '@/lib/dynamicFieldSchema'
 import { getByPath, setByPath } from '@/lib/utils'
+import { extractApiErrorMessage } from '@/lib/errors'
 import { useEmployee, useUpdateEmployee } from '@/hooks/useEmployees'
 import { useTemplates } from '@/hooks/useTemplates'
 import { useGenerateDocuments } from '@/hooks/useDocuments'
@@ -143,9 +145,9 @@ export default function EmployeeWizardPage() {
 
   if (employeeLoading || templatesLoading || !employeeData) {
     return (
-      <div className="mx-auto max-w-3xl space-y-4 py-4 bg-transparent">
-        <Skeleton className="h-8 w-48 bg-secondary/40 rounded-xl" />
-        <Skeleton className="h-96 w-full bg-secondary/40 rounded-xl" />
+      <div className="mx-auto max-w-3xl space-y-4 py-8">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-96 w-full" />
       </div>
     )
   }
@@ -190,8 +192,8 @@ export default function EmployeeWizardPage() {
       if (salaryComponents.length > 0) {
         try {
           await updateEmployee.mutateAsync({ salaryComponents })
-        } catch {
-          toast.error('Could not save — check your connection and try again')
+        } catch (err) {
+          toast.error(extractApiErrorMessage(err, 'Could not save — check your connection and try again'))
           return
         }
       }
@@ -233,8 +235,8 @@ export default function EmployeeWizardPage() {
     if (Object.keys(employeeSourcedUpdates).length > 0) {
       try {
         await updateEmployee.mutateAsync(employeeSourcedUpdates)
-      } catch {
-        toast.error('Could not save — check your connection and try again')
+      } catch (err) {
+        toast.error(extractApiErrorMessage(err, 'Could not save — check your connection and try again'))
         return
       }
     }
@@ -269,34 +271,19 @@ export default function EmployeeWizardPage() {
   }
 
   return (
-    <div className="space-y-8 py-4">
-      <main className="mx-auto max-w-3xl space-y-8">
-        {/* HERO HEADER */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3 bg-transparent">
-          {/* Identity Tile */}
-          <Card className="md:col-span-2 p-8 flex flex-col justify-between min-h-[160px]">
-            <div>
-              <span className="text-xs font-bold tracking-widest text-muted-foreground uppercase">DOCUMENT GENERATION WIZARD</span>
-              <h1 className="text-4xl md:text-5xl font-extrabold uppercase tracking-tighter text-foreground">
-                GENERATE DOCS
-              </h1>
-            </div>
-            <p className="text-sm font-semibold text-muted-foreground mt-2 uppercase tracking-widest">
-              {employee?.firstName} {employee?.lastName}
-            </p>
-          </Card>
- 
-          {/* Action Navigation Tile */}
-          <div
-            onClick={() => navigate(`/employees/${id}`)}
-            className="bg-primary/10 text-primary p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
-          >
-            <span className="text-[10px] font-bold tracking-widest text-primary/70 uppercase">NAVIGATION</span>
-            <span className="text-2xl font-extrabold uppercase tracking-wide">BACK TO PROFILE</span>
-          </div>
-        </div>
- 
-        <Card className="p-6">
+    <div className="mx-auto flex max-w-3xl flex-col gap-8 py-8">
+      <PageHeader
+        eyebrow="Document generation wizard"
+        title="Generate docs"
+        description={employee ? `${employee.firstName} ${employee.lastName ?? ''}`.trim() : undefined}
+        actions={
+          <Button variant="outline" onClick={() => navigate(`/employees/${id}`)}>
+            Back to profile
+          </Button>
+        }
+      />
+
+      <Card className="p-6">
           <WizardShell stepLabels={stepLabels} currentStep={stepIndex} onStepClick={goToStep}>
             <AnimatePresence mode="wait">
               <motion.div
@@ -362,35 +349,21 @@ export default function EmployeeWizardPage() {
                     }
                   />
                 )}
-              </motion.div>
-            </AnimatePresence>
-          </WizardShell>
-        </Card>
+            </motion.div>
+          </AnimatePresence>
+        </WizardShell>
+      </Card>
 
-        {!isReviewStep && (
-          <div className="grid grid-cols-2 gap-4">
-            <Button
-              variant="outline"
-              onClick={() => goToStep(stepIndex - 1)}
-              disabled={stepIndex === 0}
-              className="h-12 text-sm font-semibold rounded-xl uppercase tracking-wider"
-            >
-              BACK
-            </Button>
-            <Button
-              onClick={handleNext}
-              disabled={updateEmployee.isPending}
-              className="bg-primary text-primary-foreground h-12 text-sm font-semibold rounded-xl uppercase tracking-wider hover:brightness-105 hover:-translate-y-0.5 transition-all shadow-button border-0 cursor-pointer"
-            >
-              {updateEmployee.isPending ? (
-                <Loader2 className="size-5 animate-spin text-white" />
-              ) : (
-                'NEXT'
-              )}
-            </Button>
-          </div>
-        )}
-      </main>
+      {!isReviewStep && (
+        <div className="grid grid-cols-2 gap-4">
+          <Button variant="outline" size="lg" onClick={() => goToStep(stepIndex - 1)} disabled={stepIndex === 0}>
+            Back
+          </Button>
+          <Button size="lg" onClick={handleNext} disabled={updateEmployee.isPending}>
+            {updateEmployee.isPending ? <Loader2 className="size-4 animate-spin" /> : 'Next'}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

@@ -15,12 +15,15 @@ export default defineConfig(({ mode }) => {
   const emsUrl = env.VITE_EMS_URL || 'http://localhost:5173'
   const salesUrl = env.VITE_SALES_URL || 'http://localhost:5174'
   const followupsUrl = env.VITE_FOLLOWUPS_URL || 'http://localhost:5175'
+  const hrUrl = env.VITE_HR_URL || 'http://localhost:5178'
+  const opUrl = env.VITE_OP_URL || 'http://localhost:5177'
+  const financeUrl = env.VITE_FINANCE_URL || 'http://localhost:5179'
 
   return {
     plugins: [
       react(),
       tailwindcss(),
-      // Consumes the three sibling apps as micro-frontends. Each remote must be
+      // Consumes the four sibling apps as micro-frontends. Each remote must be
       // running its production build (`vite build` + `vite preview` locally, or
       // simply deployed on Vercel) for its remoteEntry.js to exist.
       federation({
@@ -29,6 +32,9 @@ export default defineConfig(({ mode }) => {
           frontendems: `${emsUrl}/assets/remoteEntry.js`,
           frontendsales: `${salesUrl}/assets/remoteEntry.js`,
           frontendfollowups: `${followupsUrl}/assets/remoteEntry.js`,
+          frontendhr: `${hrUrl}/assets/remoteEntry.js`,
+          frontendop: `${opUrl}/assets/remoteEntry.js`,
+          frontendfinance: `${financeUrl}/assets/remoteEntry.js`,
         },
         // Matches the remotes: react-router-dom/react-query are NOT shared so
         // each app keeps its own isolated router instance (see remotes' configs).

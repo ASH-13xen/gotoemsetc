@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { EmployeeMultiSelect } from '@/components/shared/EmployeeMultiSelect'
+import { DateTimePicker } from '@/components/shared/DateTimePicker'
 import { useCreateSubtask } from '@/hooks/useEmployeeTasks'
 import { fromDateTimeLocalValue } from '@/lib/dateTime'
 
@@ -84,11 +85,25 @@ export function CreateSubtaskDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-1.5">
               <Label>Start</Label>
-              <Input type="datetime-local" {...register('startAt', { required: true })} />
+              <Controller
+                control={control}
+                name="startAt"
+                rules={{ required: true }}
+                render={({ field }) => (
+                  <DateTimePicker value={field.value} onChange={field.onChange} placeholder="SELECT START" />
+                )}
+              />
             </div>
             <div className="grid gap-1.5">
               <Label>Due</Label>
-              <Input type="datetime-local" {...register('endAt', { required: true })} />
+              <Controller
+                control={control}
+                name="endAt"
+                rules={{ required: true }}
+                render={({ field }) => (
+                  <DateTimePicker value={field.value} onChange={field.onChange} placeholder="SELECT DUE" />
+                )}
+              />
             </div>
           </div>
           <div className="grid gap-1.5">

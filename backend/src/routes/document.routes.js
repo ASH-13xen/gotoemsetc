@@ -5,6 +5,12 @@ const documentController = require('../controllers/document.controller');
 
 const router = Router();
 
+// Global, cross-employee list — backs the Dashboard's "Documents generated
+// this month" stat click-through in frontendems.
+router.get('/', validate(documentGenerationValidator.listRecent), documentController.listRecent);
+// Must be registered before '/:id' — otherwise Express's :id param would
+// swallow a literal request to '/overview' (id = "overview").
+router.get('/overview', validate(documentGenerationValidator.overview), documentController.overview);
 router.get('/:id', validate(documentGenerationValidator.getOrDelete), documentController.getById);
 router.get('/:id/file', validate(documentGenerationValidator.getOrDelete), documentController.downloadFile);
 router.get('/:id/signed-file', validate(documentGenerationValidator.getOrDelete), documentController.downloadSignedFile);

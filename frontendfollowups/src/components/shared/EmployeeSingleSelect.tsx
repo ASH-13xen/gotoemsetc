@@ -20,6 +20,9 @@ export function EmployeeSingleSelect({
   const options = (data?.items ?? [])
     .filter((employee) => employee._id !== excludeId)
     .filter((employee) => !includeIds || includeIds.includes(employee._id))
+    .sort((a, b) =>
+      `${a.firstName} ${a.lastName ?? ''}`.trim().localeCompare(`${b.firstName} ${b.lastName ?? ''}`.trim())
+    )
 
   return (
     <Select value={value || undefined} onValueChange={onChange}>

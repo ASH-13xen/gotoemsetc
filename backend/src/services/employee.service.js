@@ -1,8 +1,11 @@
 const employeeRepository = require('../repositories/employee.repository');
 const counterRepository = require('../repositories/counter.repository');
+const userRepository = require('../repositories/user.repository');
 const activityService = require('./activity.service');
+const notificationService = require('./notification.service');
 const ApiError = require('../utils/ApiError');
 const { isAdminLike } = require('../utils/roles');
+const { NOTIFICATION_TYPES } = require('../config/constants');
 
 async function listEmployees(params) {
   return employeeRepository.list(params);
@@ -87,11 +90,68 @@ async function deleteEmployee(id) {
   return employee;
 }
 
+// Simple milestone gamification, per the product ask — checked against the
+// exact running total after this flag (not "every 3rd"), so each tier fires
+// once. Red has one tier (3 — poor performance); green has three (3, 6, 10),
+// each a different message. Best-effort: notification failures never block
+// the flag itself from being recorded.
+async function notifyFlagMilestone(employee, color) {
+  const count = employee.flags.filter((f) => f.color === color).length;
+  const employeeName = `${employee.firstName} ${employee.lastName || ''}`.trim();
+
+  let message = null;
+  if (color === 'red' && count === 3) {
+    message = `${employeeName} has reached 3 red flags — poor performance pattern, please review.`;
+  } else if (color === 'green' && count === 3) {
+    message = `${employeeName} has reached 3 green flags — consistently good performance.`;
+  } else if (color === 'green' && count === 6) {
+    message = `${employeeName} has reached 6 green flags — time to award the employee.`;
+  } else if (color === 'green' && count === 10) {
+    message = `${employeeName} has reached 10 green flags — time to reward the employee.`;
+  }
+  if (!message) return;
+
+  const [hrUsers, ceoUsers] = await Promise.all([userRepository.findHr(), userRepository.findCeos()]);
+  const recipientIds = [...new Set([...hrUsers, ...ceoUsers].map((u) => u._id.toString()))];
+  if (recipientIds.length === 0) return;
+
+  await notificationService.createForUsers(recipientIds, {
+    type: color === 'red' ? NOTIFICATION_TYPES.EMPLOYEE_RED_FLAG_MILESTONE : NOTIFICATION_TYPES.EMPLOYEE_GREEN_FLAG_MILESTONE,
+    title: color === 'red' ? 'Performance concern' : 'Performance milestone',
+    message,
+    employee: employee._id,
+  });
+}
+
 async function addFlag(id, { color, note, date }, addedBy) {
   const employee = await employeeRepository.addFlag(id, { color, note, date, addedBy });
   if (!employee) throw ApiError.notFound('Employee not found');
   await activityService.log(employee._id, 'EMPLOYEE_FLAG_ADDED', { color, note, date });
+  await notifyFlagMilestone(employee, color).catch(() => {});
   return employee;
+}
+
+// Flattened across every employee, most recent first — backs frontendall's
+// Performance Flags history section (see routes/employee.routes.js's
+// GET /flags/history, gated the same as HR Work).
+async function getFlagHistory() {
+  const employees = await employeeRepository.listAllForFlagHistory();
+  const entries = [];
+  for (const employee of employees) {
+    for (const flag of employee.flags) {
+      entries.push({
+        _id: flag._id,
+        employeeId: employee._id,
+        employeeName: `${employee.firstName} ${employee.lastName || ''}`.trim(),
+        employeeCode: employee.employeeCode,
+        color: flag.color,
+        note: flag.note,
+        date: flag.date,
+      });
+    }
+  }
+  entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return entries;
 }
 
 async function removeFlag(id, flagId) {
@@ -111,4 +171,5 @@ module.exports = {
   deleteEmployee,
   addFlag,
   removeFlag,
+  getFlagHistory,
 };

@@ -52,7 +52,7 @@ export function PendingWarningsModal() {
                 </span>
               </div>
               <p className="text-sm text-foreground">{warning.message}</p>
-              <p className="mt-2 text-xs font-bold uppercase tracking-widest text-amber-700">
+              <p className="mt-2 text-xs font-bold text-amber-700">
                 You have done this {warning.countThisMonth} time{warning.countThisMonth === 1 ? '' : 's'} this month
               </p>
             </div>

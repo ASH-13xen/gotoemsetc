@@ -53,7 +53,7 @@ export default function EventsPage() {
                     <span className="font-semibold">{event.title}</span>
                     <Badge variant={STATUS_VARIANT[event.status]}>{event.status}</Badge>
                   </div>
-                  {event.client && <p className="text-xs text-muted-foreground">{event.client.clientName}</p>}
+                  {event.client && <p className="text-xs text-muted-foreground">{event.client.name}</p>}
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <CalendarClock className="size-3" />
                     {new Date(event.startAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}

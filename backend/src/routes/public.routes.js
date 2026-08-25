@@ -4,11 +4,7 @@ const upload = require('../middlewares/multer.middleware');
 const { publicUploadLimiter } = require('../middlewares/rateLimiter.middleware');
 const uploadRequestValidator = require('../validators/uploadRequest.validator');
 const publicUploadController = require('../controllers/publicUpload.controller');
-const quotationValidator = require('../validators/quotation.validator');
-const quotationController = require('../controllers/quotation.controller');
 const googleFormWebhookController = require('../controllers/googleFormWebhook.controller');
-const clientDocumentRequestValidator = require('../validators/clientDocumentRequest.validator');
-const publicClientDocumentsController = require('../controllers/publicClientDocuments.controller');
 
 const router = Router();
 
@@ -40,25 +36,8 @@ router.post(
   publicUploadController.uploadDocuments
 );
 
-router.get('/quotations/:token', validate(quotationValidator.getPublic), quotationController.getPublic);
-router.get('/quotations/:token/file', validate(quotationValidator.getPublic), quotationController.getPublicFile);
-router.post('/quotations/:token/sign', validate(quotationValidator.signPublic), quotationController.signPublic);
-
-router.post(
-  '/client-documents/:token/verify',
-  validate(clientDocumentRequestValidator.verifyCode),
-  publicClientDocumentsController.verifyAccessCode
-);
-router.get(
-  '/client-documents/:token',
-  validate(clientDocumentRequestValidator.getPublicStatus),
-  publicClientDocumentsController.getStatus
-);
-router.post(
-  '/client-documents/:token/documents',
-  upload.any(),
-  validate(clientDocumentRequestValidator.uploadDocuments),
-  publicClientDocumentsController.uploadDocuments
-);
+// The public /quotations/:token and /client-documents/:token routes that used
+// to live here were removed with the old sales CMS — any share link already
+// issued for them is dead by design.
 
 module.exports = router;

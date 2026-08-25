@@ -10,10 +10,16 @@ const notificationSchema = new Schema(
     applicant: { type: Schema.Types.ObjectId, ref: 'Applicant' },
     interview: { type: Schema.Types.ObjectId, ref: 'Interview' },
     employee: { type: Schema.Types.ObjectId, ref: 'Employee' },
-    client: { type: Schema.Types.ObjectId, ref: 'Client' },
-    task: { type: Schema.Types.ObjectId, ref: 'Task' },
     employeeTask: { type: Schema.Types.ObjectId, ref: 'EmployeeTask' },
     attendanceWarning: { type: Schema.Types.ObjectId, ref: 'AttendanceWarning' },
+    complaint: { type: Schema.Types.ObjectId, ref: 'Complaint' },
+    meeting: { type: Schema.Types.ObjectId, ref: 'Meeting' },
+    // Finance section — see fnfSettlement/invoice/monthlyBill/reimbursement
+    // services for where each is set.
+    fnfSettlement: { type: Schema.Types.ObjectId, ref: 'FnfSettlement' },
+    invoice: { type: Schema.Types.ObjectId, ref: 'Invoice' },
+    monthlyBill: { type: Schema.Types.ObjectId, ref: 'MonthlyBill' },
+    reimbursement: { type: Schema.Types.ObjectId, ref: 'Reimbursement' },
     isRead: { type: Boolean, default: false },
   },
   { timestamps: true }

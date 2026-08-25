@@ -10,7 +10,7 @@ const mark = {
     .object({
       date: dateStringSchema,
       status: z.enum(Object.values(ATTENDANCE_STATUS)).optional(),
-      overtimeHours: z.coerce.number().min(0).optional(),
+      overtimeMinutes: z.coerce.number().min(0).optional(),
       isLate: z.coerce.boolean().optional(),
       earlyDeparture: z.coerce.boolean().optional(),
       notes: z.string().optional(),
@@ -18,10 +18,10 @@ const mark = {
     .refine(
       (data) =>
         data.status !== undefined ||
-        data.overtimeHours !== undefined ||
+        data.overtimeMinutes !== undefined ||
         data.isLate !== undefined ||
         data.earlyDeparture !== undefined,
-      { message: 'At least one of status, overtimeHours, isLate or earlyDeparture is required' }
+      { message: 'At least one of status, overtimeMinutes, isLate or earlyDeparture is required' }
     ),
 };
 
@@ -41,4 +41,11 @@ const getSummary = {
   }),
 };
 
-module.exports = { mark, listForEmployee, getSummary };
+const monthlyOverview = {
+  query: z.object({
+    month: z.coerce.number().int().min(1).max(12),
+    year: z.coerce.number().int().min(2000).max(3000),
+  }),
+};
+
+module.exports = { mark, listForEmployee, getSummary, monthlyOverview };

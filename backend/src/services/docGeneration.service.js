@@ -78,6 +78,16 @@ async function generateForEmployee(employeeId, templateIds, overrides = {}) {
     try {
       const document = await generateOne(employee, template, overrides);
       await activityService.log(employee._id, 'DOCUMENT_GENERATED', { templateKey: template.key });
+      // Finance section — an FnF settlement document is a payment due the
+      // moment it's generated. Lazy require avoids a hard dependency between
+      // the generic document pipeline and Finance for every other template.
+      if (template.key === 'fnf-settlement') {
+        await require('./fnfSettlement.service').createFromGeneratedDocument(
+          document,
+          employee._id,
+          overrides.severanceAmount
+        );
+      }
       results.push({ templateId, templateKey: template.key, status: 'completed', document });
     } catch (err) {
       const errorMessage = err.details ? `${err.message}: ${JSON.stringify(err.details)}` : err.message;

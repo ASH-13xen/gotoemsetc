@@ -2,11 +2,11 @@ const asyncHandler = require('../utils/asyncHandler');
 const attendanceService = require('../services/attendance.service');
 
 const mark = asyncHandler(async (req, res) => {
-  const { date, status, overtimeHours, isLate, earlyDeparture, notes } = req.body;
+  const { date, status, overtimeMinutes, isLate, earlyDeparture, notes } = req.body;
   const record = await attendanceService.markAttendance(
     req.params.id,
     date,
-    { status, overtimeHours, isLate, earlyDeparture, notes },
+    { status, overtimeMinutes, isLate, earlyDeparture, notes },
     req.user.role
   );
   res.status(201).json({ record });
@@ -31,4 +31,11 @@ const markedToday = asyncHandler(async (req, res) => {
   res.json({ employeeIds });
 });
 
-module.exports = { mark, listForEmployee, getSummary, markedToday };
+// HR Work bulk tool (frontendhr) — org-wide monthly attendance overview.
+const monthlyOverview = asyncHandler(async (req, res) => {
+  const { month, year } = req.query;
+  const records = await attendanceService.getMonthlyOverview({ month, year });
+  res.json({ records });
+});
+
+module.exports = { mark, listForEmployee, getSummary, markedToday, monthlyOverview };

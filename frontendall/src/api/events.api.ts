@@ -24,7 +24,7 @@ export interface EventItem {
   _id: string
   title: string
   description?: string
-  client?: { _id: string; clientName: string; brandName: string; logoUrl?: string } | null
+  client?: { _id: string; name: string; logoUrl?: string } | null
   mode: EventMode
   location?: string
   startAt: string

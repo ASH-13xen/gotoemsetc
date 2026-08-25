@@ -17,9 +17,16 @@ const listForEmployee = asyncHandler(async (req, res) => {
   res.json({ uploadRequests: uploadRequests.map(withLink) });
 });
 
+// Global, cross-employee — backs the Dashboard's "Pending document
+// requests" stat click-through in frontendems.
+const listPending = asyncHandler(async (req, res) => {
+  const uploadRequests = await uploadRequestService.listPending();
+  res.json({ uploadRequests: uploadRequests.map(withLink) });
+});
+
 const revoke = asyncHandler(async (req, res) => {
   const uploadRequest = await uploadRequestService.revoke(req.params.id);
   res.json({ uploadRequest });
 });
 
-module.exports = { create, listForEmployee, revoke };
+module.exports = { create, listForEmployee, listPending, revoke };

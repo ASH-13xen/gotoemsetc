@@ -26,14 +26,14 @@ export function useResolveAttendanceRequest() {
     mutationFn: ({
       id,
       status,
-      overtimeHours,
+      overtimeMinutes,
       isLate,
     }: {
       id: string
       status?: AttendanceStatus
-      overtimeHours?: number
+      overtimeMinutes?: number
       isLate?: boolean
-    }) => attendanceRequestsApi.resolveAttendanceRequest(id, { status, overtimeHours, isLate }),
+    }) => attendanceRequestsApi.resolveAttendanceRequest(id, { status, overtimeMinutes, isLate }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: KEY })
       queryClient.invalidateQueries({ queryKey: ['attendance'] })

@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, Users2, Copy, ClipboardList } from 'lucide-react'
+import { ClipboardList, Copy, Search, UserPlus, Users2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
@@ -22,11 +21,16 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { PageHeader } from '@/components/layout/PageHeader'
 import { ApplicantStatusBadge } from '@/components/applicants/ApplicantStatusBadge'
 import { AddApplicantDialog } from '@/components/applicants/AddApplicantDialog'
 import { useApplicants } from '@/hooks/useApplicants'
+import { useStaggerReveal } from '@/hooks/useStaggerReveal'
 import { cn } from '@/lib/utils'
 import type { ApplicantStatus } from '@/api/applicants.api'
+
+const GOOGLE_FORM_URL =
+  'https://docs.google.com/forms/d/e/1FAIpQLSfA1lvJ2yMgyCOgZYeJoPCidE6GcpzaIzCI3aoNxMOm2eie1w/viewform?usp=dialog'
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
   const [debounced, setDebounced] = useState(value)
@@ -53,185 +57,154 @@ export default function ApplicantsPage() {
   })
 
   const applicants = (data?.items ?? []).filter((a) => (tab === 'rejected' ? true : a.status !== 'rejected'))
+  const tableBodyRef = useStaggerReveal<HTMLTableSectionElement>([isLoading, applicants.length, tab])
 
   return (
-    <div className="space-y-8 py-4">
-      <main className="mx-auto max-w-6xl space-y-8">
-        {/* HERO HEADER */}
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-          {/* Logo/Branding Tile */}
-          <Card className="md:col-span-2 p-8 flex flex-col justify-between min-h-[180px]">
-            <span className="text-xs font-bold tracking-widest text-muted-foreground uppercase">RECRUITMENT PIPELINE</span>
-            <h1 className="text-5xl md:text-7xl font-extrabold uppercase tracking-tighter text-foreground select-none">
-              APPLICANTS
-            </h1>
-          </Card>
-
-          {/* Action Tiles */}
-          <div className="flex flex-col gap-4">
-            {/* Back to Portal */}
-            <div
-              onClick={() => navigate('/')}
-              className="bg-primary/10 text-primary p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]"
-            >
-              <span className="text-[10px] font-bold tracking-widest text-primary/70 uppercase">NAVIGATION</span>
-              <span className="text-2xl font-extrabold uppercase tracking-wide">BACK TO PORTAL</span>
-            </div>
-
-            {/* Add Applicant Tile */}
+    <div className="mx-auto flex max-w-6xl flex-col gap-8 py-8">
+      <PageHeader
+        eyebrow="Recruitment pipeline"
+        title="Applicants"
+        actions={
+          <>
+            <Button variant="outline" onClick={() => navigate('/')}>
+              Back to dashboard
+            </Button>
             <AddApplicantDialog
               trigger={
-                <div className="bg-emerald-500/10 text-emerald-700 p-6 rounded-2xl flex flex-col justify-between cursor-pointer hover:shadow-glow hover:-translate-y-0.5 active:scale-[0.99] transition-all min-h-[100px]">
-                  <span className="text-[10px] font-bold tracking-widest text-emerald-700/70 uppercase">INCOMING TALENT</span>
-                  <span className="text-2xl font-extrabold uppercase tracking-wide">ADD APPLICANT</span>
-                </div>
+                <Button>
+                  <UserPlus className="size-4" />
+                  Add applicant
+                </Button>
               }
             />
+          </>
+        }
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3.5">
+        <div className="flex items-center gap-3">
+          <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <ClipboardList className="size-4" />
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Responder's form link</p>
+            <a
+              href={GOOGLE_FORM_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Open Google Form
+            </a>
           </div>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={async () => {
+            await navigator.clipboard.writeText(GOOGLE_FORM_URL)
+            toast.success('Google Form link copied!')
+          }}
+        >
+          <Copy className="size-3.5" />
+          Copy link
+        </Button>
+      </div>
 
-        {/* GOOGLE FORM REFERENCE */}
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-card rounded-2xl p-4 border shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <ClipboardList className="size-5" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">RESPONDER'S FORM LINK</p>
-              <a
-                href="https://docs.google.com/forms/d/e/1FAIpQLSfA1lvJ2yMgyCOgZYeJoPCidE6GcpzaIzCI3aoNxMOm2eie1w/viewform?usp=dialog"
-                target="_blank"
-                rel="noreferrer"
-                className="text-sm font-semibold text-primary hover:underline"
-              >
-                Open Google Form
-              </a>
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              await navigator.clipboard.writeText('https://docs.google.com/forms/d/e/1FAIpQLSfA1lvJ2yMgyCOgZYeJoPCidE6GcpzaIzCI3aoNxMOm2eie1w/viewform?usp=dialog')
-              toast.success('Google Form link copied!')
-            }}
-            className="rounded-xl flex items-center gap-1.5"
-          >
-            <Copy className="size-3.5" />
-            Copy Link
-          </Button>
-        </div>
-
-        {/* TABS */}
-        <div className="flex bg-secondary/40 p-1.5 rounded-2xl w-fit gap-1 shadow-sm">
+      <div className="flex items-center gap-6 border-b border-border">
+        {(['pipeline', 'rejected'] as const).map((t) => (
           <button
-            onClick={() => setTab('pipeline')}
+            key={t}
+            onClick={() => setTab(t)}
             className={cn(
-              'px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wider transition-all duration-200',
-              tab === 'pipeline'
-                ? 'bg-card text-primary shadow-sm shadow-primary/5'
-                : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
+              '-mb-px border-b-2 px-1 pb-3 text-sm font-medium capitalize transition-colors',
+              tab === t
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
             )}
           >
-            Pipeline
+            {t}
           </button>
-          <button
-            onClick={() => setTab('rejected')}
-            className={cn(
-              'px-6 py-3 rounded-xl text-sm font-bold uppercase tracking-wider transition-all duration-200',
-              tab === 'rejected'
-                ? 'bg-card text-primary shadow-sm shadow-primary/5'
-                : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'
-            )}
-          >
-            Rejected
-          </button>
-        </div>
+        ))}
+      </div>
 
-        {/* FILTERS & CONTROLS */}
-        <div className="bg-card rounded-2xl p-6 grid grid-cols-1 md:grid-cols-3 gap-4 border shadow-sm">
-          <div className="md:col-span-2 relative flex items-center">
-            <Search className="pointer-events-none absolute left-4 size-5 text-muted-foreground/60 z-10" />
-            <Input
-              placeholder="SEARCH BY NAME, POSITION..."
-              className="pl-12 h-12 text-base uppercase"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex flex-1 items-center">
+          <Search className="pointer-events-none absolute left-3.5 size-4 text-muted-foreground/60" />
+          <Input
+            placeholder="Search by name, position..."
+            className="pl-10"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        {tab === 'pipeline' && (
+          <Select value={status} onValueChange={(v) => setStatus(v as ApplicantStatus | 'all')}>
+            <SelectTrigger className="w-full sm:w-56">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="interview_scheduled">Interview scheduled</SelectItem>
+              <SelectItem value="hired">Hired</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-border">
+        {isLoading ? (
+          <div className="space-y-3 p-6">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
           </div>
-          {tab === 'pipeline' && (
-            <div className="relative">
-              <Select value={status} onValueChange={(v) => setStatus(v as ApplicantStatus | 'all')}>
-                <SelectTrigger className="w-full h-12 text-base uppercase">
-                  <SelectValue placeholder="FILTER BY STATUS" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">ALL STATUSES</SelectItem>
-                  <SelectItem value="pending">PENDING</SelectItem>
-                  <SelectItem value="interview_scheduled">INTERVIEW SCHEDULED</SelectItem>
-                  <SelectItem value="hired">HIRED</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        </div>
-
-        {/* APPLICANTS GRID TABLE */}
-        <div className="bg-card rounded-2xl overflow-hidden border shadow-sm">
-          {isLoading ? (
-            <div className="space-y-4 p-6">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full bg-secondary/40 rounded-xl" />
-              ))}
-            </div>
-          ) : applicants.length === 0 ? (
-            <div className="flex flex-col items-center gap-4 py-20 text-center">
-              <Users2 className="size-16 text-neutral-400" />
-              <p className="text-2xl font-black uppercase tracking-wider text-neutral-900">
-                {tab === 'rejected' ? 'No rejected applicants' : 'No applicants yet'}
-              </p>
-              <p className="text-sm text-neutral-500 uppercase tracking-widest">
-                {tab === 'rejected'
-                  ? 'Applicants you reject will show up here.'
-                  : 'Add your first applicant to get started.'}
-              </p>
-            </div>
-          ) : (
-            <Table className="w-full">
-              <TableHeader className="bg-secondary/40 border-0">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">NAME</TableHead>
-                  <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">POSITION</TableHead>
-                  <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">DATE APPLIED</TableHead>
-                  <TableHead className="text-muted-foreground font-semibold text-xs uppercase tracking-wider p-4">STATUS</TableHead>
+        ) : applicants.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-20 text-center">
+            <Users2 className="size-10 text-muted-foreground/40" />
+            <p className="text-base font-semibold text-foreground">
+              {tab === 'rejected' ? 'No rejected applicants' : 'No applicants yet'}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {tab === 'rejected'
+                ? 'Applicants you reject will show up here.'
+                : 'Add your first applicant to get started.'}
+            </p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Position</TableHead>
+                <TableHead>Date applied</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody ref={tableBodyRef}>
+              {applicants.map((applicant) => (
+                <TableRow
+                  key={applicant._id}
+                  className="cursor-pointer"
+                  onClick={() => navigate(`/applicants/${applicant._id}`)}
+                >
+                  <TableCell className="font-medium text-foreground">
+                    {applicant.firstName} {applicant.lastName}
+                  </TableCell>
+                  <TableCell>{applicant.positionAppliedFor || '—'}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">
+                    {new Date(applicant.dateApplied).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell>
+                    <ApplicantStatusBadge status={applicant.status} />
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody className="border-0">
-                {applicants.map((applicant) => (
-                  <TableRow
-                    key={applicant._id}
-                    className="cursor-pointer hover:bg-secondary/40 transition-colors"
-                    onClick={() => navigate(`/applicants/${applicant._id}`)}
-                  >
-                    <TableCell className="font-semibold text-base text-foreground p-4 uppercase tracking-wider">
-                      {applicant.firstName} {applicant.lastName}
-                    </TableCell>
-                    <TableCell className="text-sm text-foreground/80 p-4 font-medium uppercase">
-                      {applicant.positionAppliedFor || '—'}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm text-muted-foreground p-4">
-                      {new Date(applicant.dateApplied).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="p-4">
-                      <ApplicantStatusBadge status={applicant.status} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </div>
-      </main>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
     </div>
   )
 }

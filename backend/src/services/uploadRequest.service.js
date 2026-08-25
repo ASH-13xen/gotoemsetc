@@ -70,6 +70,11 @@ async function listForEmployee(employeeId) {
   return uploadRequestRepository.listByEmployee(employeeId);
 }
 
+// Global, cross-employee — see uploadRequest.repository.js#listPending.
+async function listPending() {
+  return uploadRequestRepository.listPending();
+}
+
 async function revoke(id) {
   const uploadRequest = await uploadRequestRepository.updateStatus(id, UPLOAD_REQUEST_STATUS.REVOKED);
   if (!uploadRequest) throw ApiError.notFound('Upload request not found');
@@ -247,6 +252,7 @@ async function deleteUploadedDocument(id) {
 module.exports = {
   createRequest,
   listForEmployee,
+  listPending,
   revoke,
   verifyAccessCode,
   getPublicStatus,

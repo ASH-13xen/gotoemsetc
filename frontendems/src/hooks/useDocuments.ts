@@ -9,6 +9,15 @@ export function useEmployeeDocuments(employeeId: string | undefined) {
   })
 }
 
+// Global, cross-employee — backs the Dashboard's "Documents generated this
+// month" stat click-through.
+export function useRecentDocuments() {
+  return useQuery({
+    queryKey: ['documents', 'recent'],
+    queryFn: () => documentsApi.listRecentDocuments(),
+  })
+}
+
 export function useGenerateDocuments(employeeId: string) {
   const queryClient = useQueryClient()
   return useMutation({

@@ -42,6 +42,23 @@ const TEAM_SCOPED_TYPES = [EMPLOYEE_TASK_TYPE.TEAM, EMPLOYEE_TASK_TYPE.CLIENT, E
 // themselves). Must run after body validation (employeeTaskValidator.create)
 // so req.body.type/team/assignedEmployees are well-formed by the time this
 // reads them.
+// Client-type tasks are owned by the Client Management System's content
+// calendar: it creates them, numbers them ("POST #1"), counts them against
+// the client's plan, and drives their approval chain. A client task created
+// straight from Task Management would belong to no calendar, count toward no
+// quota, and appear in no month-end report — so that path is closed and the
+// error points at the one that works.
+function rejectDirectClientTaskCreation(req, res, next) {
+  if (req.body.type === EMPLOYEE_TASK_TYPE.CLIENT) {
+    return next(
+      ApiError.badRequest(
+        'Client tasks are created from the client\'s content calendar in Client Management, not here.'
+      )
+    );
+  }
+  return next();
+}
+
 function requireCanCreateTopLevelTask() {
   return async (req, res, next) => {
     try {
@@ -80,6 +97,9 @@ function requireCanCreateTopLevelTask() {
 // needs a DB lookup since a personal task carries no team of its own).
 async function canManageOwnTask(user, task) {
   if (taskAccess.hasFullTaskAccess(user)) return true;
+  // The Client Management System owns client tasks, so whoever runs it can
+  // manage them here too — scoped to type: client, see taskAccess.js.
+  if (taskAccess.isCmsOwnedClientTask(user, task)) return true;
 
   if (task.parentTask) {
     return taskAccess.hasSubtaskManageAccess(user) || taskAccess.isTeamLeader(user, task);
@@ -99,6 +119,36 @@ async function canManageOwnTask(user, task) {
 // no request body to worry about reassigning through.
 function requireCanManageTask(message) {
   return requireTaskAccess(canManageOwnTask, message);
+}
+
+// Deleting a CMS-owned task here would leave its calendar item pointing at
+// nothing, still counted and still coloured. Deletion has to happen on the
+// calendar, which removes the item and its whole task tree together.
+function rejectCmsOwnedDeletion(req, res, next) {
+  // cmsCalendar covers the shared "Daily Stories — <Month>" parent, which
+  // belongs to the month rather than to any single calendar item.
+  if (req.task?.cmsItem || req.task?.cmsCalendar) {
+    return next(
+      ApiError.badRequest(
+        'This task belongs to a content calendar. Delete the scheduled item in Client Management instead.'
+      )
+    );
+  }
+  return next();
+}
+
+// Same reasoning for dates: the calendar item's scheduled date is what
+// derives both task windows, so moving them here would silently desync the
+// two. Everything else on a CMS-owned task stays freely editable.
+function rejectCmsOwnedDateEdit(req, res, next) {
+  if (!req.task?.cmsItem && !req.task?.cmsCalendar) return next();
+  if (req.body.startAt === undefined && req.body.endAt === undefined) return next();
+
+  return next(
+    ApiError.badRequest(
+      'This task\'s dates come from the content calendar. Reschedule the item in Client Management instead.'
+    )
+  );
 }
 
 async function isValidTeamReassignment(user, newTeamId) {
@@ -201,4 +251,7 @@ module.exports = {
   requireCanManageTask,
   requireCanUpdateTask,
   requireCanCreateContinuation,
+  rejectDirectClientTaskCreation,
+  rejectCmsOwnedDeletion,
+  rejectCmsOwnedDateEdit,
 };

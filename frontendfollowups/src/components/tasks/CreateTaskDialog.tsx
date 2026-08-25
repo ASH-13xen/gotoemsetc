@@ -11,7 +11,8 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { EmployeeMultiSelect } from '@/components/shared/EmployeeMultiSelect'
 import { EmployeeSingleSelect } from '@/components/shared/EmployeeSingleSelect'
-import { useWorkTeams } from '@/hooks/useWorkTeams'
+import { DateTimePicker } from '@/components/shared/DateTimePicker'
+import { useCreateWorkTeam, useWorkTeams } from '@/hooks/useWorkTeams'
 import { useTaskClients } from '@/hooks/useTaskClients'
 import { useTaskEvents } from '@/hooks/useTaskEvents'
 import { useCreateTask } from '@/hooks/useEmployeeTasks'
@@ -28,7 +29,13 @@ type FormValues = {
   startAt: string
   endAt: string
   assignedEmployee: string
+  multiAssign: boolean
+  assignedEmployees: string[]
   team: string
+  useTemporaryTeam: boolean
+  temporaryTeamName: string
+  temporaryTeamLeader: string
+  temporaryTeamMembers: string[]
   extraMembers: string[]
   client: string
   event: string
@@ -63,7 +70,7 @@ export function CreateTaskDialog({ defaultType = 'personal' }: { defaultType?: E
   const ledTeamIds = ledTeams.map((t) => t._id)
   const ledTeamMemberIds = ledTeams.flatMap((t) => [t.leader._id, ...t.members.map((m) => m._id)])
 
-  const { control, register, handleSubmit, reset, watch, setValue } = useForm<FormValues>({
+  const { control, register, handleSubmit, reset, watch, setValue, formState } = useForm<FormValues>({
     defaultValues: {
       type: allowedTypes.includes(defaultType) ? defaultType : allowedTypes[0],
       title: '',
@@ -71,7 +78,13 @@ export function CreateTaskDialog({ defaultType = 'personal' }: { defaultType?: E
       startAt: '',
       endAt: '',
       assignedEmployee: '',
+      multiAssign: false,
+      assignedEmployees: [],
       team: '',
+      useTemporaryTeam: false,
+      temporaryTeamName: '',
+      temporaryTeamLeader: '',
+      temporaryTeamMembers: [],
       extraMembers: [],
       client: '',
       event: '',
@@ -89,10 +102,14 @@ export function CreateTaskDialog({ defaultType = 'personal' }: { defaultType?: E
   const selectedClientId = watch('client')
   const selectedTeamId = watch('team')
   const extraMembers = watch('extraMembers')
+  const multiAssign = watch('multiAssign')
+  const useTemporaryTeam = watch('useTemporaryTeam')
+  const temporaryTeamLeader = watch('temporaryTeamLeader')
   const { data: teamsData } = useWorkTeams()
   const { data: clientsData } = useTaskClients()
   const { data: eventsData } = useTaskEvents()
   const createTask = useCreateTask()
+  const createWorkTeam = useCreateWorkTeam()
 
   const selectedTeam = teamsData?.teams.find((t) => t._id === selectedTeamId)
   const selectedTeamRosterIds = selectedTeam ? [selectedTeam.leader._id, ...selectedTeam.members.map((m) => m._id)] : []
@@ -128,16 +145,43 @@ export function CreateTaskDialog({ defaultType = 'personal' }: { defaultType?: E
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTeamId])
 
-  const onSubmit = (values: FormValues) => {
-    createTask.mutate(
-      {
+  const onSubmit = async (values: FormValues) => {
+    if (values.type === 'personal' && values.multiAssign && values.assignedEmployees.length === 0) {
+      toast.error('Select at least one employee')
+      return
+    }
+    if (values.type === 'personal' && !values.multiAssign && !values.assignedEmployee) {
+      toast.error('Select an employee')
+      return
+    }
+    if (values.type !== 'personal' && values.useTemporaryTeam && !values.temporaryTeamLeader) {
+      toast.error('Pick a Team Main for the temporary team')
+      return
+    }
+    if (values.type !== 'personal' && !values.useTemporaryTeam && !values.team) {
+      toast.error('Select a team')
+      return
+    }
+
+    try {
+      let teamId = values.team
+      if (values.type !== 'personal' && values.useTemporaryTeam) {
+        const { team } = await createWorkTeam.mutateAsync({
+          name: values.temporaryTeamName.trim() || `Temporary — ${values.title || 'Task'}`,
+          leader: values.temporaryTeamLeader,
+          members: values.temporaryTeamMembers,
+          isTemporary: true,
+        })
+        teamId = team._id
+      }
+
+      const basePayload = {
         title: values.title,
         description: values.description || undefined,
         type: values.type,
         startAt: fromDateTimeLocalValue(values.startAt),
         endAt: fromDateTimeLocalValue(values.endAt),
-        assignedEmployees: values.type === 'personal' ? [values.assignedEmployee] : undefined,
-        team: values.type !== 'personal' ? values.team : undefined,
+        team: values.type !== 'personal' ? teamId : undefined,
         extraMembers: values.type !== 'personal' ? values.extraMembers : undefined,
         client: values.type === 'client' ? values.client : undefined,
         event: values.type === 'event' ? values.event : undefined,
@@ -147,16 +191,28 @@ export function CreateTaskDialog({ defaultType = 'personal' }: { defaultType?: E
         followUps: values.followUps
           .filter((f) => f.followUpAt)
           .map((f) => ({ note: f.note || undefined, followUpAt: fromDateTimeLocalValue(f.followUpAt) })),
-      },
-      {
-        onSuccess: () => {
-          toast.success('Task created')
-          setOpen(false)
-          reset()
-        },
-        onError: () => toast.error('Could not create task'),
       }
-    )
+
+      if (values.type === 'personal' && values.multiAssign) {
+        await Promise.all(
+          values.assignedEmployees.map((employeeId) =>
+            createTask.mutateAsync({ ...basePayload, assignedEmployees: [employeeId] })
+          )
+        )
+        toast.success(`Created ${values.assignedEmployees.length} tasks`)
+      } else {
+        await createTask.mutateAsync({
+          ...basePayload,
+          assignedEmployees: values.type === 'personal' ? [values.assignedEmployee] : undefined,
+        })
+        toast.success('Task created')
+      }
+
+      setOpen(false)
+      reset()
+    } catch {
+      toast.error('Could not create task')
+    }
   }
 
   return (
@@ -230,37 +286,73 @@ export function CreateTaskDialog({ defaultType = 'personal' }: { defaultType?: E
           <div className="grid grid-cols-2 gap-4">
             <div className="grid gap-1.5">
               <Label>Start</Label>
-              <Input type="datetime-local" {...register('startAt', { required: true })} />
+              <Controller
+                control={control}
+                name="startAt"
+                rules={{ required: true }}
+                render={({ field }) => (
+                  <DateTimePicker value={field.value} onChange={field.onChange} placeholder="SELECT START" />
+                )}
+              />
             </div>
             <div className="grid gap-1.5">
               <Label>Due (End)</Label>
-              <Input type="datetime-local" {...register('endAt', { required: true })} />
+              <Controller
+                control={control}
+                name="endAt"
+                rules={{ required: true }}
+                render={({ field }) => (
+                  <DateTimePicker value={field.value} onChange={field.onChange} placeholder="SELECT DUE" />
+                )}
+              />
             </div>
           </div>
 
           {type === 'personal' && (
             <div className="grid gap-1.5">
-              <Label>
-                Assign To
-                {isLeaderOnly && (
-                  <span className="ml-1.5 font-normal normal-case text-muted-foreground">
-                    (your team{ledTeams.length > 1 ? 's' : ''} only)
-                  </span>
-                )}
-              </Label>
-              <Controller
-                control={control}
-                name="assignedEmployee"
-                rules={{ required: true }}
-                render={({ field }) => (
-                  <EmployeeSingleSelect
-                    value={field.value}
-                    onChange={field.onChange}
-                    placeholder="SELECT EMPLOYEE"
-                    includeIds={isLeaderOnly ? ledTeamMemberIds : undefined}
-                  />
-                )}
-              />
+              <div className="flex items-center justify-between">
+                <Label>
+                  Assign To
+                  {isLeaderOnly && (
+                    <span className="ml-1.5 font-normal normal-case text-muted-foreground">
+                      (your team{ledTeams.length > 1 ? 's' : ''} only)
+                    </span>
+                  )}
+                </Label>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-primary hover:underline"
+                  onClick={() => setValue('multiAssign', !multiAssign)}
+                >
+                  {multiAssign ? 'Assign to one person instead' : 'Assign to multiple employees?'}
+                </button>
+              </div>
+              {multiAssign ? (
+                <Controller
+                  control={control}
+                  name="assignedEmployees"
+                  render={({ field }) => (
+                    <EmployeeMultiSelect
+                      value={field.value}
+                      onChange={field.onChange}
+                      includeIds={isLeaderOnly ? ledTeamMemberIds : undefined}
+                    />
+                  )}
+                />
+              ) : (
+                <Controller
+                  control={control}
+                  name="assignedEmployee"
+                  render={({ field }) => (
+                    <EmployeeSingleSelect
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="SELECT EMPLOYEE"
+                      includeIds={isLeaderOnly ? ledTeamMemberIds : undefined}
+                    />
+                  )}
+                />
+              )}
             </div>
           )}
 
@@ -292,35 +384,86 @@ export function CreateTaskDialog({ defaultType = 'personal' }: { defaultType?: E
               )}
 
               <div className="grid gap-1.5">
-                <Label>
-                  Team
-                  {type === 'client' && (
-                    <span className="ml-1.5 font-normal normal-case text-muted-foreground">
-                      (auto-filled from the client's default team — still editable)
-                    </span>
-                  )}
-                </Label>
-                <Controller
-                  control={control}
-                  name="team"
-                  rules={{ required: true }}
-                  render={({ field }) => (
-                    <Select value={field.value || undefined} onValueChange={field.onChange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="SELECT TEAM" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(teamsData?.teams ?? [])
-                          .filter((t) => !isLeaderOnly || ledTeamIds.includes(t._id))
-                          .map((t) => (
-                            <SelectItem key={t._id} value={t._id}>
-                              {t.name.toUpperCase()}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
+                <div className="flex items-center justify-between">
+                  <Label>
+                    Team
+                    {type === 'client' && !useTemporaryTeam && (
+                      <span className="ml-1.5 font-normal normal-case text-muted-foreground">
+                        (auto-filled from the client's default team — still editable)
+                      </span>
+                    )}
+                  </Label>
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-primary hover:underline"
+                    onClick={() => {
+                      const next = !useTemporaryTeam
+                      setValue('useTemporaryTeam', next)
+                      if (next && !watch('temporaryTeamName')) {
+                        const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                        setValue('temporaryTeamName', `Temporary — ${watch('title') || 'Task'} (${today})`)
+                      }
+                    }}
+                  >
+                    {useTemporaryTeam ? 'Use an existing team instead' : 'Use a temporary team instead'}
+                  </button>
+                </div>
+                {useTemporaryTeam ? (
+                  <div className="grid gap-2 rounded-xl border border-dashed border-border p-3">
+                    <Input placeholder="TEMPORARY TEAM NAME" {...register('temporaryTeamName')} />
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Team Main</Label>
+                      <Controller
+                        control={control}
+                        name="temporaryTeamLeader"
+                        render={({ field }) => (
+                          <EmployeeSingleSelect
+                            value={field.value}
+                            onChange={field.onChange}
+                            placeholder="SELECT TEAM MAIN"
+                            includeIds={isLeaderOnly ? ledTeamMemberIds : undefined}
+                          />
+                        )}
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Members</Label>
+                      <Controller
+                        control={control}
+                        name="temporaryTeamMembers"
+                        render={({ field }) => (
+                          <EmployeeMultiSelect
+                            value={field.value}
+                            onChange={field.onChange}
+                            excludeIds={temporaryTeamLeader ? [temporaryTeamLeader] : []}
+                            includeIds={isLeaderOnly ? ledTeamMemberIds : undefined}
+                          />
+                        )}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <Controller
+                    control={control}
+                    name="team"
+                    render={({ field }) => (
+                      <Select value={field.value || undefined} onValueChange={field.onChange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="SELECT TEAM" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(teamsData?.teams ?? [])
+                            .filter((t) => !isLeaderOnly || ledTeamIds.includes(t._id))
+                            .map((t) => (
+                              <SelectItem key={t._id} value={t._id}>
+                                {t.name.toUpperCase()}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                )}
               </div>
 
               <div className="grid gap-1.5">
@@ -408,7 +551,15 @@ export function CreateTaskDialog({ defaultType = 'personal' }: { defaultType?: E
             </div>
             {followUps.fields.map((field, index) => (
               <div key={field.id} className="flex gap-2">
-                <Input type="datetime-local" {...register(`followUps.${index}.followUpAt` as const)} />
+                <div className="w-48 shrink-0">
+                  <Controller
+                    control={control}
+                    name={`followUps.${index}.followUpAt` as const}
+                    render={({ field: dtField }) => (
+                      <DateTimePicker value={dtField.value} onChange={dtField.onChange} placeholder="SELECT DATE & TIME" />
+                    )}
+                  />
+                </div>
                 <Input placeholder="NOTE" {...register(`followUps.${index}.note` as const)} />
                 <Button type="button" variant="ghost" size="icon" onClick={() => followUps.remove(index)}>
                   <Trash2 className="size-4 text-destructive" />
@@ -418,7 +569,7 @@ export function CreateTaskDialog({ defaultType = 'personal' }: { defaultType?: E
           </div>
 
           <DialogFooter>
-            <Button type="submit" disabled={createTask.isPending}>
+            <Button type="submit" disabled={formState.isSubmitting || createTask.isPending || createWorkTeam.isPending}>
               Create Task
             </Button>
           </DialogFooter>

@@ -118,7 +118,7 @@ export function EventFormDialog({
                 <SelectItem value={NO_CLIENT}>Not tied to a client</SelectItem>
                 {(clients ?? []).map((c) => (
                   <SelectItem key={c._id} value={c._id}>
-                    {c.clientName}
+                    {c.name}
                   </SelectItem>
                 ))}
               </SelectContent>

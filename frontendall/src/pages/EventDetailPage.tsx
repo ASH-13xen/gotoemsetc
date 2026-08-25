@@ -118,7 +118,7 @@ export default function EventDetailPage() {
         </div>
         <div>
           <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Client</p>
-          <p className="mt-1 text-sm">{event.client?.clientName ?? 'Not tied to a client'}</p>
+          <p className="mt-1 text-sm">{event.client?.name ?? 'Not tied to a client'}</p>
         </div>
       </div>
 

@@ -1,12 +1,14 @@
 // One-off migration: encrypts any existing plaintext password-like
-// extraDetails values (Employee and Client) at rest. Safe to re-run —
-// already-encrypted values are left untouched (see
-// utils/extraDetailsCrypto.js#encryptList).
+// extraDetails values at rest. Safe to re-run — already-encrypted values are
+// left untouched (see utils/extraDetailsCrypto.js#encryptList).
+//
+// Covered Employee and the old CRM Client until the Client Management System
+// rebuild removed the latter; Employee is now the only model with encrypted
+// extraDetails.
 require('dotenv').config({ quiet: true });
 const mongoose = require('mongoose');
 const env = require('../src/config/env');
 const Employee = require('../src/models/Employee');
-const Client = require('../src/models/Client');
 const { isPasswordKey } = require('../src/utils/extraDetailsCrypto');
 
 async function migrate(Model, label) {
@@ -33,7 +35,6 @@ async function migrate(Model, label) {
 async function main() {
   await mongoose.connect(env.mongodbUri);
   await migrate(Employee, 'Employee');
-  await migrate(Client, 'Client');
   await mongoose.disconnect();
 }
 

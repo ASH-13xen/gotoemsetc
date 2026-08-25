@@ -8,7 +8,16 @@ function validate(schemas) {
       if (!schema) continue;
       const result = schema.safeParse(req[key]);
       if (!result.success) {
-        return next(ApiError.badRequest(`Invalid ${key}`, result.error.flatten()));
+        // A flat "dotted.path" -> message map, one entry per failing field —
+        // including nested ones (e.g. "permanentAddress.pincode"), unlike
+        // Zod's own flatten() which only buckets by the top-level key. Same
+        // shape error.middleware.js already produces for a Mongoose
+        // ValidationError, so every frontend error-message extractor only
+        // ever has one shape to handle.
+        const details = Object.fromEntries(
+          result.error.issues.map((issue) => [issue.path.join('.') || key, issue.message])
+        );
+        return next(ApiError.badRequest(`Invalid ${key}`, details));
       }
       // Express 5's req.query is a live getter that re-parses the URL on every
       // access, so a plain `req.query = result.data` silently no-ops. Replace

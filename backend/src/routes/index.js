@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { verifyToken, requireRole, requirePermission } = require('../middlewares/auth.middleware');
+const { verifyToken, requireRole, requirePermission, requireHrWorkAccess } = require('../middlewares/auth.middleware');
 const auditLogger = require('../middlewares/auditLog.middleware');
 const { USER_ROLES, PERMISSIONS } = require('../config/constants');
 
@@ -13,21 +13,13 @@ const publicRoutes = require('./public.routes');
 const configRoutes = require('./config.routes');
 const dashboardRoutes = require('./dashboard.routes');
 const applicantRoutes = require('./applicant.routes');
-const clientRoutes = require('./client.routes');
-const quotationTemplateRoutes = require('./quotationTemplate.routes');
-const quotationRoutes = require('./quotation.routes');
-const teamRoutes = require('./team.routes');
-const taskRoutes = require('./task.routes');
-const stepLibraryRoutes = require('./stepLibrary.routes');
 const holidayRoutes = require('./holiday.routes');
 const companyEventRoutes = require('./companyEvent.routes');
+const companyCalendarRoutes = require('./companyCalendar.routes');
 const salarySlipRoutes = require('./salarySlip.routes');
 const userRoutes = require('./user.routes');
 const auditLogRoutes = require('./auditLog.routes');
 const notificationRoutes = require('./notification.routes');
-const clientDocumentRequestRoutes = require('./clientDocumentRequest.routes');
-const clientUploadedDocumentRoutes = require('./clientUploadedDocument.routes');
-const inventoryRoutes = require('./inventory.routes');
 const eventRoutes = require('./event.routes');
 const devicePunchRoutes = require('./devicePunch.routes');
 const attendanceRequestRoutes = require('./attendanceRequest.routes');
@@ -35,7 +27,17 @@ const workTeamRoutes = require('./workTeam.routes');
 const taskClientRoutes = require('./taskClient.routes');
 const taskEventRoutes = require('./taskEvent.routes');
 const employeeTaskRoutes = require('./employeeTask.routes');
+const cmsRoutes = require('./cms.routes');
 const attendanceWarningRoutes = require('./attendanceWarning.routes');
+const attendanceOverviewRoutes = require('./attendanceOverview.routes');
+const inventoryReportRoutes = require('./inventoryReport.routes');
+const complaintRoutes = require('./complaint.routes');
+const keyHolderRoutes = require('./keyHolder.routes');
+const meetingRoutes = require('./meeting.routes');
+const fnfSettlementRoutes = require('./fnfSettlement.routes');
+const monthlyBillRoutes = require('./monthlyBill.routes');
+const reimbursementRoutes = require('./reimbursement.routes');
+const invoiceRoutes = require('./invoice.routes');
 
 const router = Router();
 
@@ -60,34 +62,54 @@ router.use('/uploaded-documents', requirePermission(PERMISSIONS.REQUEST_DOCUMENT
 router.use('/dashboard', dashboardRoutes);
 // Recruitment/Applicants — admin, or a worker granted view_applicants.
 router.use('/applicants', requirePermission(PERMISSIONS.VIEW_APPLICANTS), applicantRoutes);
-// Client Management (CMS) — admin/HR only.
-router.use('/clients', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), clientRoutes);
-router.use('/quotation-templates', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), quotationTemplateRoutes);
-router.use('/quotations', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), quotationRoutes);
-router.use('/client-document-requests', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), clientDocumentRequestRoutes);
-router.use('/client-uploaded-documents', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), clientUploadedDocumentRoutes);
-// Task Management — admin/HR only.
-router.use('/teams', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), teamRoutes);
-router.use('/tasks', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), taskRoutes);
-router.use('/step-library', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), stepLibraryRoutes);
 router.use('/holidays', holidayRoutes);
 router.use('/company-events', companyEventRoutes);
+router.use('/company-calendar', companyCalendarRoutes);
 router.use('/salary-slips', salarySlipRoutes);
 router.use('/notifications', notificationRoutes);
-// Inventory / Event Management — admin/HR only.
-router.use('/inventory', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), inventoryRoutes);
+// Event Management — admin/HR only.
 router.use('/events', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), eventRoutes);
 router.use('/device-punches', devicePunchRoutes);
 router.use('/attendance-requests', attendanceRequestRoutes);
-// Employee Task Management — distinct from the CMS Task/Team/Client/Event
-// system above (/teams, /tasks, /clients, /events). Every employee needs
-// access here; admin/HR-only vs. self-service capability differences are
-// branched per-route inside each router rather than gated at the mount.
+// Task Management. Every employee needs access here; admin/HR-only vs.
+// self-service capability differences are branched per-route inside each
+// router rather than gated at the mount. WorkTeam/TaskClient are the single
+// team/client registries — the parallel Team/Client models the old sales CMS
+// used were removed in the Client Management System rebuild.
 router.use('/work-teams', workTeamRoutes);
 router.use('/task-clients', taskClientRoutes);
 router.use('/task-events', taskEventRoutes);
 router.use('/employee-tasks', employeeTaskRoutes);
+// Client Management System — the client registry itself stays on
+// /task-clients (shared with Task Management); this mount is the calendars,
+// scheduled content, and approval workflow built on top of it. Gated
+// per-route inside, since read/write/schedule/approve each have a different
+// audience — see cms.routes.js.
+router.use('/cms', cmsRoutes);
+// Client Manual — Meetings/MOM. Same open-read/service-checked-write shape
+// as /cms — see meeting.routes.js.
+router.use('/meetings', meetingRoutes);
+// Finance section. Gated inside each router (requireFinanceAccess or a
+// narrower/wider variant per section — see auth.middleware.js).
+router.use('/fnf-settlements', fnfSettlementRoutes);
+router.use('/monthly-bills', monthlyBillRoutes);
+router.use('/reimbursements', reimbursementRoutes);
+router.use('/invoices', invoiceRoutes);
 router.use('/attendance-warnings', attendanceWarningRoutes);
+// HR Work's org-wide monthly attendance overview (frontendhr) — the only
+// attendance endpoint that isn't nested under /employees/:id, since it's
+// never scoped to one employee.
+router.use('/attendance', requireHrWorkAccess(), attendanceOverviewRoutes);
+// HR Work's inventory column-picker report (frontendhr).
+router.use('/inventory-report', requireHrWorkAccess(), inventoryReportRoutes);
+// Operations — Complaint Register. Every employee can file/browse/review
+// their own; list-everyone and mark-completed are Operations-only
+// (admin/ceo/operations_manager, explicitly NOT hr), gated per-route inside
+// complaint.routes.js.
+router.use('/complaints', complaintRoutes);
+// Office key holders — read open to everyone, reassigning gated per-route
+// inside keyHolder.routes.js (same admin/ceo/operations_manager set).
+router.use('/keys', keyHolderRoutes);
 // Gated per-route inside user.routes.js — some actions there are reachable
 // by a worker with add_credentials, not just admins.
 router.use('/users', userRoutes);

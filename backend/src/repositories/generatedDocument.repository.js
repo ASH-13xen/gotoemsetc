@@ -32,6 +32,28 @@ function countCompletedSince(date) {
   return GeneratedDocument.countDocuments({ status: 'completed', createdAt: { $gte: date } });
 }
 
+// Global, cross-employee — backs the Dashboard's "Documents generated this
+// month" stat click-through. Same status/date filter as countCompletedSince
+// above, so the number and the list it opens into always agree.
+function listCompletedSince(date) {
+  return GeneratedDocument.find({ status: 'completed', createdAt: { $gte: date } })
+    .select(WITHOUT_FILE_DATA)
+    .sort({ createdAt: -1 })
+    .populate('employee', 'firstName lastName employeeCode designation')
+    .populate('template', 'key title category');
+}
+
+// Every generated document for one template, without file bytes, most
+// recent first — backs HR Work's "Generated documents" overview (frontendhr).
+// A document's employee field is enough for the service to bucket by
+// employee; signedFile.filename (not .data) is enough to tell signed from
+// unsigned without loading the actual bytes.
+function listByTemplate(templateId) {
+  return GeneratedDocument.find({ template: templateId })
+    .select('employee status createdAt signedFile.filename')
+    .sort({ createdAt: -1 });
+}
+
 function setSignedFile(id, signedFile) {
   return GeneratedDocument.findByIdAndUpdate(id, { signedFile }, { returnDocument: 'after' }).select(
     WITHOUT_FILE_DATA
@@ -41,6 +63,8 @@ function setSignedFile(id, signedFile) {
 module.exports = {
   create,
   listByEmployee,
+  listCompletedSince,
+  listByTemplate,
   findById,
   findByIdWithFile,
   deleteById,

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Card } from '@/components/ui/card'
 import { TaskStatusBadge } from './TaskStatusBadge'
+import { TASK_STATUS_STYLES, taskVisualStatus } from '@/lib/taskStatusColor'
 import type { EmployeeTask } from '@/api/employeeTasks.api'
 
 function formatDateTime(iso: string) {
@@ -30,9 +31,16 @@ function AssignmentLine({ task }: { task: EmployeeTask }) {
 }
 
 export function TaskCard({ task }: { task: EmployeeTask }) {
+  const status = taskVisualStatus(task)
+  const style = TASK_STATUS_STYLES[status]
+
   return (
     <Link to={`/tasks/${task._id}`}>
-      <Card className="cursor-pointer space-y-3 p-5">
+      {/* The status colour rides on a left accent bar rather than the whole
+          card — these stack densely, and a wall of saturated cards is harder
+          to scan than one with a single scannable edge. */}
+      <Card className={`relative cursor-pointer space-y-3 overflow-hidden p-5 pl-6 ${style.tint}`}>
+        <span className={`absolute inset-y-0 left-0 w-1.5 ${style.bar}`} aria-hidden />
         <div className="flex items-start justify-between gap-2">
           <div>
             {task.client && (
@@ -45,7 +53,12 @@ export function TaskCard({ task }: { task: EmployeeTask }) {
           <TaskStatusBadge task={task} />
         </div>
         {task.description && <p className="line-clamp-2 text-sm text-muted-foreground">{task.description}</p>}
-        <p className="text-xs font-semibold text-muted-foreground">Due {formatDateTime(task.endAt)}</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold text-muted-foreground">Due {formatDateTime(task.endAt)}</p>
+          {status === 'blocked' && task.blockedBy && (
+            <p className="text-xs text-muted-foreground">Waiting on “{task.blockedBy.title}”</p>
+          )}
+        </div>
       </Card>
     </Link>
   )

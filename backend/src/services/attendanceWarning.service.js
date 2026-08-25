@@ -45,7 +45,7 @@ function toRow(record, warningsByEmployee, punchesByEmployee) {
     employee: { _id: employee._id, firstName: employee.firstName, lastName: employee.lastName, designation: employee.designation },
     record: {
       status: record.status,
-      overtimeHours: record.overtimeHours,
+      overtimeMinutes: record.overtimeMinutes,
       isLate: record.isLate,
       earlyDeparture: record.earlyDeparture,
       notes: record.notes,
@@ -91,7 +91,10 @@ async function computeDailyReport({ date } = {}) {
   ]);
 
   const liveRecords = records.filter((r) => r.employee && !r.employee.isDeleted);
-  const warningsByCategory = new Map(WARNABLE_BUCKETS.map((b) => [b.category, new Map()]));
+  // Built from every category, not just WARNABLE_BUCKETS, so single_scan
+  // warnings (tracked below, outside the AttendanceRecord-driven buckets)
+  // still render as "already warned" instead of silently vanishing.
+  const warningsByCategory = new Map(Object.values(ATTENDANCE_WARNING_CATEGORY).map((c) => [c, new Map()]));
   for (const warning of warnings) {
     warningsByCategory.get(warning.category)?.set(warning.employee.toString(), warning);
   }
@@ -121,29 +124,30 @@ async function computeDailyReport({ date } = {}) {
       .map((r) => toRow(r, warningsByCategory.get(bucket.category), punchesByEmployee));
   }
   result.present_overtime = liveRecords
-    .filter((r) => r.status === ATTENDANCE_STATUS.PRESENT && r.overtimeHours > 0)
+    .filter((r) => r.status === ATTENDANCE_STATUS.PRESENT && r.overtimeMinutes > 0)
     .map((r) => toRow(r, new Map(), punchesByEmployee));
 
   // The classifier deliberately never writes an AttendanceRecord for a
   // single-scan day (see attendanceClassifier.service.js's "single-scan/
   // unclassified are never auto-written as a record") — so unlike every
   // other bucket above, this can't be derived from liveRecords at all; it
-  // has to scan every active employee's raw punches directly. Informational
-  // only, same as Present+Overtime — no "not informed" warning category
-  // exists for this.
+  // has to scan every active employee's raw punches directly. Warnable, same
+  // as the WARNABLE_BUCKETS above (see ATTENDANCE_WARNING_CATEGORY.SINGLE_SCAN).
   const recordedEmployeeIds = new Set(liveRecords.map((r) => r.employee._id.toString()));
+  const singleScanWarnings = warningsByCategory.get(ATTENDANCE_WARNING_CATEGORY.SINGLE_SCAN);
   result.single_scan = activeEmployees
     .filter((e) => !recordedEmployeeIds.has(e._id.toString()))
     .filter((e) => (punchesByEmployee.get(e._id.toString()) || []).length === 1)
     .map((e) => {
       const punch = punchesByEmployee.get(e._id.toString())[0];
+      const warning = singleScanWarnings?.get(e._id.toString());
       return {
         employee: { _id: e._id, firstName: e.firstName, lastName: e.lastName, designation: e.designation },
-        record: { overtimeHours: 0, isLate: false, earlyDeparture: false },
+        record: { overtimeMinutes: 0, isLate: false, earlyDeparture: false },
         firstPunchAt: punch.timestamp,
         lastPunchAt: punch.timestamp,
         provisional: true,
-        alreadyWarned: null,
+        alreadyWarned: warning ? { message: warning.message, sentBy: warning.sentBy?.username, sentAt: warning.createdAt } : null,
       };
     });
 

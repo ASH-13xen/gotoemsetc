@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { isAxiosError } from 'axios'
@@ -21,13 +21,13 @@ function errorMessageFrom(error: unknown, fallback: string): string {
   return fallback
 }
 
-function CenteredMessage({ icon, title, description }: { icon: React.ReactNode; title: string; description?: string }) {
+function CenteredMessage({ icon, title, description }: { icon: ReactNode; title: string; description?: string }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
-      <div className="flex max-w-sm flex-col items-center gap-4 text-center bg-card rounded-2xl shadow-diffuse border border-border/10 p-8">
+      <div className="flex max-w-sm flex-col items-center gap-4 rounded-xl border border-border bg-card p-8 text-center">
         {icon}
-        <h1 className="text-xl font-bold uppercase tracking-wider text-foreground">{title}</h1>
-        {description && <p className="text-sm font-semibold text-muted-foreground uppercase tracking-widest">{description}</p>}
+        <h1 className="text-lg font-semibold text-foreground">{title}</h1>
+        {description && <p className="text-sm text-muted-foreground">{description}</p>}
       </div>
     </div>
   )
@@ -75,12 +75,10 @@ export default function PublicUploadPage() {
   if (!verifiedCode) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4 text-foreground">
-        <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-border/10 bg-card p-8 text-center shadow-diffuse">
-          <KeyRound className="size-8 text-muted-foreground" />
-          <h1 className="text-xl font-bold uppercase tracking-wider text-foreground">Enter access code</h1>
-          <p className="text-sm font-semibold text-muted-foreground uppercase tracking-widest">
-            HR sent you a 6-digit code separately from this link.
-          </p>
+        <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-xl border border-border bg-card p-8 text-center">
+          <KeyRound className="size-7 text-muted-foreground" />
+          <h1 className="text-lg font-semibold text-foreground">Enter access code</h1>
+          <p className="text-sm text-muted-foreground">HR sent you a 6-digit code separately from this link.</p>
           <form
             className="w-full space-y-4"
             onSubmit={(e) => {
@@ -96,15 +94,11 @@ export default function PublicUploadPage() {
               value={codeInput}
               onChange={(e) => setCodeInput(e.target.value.replace(/\D/g, ''))}
               placeholder="000000"
-              className="w-full rounded-xl border border-border/20 bg-secondary/30 p-4 text-center text-2xl font-mono font-bold tracking-[0.5em] text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full rounded-lg bg-secondary/60 p-4 text-center font-mono text-2xl font-semibold tracking-[0.5em] text-foreground focus:ring-2 focus:ring-primary/30 focus:outline-none"
             />
-            <Button
-              type="submit"
-              className="w-full bg-primary text-primary-foreground font-bold text-base h-12 rounded-xl hover:brightness-105 transition-all shadow-button border-0 cursor-pointer"
-              disabled={codeInput.trim().length !== 6 || verifyMutation.isPending}
-            >
-              {verifyMutation.isPending && <Loader2 className="size-5 animate-spin text-white" />}
-              CONTINUE
+            <Button type="submit" size="lg" className="w-full" disabled={codeInput.trim().length !== 6 || verifyMutation.isPending}>
+              {verifyMutation.isPending && <Loader2 className="size-4 animate-spin" />}
+              Continue
             </Button>
           </form>
         </div>
@@ -113,19 +107,14 @@ export default function PublicUploadPage() {
   }
 
   if (statusQuery.isLoading) {
-    return (
-      <CenteredMessage
-        icon={<Loader2 className="size-8 animate-spin text-neutral-400" />}
-        title="LOADING…"
-      />
-    )
+    return <CenteredMessage icon={<Loader2 className="size-7 animate-spin text-muted-foreground" />} title="Loading…" />
   }
 
   if (statusQuery.isError) {
     return (
       <CenteredMessage
-        icon={<ShieldAlert className="size-8 text-destructive" />}
-        title={errorMessageFrom(statusQuery.error, 'LINK IS INVALID.')}
+        icon={<ShieldAlert className="size-7 text-destructive" />}
+        title={errorMessageFrom(statusQuery.error, 'Link is invalid.')}
         description="Please contact HR for a new link."
       />
     )
@@ -139,39 +128,39 @@ export default function PublicUploadPage() {
   const hasSelection = Object.keys(selectedFiles).length > 0
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-6 flex flex-col items-center justify-center">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-6 text-foreground">
       <div className="w-full max-w-md space-y-6">
         <div className="flex items-center justify-center gap-2 text-muted-foreground">
-          <Building2 className="size-5" />
-          <span className="text-xs font-bold uppercase tracking-widest">EMS SECURE COLLECTION</span>
+          <Building2 className="size-4" />
+          <span className="text-xs font-medium">EMS secure collection</span>
         </div>
-        
-        <div className="bg-card rounded-2xl shadow-diffuse border border-border/10 p-8 space-y-6">
-          <div className="border-b border-border/15 pb-4">
-            <h1 className="text-2xl font-bold uppercase tracking-widest text-foreground">UPLOAD REQUEST</h1>
-            <p className="mt-2 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+
+        <div className="space-y-6 rounded-xl border border-border bg-card p-8">
+          <div className="border-b border-border pb-4">
+            <h1 className="text-lg font-semibold text-foreground">Upload request</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
               Hi {status.employeeName}, please upload the requested documents.
             </p>
           </div>
- 
-          <div className="space-y-4">
+
+          <div className="space-y-3">
             {status.requestedDocTypes.map((docType) => {
               const uploaded = isUploaded(docType)
               return (
-                <div key={docType} className="bg-secondary/40 rounded-xl p-4 border border-border/5">
+                <div key={docType} className="rounded-lg bg-secondary/40 p-4">
                   <div className="mb-3 flex items-center justify-between gap-2">
-                    <span className="text-sm font-bold uppercase tracking-wider text-foreground">{labelFor(docType)}</span>
+                    <span className="text-sm font-medium text-foreground">{labelFor(docType)}</span>
                     {uploaded && (
-                      <span className="inline-flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 rounded-lg">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700">
                         <CheckCircle2 className="size-3" />
-                        SUBMITTED
+                        Submitted
                       </span>
                     )}
                   </div>
-                  <label className="flex h-14 cursor-pointer items-center justify-center gap-2 border border-dashed border-muted-foreground/30 bg-card hover:bg-secondary/50 transition-colors rounded-xl p-4">
-                    <UploadCloud className="size-5 shrink-0 text-muted-foreground" />
-                    <span className="truncate text-sm font-semibold uppercase tracking-wider text-foreground select-none">
-                      {selectedFiles[docType]?.name ?? (uploaded ? 'REPLACE FILE…' : 'CHOOSE FILE…')}
+                  <label className="flex h-14 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-muted-foreground/30 bg-card p-4 transition-colors hover:bg-secondary/50">
+                    <UploadCloud className="size-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate text-sm font-medium text-foreground select-none">
+                      {selectedFiles[docType]?.name ?? (uploaded ? 'Replace file…' : 'Choose file…')}
                     </span>
                     <input
                       type="file"
@@ -188,14 +177,15 @@ export default function PublicUploadPage() {
               )
             })}
           </div>
- 
+
           <Button
-            className="w-full bg-primary text-primary-foreground font-bold text-base h-12 rounded-xl hover:brightness-105 transition-all shadow-button mt-4 border-0 cursor-pointer"
+            size="lg"
+            className="w-full"
             disabled={!hasSelection || uploadMutation.isPending}
             onClick={() => uploadMutation.mutate()}
           >
-            {uploadMutation.isPending && <Loader2 className="size-5 animate-spin text-white" />}
-            SUBMIT REQUESTS
+            {uploadMutation.isPending && <Loader2 className="size-4 animate-spin" />}
+            Submit requests
           </Button>
         </div>
       </div>

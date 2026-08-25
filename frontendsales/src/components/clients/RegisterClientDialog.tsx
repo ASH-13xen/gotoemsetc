@@ -1,14 +1,4 @@
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
-import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
-
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
@@ -16,114 +6,142 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
-import { useRegisterClient } from '@/hooks/useClients'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { useCreateClient, useTeams } from '@/hooks/useCms'
+import type { CmsPlan } from '@/api/cms.api'
 
-const schema = z.object({
-  clientName: z.string().min(1, 'Client name is required'),
-  brandName: z.string().min(1, 'Brand name is required'),
-  dateRegistered: z.string().min(1, 'Date is required'),
-})
+const NO_TEAM = '__none__'
+const NO_PLAN = '__none__'
 
-type FormValues = z.infer<typeof schema>
+// Registration asks only for what's genuinely needed to get started — a name,
+// and optionally the team and plan. Contacts, location, and the rest are
+// filled in on the client's detail page afterwards, matching how onboarding
+// actually goes.
+export function RegisterClientDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
+  const { data: teams } = useTeams()
+  const createClient = useCreateClient()
 
-function todayValue() {
-  return new Date().toISOString().slice(0, 10)
-}
+  const [name, setName] = useState('')
+  const [brandName, setBrandName] = useState('')
+  const [team, setTeam] = useState(NO_TEAM)
+  const [plan, setPlan] = useState(NO_PLAN)
 
-export function RegisterClientDialog({ trigger }: { trigger?: React.ReactNode }) {
-  const [open, setOpen] = useState(false)
-  const navigate = useNavigate()
-  const registerClient = useRegisterClient()
+  function reset() {
+    setName('')
+    setBrandName('')
+    setTeam(NO_TEAM)
+    setPlan(NO_PLAN)
+  }
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<FormValues>({
-    resolver: zodResolver(schema),
-    defaultValues: { dateRegistered: todayValue() },
-  })
-
-  const onSubmit = (values: FormValues) => {
-    registerClient.mutate(values, {
-      onSuccess: ({ client }) => {
-        toast.success(`${client.clientName} registered`)
-        reset({ dateRegistered: todayValue() })
-        setOpen(false)
-        navigate(`/clients/${client._id}`)
+  function submit() {
+    if (!name.trim()) return
+    createClient.mutate(
+      {
+        name: name.trim(),
+        brandName: brandName.trim() || undefined,
+        defaultTeam: team === NO_TEAM ? null : team,
+        currentPlan: plan === NO_PLAN ? null : (plan as CmsPlan),
       },
-      onError: () => toast.error('Could not register client'),
-    })
+      {
+        onSuccess: () => {
+          reset()
+          onOpenChange(false)
+        },
+      }
+    )
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next)
-        if (!next) reset({ dateRegistered: todayValue() })
-      }}
-    >
-      <DialogTrigger asChild>
-        {trigger ?? <Button>Register Client</Button>}
-      </DialogTrigger>
-      <DialogContent className="rounded-none border-2 border-foreground bg-card text-foreground">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
         <DialogHeader>
-          <DialogTitle className="uppercase tracking-widest">Register Client</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            Start tracking a new potential client.
+          <DialogTitle>Register client</DialogTitle>
+          <DialogDescription>
+            The client joins the shared registry, so they appear in Task Management too.
           </DialogDescription>
         </DialogHeader>
-        <form className="grid gap-4" onSubmit={handleSubmit(onSubmit)} noValidate>
-          <div className="grid gap-1.5">
-            <Label htmlFor="clientName" className="text-xs font-black tracking-widest text-muted-foreground uppercase">
-              Client Name
-            </Label>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="client-name">Client name</Label>
             <Input
-              id="clientName"
-              className="rounded-none border-2 border-foreground bg-background text-foreground"
-              aria-invalid={Boolean(errors.clientName)}
-              {...register('clientName')}
+              id="client-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Acme Pvt Ltd"
+              autoFocus
             />
-            {errors.clientName && <p className="text-xs text-destructive">{errors.clientName.message}</p>}
           </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="brandName" className="text-xs font-black tracking-widest text-muted-foreground uppercase">
-              Brand Name
-            </Label>
+
+          <div className="space-y-2">
+            <Label htmlFor="brand-name">Brand name</Label>
             <Input
-              id="brandName"
-              className="rounded-none border-2 border-foreground bg-background text-foreground"
-              aria-invalid={Boolean(errors.brandName)}
-              {...register('brandName')}
+              id="brand-name"
+              value={brandName}
+              onChange={(e) => setBrandName(e.target.value)}
+              placeholder="Acme"
             />
-            {errors.brandName && <p className="text-xs text-destructive">{errors.brandName.message}</p>}
           </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="dateRegistered" className="text-xs font-black tracking-widest text-muted-foreground uppercase">
-              Date Registered
-            </Label>
-            <Input
-              id="dateRegistered"
-              type="date"
-              className="rounded-none border-2 border-foreground bg-background text-foreground"
-              aria-invalid={Boolean(errors.dateRegistered)}
-              {...register('dateRegistered')}
-            />
-            {errors.dateRegistered && (
-              <p className="text-xs text-destructive">{errors.dateRegistered.message}</p>
-            )}
+
+          <div className="space-y-2">
+            <Label>Team</Label>
+            <Select value={team} onValueChange={setTeam}>
+              <SelectTrigger>
+                <SelectValue placeholder="Pick a team" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_TEAM}>Decide later</SelectItem>
+                {(teams ?? []).map((t) => (
+                  <SelectItem key={t._id} value={t._id}>
+                    {t.name}
+                    {!(t.memberRoles ?? []).some((r) => r.roles.includes('social_media_manager')) &&
+                      ' — no social media manager'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          <DialogFooter>
-            <Button type="submit" className="bg-emerald-600 text-white hover:bg-emerald-500" disabled={registerClient.isPending}>
-              {registerClient.isPending && <Loader2 className="size-4 animate-spin" />}
-              Register
-            </Button>
-          </DialogFooter>
-        </form>
+
+          <div className="space-y-2">
+            <Label>Plan</Label>
+            <Select value={plan} onValueChange={setPlan}>
+              <SelectTrigger>
+                <SelectValue placeholder="Pick a plan" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_PLAN}>Decide later</SelectItem>
+                <SelectItem value="gold">Gold — 6 posts, 6 reels, 1 story/day, 2 festive</SelectItem>
+                <SelectItem value="platinum">Platinum — 6-8 posts, 6-8 reels, 1-2 stories/day, 2-4 festive</SelectItem>
+                <SelectItem value="diamond">Diamond — 8 posts, 8 reels, 2-3 stories/day, 2-4 festive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={!name.trim() || createClient.isPending}>
+            {createClient.isPending ? 'Registering…' : 'Register'}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

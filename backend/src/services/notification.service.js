@@ -7,7 +7,22 @@ const logger = require('../utils/logger');
 // that triggered it.
 async function createForUsers(
   userIds,
-  { type, title, message, applicant, interview, employee, client, task, employeeTask, attendanceWarning }
+  {
+    type,
+    title,
+    message,
+    applicant,
+    interview,
+    employee,
+    employeeTask,
+    attendanceWarning,
+    complaint,
+    meeting,
+    fnfSettlement,
+    invoice,
+    monthlyBill,
+    reimbursement,
+  }
 ) {
   const uniqueIds = [...new Set(userIds.map((id) => id.toString()))];
   if (uniqueIds.length === 0) return;
@@ -22,10 +37,14 @@ async function createForUsers(
         applicant,
         interview,
         employee,
-        client,
-        task,
         employeeTask,
         attendanceWarning,
+        complaint,
+        meeting,
+        fnfSettlement,
+        invoice,
+        monthlyBill,
+        reimbursement,
       }))
     );
   } catch (err) {

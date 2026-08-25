@@ -10,10 +10,15 @@ const { COMPANY_EVENT_TYPE } = require('../config/constants');
 // Unpaginated: total volume here (client roster + a handful of important
 // markers) never approaches a scale where filtering in JS instead of the DB
 // matters.
+// The general company calendar — client-scoped events are deliberately
+// excluded here (a client's birthday reminder belongs on that client's page,
+// not broadcast into HR's shared calendar); see listForClient below for
+// those.
 async function listForMonth(month, year) {
   const all = await companyEventRepository.list();
-  if (!month) return all;
-  return all.filter((e) => {
+  const companyWide = all.filter((e) => !e.client);
+  if (!month) return companyWide;
+  return companyWide.filter((e) => {
     const d = new Date(e.date);
     if (d.getUTCMonth() + 1 !== month) return false;
     if (e.type === COMPANY_EVENT_TYPE.IMPORTANT) {
@@ -23,10 +28,22 @@ async function listForMonth(month, year) {
   });
 }
 
-async function createEvent({ type, name, date, notes }, createdBy) {
+// One client's important dates — birthdays, anniversaries, brand
+// anniversary — for the client-detail UI and the manual (§9).
+async function listForClient(clientId) {
+  return companyEventRepository.listForClient(clientId);
+}
+
+async function createEvent({ type, name, date, notes, client }, createdBy) {
   const normalized = new Date(date);
   if (Number.isNaN(normalized.getTime())) throw ApiError.badRequest('Invalid date');
-  return companyEventRepository.create({ type, name, date: normalized, notes, createdBy });
+  return companyEventRepository.create({ type, name, date: normalized, notes, client: client || null, createdBy });
+}
+
+async function getEvent(id) {
+  const event = await companyEventRepository.findById(id);
+  if (!event) throw ApiError.notFound('Company event not found');
+  return event;
 }
 
 async function removeEvent(id) {
@@ -35,4 +52,4 @@ async function removeEvent(id) {
   return event;
 }
 
-module.exports = { listForMonth, createEvent, removeEvent };
+module.exports = { listForMonth, listForClient, createEvent, getEvent, removeEvent };

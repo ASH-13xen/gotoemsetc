@@ -10,15 +10,37 @@ import { RequireRole } from '@/components/auth/RequireRole'
 import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
 import AuditLogPage from '@/pages/AuditLogPage'
-import InventoryPage from '@/pages/InventoryPage'
-import InventoryItemDetailPage from '@/pages/InventoryItemDetailPage'
+import PerformanceFlagsPage from '@/pages/PerformanceFlagsPage'
 import EventsPage from '@/pages/EventsPage'
 import EventDetailPage from '@/pages/EventDetailPage'
+import CompanyCalendarPage from '@/pages/CompanyCalendarPage'
 import { ShellLayout } from '@/components/layout/ShellLayout'
+import { ensureRemoteStyles } from '@/lib/remoteStyles'
 
-const RemoteEms = lazy(() => import('frontendems/App'))
-const RemoteSales = lazy(() => import('frontendsales/App'))
-const RemoteFollowups = lazy(() => import('frontendfollowups/App'))
+const RemoteEms = lazy(() => {
+  ensureRemoteStyles('frontendems')
+  return import('frontendems/App')
+})
+const RemoteSales = lazy(() => {
+  ensureRemoteStyles('frontendsales')
+  return import('frontendsales/App')
+})
+const RemoteFollowups = lazy(() => {
+  ensureRemoteStyles('frontendfollowups')
+  return import('frontendfollowups/App')
+})
+const RemoteHr = lazy(() => {
+  ensureRemoteStyles('frontendhr')
+  return import('frontendhr/App')
+})
+const RemoteOperations = lazy(() => {
+  ensureRemoteStyles('frontendop')
+  return import('frontendop/App')
+})
+const RemoteFinance = lazy(() => {
+  ensureRemoteStyles('frontendfinance')
+  return import('frontendfinance/App')
+})
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,26 +71,12 @@ export default function App() {
                 }
               />
               <Route
-                path="/inventory"
+                path="/calendar"
                 element={
                   <RequireAuth>
-                    <RequireRole role="admin">
-                      <ShellLayout section="Inventory Management">
-                        <InventoryPage />
-                      </ShellLayout>
-                    </RequireRole>
-                  </RequireAuth>
-                }
-              />
-              <Route
-                path="/inventory/:id"
-                element={
-                  <RequireAuth>
-                    <RequireRole role="admin">
-                      <ShellLayout section="Inventory Management">
-                        <InventoryItemDetailPage />
-                      </ShellLayout>
-                    </RequireRole>
+                    <ShellLayout section="Calendar">
+                      <CompanyCalendarPage />
+                    </ShellLayout>
                   </RequireAuth>
                 }
               />
@@ -109,6 +117,18 @@ export default function App() {
                 }
               />
               <Route
+                path="/performance-flags"
+                element={
+                  <RequireAuth>
+                    <RequireRole role="hr-work">
+                      <ShellLayout section="Performance Flags">
+                        <PerformanceFlagsPage />
+                      </ShellLayout>
+                    </RequireRole>
+                  </RequireAuth>
+                }
+              />
+              <Route
                 path="/ems/*"
                 element={
                   <RequireAuth>
@@ -124,7 +144,7 @@ export default function App() {
                 path="/sales/*"
                 element={
                   <RequireAuth>
-                    <RequireRole role="admin">
+                    <RequireRole role="cms">
                       <ShellLayout section="Client Management">
                         <Suspense fallback={<RemoteFallback />}>
                           <RemoteSales basename="/sales" />
@@ -143,6 +163,48 @@ export default function App() {
                         <RemoteFollowups basename="/followups" />
                       </Suspense>
                     </ShellLayout>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/hr/*"
+                element={
+                  <RequireAuth>
+                    <RequireRole role="hr-work">
+                      <ShellLayout section="HR Work">
+                        <Suspense fallback={<RemoteFallback />}>
+                          <RemoteHr basename="/hr" />
+                        </Suspense>
+                      </ShellLayout>
+                    </RequireRole>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/operations/*"
+                element={
+                  <RequireAuth>
+                    <RequireRole role="operations">
+                      <ShellLayout section="Operations">
+                        <Suspense fallback={<RemoteFallback />}>
+                          <RemoteOperations basename="/operations" />
+                        </Suspense>
+                      </ShellLayout>
+                    </RequireRole>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/finance/*"
+                element={
+                  <RequireAuth>
+                    <RequireRole role="finance">
+                      <ShellLayout section="Finance">
+                        <Suspense fallback={<RemoteFallback />}>
+                          <RemoteFinance basename="/finance" />
+                        </Suspense>
+                      </ShellLayout>
+                    </RequireRole>
                   </RequireAuth>
                 }
               />

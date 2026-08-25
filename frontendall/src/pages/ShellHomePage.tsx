@@ -4,9 +4,8 @@ import { useAuth } from '@/hooks/useAuth'
 
 const SECTIONS = [
   { to: '/ems', title: 'Employee Management (EMS)', description: 'Manage employee directories, tracks attendance, review profiles, and view incoming applicant files.' },
-  { to: '/sales', title: 'Client Management', description: 'Manage client relationships, prepare quotations, schedule meetings, and collect documents.' },
-  { to: '/followups', title: 'Task Management', description: 'Recurring content tasks generated from each client\'s quotation, tracked step by step.' },
-  { to: '/inventory', title: 'Inventory Management', description: 'Equipment in the company\'s possession, bookable by anyone and tracked by lock/check-in.' },
+  { to: '/sales', title: 'Client Management', description: 'Client registry, plans, and a month-by-month content calendar for posts, reels, and stories.' },
+  { to: '/followups', title: 'Task Management', description: 'Personal, team, client, and event tasks, tracked from assignment through review.' },
   { to: '/events', title: 'Event Management', description: 'Company events, team responsibilities, and post-event summaries.' },
 ]
 

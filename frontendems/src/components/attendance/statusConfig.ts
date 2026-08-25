@@ -1,58 +1,67 @@
 import type { AttendanceStatus } from '@/api/attendance.api'
 
-// Bold, high-contrast per-status treatment for the pure-black theme —
-// mirrors the border/tinted-fill/bright-text pattern used by Badge's
-// success/warning/destructive variants.
+// Per-status treatment shared by the calendar cells, the legend, and the
+// summary/request panels — each status gets one hue since there are 7 of
+// them and they need to stay visually distinct, just applied as a soft
+// tint + dot rather than a heavy filled pill.
 export const STATUS_CONFIG: Record<
   AttendanceStatus,
-  { label: string; cell: string; solid: string; dot: string }
+  { code: string; label: string; cell: string; dot: string; box: string }
 > = {
   P: {
-    label: 'P — Full Day',
-    cell: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/20',
-    solid: 'bg-emerald-500/10 text-emerald-700',
+    code: 'P',
+    label: 'Full Day',
+    cell: 'bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/15',
     dot: 'bg-emerald-500',
+    box: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700',
   },
   O: {
-    label: 'O — Paid Leave',
-    cell: 'border-sky-500/20 bg-sky-500/10 text-sky-700 hover:bg-sky-500/20',
-    solid: 'bg-sky-500/10 text-sky-700',
+    code: 'O',
+    label: 'Paid Leave',
+    cell: 'bg-sky-500/10 text-sky-700 hover:bg-sky-500/15',
     dot: 'bg-sky-500',
+    box: 'border-sky-500/25 bg-sky-500/10 text-sky-700',
   },
   H: {
-    label: 'H — Half Day',
-    cell: 'border-amber-500/20 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20',
-    solid: 'bg-amber-500/10 text-amber-700',
+    code: 'H',
+    label: 'Half Day',
+    cell: 'bg-amber-500/10 text-amber-700 hover:bg-amber-500/15',
     dot: 'bg-amber-500',
+    box: 'border-amber-500/25 bg-amber-500/10 text-amber-700',
   },
   L: {
-    label: 'L — Late',
-    cell: 'border-orange-500/20 bg-orange-500/10 text-orange-700 hover:bg-orange-500/20',
-    solid: 'bg-orange-500/10 text-orange-700',
+    code: 'L',
+    label: 'Late',
+    cell: 'bg-orange-500/10 text-orange-700 hover:bg-orange-500/15',
     dot: 'bg-orange-500',
+    box: 'border-orange-500/25 bg-orange-500/10 text-orange-700',
   },
   SL: {
-    label: 'SL — Short Leave',
-    cell: 'border-red-500/20 bg-red-500/10 text-red-700 hover:bg-red-500/20',
-    solid: 'bg-red-500/10 text-red-700',
+    code: 'SL',
+    label: 'Short Leave',
+    cell: 'bg-red-500/10 text-red-700 hover:bg-red-500/15',
     dot: 'bg-red-500',
+    box: 'border-red-500/25 bg-red-500/10 text-red-700',
   },
   W: {
-    label: 'W — Work From Home',
-    cell: 'border-violet-500/20 bg-violet-500/10 text-violet-700 hover:bg-violet-500/20',
-    solid: 'bg-violet-500/10 text-violet-700',
+    code: 'W',
+    label: 'Work From Home',
+    cell: 'bg-violet-500/10 text-violet-700 hover:bg-violet-500/15',
     dot: 'bg-violet-500',
+    box: 'border-violet-500/25 bg-violet-500/10 text-violet-700',
   },
   A: {
-    label: 'A — Absent',
-    cell: 'border-neutral-500/30 bg-neutral-500/15 text-neutral-500 hover:bg-neutral-500/25',
-    solid: 'bg-neutral-500/15 text-neutral-500',
+    code: 'A',
+    label: 'Absent',
+    cell: 'bg-neutral-500/10 text-neutral-600 hover:bg-neutral-500/15',
     dot: 'bg-neutral-500',
+    box: 'border-neutral-500/25 bg-neutral-500/10 text-neutral-600',
   },
   HL: {
-    label: 'HL — Holiday',
-    cell: 'border-cyan-500/20 bg-cyan-500/10 text-cyan-700 hover:bg-cyan-500/20',
-    solid: 'bg-cyan-500/10 text-cyan-700',
+    code: 'HL',
+    label: 'Holiday',
+    cell: 'bg-cyan-500/10 text-cyan-700 hover:bg-cyan-500/15',
     dot: 'bg-cyan-500',
+    box: 'border-cyan-500/25 bg-cyan-500/10 text-cyan-700',
   },
 }

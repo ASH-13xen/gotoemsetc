@@ -1,8 +1,8 @@
 const AttendanceRecord = require('../models/AttendanceRecord');
 
 // A plain-object update only $sets keys that are actually present — passing
-// `status`/`overtimeHours` as `undefined` when the caller didn't provide them
-// leaves whatever was already stored untouched (e.g. setting OT hours on a
+// `status`/`overtimeMinutes` as `undefined` when the caller didn't provide them
+// leaves whatever was already stored untouched (e.g. setting OT minutes on a
 // day that already has a status doesn't clear that status, and vice versa).
 // `isAutoMarked` is always written explicitly (never left undefined) — a
 // manual admin save must always flip an existing auto-mark back to false,
@@ -15,13 +15,23 @@ const AttendanceRecord = require('../models/AttendanceRecord');
 function upsertForDate(
   employeeId,
   date,
-  { status, overtimeHours, notes, isLate, earlyDeparture },
+  { status, overtimeMinutes, notes, isLate, earlyDeparture, isHalfDayBoost },
   isBackdated,
   isAutoMarked = false,
   modifiedByRequest,
   isSettled = true
 ) {
-  const update = { status, overtimeHours, isBackdated, notes, isAutoMarked, isLate, earlyDeparture, isSettled };
+  const update = {
+    status,
+    overtimeMinutes,
+    isBackdated,
+    notes,
+    isAutoMarked,
+    isLate,
+    earlyDeparture,
+    isSettled,
+    isHalfDayBoost,
+  };
   if (modifiedByRequest !== undefined) update.modifiedByRequest = modifiedByRequest;
   return AttendanceRecord.findOneAndUpdate(
     { employee: employeeId, date },
@@ -34,6 +44,35 @@ function upsertForDate(
 // (re)write — never touches days a human already decided on.
 function findForDate(employeeId, date) {
   return AttendanceRecord.findOne({ employee: employeeId, date });
+}
+
+// Restores a date's AttendanceRecord to exactly how it looked before a
+// modification-request resolution overwrote it — or, if `snapshot` is null
+// (no record existed at that point), brings it back to that same blank
+// shell. Used only by attendanceRequest.service.js#revokeRequest. Never
+// deletes the document: status/notes are $unset rather than the record
+// being removed, so the row (and its _id/history) survives even a full
+// revert-to-nothing, consistent with never destroying existing data.
+function applySnapshot(employeeId, date, snapshot) {
+  const target = snapshot || {};
+  const set = {
+    overtimeMinutes: target.overtimeMinutes || 0,
+    isLate: Boolean(target.isLate),
+    earlyDeparture: Boolean(target.earlyDeparture),
+    modifiedByRequest: false,
+  };
+  const unset = {};
+  if (target.status) set.status = target.status;
+  else unset.status = '';
+  if (target.notes) set.notes = target.notes;
+  else unset.notes = '';
+  if (!snapshot) {
+    set.isAutoMarked = false;
+    set.isSettled = true;
+  }
+  const update = { $set: set };
+  if (Object.keys(unset).length > 0) update.$unset = unset;
+  return AttendanceRecord.findOneAndUpdate({ employee: employeeId, date }, update, { new: true });
 }
 
 // Used only to undo an auto-written Holiday record when the holiday itself
@@ -63,6 +102,16 @@ function listForDate(date) {
   return AttendanceRecord.find({ date }).populate('employee', 'firstName lastName employeeCode designation isDeleted status');
 }
 
+// Every employee's records across a date range — backs HR Work's org-wide
+// "All merged attendance" monthly overview (frontendhr). isDeleted employees
+// are filtered out by the caller after populate, same reasoning as
+// listForDate.
+function listAllForRange(from, to) {
+  return AttendanceRecord.find({ date: { $gte: from, $lte: to } })
+    .populate('employee', 'firstName lastName employeeCode designation isDeleted')
+    .sort({ date: 1 });
+}
+
 function listForEmployee(employeeId, { from, to } = {}) {
   const query = { employee: employeeId };
   if (from || to) {
@@ -84,7 +133,9 @@ async function listEmployeeIdsForDate(date) {
 module.exports = {
   upsertForDate,
   findForDate,
+  applySnapshot,
   listForDate,
+  listAllForRange,
   deleteForDate,
   findUnsettledBefore,
   listForEmployee,
