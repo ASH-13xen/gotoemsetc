@@ -191,10 +191,10 @@ async function notifyAdmins(type, title, message, employeeId) {
 }
 
 // Sundays are NOT an "off day" here anymore — see computeOffDayOvertime —
-// this now checks admin-marked Holiday/Half Day dates only. Returns the
-// marking's type ('holiday' | 'half_day') or null if `dateLabel` isn't
-// marked at all. A date can only ever be one or the other — Holiday.date is
-// unique.
+// this now checks admin-marked Holiday/Half Day/SL Day dates only. Returns
+// the marking's type ('holiday' | 'half_day' | 'sl_day') or null if
+// `dateLabel` isn't marked at all. A date can only ever be one of the
+// three — Holiday.date is unique.
 async function offDayTypeForLabel(dateLabel) {
   const holidays = await holidayRepository.list({ from: dateLabel, to: dateLabel });
   const match = holidays.find((h) => dateKey(h.date) === dateKey(dateLabel));
@@ -260,14 +260,19 @@ async function revertHolidayForAllEmployees(dateLabel) {
 }
 
 // Writes (or refreshes) one employee's record for a company-marked Half
-// Day. Unlike a Holiday, this runs the real weekday classifyPunches() and
-// upgrades whatever it finds: any actual arrival (classified, or a first
-// scan after 2pm) gets credited a full-day Present, since showing up at all
-// on a half day counts as fully present; zero scans stays Absent, exactly
-// like a normal day; an ambiguous scan pattern (single-scan/unclassified)
-// is left alone for manual review, same as a normal day. Same
-// existing.isAutoMarked guard as applyHolidayForEmployee — never touches a
-// day a human already decided.
+// Day. Runs the real weekday classifyPunches() and re-grades the result:
+// arriving within the normal grace window still earns a full-day Present
+// (isHalfDayBoost: true); any later arrival — Late/Short-Leave/Half-Day
+// territory, or a first scan after 2pm — demotes to Short Leave instead of
+// the day's own harsher outcome, since the day itself is only a half day
+// anyway: the worst a late arrival can cost here is a Short Leave, never a
+// full Half Day or Absent penalty. Leaving early is never penalized on its
+// own regardless of arrival — earlyDeparture is always cleared. Zero scans
+// stays Absent, exactly like a normal day (not a boost — nothing to
+// forgive, nobody showed up). An ambiguous scan pattern
+// (single-scan/unclassified) is left alone for manual review, same as a
+// normal day. Same existing.isAutoMarked guard as applyHolidayForEmployee —
+// never touches a day a human already decided.
 async function applyHalfDayForEmployee(employeeId, dateLabel) {
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) return null;
@@ -291,11 +296,14 @@ async function applyHalfDayForEmployee(employeeId, dateLabel) {
     );
   }
 
+  // A first scan at/after 2pm still counts as "showed up, just very late" on
+  // a half day — Short Leave, not Absent (a normal unmarked day treats this
+  // as Absent outright; a half day never falls further than Short Leave).
   if (result.outcome === 'late-absent') {
     return attendanceRepository.upsertForDate(
       employeeId,
       dateLabel,
-      { status: ATTENDANCE_STATUS.PRESENT, earlyDeparture: false, overtimeMinutes: 0, isHalfDayBoost: true },
+      { status: ATTENDANCE_STATUS.SHORT_LEAVE, earlyDeparture: false, overtimeMinutes: 0, isHalfDayBoost: true },
       false,
       true,
       undefined,
@@ -304,14 +312,89 @@ async function applyHalfDayForEmployee(employeeId, dateLabel) {
   }
 
   if (result.outcome === 'classified') {
+    const withinGrace = result.status === ATTENDANCE_STATUS.PRESENT;
     return attendanceRepository.upsertForDate(
       employeeId,
       dateLabel,
       {
-        status: ATTENDANCE_STATUS.PRESENT,
+        status: withinGrace ? ATTENDANCE_STATUS.PRESENT : ATTENDANCE_STATUS.SHORT_LEAVE,
         earlyDeparture: false,
         overtimeMinutes: result.overtimeMinutes,
         isHalfDayBoost: true,
+      },
+      false,
+      true,
+      undefined,
+      true
+    );
+  }
+
+  // single-scan/unclassified — leave untouched for manual review.
+  return existing ?? null;
+}
+
+// Writes (or refreshes) one employee's record for a company-marked SL
+// Day — a narrower, gentler cousin of Half Day above: only forgives what
+// would already classify as Short-Leave-or-better on a normal day (arriving
+// before 11:30am, i.e. classifyPunches' PRESENT/LATE/SHORT_LEAVE statuses)
+// up to a full-day Present. A Half-Day-territory arrival (11:30am-1:59pm) or
+// a first scan at/after 2pm is NOT forgiven — it's written exactly as it
+// would be on any ordinary unmarked day (Half Day / Absent respectively,
+// earlyDeparture left as classifyPunches actually computed it). Use SL Day
+// for an otherwise-normal working day where only minor lateness should be
+// pre-forgiven, as opposed to Half Day's broad "the whole day is only half a
+// day anyway" forgiveness. Same existing.isAutoMarked guard.
+async function applySlDayForEmployee(employeeId, dateLabel) {
+  const employee = await employeeRepository.findById(employeeId);
+  if (!employee) return null;
+
+  const existing = await attendanceRepository.findForDate(employeeId, dateLabel);
+  if (existing && !existing.isAutoMarked) return existing;
+
+  const { start, end } = istDayBoundsUTC(dateLabel);
+  const punches = await devicePunchRepository.listForEmployeeOnDay(employeeId, start, end);
+  const result = classifyPunches(punches, employee);
+
+  if (result.outcome === 'no-scan') {
+    return attendanceRepository.upsertForDate(
+      employeeId,
+      dateLabel,
+      { status: ATTENDANCE_STATUS.ABSENT, earlyDeparture: false, overtimeMinutes: 0, isSlDayBoost: false },
+      false,
+      true,
+      undefined,
+      true
+    );
+  }
+
+  // Not forgiven — SL Day's leniency stops at Short-Leave-territory arrivals,
+  // and a first scan this late doesn't qualify. Same outcome as an ordinary
+  // unmarked day.
+  if (result.outcome === 'late-absent') {
+    return attendanceRepository.upsertForDate(
+      employeeId,
+      dateLabel,
+      { status: ATTENDANCE_STATUS.ABSENT, earlyDeparture: false, overtimeMinutes: 0, isSlDayBoost: false },
+      false,
+      true,
+      undefined,
+      true
+    );
+  }
+
+  if (result.outcome === 'classified') {
+    const forgiven = result.status !== ATTENDANCE_STATUS.HALF_DAY;
+    return attendanceRepository.upsertForDate(
+      employeeId,
+      dateLabel,
+      {
+        status: forgiven ? ATTENDANCE_STATUS.PRESENT : ATTENDANCE_STATUS.HALF_DAY,
+        // Forgiven arrivals also forgive the departure side, same as Half
+        // Day; an un-forgiven (Half-Day-territory) arrival behaves exactly
+        // like an ordinary unmarked day, departure penalty included.
+        earlyDeparture: forgiven ? false : result.earlyDeparture,
+        overtimeMinutes: result.overtimeMinutes,
+        isSlDayBoost: forgiven,
       },
       false,
       true,
@@ -352,6 +435,34 @@ async function revertHalfDayForAllEmployees(dateLabel) {
   }
 }
 
+// Called once, immediately, from holiday.service.js#createHoliday (type:
+// 'sl_day') — mirrors applyHalfDayToAllEmployees. Anyone still mid-day gets
+// picked up naturally by settleDay, same as Half Day.
+async function applySlDayToAllEmployees(dateLabel) {
+  const employees = await employeeRepository.listActive();
+  for (const employee of employees) {
+    // eslint-disable-next-line no-await-in-loop
+    await applySlDayForEmployee(employee._id, dateLabel);
+  }
+}
+
+// Called from holiday.service.js#removeHoliday — mirrors
+// revertHalfDayForAllEmployees, but only undoes records this feature itself
+// boosted (isSlDayBoost: true) — an un-forgiven Half-Day/Absent record this
+// same function wrote is already identical to what an ordinary unmarked day
+// would compute, so there's nothing to revert there.
+async function revertSlDayForAllEmployees(dateLabel) {
+  const employees = await employeeRepository.listActive();
+  for (const employee of employees) {
+    // eslint-disable-next-line no-await-in-loop
+    const existing = await attendanceRepository.findForDate(employee._id, dateLabel);
+    if (existing && existing.isAutoMarked && existing.isSlDayBoost) {
+      // eslint-disable-next-line no-await-in-loop
+      await attendanceRepository.deleteForDate(employee._id, dateLabel);
+    }
+  }
+}
+
 // Called fire-and-forget right after a punch is recorded (see
 // devicePunch.service.js#recordPunch). Settles yesterday (a new scan today
 // proves it's over), then recomputes today from every valid scan so far —
@@ -369,11 +480,11 @@ async function handlePunchEvent(employeeId, timestamp) {
     await settleDay(employeeId, record.date);
   }
 
-  // Half Day is deliberately NOT handled here — unlike Holiday, its correct
-  // outcome depends on the same arrival/departure classification a normal
-  // workday uses, which can still change as more scans arrive. It's finalized
-  // once, for real, in settleDay below (naturally end-of-day, same as any
-  // other workday's classification).
+  // Half Day and SL Day are deliberately NOT handled here — unlike Holiday,
+  // their correct outcome depends on the same arrival/departure
+  // classification a normal workday uses, which can still change as more
+  // scans arrive. Both are finalized once, for real, in settleDay below
+  // (naturally end-of-day, same as any other workday's classification).
   if ((await offDayTypeForLabel(dateLabel)) === 'holiday') {
     await applyHolidayForEmployee(employeeId, dateLabel);
     return;
@@ -452,6 +563,10 @@ async function settleDay(employeeId, dateLabel) {
   }
   if (offDayType === 'half_day') {
     await applyHalfDayForEmployee(employeeId, dateLabel);
+    return;
+  }
+  if (offDayType === 'sl_day') {
+    await applySlDayForEmployee(employeeId, dateLabel);
     return;
   }
 
@@ -584,5 +699,7 @@ module.exports = {
   revertHolidayForAllEmployees,
   applyHalfDayToAllEmployees,
   revertHalfDayForAllEmployees,
+  applySlDayToAllEmployees,
+  revertSlDayForAllEmployees,
   istDayBoundsUTC,
 };

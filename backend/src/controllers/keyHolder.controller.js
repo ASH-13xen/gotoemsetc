@@ -7,12 +7,12 @@ const list = asyncHandler(async (req, res) => {
 });
 
 const assign = asyncHandler(async (req, res) => {
-  const keyHolder = await keyHolderService.assignKey(req.params.key, req.body.employeeId, req.user.id);
+  const keyHolder = await keyHolderService.assignKeyHolders(req.params.key, req.body.employeeIds, req.user.id);
   req.auditContext = {
     action: 'keyHolder.assign',
     resourceType: 'KeyHolder',
     resourceId: keyHolder._id,
-    metadata: { key: req.params.key, employeeId: req.body.employeeId ?? null },
+    metadata: { key: req.params.key, employeeIds: req.body.employeeIds ?? [] },
   };
   res.json({ keyHolder });
 });

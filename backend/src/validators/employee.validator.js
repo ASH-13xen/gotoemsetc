@@ -62,6 +62,44 @@ const inventorySchema = z
     backCover: z.boolean().optional(),
     powerAdapter: z.boolean().optional(),
     cable: z.boolean().optional(),
+
+    hasMobile: z.boolean().optional(),
+    // .optional() alone only tolerates the key being absent — the Select's
+    // blank default sends '' for "not chosen yet", same pattern as
+    // bloodGroup above.
+    mobileOS: z.enum(['android', 'ios']).optional().or(z.literal('')),
+    deviceCondition: z.string().optional(),
+    whatsappTwoFactor: z.boolean().optional(),
+    whatsappTwoFactorBackupMail: z.string().optional(),
+    whatsappTwoFactorPin: z.string().optional(),
+    whatsappNameUpdated: z.boolean().optional(),
+    whatsappProfiling: z.boolean().optional(),
+    whatsappBackupInEmployeeMail: z.boolean().optional(),
+    galleryBackupInEmployeeMail: z.boolean().optional(),
+    trueCallerUpdated: z.boolean().optional(),
+    theftProtection: z.boolean().optional(),
+    findMyDevice: z.boolean().optional(),
+    appleId: z.string().optional(),
+    password: z.string().optional(),
+    thumbOrFace: z.boolean().optional(),
+
+    hasLaptop: z.boolean().optional(),
+    laptopDeviceName: z.string().optional(),
+    laptopSerialNumber: z.string().optional(),
+    laptopColor: z.string().optional(),
+    laptopCondition: z.string().optional(),
+    laptopTheftProtection: z.boolean().optional(),
+    laptopFindMyDevice: z.boolean().optional(),
+    laptopPassword: z.string().optional(),
+    laptopThumbOrFace: z.boolean().optional(),
+    laptopMouse: z.boolean().optional(),
+
+    consentFormLink: z.string().optional(),
+    gotofriendLoggedIn: z.boolean().optional(),
+    employeeMailLoggedIn: z.boolean().optional(),
+    clientMailLoggedIn: z.boolean().optional(),
+    goToDataTransfer: z.boolean().optional(),
+    podcastDataTransfer: z.boolean().optional(),
   })
   .partial();
 

@@ -35,7 +35,10 @@ export interface KeyHolderEmployee {
 
 export interface KeyHolderEntry {
   key: OfficeKey
-  holder: KeyHolderEmployee | null
+  // Several physical copies of the same key can be out with different
+  // people at once (e.g. 3 copies of the main gate key) — this is a list,
+  // not a single holder.
+  holders: KeyHolderEmployee[]
   updatedBy: { _id: string; username: string } | null
   updatedAt: string | null
 }
@@ -45,9 +48,10 @@ export async function listKeys(): Promise<{ keys: KeyHolderEntry[] }> {
   return data
 }
 
-// employeeId: null clears the key back to unassigned. Operations-only
-// server-side (admin/ceo/operations_manager) — see requireOperationsAccess().
-export async function assignKey(key: OfficeKey, employeeId: string | null): Promise<{ keyHolder: KeyHolderEntry }> {
-  const { data } = await apiClient.post(`/keys/${key}/assign`, { employeeId })
+// employeeIds replaces the full holder list for this key — an empty array
+// clears it back to unassigned. Operations-only server-side (admin/ceo/
+// operations_manager) — see requireOperationsAccess().
+export async function assignKeyHolders(key: OfficeKey, employeeIds: string[]): Promise<{ keyHolder: KeyHolderEntry }> {
+  const { data } = await apiClient.post(`/keys/${key}/assign`, { employeeIds })
   return data
 }

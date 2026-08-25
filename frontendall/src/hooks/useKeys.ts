@@ -14,8 +14,8 @@ export function useKeys() {
 export function useAssignKey() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ key, employeeId }: { key: OfficeKey; employeeId: string | null }) =>
-      keysApi.assignKey(key, employeeId),
+    mutationFn: ({ key, employeeIds }: { key: OfficeKey; employeeIds: string[] }) =>
+      keysApi.assignKeyHolders(key, employeeIds),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: KEY }),
   })
 }

@@ -14,6 +14,7 @@ const { fillTemplate, renderPdfFromHtml } = require('./htmlRender.service');
 const { dateKey } = require('../utils/attendanceDays');
 const { istMonthRange } = require('../utils/istDate');
 const { ATTENDANCE_STATUS, NOTIFICATION_TYPES } = require('../config/constants');
+const { LATE_CAP, SL_CAP } = require('../utils/attendancePenalties');
 
 const NAMESPACE = 'salary-slips';
 const TEMPLATE_FILE = 'salary-slip.html';
@@ -50,7 +51,7 @@ function buildAttendanceDays(startDate, summary) {
 
   const days = [];
   for (let i = 0; i < firstWeekday; i += 1) {
-    days.push({ dayNum: '', bg: 'transparent', statusText: '', otText: '' });
+    days.push({ dayNum: '', bg: 'transparent', statusText: '', otText: '', edText: '' });
   }
   for (let i = 0; i < summary.totalDaysInPeriod; i += 1) {
     const date = new Date(startDate.getTime() + i * MS_PER_DAY);
@@ -77,10 +78,32 @@ function buildAttendanceDays(startDate, summary) {
       bg = UNPAID_BG;
     }
     const otText = record?.overtimeMinutes ? `+${record.overtimeMinutes}min OT` : '';
+    // Independent of status — a day can show e.g. "SL" and still have left
+    // early on top of that (see the Deduction Calculation section below for
+    // exactly how that second flag gets counted), so it needs its own
+    // marker rather than being folded into statusText.
+    const edText = record?.earlyDeparture ? 'ED' : '';
 
-    days.push({ dayNum: String(date.getUTCDate()), bg, statusText, otText });
+    days.push({ dayNum: String(date.getUTCDate()), bg, statusText, otText, edText });
   }
   return days;
+}
+
+// {#loop} items need every referenced field present on every item (an
+// absent key just leaves the literal "{tag}" in the output — see
+// htmlRender.service.js#fillTemplate) — and an empty array renders nothing
+// at all, which would silently look like the section was left out rather
+// than "genuinely zero this period". This guarantees at least one row
+// either way.
+function formatBreakdownRows(events, { includeOutcome }) {
+  if (events.length === 0) {
+    return [{ dateFormatted: '—', reason: 'None this period', outcomeLabel: '' }];
+  }
+  return events.map((e) => ({
+    dateFormatted: formatDateDDMMYYYY(e.date),
+    reason: e.reason,
+    outcomeLabel: includeOutcome ? e.outcomeLabel : '',
+  }));
 }
 
 function buildMergeData(employee, startDate, endDate, summary, salary) {
@@ -139,6 +162,18 @@ function buildMergeData(employee, startDate, endDate, summary, salary) {
     workingDaysInPeriod: String(summary.workingDaysInPeriod),
     offDaysInPeriod: String(summary.totalDaysInPeriod - summary.workingDaysInPeriod),
     unpaidAbsentDays: String(summary.unpaidAbsentDays),
+
+    // Exact per-date reasoning behind the Half Day Deductions line — see
+    // attendancePenalties.js#computeEffectiveUnitsBreakdown. Every Late and
+    // every Short-Leave-pool date is listed with whether it counted normally
+    // or escalated, so an employee can trace the final deduction back to
+    // specific dates instead of just a total.
+    lateCap: String(LATE_CAP),
+    slCap: String(SL_CAP),
+    totalHalfDayUnits: String(summary.totalHalfDayUnits),
+    lateEvents: formatBreakdownRows(summary.deductionBreakdown.lateEvents, { includeOutcome: true }),
+    slEvents: formatBreakdownRows(summary.deductionBreakdown.slEvents, { includeOutcome: true }),
+    halfDayEvents: formatBreakdownRows(summary.deductionBreakdown.halfDayEvents, { includeOutcome: false }),
 
     attendanceDays: buildAttendanceDays(startDate, summary),
   };

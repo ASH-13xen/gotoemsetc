@@ -51,6 +51,13 @@ const attendanceRecordSchema = new Schema(
     // the half-day marking revert only the records it boosted, the same way
     // isAutoMarked lets removing a Holiday revert only its own writes.
     isHalfDayBoost: { type: Boolean, default: false },
+    // True only when a company-marked SL Day upgraded this record to a
+    // full-day Present that would otherwise have been Late/Short
+    // Leave/Absent-after-2pm — the narrower cousin of isHalfDayBoost above;
+    // an SL Day only forgives up to Short-Leave-territory arrivals, so a
+    // Half-Day-territory arrival never sets this. See
+    // attendanceClassifier.service.js#applySlDayForEmployee.
+    isSlDayBoost: { type: Boolean, default: false },
     notes: String,
   },
   { timestamps: true }

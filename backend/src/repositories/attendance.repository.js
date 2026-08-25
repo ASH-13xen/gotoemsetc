@@ -15,7 +15,7 @@ const AttendanceRecord = require('../models/AttendanceRecord');
 function upsertForDate(
   employeeId,
   date,
-  { status, overtimeMinutes, notes, isLate, earlyDeparture, isHalfDayBoost },
+  { status, overtimeMinutes, notes, isLate, earlyDeparture, isHalfDayBoost, isSlDayBoost },
   isBackdated,
   isAutoMarked = false,
   modifiedByRequest,
@@ -31,6 +31,7 @@ function upsertForDate(
     earlyDeparture,
     isSettled,
     isHalfDayBoost,
+    isSlDayBoost,
   };
   if (modifiedByRequest !== undefined) update.modifiedByRequest = modifiedByRequest;
   return AttendanceRecord.findOneAndUpdate(

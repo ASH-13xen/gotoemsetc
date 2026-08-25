@@ -1,6 +1,6 @@
 import { apiClient } from './client'
 
-export type HolidayType = 'holiday' | 'half_day'
+export type HolidayType = 'holiday' | 'half_day' | 'sl_day'
 
 export interface Holiday {
   _id: string

@@ -31,6 +31,12 @@ function pad(n: number) {
   return String(n).padStart(2, '0')
 }
 
+function offDayTypeLabel(type: HolidayType): string {
+  if (type === 'half_day') return 'Half Day'
+  if (type === 'sl_day') return 'SL Day'
+  return 'Holiday'
+}
+
 // Raw biometric scans for one employee on one day — shown inside the
 // day-popover so an admin can see exactly what the classifier (or they
 // themselves) is working from, not just the resulting status.
@@ -66,7 +72,7 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10)
 }
 
-export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
+export function AttendanceCalendar({ employeeId, compact = false }: { employeeId: string; compact?: boolean }) {
   const { user } = useAuth()
   const isAdmin = isAdminLike(user)
   const canMark = hasPermission(user, 'mark_attendance')
@@ -135,15 +141,18 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
   }
 
   const onMarkOffDay = (dateKey: string, type: HolidayType) => {
-    const typeLabel = type === 'half_day' ? 'half day' : 'holiday'
-    const label = window.prompt(`Label for this ${typeLabel}?`, type === 'half_day' ? 'Half Day' : 'Holiday')
+    const typeLabel = offDayTypeLabel(type)
+    const label = window.prompt(`Label for this ${typeLabel.toLowerCase()}?`, typeLabel)
     if (label === null) return
     createHoliday.mutate(
-      { date: dateKey, label: label || (type === 'half_day' ? 'Half Day' : 'Holiday'), type },
+      { date: dateKey, label: label || typeLabel, type },
       {
-        onSuccess: () =>
-          toast.success(type === 'half_day' ? 'Half day marked — employees who scan in get full-day credit' : 'Holiday marked'),
-        onError: () => toast.error(`Could not mark ${typeLabel}`),
+        onSuccess: () => {
+          if (type === 'half_day') toast.success('Half day marked — arriving within grace still gets full-day credit')
+          else if (type === 'sl_day') toast.success('SL day marked — minor lateness gets forgiven up to Short Leave')
+          else toast.success('Holiday marked')
+        },
+        onError: () => toast.error(`Could not mark ${typeLabel.toLowerCase()}`),
       }
     )
   }
@@ -152,29 +161,39 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
     const existing = holidayByDate.get(dateKey)
     if (!existing) return
     deleteHoliday.mutate(existing._id, {
-      onSuccess: () => toast.success(existing.type === 'half_day' ? 'Half day removed' : 'Holiday removed'),
+      onSuccess: () => toast.success(`${offDayTypeLabel(existing.type)} removed`),
       onError: () => toast.error('Could not remove'),
     })
   }
 
   return (
     <div className="overflow-hidden rounded-xl border border-border">
-      <div className="flex items-center justify-between border-b border-border p-5">
-        <h3 className="text-base font-semibold text-foreground">Calendar</h3>
-        <div className="flex items-center gap-3">
+      <div
+        className={cn(
+          'flex items-center justify-between border-b border-border',
+          compact ? 'p-3' : 'p-5'
+        )}
+      >
+        <h3 className={cn('font-semibold text-foreground', compact ? 'text-sm' : 'text-base')}>Calendar</h3>
+        <div className={cn('flex items-center', compact ? 'gap-1.5' : 'gap-3')}>
           <Button
             variant="outline"
             size="icon"
-            className="size-8"
+            className={compact ? 'size-6' : 'size-8'}
             onClick={() =>
               setMonthDate((d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)))
             }
           >
-            <ChevronLeft className="size-4" />
+            <ChevronLeft className={compact ? 'size-3' : 'size-4'} />
           </Button>
-          <span className="min-w-32 text-center text-sm font-medium text-foreground">
+          <span
+            className={cn(
+              'text-center font-medium text-foreground',
+              compact ? 'min-w-20 text-xs' : 'min-w-32 text-sm'
+            )}
+          >
             {monthDate.toLocaleDateString('en-US', {
-              month: 'long',
+              month: compact ? 'short' : 'long',
               year: 'numeric',
               timeZone: 'UTC',
             })}
@@ -182,28 +201,33 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
           <Button
             variant="outline"
             size="icon"
-            className="size-8"
+            className={compact ? 'size-6' : 'size-8'}
             onClick={() =>
               setMonthDate((d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)))
             }
           >
-            <ChevronRight className="size-4" />
+            <ChevronRight className={compact ? 'size-3' : 'size-4'} />
           </Button>
         </div>
       </div>
-      <div className="p-5">
+      <div className={compact ? 'p-3' : 'p-5'}>
         {isLoading ? (
           <Skeleton className="h-64 w-full" />
         ) : (
           <>
-            <div className="grid grid-cols-7 gap-2 border-b border-border pb-2 text-center text-xs font-semibold text-muted-foreground">
+            <div
+              className={cn(
+                'grid grid-cols-7 border-b border-border text-center font-semibold text-muted-foreground',
+                compact ? 'gap-1 pb-1 text-[9px]' : 'gap-2 pb-2 text-xs'
+              )}
+            >
               {WEEKDAYS.map((d) => (
                 <div key={d} className="py-1">
-                  {d}
+                  {compact ? d.slice(0, 1) : d}
                 </div>
               ))}
             </div>
-            <div className="mt-2 grid grid-cols-7 gap-2">
+            <div className={cn('mt-2 grid grid-cols-7', compact ? 'gap-1' : 'gap-2')}>
               {cells.map((dateKey, i) => {
                 if (!dateKey) return <div key={`blank-${i}`} />
                 const record = recordByDate.get(dateKey)
@@ -233,7 +257,8 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                         type="button"
                         disabled={isFuture}
                         className={cn(
-                          'relative flex aspect-square flex-col items-center justify-center gap-0.5 rounded-xl border text-sm font-semibold transition-colors duration-150',
+                          'relative flex aspect-square flex-col items-center justify-center rounded-xl border font-semibold transition-colors duration-150',
+                          compact ? 'gap-0 text-[10px]' : 'gap-0.5 text-sm',
                           isFuture
                             ? 'cursor-not-allowed border-border/40 bg-secondary/10 text-muted-foreground/40'
                             : 'border-border bg-card text-foreground hover:bg-secondary/60',
@@ -242,24 +267,40 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                           dateKey === today && 'ring-2 ring-inset ring-primary'
                         )}
                       >
-                        <span className="text-base">{dayNum}</span>
-                        {config && <span className="text-[9px] font-bold tracking-wide uppercase opacity-80">{config.code}</span>}
-                        {record?.overtimeMinutes ? (
+                        <span className={compact ? 'text-[11px]' : 'text-base'}>{dayNum}</span>
+                        {config && !compact && (
+                          <span className="text-[9px] font-bold tracking-wide uppercase opacity-80">{config.code}</span>
+                        )}
+                        {record?.overtimeMinutes && !compact ? (
                           <span className="text-[9px] font-medium opacity-70">+{record.overtimeMinutes}min</span>
                         ) : null}
                         {record?.isLate && (
-                          <span className="absolute bottom-1 right-1 flex size-3.5 items-center justify-center rounded-full bg-amber-500 text-[8px] font-bold text-white">L</span>
+                          <span
+                            className={cn(
+                              'absolute bottom-1 right-1 flex items-center justify-center rounded-full bg-amber-500 font-bold text-white',
+                              compact ? 'size-2' : 'size-3.5 text-[8px]'
+                            )}
+                          >
+                            {!compact && 'L'}
+                          </span>
                         )}
                         {record?.earlyDeparture && (
-                          <span className="absolute bottom-1 left-1 flex size-3.5 items-center justify-center rounded-full bg-red-500 text-[8px] font-bold text-white">E</span>
+                          <span
+                            className={cn(
+                              'absolute bottom-1 left-1 flex items-center justify-center rounded-full bg-red-500 font-bold text-white',
+                              compact ? 'size-2' : 'size-3.5 text-[8px]'
+                            )}
+                          >
+                            {!compact && 'E'}
+                          </span>
                         )}
                         {record && !record.isSettled && (
                           <span className="absolute top-1 left-1 size-1.5 rounded-full bg-yellow-500" title="Pending" />
                         )}
-                        {record?.isBackdated && (
+                        {record?.isBackdated && !compact && (
                           <Clock3 className="absolute top-1 right-1 size-3 opacity-70" />
                         )}
-                        {holiday && <CalendarOff className="absolute top-1 left-1 size-3 opacity-70" />}
+                        {holiday && <CalendarOff className={cn('absolute top-1 left-1 opacity-70', compact ? 'size-2' : 'size-3')} />}
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className="w-64 p-4">
@@ -275,7 +316,7 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                         {isSunday && <p className="text-xs text-muted-foreground">Sunday — off</p>}
                         {holiday && (
                           <p className="text-xs text-muted-foreground">
-                            {holiday.type === 'half_day' ? 'Half Day' : 'Holiday'}: {holiday.label}
+                            {offDayTypeLabel(holiday.type)}: {holiday.label}
                           </p>
                         )}
                         <DayScans employeeId={employeeId} date={dateKey} />
@@ -422,11 +463,11 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                             disabled={deleteHoliday.isPending}
                           >
                             <CalendarOff className="size-4" />
-                            Remove {holiday.type === 'half_day' ? 'half day' : 'holiday'}
+                            Remove {offDayTypeLabel(holiday.type).toLowerCase()}
                           </Button>
                         )}
                         {isAdmin && !holiday && (
-                          <div className="flex gap-2">
+                          <div className="flex flex-wrap gap-2">
                             <Button
                               size="sm"
                               variant="outline"
@@ -445,6 +486,15 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                               <CalendarOff className="size-4" />
                               Mark as half day
                             </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => onMarkOffDay(dateKey, 'sl_day')}
+                              disabled={createHoliday.isPending}
+                            >
+                              <CalendarOff className="size-4" />
+                              Mark as SL day
+                            </Button>
                           </div>
                         )}
                       </div>
@@ -453,25 +503,33 @@ export function AttendanceCalendar({ employeeId }: { employeeId: string }) {
                 )
               })}
             </div>
-            <div className="mt-6 flex flex-wrap gap-2 border-t border-border pt-4">
-              {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-                <div
-                  key={key}
-                  className={cn('flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium', cfg.box)}
-                >
-                  <span className={cn('size-1.5 shrink-0 rounded-full', cfg.dot)} />
-                  {cfg.code} — {cfg.label}
+            {compact ? (
+              <div className="mt-3 flex flex-wrap gap-1 border-t border-border pt-3">
+                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                  <span key={key} className={cn('size-2 shrink-0 rounded-full', cfg.dot)} title={cfg.label} />
+                ))}
+              </div>
+            ) : (
+              <div className="mt-6 flex flex-wrap gap-2 border-t border-border pt-4">
+                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                  <div
+                    key={key}
+                    className={cn('flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium', cfg.box)}
+                  >
+                    <span className={cn('size-1.5 shrink-0 rounded-full', cfg.dot)} />
+                    {cfg.code} — {cfg.label}
+                  </div>
+                ))}
+                <div className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                  <Clock3 className="size-3" />
+                  Backdated
                 </div>
-              ))}
-              <div className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                <Clock3 className="size-3" />
-                Backdated
+                <div className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                  <CalendarOff className="size-3" />
+                  Sunday / Holiday
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground">
-                <CalendarOff className="size-3" />
-                Sunday / Holiday
-              </div>
-            </div>
+            )}
           </>
         )}
       </div>

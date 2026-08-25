@@ -26,6 +26,12 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function offDayTypeLabel(type: HolidayType): string {
+  if (type === 'half_day') return 'Half Day'
+  if (type === 'sl_day') return 'SL Day'
+  return 'Holiday'
+}
+
 // Recurring events (employee birthdays, client birthdays/anniversaries,
 // brand anniversary) only ever compare month/day — the stored year is
 // whatever the record happened to be entered with, never compared, same
@@ -131,15 +137,18 @@ export function CompanyCalendarGrid() {
   ]
 
   const onMarkOffDay = (dateKey: string, type: HolidayType) => {
-    const typeLabel = type === 'half_day' ? 'half day' : 'holiday'
-    const label = window.prompt(`Label for this ${typeLabel}?`, type === 'half_day' ? 'Half Day' : 'Holiday')
+    const typeLabel = offDayTypeLabel(type)
+    const label = window.prompt(`Label for this ${typeLabel.toLowerCase()}?`, typeLabel)
     if (label === null) return
     createHoliday.mutate(
-      { date: dateKey, label: label || (type === 'half_day' ? 'Half Day' : 'Holiday'), type },
+      { date: dateKey, label: label || typeLabel, type },
       {
-        onSuccess: () =>
-          toast.success(type === 'half_day' ? 'Half day marked — employees who scan in get full-day credit' : 'Holiday marked'),
-        onError: () => toast.error(`Could not mark ${typeLabel}`),
+        onSuccess: () => {
+          if (type === 'half_day') toast.success('Half day marked — arriving within grace still gets full-day credit')
+          else if (type === 'sl_day') toast.success('SL day marked — minor lateness gets forgiven up to Short Leave')
+          else toast.success('Holiday marked')
+        },
+        onError: () => toast.error(`Could not mark ${typeLabel.toLowerCase()}`),
       }
     )
   }
@@ -148,7 +157,7 @@ export function CompanyCalendarGrid() {
     const existing = holidayByDate.get(dateKey)
     if (!existing) return
     deleteHoliday.mutate(existing._id, {
-      onSuccess: () => toast.success(existing.type === 'half_day' ? 'Half day removed' : 'Holiday removed'),
+      onSuccess: () => toast.success(`${offDayTypeLabel(existing.type)} removed`),
       onError: () => toast.error('Could not remove'),
     })
   }
@@ -220,6 +229,7 @@ export function CompanyCalendarGrid() {
                 const dayNum = Number(dateKey.slice(8, 10))
                 const holiday = holidayByDate.get(dateKey)
                 const isHalfDay = holiday?.type === 'half_day'
+                const isSlDay = holiday?.type === 'sl_day'
                 const isSunday = new Date(dateKey).getUTCDay() === 0
                 const isPastDate = dateKey < today
                 const birthdays = birthdaysByDay.get(dayNum) ?? []
@@ -234,8 +244,9 @@ export function CompanyCalendarGrid() {
                         className={cn(
                           'relative flex aspect-square flex-col items-center justify-center rounded-lg text-sm font-medium transition-colors duration-150',
                           'bg-secondary/50 text-foreground hover:bg-secondary/80',
-                          (isSunday || holiday) && !isHalfDay && 'bg-secondary/25 text-muted-foreground/60',
+                          (isSunday || holiday) && !isHalfDay && !isSlDay && 'bg-secondary/25 text-muted-foreground/60',
                           isHalfDay && 'bg-indigo-500/10 text-indigo-700',
+                          isSlDay && 'bg-teal-500/10 text-teal-700',
                           dateKey === today && 'ring-1 ring-inset ring-primary'
                         )}
                       >
@@ -258,6 +269,8 @@ export function CompanyCalendarGrid() {
                           <span className="absolute top-1 left-1">
                             {isHalfDay ? (
                               <Clock3 className="size-3 text-indigo-600" />
+                            ) : isSlDay ? (
+                              <Clock3 className="size-3 text-teal-600" />
                             ) : (
                               <CalendarOff className="size-3 text-muted-foreground" />
                             )}
@@ -273,7 +286,7 @@ export function CompanyCalendarGrid() {
                         {isSunday && <p className="text-xs text-muted-foreground">Sunday — off</p>}
                         {holiday && (
                           <p className="text-xs text-muted-foreground">
-                            {isHalfDay ? 'Half Day' : 'Holiday'}: {holiday.label}
+                            {offDayTypeLabel(holiday.type)}: {holiday.label}
                           </p>
                         )}
                         {birthdays.length > 0 && (
@@ -339,7 +352,7 @@ export function CompanyCalendarGrid() {
                             {holiday ? (
                               <Button size="sm" variant="outline" onClick={() => onRemoveOffDay(dateKey)}>
                                 <CalendarOff className="size-3.5" />
-                                Remove {isHalfDay ? 'half day' : 'holiday'}
+                                Remove {offDayTypeLabel(holiday.type).toLowerCase()}
                               </Button>
                             ) : (
                               <>
@@ -362,6 +375,16 @@ export function CompanyCalendarGrid() {
                                 >
                                   <Clock3 className="size-3.5" />
                                   Mark as half day
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => onMarkOffDay(dateKey, 'sl_day')}
+                                  disabled={isPastDate}
+                                  title={isPastDate ? "Past dates can't be marked as an SL day" : undefined}
+                                >
+                                  <Clock3 className="size-3.5" />
+                                  Mark as SL day
                                 </Button>
                               </>
                             )}
@@ -417,6 +440,10 @@ export function CompanyCalendarGrid() {
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Clock3 className="size-3 text-indigo-600" />
                 Half Day
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Clock3 className="size-3 text-teal-600" />
+                SL Day
               </div>
               {(['O', 'H', 'SL', 'W'] as const).map((key) => (
                 <div key={key} className="flex items-center gap-1.5 text-xs text-muted-foreground">

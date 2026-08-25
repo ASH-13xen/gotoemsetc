@@ -43,11 +43,18 @@
   .cell .daynum { font-size: 7.5pt; color: #555; }
   .cell .statuscode { display: block; font-size: 12pt; font-weight: 700; margin-top: 4pt; }
   .cell .ottext { display: block; font-size: 6pt; color: #444; position: absolute; bottom: 2pt; right: 3pt; }
+  .cell .edtext { display: block; font-size: 6pt; color: #b3261e; font-weight: 700; position: absolute; bottom: 2pt; left: 3pt; }
   .legend { display: flex; flex-wrap: wrap; gap: 10pt; margin-top: 14pt; font-size: 8pt; }
   .legend-item { display: flex; align-items: center; gap: 4pt; }
   .legend-swatch { width: 9pt; height: 9pt; border-radius: 2pt; border: 1px solid #999; }
   .summary-box { margin-top: 14pt; font-size: 8.5pt; }
   .summary-box div { padding: 1.5pt 0; }
+  .calc-page { page-break-before: always; padding-top: 10pt; }
+  .calc-intro { font-size: 9pt; color: #333; margin-bottom: 10pt; line-height: 1.5; }
+  table.calc { font-size: 8pt; margin-bottom: 12pt; }
+  table.calc th { background: #eee; text-transform: uppercase; font-size: 7.5pt; letter-spacing: 0.4px; padding: 4pt 6pt; border: 1px solid #ccc; text-align: left; }
+  table.calc td { padding: 4pt 6pt; border: 1px solid #ccc; }
+  table.calc tr.section-title th { background: #1a1a1a; color: #fff; font-size: 8.5pt; text-transform: none; letter-spacing: 0; }
 </style>
 </head>
 <body>
@@ -121,7 +128,7 @@
     <div class="weekday-row">
       <span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span>
     </div>
-    <div class="calendar-grid">{#attendanceDays}<div class="cell" style="background:{bg}"><span class="daynum">{dayNum}</span><span class="statuscode">{statusText}</span><span class="ottext">{otText}</span></div>{/attendanceDays}</div>
+    <div class="calendar-grid">{#attendanceDays}<div class="cell" style="background:{bg}"><span class="daynum">{dayNum}</span><span class="statuscode">{statusText}</span><span class="ottext">{otText}</span><span class="edtext">{edText}</span></div>{/attendanceDays}</div>
 
     <div class="legend">
       <div class="legend-item"><span class="legend-swatch" style="background:#cceecc"></span>P = Full Day Present</div>
@@ -132,6 +139,7 @@
       <div class="legend-item"><span class="legend-swatch" style="background:#e0d0ff"></span>W = Work From Home</div>
       <div class="legend-item"><span class="legend-swatch" style="background:#d9d9d9"></span>Off Day (Sunday/Holiday)</div>
       <div class="legend-item"><span class="legend-swatch" style="background:#ffb3b3"></span>Unpaid Absent</div>
+      <div class="legend-item"><span style="color:#b3261e;font-weight:700;font-size:8pt;">ED</span>&nbsp;= Early Departure (independent of the day's status above)</div>
     </div>
 
     <div class="summary-box">
@@ -148,6 +156,34 @@
       <div>Unpaid Absent Days: {unpaidAbsentDays}</div>
       <div>Days Worked (for pay): {daysWorked}</div>
     </div>
+  </div>
+
+  <div class="calc-page">
+    <div class="attendance-title">How Your Half Day Deductions Were Calculated</div>
+    <div class="calc-intro">
+      Late arrivals and Short Leave days each get {lateCap} free per period before any deduction applies. Beyond that,
+      each extra one escalates one level: a 3rd+ Late becomes a Short Leave unit, and a 3rd+ Short Leave unit (from any
+      source below) becomes a Half Day deduction. The tables below list every date that counted toward this, so a Half
+      Day deduction can always be traced back to specific dates &mdash; not just a total.
+    </div>
+
+    <table class="calc">
+      <tr class="section-title"><th colspan="3">Late Arrivals (free: {lateCap} per period)</th></tr>
+      <tr><th>Date</th><th>Reason</th><th>Outcome</th></tr>
+      {#lateEvents}<tr><td>{dateFormatted}</td><td>{reason}</td><td>{outcomeLabel}</td></tr>{/lateEvents}
+    </table>
+
+    <table class="calc">
+      <tr class="section-title"><th colspan="3">Short Leave (free: {slCap} per period &mdash; includes Short Leave days, Early Departures, and any Late beyond the free {lateCap} above)</th></tr>
+      <tr><th>Date</th><th>Reason</th><th>Outcome</th></tr>
+      {#slEvents}<tr><td>{dateFormatted}</td><td>{reason}</td><td>{outcomeLabel}</td></tr>{/slEvents}
+    </table>
+
+    <table class="calc">
+      <tr class="section-title"><th colspan="2">Half Day Deductions &mdash; {totalHalfDayUnits} unit(s) &times; half a day's pay = Rs. {halfDayDeductions}</th></tr>
+      <tr><th>Date</th><th>Reason</th></tr>
+      {#halfDayEvents}<tr><td>{dateFormatted}</td><td>{reason}</td></tr>{/halfDayEvents}
+    </table>
   </div>
 </body>
 </html>

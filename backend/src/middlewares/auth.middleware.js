@@ -213,6 +213,19 @@ function requireSelfOrDirectoryAccess(paramName = 'id') {
   };
 }
 
+// Every login role except plain worker — admin/hr plus the 5 other
+// leadership roles (ceo, digital_admin, team_lead, account_manager,
+// operations_manager). Used only for creating an Announcement; any employee,
+// worker included, can still read and acknowledge one addressed to them
+// (self-scoped, gated elsewhere).
+function requireAnnouncementCreateAccess() {
+  return (req, res, next) => {
+    if (!req.user) return next(ApiError.unauthorized());
+    if (req.user.role !== USER_ROLES.WORKER) return next();
+    return next(ApiError.forbidden());
+  };
+}
+
 module.exports = {
   verifyToken,
   requireRole,
@@ -228,4 +241,5 @@ module.exports = {
   requireUnifiedTaskViewAccess,
   requireDirectoryAccess,
   requireSelfOrDirectoryAccess,
+  requireAnnouncementCreateAccess,
 };

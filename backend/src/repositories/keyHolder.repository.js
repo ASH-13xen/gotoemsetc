@@ -3,20 +3,21 @@ const KeyHolder = require('../models/KeyHolder');
 const HOLDER_FIELDS = 'firstName lastName employeeCode designation';
 
 function listAll() {
-  return KeyHolder.find().populate('holder', HOLDER_FIELDS).populate('updatedBy', 'username');
+  return KeyHolder.find().populate('holders', HOLDER_FIELDS).populate('updatedBy', 'username');
 }
 
 // Upsert — most keys won't have a document yet the first time they're
-// assigned. `holderEmployeeId` may be null to clear the key back to
-// unassigned.
-function setHolder(key, holderEmployeeId, updatedBy) {
+// assigned. `holderEmployeeIds` replaces the full holder list for this key
+// (an empty array clears it back to unassigned) rather than adding/removing
+// one at a time, matching the multi-select UI this feeds.
+function setHolders(key, holderEmployeeIds, updatedBy) {
   return KeyHolder.findOneAndUpdate(
     { key },
-    { holder: holderEmployeeId, updatedBy },
+    { holders: holderEmployeeIds, updatedBy },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   )
-    .populate('holder', HOLDER_FIELDS)
+    .populate('holders', HOLDER_FIELDS)
     .populate('updatedBy', 'username');
 }
 
-module.exports = { listAll, setHolder };
+module.exports = { listAll, setHolders };

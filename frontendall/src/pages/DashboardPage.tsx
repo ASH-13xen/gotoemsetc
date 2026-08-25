@@ -34,6 +34,8 @@ import { MonthlyBillReminderModal } from '@/components/finance/MonthlyBillRemind
 import { ClaimReimbursementDialog } from '@/components/reimbursements/ClaimReimbursementDialog'
 import { MyReimbursementsCard } from '@/components/reimbursements/MyReimbursementsCard'
 import { KeysDialog } from '@/components/keys/KeysDialog'
+import { CreateAnnouncementDialog, canCreateAnnouncements } from '@/components/announcements/CreateAnnouncementDialog'
+import { PendingAnnouncementsModal } from '@/components/announcements/PendingAnnouncementsModal'
 import { PlanNextDayCard } from '@/components/tasks/PlanNextDayCard'
 import { UpcomingCalendarWidget } from '@/components/calendar/UpcomingCalendarWidget'
 import { CompanyCalendarGrid } from '@/components/calendar/CompanyCalendarGrid'
@@ -106,12 +108,14 @@ export default function DashboardPage() {
         <ComplaintReviewModal />
         <PendingLeaveApprovalsModal />
         <MonthlyBillReminderModal />
+        <PendingAnnouncementsModal />
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-4xl font-black tracking-tight text-foreground">
             Welcome, <span className="text-primary">{user?.username}</span>
           </h1>
           <div className="flex flex-wrap items-center gap-2">
             <KeysDialog />
+            {canCreateAnnouncements(user?.role) && <CreateAnnouncementDialog />}
             <RegisterComplaintDialog />
             <ApplyLeaveDialog />
             <ClaimReimbursementDialog />
@@ -134,6 +138,7 @@ export default function DashboardPage() {
     <div className="space-y-8 py-4">
       <PendingWarningsModal />
       <PendingLeaveApprovalsModal />
+      <PendingAnnouncementsModal />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-4xl font-black tracking-tight text-foreground">
@@ -143,7 +148,10 @@ export default function DashboardPage() {
             Here is a quick snapshot of the telemetry metrics, summary reports, and active recruitment pipelines.
           </p>
         </div>
-        <KeysDialog />
+        <div className="flex flex-wrap items-center gap-2">
+          <KeysDialog />
+          {canCreateAnnouncements(user?.role) && <CreateAnnouncementDialog />}
+        </div>
       </div>
 
       {/* STATS PANEL */}

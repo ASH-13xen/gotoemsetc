@@ -31,10 +31,14 @@ const resumeSchema = new Schema(
   { _id: false }
 );
 
-// Company-issued hardware/SIM, filled in once at issuance — this is the
-// source of truth the Hardware Consent Form's Equipment Inventory section
-// auto-fills from (see mergeData.service.js), same as every other
-// employee-sourced document field.
+// Company-issued hardware/SIM/security checklist, filled in once at
+// issuance and kept current by HR. The first 9 fields below are the
+// original set and MUST keep these exact names — the Hardware Consent
+// Form's Equipment Inventory section auto-fills from them by mapsTo path
+// (see backend/scripts/seedTemplates.js, already seeded into the
+// DocumentTemplate collection); renaming any of them silently blanks that
+// section of every future generated consent form. Everything after that
+// comment is new and additive.
 const inventorySchema = new Schema(
   {
     deviceName: { type: String, trim: true },
@@ -46,6 +50,53 @@ const inventorySchema = new Schema(
     backCover: Boolean,
     powerAdapter: Boolean,
     cable: Boolean,
+
+    // Mobile — new fields. Only shown/relevant in the UI once hasMobile is
+    // checked; kept flat (not nested) so the 9 fields above stay untouched.
+    hasMobile: { type: Boolean, default: false },
+    // Not a Mongoose enum on purpose — the form's blank Select state sends
+    // '' for "not chosen yet" (same pattern as the top-level bloodGroup
+    // field), which a strict enum would reject. 'android' | 'ios' is
+    // enforced at the Zod validator layer instead.
+    mobileOS: { type: String, trim: true },
+    deviceCondition: { type: String, trim: true },
+    whatsappTwoFactor: Boolean,
+    whatsappTwoFactorBackupMail: { type: String, trim: true },
+    whatsappTwoFactorPin: { type: String, trim: true },
+    whatsappNameUpdated: Boolean,
+    whatsappProfiling: Boolean,
+    whatsappBackupInEmployeeMail: Boolean,
+    galleryBackupInEmployeeMail: Boolean,
+    trueCallerUpdated: Boolean,
+    theftProtection: Boolean,
+    findMyDevice: Boolean,
+    appleId: { type: String, trim: true },
+    password: { type: String, trim: true },
+    thumbOrFace: Boolean,
+
+    // Laptop — a separate flat set mirroring the mobile fields above, since
+    // one employee can be issued both at once. Distinct from the top-level
+    // Employee.hasLaptop field (carried over from the Applicant record at
+    // hire time, a different question — "did they already own one" vs "has
+    // the company issued them one").
+    hasLaptop: { type: Boolean, default: false },
+    laptopDeviceName: { type: String, trim: true },
+    laptopSerialNumber: { type: String, trim: true },
+    laptopColor: { type: String, trim: true },
+    laptopCondition: { type: String, trim: true },
+    laptopTheftProtection: Boolean,
+    laptopFindMyDevice: Boolean,
+    laptopPassword: { type: String, trim: true },
+    laptopThumbOrFace: Boolean,
+    laptopMouse: Boolean,
+
+    // General — apply once, regardless of which device(s) are checked above.
+    consentFormLink: { type: String, trim: true },
+    gotofriendLoggedIn: Boolean,
+    employeeMailLoggedIn: Boolean,
+    clientMailLoggedIn: Boolean,
+    goToDataTransfer: Boolean,
+    podcastDataTransfer: Boolean,
   },
   { _id: false }
 );

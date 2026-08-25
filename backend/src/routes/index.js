@@ -38,6 +38,7 @@ const fnfSettlementRoutes = require('./fnfSettlement.routes');
 const monthlyBillRoutes = require('./monthlyBill.routes');
 const reimbursementRoutes = require('./reimbursement.routes');
 const invoiceRoutes = require('./invoice.routes');
+const announcementRoutes = require('./announcement.routes');
 
 const router = Router();
 
@@ -114,5 +115,9 @@ router.use('/keys', keyHolderRoutes);
 // by a worker with add_credentials, not just admins.
 router.use('/users', userRoutes);
 router.use('/audit-log', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), auditLogRoutes);
+// Announcements — gated per-route inside announcement.routes.js (reading/
+// acknowledging your own is open to everyone; creating and the full
+// management list are every non-worker role).
+router.use('/announcements', announcementRoutes);
 
 module.exports = router;

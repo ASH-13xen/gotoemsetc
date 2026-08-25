@@ -92,4 +92,20 @@
   .font-mono {
     font-family: 'Geist Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, monospace;
   }
+
+  /* Every detail in this app displays in caps — a display-only transform,
+     the underlying stored/typed values are untouched. Scoped to .ems-uppercase
+     (App.tsx's root wrapper) rather than `body`, since this app is mounted as
+     a module-federation remote sharing one document with frontendall's shell
+     and other remotes. Being in @layer base means any element that needs to
+     opt out (e.g. the Extra Details password value field) can simply use
+     Tailwind's `normal-case` utility — utilities always win over base in
+     Tailwind's layer order, regardless of selector specificity. */
+  .ems-uppercase,
+  .ems-uppercase input,
+  .ems-uppercase textarea,
+  .ems-uppercase select,
+  .ems-uppercase button {
+    text-transform: uppercase;
+  }
 }

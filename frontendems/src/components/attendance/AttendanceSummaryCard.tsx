@@ -44,19 +44,30 @@ function StatBox({
   value,
   tone,
   code,
+  compact,
 }: {
   label: string
   value: number
   tone: string
   code?: string
+  compact?: boolean
 }) {
   return (
-    <div className={cn('flex flex-col gap-1.5 rounded-xl border p-4', tone)}>
+    <div className={cn('flex flex-col rounded-xl border', compact ? 'gap-0.5 p-2' : 'gap-1.5 p-4', tone)}>
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-2xl font-bold tracking-tight tabular-nums">{value}</p>
-        {code && <span className="rounded-md bg-background/60 px-1.5 py-0.5 text-[10px] font-bold">{code}</span>}
+        <p className={cn('font-bold tracking-tight tabular-nums', compact ? 'text-base' : 'text-2xl')}>{value}</p>
+        {code && (
+          <span
+            className={cn(
+              'rounded-md bg-background/60 font-bold',
+              compact ? 'px-1 py-0 text-[8px]' : 'px-1.5 py-0.5 text-[10px]'
+            )}
+          >
+            {code}
+          </span>
+        )}
       </div>
-      <p className="text-xs font-medium opacity-80">{label}</p>
+      <p className={cn('font-medium opacity-80', compact ? 'text-[10px] leading-tight' : 'text-xs')}>{label}</p>
     </div>
   )
 }
@@ -74,21 +85,27 @@ const OVERTIME_TONE = 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700'
 export function AttendanceSummaryCard({
   employeeId,
   showViewFullButton = true,
+  compact = false,
 }: {
   employeeId: string
   showViewFullButton?: boolean
+  // Smaller padding/tiles/text so this fits in a narrow column next to the
+  // calendar (see EmployeeDetailPage.tsx) instead of the card's own full
+  // width. Purely visual — same data, same grid shape either way.
+  compact?: boolean
 }) {
   const navigate = useNavigate()
   const [period, setPeriod] = useState<Period>('current')
   const range = period === 'current' ? currentMonthRange() : period === 'previous' ? previousMonthRange() : undefined
   const { data, isLoading } = useAttendanceSummary(employeeId, range)
   const summary = data?.summary
+  const statGridCols = compact ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'
 
   return (
-    <Card className="gap-6 p-6">
+    <Card className={compact ? 'gap-4 p-4' : 'gap-6 p-6'}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold text-foreground">Attendance</h2>
+          <h2 className={cn('font-semibold text-foreground', compact ? 'text-sm' : 'text-base')}>Attendance</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             {period === 'overall' && !summary?.dateOfJoining
               ? 'No date of joining on file'
@@ -130,15 +147,22 @@ export function AttendanceSummaryCard({
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 border-t border-border pt-5 sm:grid-cols-4">
-            <StatBox label="Working days" value={summary?.totalWorkingDays ?? 0} tone={NEUTRAL_TONE} />
-            <StatBox label="Unmarked" value={summary?.unmarkedDays ?? 0} tone={NEUTRAL_TONE} />
+          <div className={cn('grid gap-3 border-t border-border pt-5', statGridCols)}>
+            <StatBox compact={compact} label="Working days" value={summary?.totalWorkingDays ?? 0} tone={NEUTRAL_TONE} />
+            <StatBox compact={compact} label="Unmarked" value={summary?.unmarkedDays ?? 0} tone={NEUTRAL_TONE} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className={cn('grid gap-3', statGridCols)}>
             {(Object.entries(STATUS_CONFIG) as [AttendanceStatus, (typeof STATUS_CONFIG)[AttendanceStatus]][]).map(
               ([key, cfg]) => (
-                <StatBox key={key} label={cfg.label} code={cfg.code} value={summary?.counts[key] ?? 0} tone={cfg.box} />
+                <StatBox
+                  key={key}
+                  compact={compact}
+                  label={cfg.label}
+                  code={cfg.code}
+                  value={summary?.counts[key] ?? 0}
+                  tone={cfg.box}
+                />
               )
             )}
           </div>
@@ -146,11 +170,11 @@ export function AttendanceSummaryCard({
           {/* Stacking visibility — a day can be an arrival-side Short Leave
               AND an early departure at once; these surface that instead of
               it silently looking like "just 1 SL" above. */}
-          <div className="grid grid-cols-2 gap-3 border-t border-border pt-5 sm:grid-cols-4">
-            <StatBox label="Early departures" value={summary?.earlyDepartureCount ?? 0} tone={PENALTY_TONE} />
-            <StatBox label="Effective SL units" value={summary?.effectiveSLUnits ?? 0} tone={PENALTY_TONE} />
-            <StatBox label="Half-day penalty units" value={summary?.halfDayPenaltyUnits ?? 0} tone={PENALTY_TONE} />
-            <StatBox label="Overtime (minutes)" value={summary?.totalOvertimeMinutes ?? 0} tone={OVERTIME_TONE} />
+          <div className={cn('grid gap-3 border-t border-border pt-5', statGridCols)}>
+            <StatBox compact={compact} label="Early departures" value={summary?.earlyDepartureCount ?? 0} tone={PENALTY_TONE} />
+            <StatBox compact={compact} label="Effective SL units" value={summary?.effectiveSLUnits ?? 0} tone={PENALTY_TONE} />
+            <StatBox compact={compact} label="Half-day penalty units" value={summary?.halfDayPenaltyUnits ?? 0} tone={PENALTY_TONE} />
+            <StatBox compact={compact} label="Overtime (minutes)" value={summary?.totalOvertimeMinutes ?? 0} tone={OVERTIME_TONE} />
           </div>
         </>
       )}

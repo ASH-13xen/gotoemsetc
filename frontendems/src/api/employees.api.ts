@@ -25,7 +25,11 @@ export interface ExtraDetail {
   value?: string
 }
 
+export type MobileOS = 'android' | 'ios' | ''
+
 export interface Inventory {
+  // Original fields — kept exactly as-is, the Hardware Consent Form's
+  // Equipment Inventory section auto-fills from these by name.
   deviceName?: string
   imeiOrSerialNumber?: string
   deviceColor?: string
@@ -35,6 +39,46 @@ export interface Inventory {
   backCover?: boolean
   powerAdapter?: boolean
   cable?: boolean
+
+  // Mobile — only shown/relevant once hasMobile is checked.
+  hasMobile?: boolean
+  mobileOS?: MobileOS
+  deviceCondition?: string
+  whatsappTwoFactor?: boolean
+  whatsappTwoFactorBackupMail?: string
+  whatsappTwoFactorPin?: string
+  whatsappNameUpdated?: boolean
+  whatsappProfiling?: boolean
+  whatsappBackupInEmployeeMail?: boolean
+  galleryBackupInEmployeeMail?: boolean
+  trueCallerUpdated?: boolean
+  theftProtection?: boolean
+  findMyDevice?: boolean
+  appleId?: string
+  password?: string
+  thumbOrFace?: boolean
+
+  // Laptop — a separate set mirroring the mobile fields, since one employee
+  // can be issued both at once. Distinct from the top-level Employee.hasLaptop
+  // (carried over from the Applicant record at hire time).
+  hasLaptop?: boolean
+  laptopDeviceName?: string
+  laptopSerialNumber?: string
+  laptopColor?: string
+  laptopCondition?: string
+  laptopTheftProtection?: boolean
+  laptopFindMyDevice?: boolean
+  laptopPassword?: string
+  laptopThumbOrFace?: boolean
+  laptopMouse?: boolean
+
+  // General — apply once, regardless of which device(s) are checked above.
+  consentFormLink?: string
+  gotofriendLoggedIn?: boolean
+  employeeMailLoggedIn?: boolean
+  clientMailLoggedIn?: boolean
+  goToDataTransfer?: boolean
+  podcastDataTransfer?: boolean
 }
 
 export interface EmployeeFlag {

@@ -39,10 +39,12 @@ async function createHoliday({ date, label, type = 'holiday' }, createdBy) {
 
   // Instantly applies to every active employee — see
   // attendanceClassifier.service.js#applyHolidayToAllEmployees/
-  // applyHalfDayToAllEmployees — rather than waiting for each of them to
-  // scan in/out before it shows up.
+  // applyHalfDayToAllEmployees/applySlDayToAllEmployees — rather than
+  // waiting for each of them to scan in/out before it shows up.
   if (type === 'half_day') {
     await attendanceClassifierService.applyHalfDayToAllEmployees(normalized);
+  } else if (type === 'sl_day') {
+    await attendanceClassifierService.applySlDayToAllEmployees(normalized);
   } else {
     await attendanceClassifierService.applyHolidayToAllEmployees(normalized);
   }
@@ -54,6 +56,8 @@ async function removeHoliday(id) {
   if (!holiday) throw ApiError.notFound('Holiday not found');
   if (holiday.type === 'half_day') {
     await attendanceClassifierService.revertHalfDayForAllEmployees(holiday.date);
+  } else if (holiday.type === 'sl_day') {
+    await attendanceClassifierService.revertSlDayForAllEmployees(holiday.date);
   } else {
     await attendanceClassifierService.revertHolidayForAllEmployees(holiday.date);
   }

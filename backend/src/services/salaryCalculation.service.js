@@ -3,7 +3,7 @@ const attendanceRepository = require('../repositories/attendance.repository');
 const holidayRepository = require('../repositories/holiday.repository');
 const { ATTENDANCE_STATUS } = require('../config/constants');
 const { dateKey, isOffDay } = require('../utils/attendanceDays');
-const { computeEffectiveUnits } = require('../utils/attendancePenalties');
+const { computeEffectiveUnitsBreakdown } = require('../utils/attendancePenalties');
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -61,10 +61,30 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
   // Short Leave arrival AND an early departure at once (two short leaves in
   // one day), so it's a separate tally feeding the same penalty pool below.
   let earlyDepartureCount = 0;
+  // Parallel date-tagged lists, alongside the plain counts above — this is
+  // what lets the generated salary slip show an employee exactly which
+  // dates produced a Late/Short-Leave/Half-Day deduction, not just a final
+  // number. See attendancePenalties.js#computeEffectiveUnitsBreakdown.
+  const lateStatusDates = [];
+  const lateFlagDates = [];
+  const slStatusDates = [];
+  const earlyDepartureDates = [];
+  const halfDayStatusDates = [];
   for (const record of records) {
-    if (record.status) counts[record.status] += 1;
-    if (record.isLate) lateFlagCount += 1;
-    if (record.earlyDeparture) earlyDepartureCount += 1;
+    if (record.status) {
+      counts[record.status] += 1;
+      if (record.status === ATTENDANCE_STATUS.LATE) lateStatusDates.push(record.date);
+      if (record.status === ATTENDANCE_STATUS.SHORT_LEAVE) slStatusDates.push(record.date);
+      if (record.status === ATTENDANCE_STATUS.HALF_DAY) halfDayStatusDates.push(record.date);
+    }
+    if (record.isLate) {
+      lateFlagCount += 1;
+      lateFlagDates.push(record.date);
+    }
+    if (record.earlyDeparture) {
+      earlyDepartureCount += 1;
+      earlyDepartureDates.push(record.date);
+    }
     totalOvertimeMinutes += record.overtimeMinutes || 0;
   }
 
@@ -88,13 +108,21 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
   const workingDaysInPeriod = totalDaysInPeriod - offDaysInPeriod;
 
   // At most 2 Lates and 2 Short-Leave units count in full; the overflow
-  // demotes down to Half-Day units (see attendancePenalties.js).
-  const { lateToSLUnits, effectiveSLUnits, cappedLateUnits, cappedSLUnits, halfDayPenaltyUnits } =
-    computeEffectiveUnits({ counts, lateFlagCount, earlyDepartureCount });
+  // demotes down to Half-Day units (see attendancePenalties.js) — computed
+  // date-by-date so the exact dates behind each number can be shown on the
+  // generated salary slip, not just the totals.
+  const deductionBreakdown = computeEffectiveUnitsBreakdown({
+    lateStatusDates,
+    lateFlagDates,
+    slStatusDates,
+    earlyDepartureDates,
+    halfDayStatusDates,
+  });
+  const { lateToSLUnits, effectiveSLUnits, cappedLateUnits, cappedSLUnits, halfDayPenaltyUnits } = deductionBreakdown;
 
   // Actual Half-Day-status days plus every day demoted down to Half-Day by
   // the cap above — one unified pool for both Days Worked credit and the
-  // Half Day Deductions line.
+  // Half Day Deductions line. Same count as deductionBreakdown.halfDayEvents.length.
   const totalHalfDayUnits = counts.H + halfDayPenaltyUnits;
 
   const daysWorkedTotal =
@@ -114,6 +142,7 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
     cappedSLUnits,
     halfDayPenaltyUnits,
     totalHalfDayUnits,
+    deductionBreakdown,
     unpaidAbsentDays,
     totalOvertimeMinutes,
     records,
@@ -153,11 +182,17 @@ function computeSalary(employee, summary, manualInputs) {
   const totalDeductions =
     incomeTaxDeduction + professionTax + pf + halfDayDeductions + unpaidOffDeductions + otherDeduction3;
 
-  // Every Earnings row's Master and Earnings columns are identical,
-  // including Basic — no deduction is baked into any individual row.
-  // Gross Earnings is simply the sum of the Master column.
-  const basicEarnings = basicMaster;
-  const grossEarnings = basicMaster + otMaster + compensationOff + incentives + travelAllowance + otherEarning1;
+  // Master = the employee's flat monthly reference rate, shown as-is.
+  // Earnings = what was actually earned this specific period — prorated by
+  // the daily rate × the number of days the period actually covers. For a
+  // full calendar month these are identical (totalDaysInPeriod ===
+  // dailyRateDivisor), which is why this was previously indistinguishable
+  // from just cloning basicMaster — but for any partial period (a new
+  // joiner's first, clipped month; an admin-picked custom range shorter
+  // than a month) Earnings must scale down, or the employee gets paid a
+  // full month's Basic for only part of it.
+  const basicEarnings = dailyRate * summary.totalDaysInPeriod;
+  const grossEarnings = basicEarnings + otMaster + compensationOff + incentives + travelAllowance + otherEarning1;
 
   const totalReimbursements = reimbursement1 + reimbursement2;
   const netPayable = grossEarnings - totalDeductions + totalReimbursements;

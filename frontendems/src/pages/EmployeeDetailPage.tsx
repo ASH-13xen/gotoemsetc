@@ -30,6 +30,7 @@ import { SalarySlipsList } from '@/components/salary/SalarySlipsList'
 import { RequestHistoryTable } from '@/components/uploadRequests/RequestHistoryTable'
 import { ActivityTimeline } from '@/components/employees/ActivityTimeline'
 import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummaryCard'
+import { AttendanceCalendar } from '@/components/attendance/AttendanceCalendar'
 import { NotInformedWarningsCard } from '@/components/attendance/NotInformedWarningsCard'
 import { PendingWarningsModal } from '@/components/attendance/PendingWarningsModal'
 import { useAuth } from '@/hooks/useAuth'
@@ -38,7 +39,7 @@ import { extractApiErrorMessage } from '@/lib/errors'
 import { hasAnyPermission, hasPermission, isAdminLike } from '@/lib/permissions'
 import { useDeleteEmployee, useEmployee, useEmployees, useUpdateEmployee } from '@/hooks/useEmployees'
 import { useUploadedDocuments } from '@/hooks/useUploadRequests'
-import { BLOOD_GROUPS, type Address, type Employee, type EmployeeStatus, type EmploymentType, type Inventory } from '@/api/employees.api'
+import { BLOOD_GROUPS, type Address, type Employee, type EmployeeStatus, type EmploymentType, type Inventory, type MobileOS } from '@/api/employees.api'
 
 type InventoryForm = {
   deviceName: string
@@ -50,6 +51,41 @@ type InventoryForm = {
   backCover: boolean
   powerAdapter: boolean
   cable: boolean
+
+  hasMobile: boolean
+  mobileOS: MobileOS
+  deviceCondition: string
+  whatsappTwoFactor: boolean
+  whatsappTwoFactorBackupMail: string
+  whatsappTwoFactorPin: string
+  whatsappNameUpdated: boolean
+  whatsappProfiling: boolean
+  whatsappBackupInEmployeeMail: boolean
+  galleryBackupInEmployeeMail: boolean
+  trueCallerUpdated: boolean
+  theftProtection: boolean
+  findMyDevice: boolean
+  appleId: string
+  password: string
+  thumbOrFace: boolean
+
+  hasLaptop: boolean
+  laptopDeviceName: string
+  laptopSerialNumber: string
+  laptopColor: string
+  laptopCondition: string
+  laptopTheftProtection: boolean
+  laptopFindMyDevice: boolean
+  laptopPassword: string
+  laptopThumbOrFace: boolean
+  laptopMouse: boolean
+
+  consentFormLink: string
+  gotofriendLoggedIn: boolean
+  employeeMailLoggedIn: boolean
+  clientMailLoggedIn: boolean
+  goToDataTransfer: boolean
+  podcastDataTransfer: boolean
 }
 
 type AddressForm = {
@@ -140,6 +176,41 @@ function toInventoryForm(inventory: Inventory | undefined): InventoryForm {
     backCover: inventory?.backCover ?? false,
     powerAdapter: inventory?.powerAdapter ?? false,
     cable: inventory?.cable ?? false,
+
+    hasMobile: inventory?.hasMobile ?? false,
+    mobileOS: inventory?.mobileOS ?? '',
+    deviceCondition: inventory?.deviceCondition ?? '',
+    whatsappTwoFactor: inventory?.whatsappTwoFactor ?? false,
+    whatsappTwoFactorBackupMail: inventory?.whatsappTwoFactorBackupMail ?? '',
+    whatsappTwoFactorPin: inventory?.whatsappTwoFactorPin ?? '',
+    whatsappNameUpdated: inventory?.whatsappNameUpdated ?? false,
+    whatsappProfiling: inventory?.whatsappProfiling ?? false,
+    whatsappBackupInEmployeeMail: inventory?.whatsappBackupInEmployeeMail ?? false,
+    galleryBackupInEmployeeMail: inventory?.galleryBackupInEmployeeMail ?? false,
+    trueCallerUpdated: inventory?.trueCallerUpdated ?? false,
+    theftProtection: inventory?.theftProtection ?? false,
+    findMyDevice: inventory?.findMyDevice ?? false,
+    appleId: inventory?.appleId ?? '',
+    password: inventory?.password ?? '',
+    thumbOrFace: inventory?.thumbOrFace ?? false,
+
+    hasLaptop: inventory?.hasLaptop ?? false,
+    laptopDeviceName: inventory?.laptopDeviceName ?? '',
+    laptopSerialNumber: inventory?.laptopSerialNumber ?? '',
+    laptopColor: inventory?.laptopColor ?? '',
+    laptopCondition: inventory?.laptopCondition ?? '',
+    laptopTheftProtection: inventory?.laptopTheftProtection ?? false,
+    laptopFindMyDevice: inventory?.laptopFindMyDevice ?? false,
+    laptopPassword: inventory?.laptopPassword ?? '',
+    laptopThumbOrFace: inventory?.laptopThumbOrFace ?? false,
+    laptopMouse: inventory?.laptopMouse ?? false,
+
+    consentFormLink: inventory?.consentFormLink ?? '',
+    gotofriendLoggedIn: inventory?.gotofriendLoggedIn ?? false,
+    employeeMailLoggedIn: inventory?.employeeMailLoggedIn ?? false,
+    clientMailLoggedIn: inventory?.clientMailLoggedIn ?? false,
+    goToDataTransfer: inventory?.goToDataTransfer ?? false,
+    podcastDataTransfer: inventory?.podcastDataTransfer ?? false,
   }
 }
 
@@ -327,7 +398,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
           requested documents) renders as a fixed-size portrait beside the
           name, not a background — same layout for both an admin/HR viewer
           and the employee viewing their own profile. */}
-      <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+      <div className="sticky top-0 z-30 flex flex-col gap-6 border-b border-border bg-background py-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex gap-4">
           {photoDoc && (
             <UploadedDocumentImage
@@ -645,7 +716,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 control={control}
                 name="companyLoginAdded"
                 render={({ field }) => (
-                  <CheckboxRow label={`Gotofriend_${employee.employeeCode} log in?`} checked={field.value} onChange={field.onChange} />
+                  <CheckboxRow label="Gotofriend12345 log in?" checked={field.value} onChange={field.onChange} />
                 )}
               />
               <Controller
@@ -679,27 +750,30 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
             </div>
           </Card>
 
-          {/* Inventory — company-issued hardware/SIM, auto-fills the
-              Hardware Consent Form's Equipment Inventory section in the
-              document wizard the same way Designation/Department do. */}
+          {/* Inventory — company-issued hardware/SIM/security checklist. The
+              first grid + first checkbox row below (deviceName through cable)
+              are the original fields and auto-fill the Hardware Consent
+              Form's Equipment Inventory section — everything past "Has
+              mobile" / "Has laptop" is new and only appears once that
+              device's checkbox is ticked. */}
           <Card className="gap-6 p-6">
             <SectionTitle>Inventory</SectionTitle>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="grid gap-1.5">
                 <Label htmlFor="inventory.deviceName" className="text-xs text-muted-foreground">Mobile/laptop name</Label>
-                <Input id="inventory.deviceName" className="uppercase" {...register('inventory.deviceName')} />
+                <Input id="inventory.deviceName" {...register('inventory.deviceName')} />
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="inventory.imeiOrSerialNumber" className="text-xs text-muted-foreground">Mobile IMEI num / laptop serial num</Label>
-                <Input id="inventory.imeiOrSerialNumber" className="uppercase" {...register('inventory.imeiOrSerialNumber')} />
+                <Input id="inventory.imeiOrSerialNumber" {...register('inventory.imeiOrSerialNumber')} />
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="inventory.deviceColor" className="text-xs text-muted-foreground">Mobile/laptop color</Label>
-                <Input id="inventory.deviceColor" className="uppercase" {...register('inventory.deviceColor')} />
+                <Input id="inventory.deviceColor" {...register('inventory.deviceColor')} />
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="inventory.simProvider" className="text-xs text-muted-foreground">SIM provider</Label>
-                <Input id="inventory.simProvider" className="uppercase" {...register('inventory.simProvider')} />
+                <Input id="inventory.simProvider" {...register('inventory.simProvider')} />
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="inventory.simPhoneNumber" className="text-xs text-muted-foreground">Phone number</Label>
@@ -727,6 +801,206 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 name="inventory.cable"
                 render={({ field }) => <CheckboxRow label="Cable" checked={field.value} onChange={field.onChange} />}
               />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 border-t border-border pt-5 md:grid-cols-2">
+              <Controller
+                control={control}
+                name="inventory.hasMobile"
+                render={({ field }) => <CheckboxRow label="Has a company mobile" checked={field.value} onChange={field.onChange} />}
+              />
+              <Controller
+                control={control}
+                name="inventory.hasLaptop"
+                render={({ field }) => <CheckboxRow label="Has a company laptop" checked={field.value} onChange={field.onChange} />}
+              />
+            </div>
+
+            {watch('inventory.hasMobile') && (
+              <div className="grid gap-4 rounded-xl border border-border bg-secondary/20 p-4">
+                <p className="text-xs font-semibold text-muted-foreground">Mobile</p>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Operating system</Label>
+                    <Controller
+                      control={control}
+                      name="inventory.mobileOS"
+                      render={({ field }) => (
+                        <Select value={field.value} onValueChange={(v) => field.onChange(v as MobileOS)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="android">Android</SelectItem>
+                            <SelectItem value="ios">iOS</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="inventory.deviceCondition" className="text-xs text-muted-foreground">Condition</Label>
+                    <Input id="inventory.deviceCondition" {...register('inventory.deviceCondition')} />
+                  </div>
+                  {watch('inventory.mobileOS') === 'ios' && (
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="inventory.appleId" className="text-xs text-muted-foreground">Apple ID</Label>
+                      <Input id="inventory.appleId" {...register('inventory.appleId')} />
+                    </div>
+                  )}
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="inventory.password" className="text-xs text-muted-foreground">Password</Label>
+                    <Input id="inventory.password" className="normal-case" {...register('inventory.password')} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <Controller
+                    control={control}
+                    name="inventory.whatsappTwoFactor"
+                    render={({ field }) => <CheckboxRow label="WhatsApp 2-factor enabled" checked={field.value} onChange={field.onChange} />}
+                  />
+                  {watch('inventory.whatsappTwoFactor') && (
+                    <>
+                      <div className="grid gap-1.5">
+                        <Label htmlFor="inventory.whatsappTwoFactorBackupMail" className="text-xs text-muted-foreground">W/A 2FA backup mail</Label>
+                        <Input id="inventory.whatsappTwoFactorBackupMail" {...register('inventory.whatsappTwoFactorBackupMail')} />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label htmlFor="inventory.whatsappTwoFactorPin" className="text-xs text-muted-foreground">W/A 2FA PIN</Label>
+                        <Input id="inventory.whatsappTwoFactorPin" className="normal-case" {...register('inventory.whatsappTwoFactorPin')} />
+                      </div>
+                    </>
+                  )}
+                  <Controller
+                    control={control}
+                    name="inventory.whatsappNameUpdated"
+                    render={({ field }) => <CheckboxRow label="W/A name updated" checked={field.value} onChange={field.onChange} />}
+                  />
+                  <Controller
+                    control={control}
+                    name="inventory.whatsappProfiling"
+                    render={({ field }) => <CheckboxRow label="W/A profiling done" checked={field.value} onChange={field.onChange} />}
+                  />
+                  <Controller
+                    control={control}
+                    name="inventory.whatsappBackupInEmployeeMail"
+                    render={({ field }) => <CheckboxRow label="W/A backup in employee mail" checked={field.value} onChange={field.onChange} />}
+                  />
+                  <Controller
+                    control={control}
+                    name="inventory.galleryBackupInEmployeeMail"
+                    render={({ field }) => <CheckboxRow label="Gallery backup in employee mail" checked={field.value} onChange={field.onChange} />}
+                  />
+                  <Controller
+                    control={control}
+                    name="inventory.trueCallerUpdated"
+                    render={({ field }) => <CheckboxRow label="True Caller updated" checked={field.value} onChange={field.onChange} />}
+                  />
+                  <Controller
+                    control={control}
+                    name="inventory.theftProtection"
+                    render={({ field }) => <CheckboxRow label="Theft protection enabled" checked={field.value} onChange={field.onChange} />}
+                  />
+                  <Controller
+                    control={control}
+                    name="inventory.findMyDevice"
+                    render={({ field }) => <CheckboxRow label="Find my device enabled" checked={field.value} onChange={field.onChange} />}
+                  />
+                  <Controller
+                    control={control}
+                    name="inventory.thumbOrFace"
+                    render={({ field }) => <CheckboxRow label="Thumb / face unlock set up" checked={field.value} onChange={field.onChange} />}
+                  />
+                </div>
+              </div>
+            )}
+
+            {watch('inventory.hasLaptop') && (
+              <div className="grid gap-4 rounded-xl border border-border bg-secondary/20 p-4">
+                <p className="text-xs font-semibold text-muted-foreground">Laptop</p>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="inventory.laptopDeviceName" className="text-xs text-muted-foreground">Laptop name</Label>
+                    <Input id="inventory.laptopDeviceName" {...register('inventory.laptopDeviceName')} />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="inventory.laptopSerialNumber" className="text-xs text-muted-foreground">Serial number</Label>
+                    <Input id="inventory.laptopSerialNumber" {...register('inventory.laptopSerialNumber')} />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="inventory.laptopColor" className="text-xs text-muted-foreground">Color</Label>
+                    <Input id="inventory.laptopColor" {...register('inventory.laptopColor')} />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="inventory.laptopCondition" className="text-xs text-muted-foreground">Condition</Label>
+                    <Input id="inventory.laptopCondition" {...register('inventory.laptopCondition')} />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="inventory.laptopPassword" className="text-xs text-muted-foreground">Password</Label>
+                    <Input id="inventory.laptopPassword" className="normal-case" {...register('inventory.laptopPassword')} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <Controller
+                    control={control}
+                    name="inventory.laptopTheftProtection"
+                    render={({ field }) => <CheckboxRow label="Theft protection enabled" checked={field.value} onChange={field.onChange} />}
+                  />
+                  <Controller
+                    control={control}
+                    name="inventory.laptopFindMyDevice"
+                    render={({ field }) => <CheckboxRow label="Find my device enabled" checked={field.value} onChange={field.onChange} />}
+                  />
+                  <Controller
+                    control={control}
+                    name="inventory.laptopThumbOrFace"
+                    render={({ field }) => <CheckboxRow label="Thumb / face unlock set up" checked={field.value} onChange={field.onChange} />}
+                  />
+                  <Controller
+                    control={control}
+                    name="inventory.laptopMouse"
+                    render={({ field }) => <CheckboxRow label="Mouse issued" checked={field.value} onChange={field.onChange} />}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="grid gap-4 border-t border-border pt-5">
+              <p className="text-xs font-semibold text-muted-foreground">General</p>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="inventory.consentFormLink" className="text-xs text-muted-foreground">Consent form link</Label>
+                  <Input id="inventory.consentFormLink" className="normal-case" {...register('inventory.consentFormLink')} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <Controller
+                  control={control}
+                  name="inventory.gotofriendLoggedIn"
+                  render={({ field }) => <CheckboxRow label="Gotofriend12345 logged in" checked={field.value} onChange={field.onChange} />}
+                />
+                <Controller
+                  control={control}
+                  name="inventory.employeeMailLoggedIn"
+                  render={({ field }) => <CheckboxRow label="Employee mail logged in" checked={field.value} onChange={field.onChange} />}
+                />
+                <Controller
+                  control={control}
+                  name="inventory.clientMailLoggedIn"
+                  render={({ field }) => <CheckboxRow label="Client mail logged in" checked={field.value} onChange={field.onChange} />}
+                />
+                <Controller
+                  control={control}
+                  name="inventory.goToDataTransfer"
+                  render={({ field }) => <CheckboxRow label="GO-TO data transfer done" checked={field.value} onChange={field.onChange} />}
+                />
+                <Controller
+                  control={control}
+                  name="inventory.podcastDataTransfer"
+                  render={({ field }) => <CheckboxRow label="Podcast data transfer done" checked={field.value} onChange={field.onChange} />}
+                />
+              </div>
             </div>
           </Card>
 
@@ -817,20 +1091,21 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
               )}
               {extraDetails.fields.map((field, index) => {
                 // Mirrors backend/src/utils/extraDetailsCrypto.js#isPasswordKey
-                // exactly — a password-like value stays normal-case here the
-                // same way it stays out of the uppercase sweep everywhere else.
+                // exactly — this is the one field in the whole app exempted
+                // from the global uppercase display rule (see index.css),
+                // since a password needs to read back in its real case.
                 const isPasswordKey = /password/i.test(watch(`extraDetails.${index}.key`) || '')
                 return (
                   <div key={field.id} className="flex items-center gap-3">
                     <Input
                       placeholder="Key"
                       {...register(`extraDetails.${index}.key` as const)}
-                      className="flex-1 font-mono uppercase"
+                      className="flex-1 font-mono"
                     />
                     <Input
                       placeholder="Value"
                       {...register(`extraDetails.${index}.value` as const)}
-                      className={cn('flex-1 font-mono', !isPasswordKey && 'uppercase')}
+                      className={cn('flex-1 font-mono', isPasswordKey && 'normal-case')}
                     />
                     <Button
                       type="button"
@@ -912,7 +1187,10 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
       )}
 
       <div className="grid gap-8">
-        <AttendanceSummaryCard employeeId={employeeId} />
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <AttendanceSummaryCard employeeId={employeeId} compact />
+          <AttendanceCalendar employeeId={employeeId} compact />
+        </div>
         {isAdmin && <NotInformedWarningsCard employeeId={employeeId} />}
         {canViewSalary && (
           <SalarySlipsList employeeId={employeeId} employeeName={`${employee.firstName} ${employee.lastName ?? ''}`} />

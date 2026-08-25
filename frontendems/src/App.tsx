@@ -53,10 +53,16 @@ interface AppProps {
 
 export default function App({ basename }: AppProps = {}) {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <BrowserRouter basename={basename}>
-          <Routes>
+    // Scopes the app-wide uppercase display rule (see index.css) to just
+    // this remote's own subtree — `contents` keeps it out of the layout box
+    // tree entirely, so it can't be a bare `body` selector (which would leak
+    // into frontendall's shell and every other remote when this app is
+    // loaded as a module-federation remote sharing one document).
+    <div className="ems-uppercase contents">
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <BrowserRouter basename={basename}>
+            <Routes>
             <Route path="/login" element={<LoginPage />} />
             {/* Public, token-gated link sent to applicants — no login required. */}
             <Route path="/upload/:token" element={<PublicUploadPage />} />
@@ -166,10 +172,11 @@ export default function App({ basename }: AppProps = {}) {
                 </RequireAuth>
               }
             />
-          </Routes>
-        </BrowserRouter>
-        <Toaster richColors position="top-right" />
-      </AuthProvider>
-    </QueryClientProvider>
+            </Routes>
+          </BrowserRouter>
+          <Toaster richColors position="top-right" />
+        </AuthProvider>
+      </QueryClientProvider>
+    </div>
   )
 }
