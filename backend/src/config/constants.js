@@ -191,6 +191,10 @@ module.exports = {
     // text distinguishes the 3/6/10 tiers rather than a type per tier.
     EMPLOYEE_RED_FLAG_MILESTONE: 'employee_red_flag_milestone',
     EMPLOYEE_GREEN_FLAG_MILESTONE: 'employee_green_flag_milestone',
+    // Sales chatbot — fired the moment a lead needs a human (bot handoff,
+    // meeting offer, the "talk to a human" button, or the fallback form).
+    // See services/salesChat/notify.js.
+    SALES_LEAD_ROUTED: 'sales_lead_routed',
   },
   // HR sits below Admin but is treated as admin-equivalent everywhere except
   // one explicit restriction (can't edit attendance older than 2 days — see
@@ -566,4 +570,56 @@ module.exports = {
   },
   REIMBURSEMENT_TRAVEL_MODE: { CAB: 'cab', BIKE_PETROL: 'bike_petrol' },
   REIMBURSEMENT_STATUS: { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected', PAID: 'paid' },
+
+  // ---------------------------------------------------------------------
+  // Sales chatbot — public landing page (folder: /sales), routes:
+  // /api/sales-chat. An always-on AI qualifier that runs a short discovery
+  // conversation, scores the lead, and routes it. WhatsApp / Meta / calendar
+  // booking are deliberately out of this first slice. See
+  // services/salesChat/* and models/SalesLead|SalesConversation|SalesKbDoc.
+  // ---------------------------------------------------------------------
+  // Where the lead is in its lifecycle. new -> engaged the moment they send
+  // a first message; qualified once there's a contact detail and a score in
+  // band C or better; routed once the bot has offered a meeting or a human;
+  // disqualified on a hard knock-out (competitor, job seeker, no budget…).
+  SALES_LEAD_STATUS: {
+    NEW: 'new',
+    ENGAGED: 'engaged',
+    QUALIFIED: 'qualified',
+    ROUTED: 'routed',
+    DISQUALIFIED: 'disqualified',
+  },
+  SALES_CONVERSATION_STATUS: { OPEN: 'open', HANDOFF: 'handoff', CLOSED: 'closed' },
+  // Where a routed lead goes. self_book is the "bot offered a slot" path
+  // (calendar integration lands later — until then it behaves like
+  // exec_queue with a note); ceo_track is reserved for band-A leads who
+  // explicitly asked to talk.
+  SALES_ROUTING_DESTINATION: {
+    SELF_BOOK: 'self_book',
+    EXEC_QUEUE: 'exec_queue',
+    CEO_TRACK: 'ceo_track',
+    NURTURE: 'nurture',
+    DISQUALIFY: 'disqualify',
+  },
+  SALES_SCORE_BAND: { A: 'A', B: 'B', C: 'C', D: 'D' },
+  // What the bot should do next, decided deterministically after each turn
+  // (never left to the model) — see services/salesChat/orchestrator.js.
+  SALES_NEXT_ACTION: {
+    CONTINUE: 'continue',
+    OFFER_MEETING: 'offer_meeting',
+    OFFER_HANDOFF: 'offer_handoff',
+    DISQUALIFY: 'disqualify',
+  },
+  // Knowledge-base document kinds. case_study is the only one the bot can
+  // quote past results from; offer/service back get_offers; the rest are
+  // grounding context. Nothing about price is ever generated free-hand.
+  SALES_KB_TYPE: {
+    CASE_STUDY: 'case_study',
+    SERVICE: 'service',
+    OFFER: 'offer',
+    FAQ: 'faq',
+    OBJECTION: 'objection',
+  },
+  SALES_KB_STATUS: { ACTIVE: 'active', ARCHIVED: 'archived' },
+  SALES_CHAT_CHANNEL: { WEB: 'web' },
 };

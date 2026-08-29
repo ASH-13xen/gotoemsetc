@@ -102,7 +102,7 @@ export default function DashboardPage() {
 
   if (!isAdminLike) {
     return (
-      <div className="space-y-8 py-4">
+      <div className="space-y-6 py-4">
         <PendingWarningsModal />
         <AttendanceOutcomeModal />
         <ComplaintReviewModal />
@@ -110,7 +110,7 @@ export default function DashboardPage() {
         <MonthlyBillReminderModal />
         <PendingAnnouncementsModal />
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-4xl font-black tracking-tight text-foreground">
+          <h1 className="text-3xl font-black tracking-tight text-foreground sm:text-4xl">
             Welcome, <span className="text-primary">{user?.username}</span>
           </h1>
           <div className="flex flex-wrap items-center gap-2">
@@ -121,27 +121,36 @@ export default function DashboardPage() {
             <ClaimReimbursementDialog />
           </div>
         </div>
-        <MyOvertimeCard />
+
         <PlanNextDayCard />
         <UpcomingCalendarWidget />
         <CompanyCalendarGrid />
-        <MyUpcomingTasksWidget />
-        <MyDocumentsCard />
-        <MyUploadRequestsCard />
-        <MySalarySlipsCard />
-        <MyReimbursementsCard />
+
+        {/* The rest are compact stat/list cards — grouped into a grid
+            instead of stacked full-width, one per row, which is what was
+            forcing so much scrolling to get through the dashboard.
+            `items-start` keeps a shorter card from stretching to match its
+            tallest row neighbour. */}
+        <div className="grid items-start gap-6 sm:grid-cols-2 xl:grid-cols-3">
+          <MyOvertimeCard />
+          <MyUpcomingTasksWidget />
+          <MyDocumentsCard />
+          <MyUploadRequestsCard />
+          <MySalarySlipsCard />
+          <MyReimbursementsCard />
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-8 py-4">
+    <div className="space-y-6 py-4">
       <PendingWarningsModal />
       <PendingLeaveApprovalsModal />
       <PendingAnnouncementsModal />
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-black tracking-tight text-foreground">
+          <h1 className="text-3xl font-black tracking-tight text-foreground sm:text-4xl">
             Welcome, <span className="text-primary">{user?.username}</span>
           </h1>
           <p className="text-sm text-muted-foreground mt-2">
@@ -159,7 +168,7 @@ export default function DashboardPage() {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="grid gap-6 grid-cols-2 md:grid-cols-4"
+        className="grid gap-4 grid-cols-2 sm:gap-6 md:grid-cols-4"
       >
         <StatCard label="Total applicants" value={totalApplicants} />
         <StatCard label="Upcoming meetings" value={upcomingMeetings} />
@@ -173,9 +182,10 @@ export default function DashboardPage() {
 
       <CompanyCalendarGrid />
 
-      <MyUpcomingTasksWidget />
-
-      <MyEventResponsibilitiesWidget />
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <MyUpcomingTasksWidget />
+        <MyEventResponsibilitiesWidget />
+      </div>
     </div>
   )
 }

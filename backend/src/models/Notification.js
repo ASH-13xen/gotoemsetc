@@ -20,6 +20,8 @@ const notificationSchema = new Schema(
     invoice: { type: Schema.Types.ObjectId, ref: 'Invoice' },
     monthlyBill: { type: Schema.Types.ObjectId, ref: 'MonthlyBill' },
     reimbursement: { type: Schema.Types.ObjectId, ref: 'Reimbursement' },
+    // Sales chatbot — see services/salesChat/notify.js.
+    salesLead: { type: Schema.Types.ObjectId, ref: 'SalesLead' },
     isRead: { type: Boolean, default: false },
   },
   { timestamps: true }

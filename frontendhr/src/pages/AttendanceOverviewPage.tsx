@@ -98,54 +98,60 @@ export default function AttendanceOverviewPage() {
         }
       />
 
-      {isLoading ? (
-        <div className="grid grid-cols-7 gap-2">
-          {Array.from({ length: 35 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full rounded-xl" />
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-7 gap-2">
-          {WEEKDAYS.map((w) => (
-            <div key={w} className="px-1 text-center text-xs font-bold uppercase tracking-widest text-muted-foreground">
-              {w}
-            </div>
-          ))}
-          {cells.map((day, i) => {
-            if (day === null) return <div key={`blank-${i}`} />
-            const key = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-            const dayRecords = byDate.get(key) ?? []
-            const notable = dayRecords.filter((r) => r.status && r.status !== 'P')
-            const overtime = dayRecords.filter((r) => r.overtimeMinutes > 0)
-
-            return (
-              <div key={key} className="flex min-h-32 flex-col gap-1.5 rounded-xl border border-border bg-card p-2">
-                <p className="text-xs font-bold text-foreground">{day}</p>
-                <div className="flex flex-col gap-1 overflow-y-auto">
-                  {notable.map((r) => {
-                    const cfg = r.status ? STATUS_CONFIG[r.status] : undefined
-                    return (
-                      <div key={r._id} className="flex items-center gap-1.5 text-[11px]">
-                        <span className={cn('size-1.5 shrink-0 rounded-full', cfg?.dot ?? 'bg-muted-foreground')} />
-                        <span className="truncate text-foreground">{employeeName(r)}</span>
-                        <span className="shrink-0 font-bold text-muted-foreground">{r.status}</span>
-                      </div>
-                    )
-                  })}
-                  {showOvertime &&
-                    overtime.map((r) => (
-                      <div key={`ot-${r._id}`} className="flex items-center gap-1.5 text-[11px] text-primary">
-                        <Clock className="size-3 shrink-0" />
-                        <span className="truncate">{employeeName(r)}</span>
-                        <span className="shrink-0 font-bold">+{r.overtimeMinutes}m</span>
-                      </div>
-                    ))}
-                </div>
+      {/* This is a dense, 7-column-wide report — on a narrow screen it
+          scrolls horizontally as one unit (min-w-227.5 keeps every day
+          column at a legible ~130px) rather than squeezing each day down to
+          an unreadable sliver. */}
+      <div className="overflow-x-auto">
+        {isLoading ? (
+          <div className="grid min-w-227.5 grid-cols-7 gap-2">
+            {Array.from({ length: 35 }).map((_, i) => (
+              <Skeleton key={i} className="h-32 w-full rounded-xl" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid min-w-227.5 grid-cols-7 gap-2">
+            {WEEKDAYS.map((w) => (
+              <div key={w} className="px-1 text-center text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                {w}
               </div>
-            )
-          })}
-        </div>
-      )}
+            ))}
+            {cells.map((day, i) => {
+              if (day === null) return <div key={`blank-${i}`} />
+              const key = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+              const dayRecords = byDate.get(key) ?? []
+              const notable = dayRecords.filter((r) => r.status && r.status !== 'P')
+              const overtime = dayRecords.filter((r) => r.overtimeMinutes > 0)
+
+              return (
+                <div key={key} className="flex min-h-32 flex-col gap-1.5 rounded-xl border border-border bg-card p-2">
+                  <p className="text-xs font-bold text-foreground">{day}</p>
+                  <div className="flex flex-col gap-1 overflow-y-auto">
+                    {notable.map((r) => {
+                      const cfg = r.status ? STATUS_CONFIG[r.status] : undefined
+                      return (
+                        <div key={r._id} className="flex items-center gap-1.5 text-[11px]">
+                          <span className={cn('size-1.5 shrink-0 rounded-full', cfg?.dot ?? 'bg-muted-foreground')} />
+                          <span className="truncate text-foreground">{employeeName(r)}</span>
+                          <span className="shrink-0 font-bold text-muted-foreground">{r.status}</span>
+                        </div>
+                      )
+                    })}
+                    {showOvertime &&
+                      overtime.map((r) => (
+                        <div key={`ot-${r._id}`} className="flex items-center gap-1.5 text-[11px] text-primary">
+                          <Clock className="size-3 shrink-0" />
+                          <span className="truncate">{employeeName(r)}</span>
+                          <span className="shrink-0 font-bold">+{r.overtimeMinutes}m</span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

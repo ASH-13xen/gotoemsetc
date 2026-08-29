@@ -1,5 +1,5 @@
-import { type ReactNode, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { type ReactNode, useEffect, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Users,
@@ -14,10 +14,12 @@ import {
   Wrench,
   Wallet,
   Flag,
+  X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { roleLabel } from "@/lib/roles";
+import { cn } from "@/lib/utils";
 import { NotificationBell } from "./NotificationBell";
 
 // Display names for the underlying role values (permissions/auth logic stays
@@ -33,6 +35,21 @@ export function ShellLayout({
 }) {
   const { user, signOut } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  // Off-canvas drawer state for narrow viewports — the sidebar below md is
+  // fully hidden (translate-x-full) rather than permanently occupying a
+  // third of a phone's width, which is what was clipping/squeezing content
+  // on mobile before. Independent of `collapsed`, which is a desktop-only
+  // icon-rail toggle and has no meaning on a drawer that's either fully open
+  // or fully closed.
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
+
+  // Close the drawer automatically on every route change — otherwise a link
+  // tap on mobile would leave the overlay sitting open on top of the page it
+  // just navigated to.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   // Deliberately only admin + HR — the newer roles (ceo, digital admin,
   // operations/account manager, team lead) have no permissions wired up yet,
@@ -89,26 +106,50 @@ export function ShellLayout({
   ];
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background">
-      {/* Sidebar */}
+    <div className="flex h-screen w-full overflow-hidden bg-background">
+      {/* Mobile backdrop — covers the whole viewport (including the top
+          bar) while the drawer is open, so a tap anywhere outside the
+          sidebar closes it instead of interacting with the page behind it. */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar — an off-canvas drawer below md (fixed, slides in/out,
+          full label width regardless of `collapsed`), the original
+          icon-rail/full sidebar at md and up. */}
       <aside
-        className={`flex flex-col bg-card border-r border-border transition-all duration-300 z-50 shrink-0 ${
-          collapsed ? "w-20" : "w-64"
-        }`}
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-card border-r border-border shrink-0",
+          "transition-transform duration-300 ease-out",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
+          "md:static md:translate-x-0 md:transition-[width] md:duration-300",
+          collapsed ? "md:w-20" : "md:w-64"
+        )}
       >
         {/* Brand / Logo */}
-        <div className="flex h-16 items-center justify-between px-5 border-b border-border">
-          {!collapsed && (
-            <span className="text-lg font-black tracking-tight text-primary select-none">
-              CRM Platform
+        <div className="flex h-16 items-center justify-between px-5 border-b border-border shrink-0">
+          <span
+            className={cn(
+              "text-lg font-black tracking-tight text-primary select-none",
+              collapsed && "md:hidden"
+            )}
+          >
+            CRM Platform
+          </span>
+          {collapsed && (
+            <span className="hidden text-xs font-black text-primary mx-auto md:inline">
+              EMS
             </span>
           )}
-          {collapsed && (
-            <span className="text-xs font-black text-primary mx-auto">EMS</span>
-          )}
+          {/* Desktop-only collapse toggle — meaningless on a drawer that's
+              always either fully open or fully closed. */}
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground transition-colors duration-150"
+            className="hidden p-1.5 rounded-lg hover:bg-secondary text-muted-foreground transition-colors duration-150 md:inline-flex"
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {collapsed ? (
@@ -116,6 +157,14 @@ export function ShellLayout({
             ) : (
               <ChevronLeft className="size-4" />
             )}
+          </button>
+          {/* Mobile-only close button for the drawer. */}
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground transition-colors duration-150 md:hidden"
+            aria-label="Close menu"
+          >
+            <X className="size-4" />
           </button>
         </div>
 
@@ -138,6 +187,7 @@ export function ShellLayout({
                 // for (that's how back/forward works), so this makes it
                 // resync to the new URL immediately.
                 onClick={() => {
+                  setMobileOpen(false);
                   setTimeout(() => window.dispatchEvent(new PopStateEvent('popstate')), 0)
                 }}
                 className={({ isActive }) =>
@@ -149,25 +199,25 @@ export function ShellLayout({
                 }
               >
                 <Icon className="size-4.5 shrink-0" />
-                {!collapsed && <span className="truncate">{link.label}</span>}
+                <span className={cn("truncate", collapsed && "md:hidden")}>
+                  {link.label}
+                </span>
               </NavLink>
             );
           })}
         </nav>
 
         {/* User profile & signout info */}
-        <div className="p-4 border-t border-border">
+        <div className="p-4 border-t border-border shrink-0">
           <div className="flex items-center justify-between gap-3">
-            {!collapsed && (
-              <div className="flex flex-col min-w-0">
-                <span className="text-sm font-bold text-foreground truncate">
-                  {user?.username}
-                </span>
-                <span className="text-xs font-medium text-muted-foreground mt-0.5">
-                  {roleLabel(user?.role)}
-                </span>
-              </div>
-            )}
+            <div className={cn("flex flex-col min-w-0", collapsed && "md:hidden")}>
+              <span className="text-sm font-bold text-foreground truncate">
+                {user?.username}
+              </span>
+              <span className="text-xs font-medium text-muted-foreground mt-0.5">
+                {roleLabel(user?.role)}
+              </span>
+            </div>
             <Button
               variant="ghost"
               size="icon"
@@ -184,19 +234,26 @@ export function ShellLayout({
       {/* Main content body */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {/* Top bar */}
-        <header className="h-16 flex items-center justify-between px-8 bg-background border-b border-border sticky top-0 z-40 shrink-0">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-muted-foreground bg-secondary px-3 py-1.5 rounded-lg">
+        <header className="h-14 md:h-16 flex items-center justify-between gap-3 px-4 sm:px-6 lg:px-8 bg-background border-b border-border sticky top-0 z-30 shrink-0">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="-ml-1.5 shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors duration-150 hover:bg-secondary md:hidden"
+              aria-label="Open menu"
+            >
+              <Menu className="size-5" />
+            </button>
+            <span className="truncate text-xs font-semibold text-muted-foreground bg-secondary px-3 py-1.5 rounded-lg">
               Workspace / {section || "Dashboard"}
             </span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex shrink-0 items-center gap-4">
             <NotificationBell />
           </div>
         </header>
 
         {/* Workspace body */}
-        <main className="flex-1 overflow-y-auto px-8 py-6 max-w-6xl w-full mx-auto">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 sm:py-6 lg:px-8 max-w-6xl w-full mx-auto">
           {children}
         </main>
       </div>

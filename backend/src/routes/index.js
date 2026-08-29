@@ -28,6 +28,7 @@ const taskClientRoutes = require('./taskClient.routes');
 const taskEventRoutes = require('./taskEvent.routes');
 const employeeTaskRoutes = require('./employeeTask.routes');
 const cmsRoutes = require('./cms.routes');
+const salesChatRoutes = require('./salesChat.routes');
 const attendanceWarningRoutes = require('./attendanceWarning.routes');
 const attendanceOverviewRoutes = require('./attendanceOverview.routes');
 const inventoryReportRoutes = require('./inventoryReport.routes');
@@ -45,6 +46,11 @@ const router = Router();
 router.get('/health', (req, res) => res.json({ status: 'ok' }));
 router.use('/auth', authRoutes);
 router.use('/public', publicRoutes);
+// Public sales chatbot — unauthenticated by design (a website visitor has no
+// login). Mounted here, above verifyToken, alongside /public. Its own
+// rate limiters, session-token check, and LLM spend caps live inside the
+// router / service, not in this file.
+router.use('/sales-chat', salesChatRoutes);
 // Non-sensitive static config (doc type labels, whether email is set up) —
 // PublicUploadPage needs this to render doc type names for unauthenticated
 // applicants, so it must stay open rather than behind verifyToken.
