@@ -1,0 +1,68 @@
+/* Deliberately plain, un-layered CSS — NOT run through Tailwind's `@apply`
+   or any `@layer` block. Every one of this app's own utility classes (and
+   every remote's — see lib/remoteStyles.ts, which injects each mounted
+   remote's own compiled Tailwind stylesheet permanently into this shared
+   document, once, the first time it mounts) is generated inside
+   `@layer utilities`. Per the CSS Cascade Layers spec, a plain, un-layered
+   rule always outranks a layered one, REGARDLESS of specificity or which
+   stylesheet loaded first — which is exactly the property this file needs.
+
+   Without it: this shell's own `fixed md:static` on the sidebar works fine
+   in isolation, but the moment a remote (e.g. EMS) is visited, its
+   `remote-style.css` lands in <head> *after* this app's own stylesheet.
+   Both stylesheets define an identical-looking `.fixed { position: fixed }`
+   utility (from their own separate Tailwind builds), and Tailwind's own
+   `md:static` override only reliably wins over `.fixed` *within a single
+   build's own internal ordering* — across two independently-built
+   stylesheets sharing one layer, the later-loaded one's plain `.fixed`
+   rule ends up after this app's `md:static` media block in the merged
+   cascade, so it silently wins even on a desktop-width viewport. Symptom:
+   navigate into EMS and back to the Dashboard, and the sidebar stays
+   pinned in its mobile, fixed-overlay position — floating on top of the
+   page content instead of sitting beside it in the flex row.
+
+   Scope this file to genuinely structural, responsive on/off toggles only
+   (position/width/transform) — cosmetic classes (color, border, flex,
+   padding) are safe to leave as ordinary Tailwind utilities, since even if
+   a remote's copy of those wins the tie, the values are identical. */
+
+.shell-aside {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 50;
+  width: 18rem; /* matches Tailwind's w-72 — mobile drawer width */
+  transform: translateX(-100%);
+  transition: transform 300ms ease-out;
+}
+
+.shell-aside[data-open='true'] {
+  transform: translateX(0);
+}
+
+@media (min-width: 768px) {
+  .shell-aside {
+    position: static;
+    transform: none;
+    width: 16rem; /* matches Tailwind's w-64 */
+    transition: width 300ms ease-out;
+  }
+
+  .shell-aside[data-collapsed='true'] {
+    width: 5rem; /* matches Tailwind's w-20 */
+  }
+}
+
+/* The mobile-only backdrop is defensively hardened the same way — a stray
+   remote `.hidden` collision here would leave an invisible full-screen
+   click-blocker sitting over the desktop app with no way to dismiss it. */
+.shell-backdrop {
+  display: block;
+}
+
+@media (min-width: 768px) {
+  .shell-backdrop {
+    display: none;
+  }
+}

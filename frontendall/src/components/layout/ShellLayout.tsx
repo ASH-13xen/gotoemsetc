@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { roleLabel } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "./NotificationBell";
+import "./ShellLayout.css";
 
 // Display names for the underlying role values (permissions/auth logic stays
 // keyed on the raw names) — e.g. 'worker' shows as "Employee". Single source
@@ -112,7 +113,7 @@ export function ShellLayout({
           sidebar closes it instead of interacting with the page behind it. */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          className="shell-backdrop fixed inset-0 z-40 bg-black/50"
           onClick={() => setMobileOpen(false)}
           aria-hidden="true"
         />
@@ -120,15 +121,15 @@ export function ShellLayout({
 
       {/* Sidebar — an off-canvas drawer below md (fixed, slides in/out,
           full label width regardless of `collapsed`), the original
-          icon-rail/full sidebar at md and up. */}
+          icon-rail/full sidebar at md and up. Position/width/transform
+          come from the hand-written, un-layered rules in ShellLayout.css,
+          not plain Tailwind utilities — see that file for why: a Tailwind
+          `md:static` here is not reliably safe from being overridden once
+          a remote app's own compiled CSS lands in this shared document. */}
       <aside
-        className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-card border-r border-border shrink-0",
-          "transition-transform duration-300 ease-out",
-          mobileOpen ? "translate-x-0" : "-translate-x-full",
-          "md:static md:translate-x-0 md:transition-[width] md:duration-300",
-          collapsed ? "md:w-20" : "md:w-64"
-        )}
+        data-open={mobileOpen}
+        data-collapsed={collapsed}
+        className={cn("shell-aside flex flex-col bg-card border-r border-border shrink-0")}
       >
         {/* Brand / Logo */}
         <div className="flex h-16 items-center justify-between px-5 border-b border-border shrink-0">
