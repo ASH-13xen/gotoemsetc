@@ -1,6 +1,9 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
-const archiver = require('archiver');
+// v8 replaced the old archiver('zip', opts) factory with a class per format
+// — ZipArchive still extends the same Transform-stream Archiver core, so
+// every other call below (.file/.finalize/.pipe/.on('error')) is unchanged.
+const { ZipArchive } = require('archiver');
 const ApiError = require('../utils/ApiError');
 const env = require('../config/env');
 const employeeRepository = require('../repositories/employee.repository');
@@ -296,7 +299,7 @@ function buildBulkZip(slipIds) {
     throw ApiError.badRequest('No salary slips to zip');
   }
 
-  const archive = archiver('zip', { zlib: { level: 9 } });
+  const archive = new ZipArchive({ zlib: { level: 9 } });
 
   (async () => {
     try {

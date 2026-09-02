@@ -1,11 +1,32 @@
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const fsSync = require('node:fs');
 const crypto = require('node:crypto');
 // v149 ships as ESM with a default export — required via CJS, the actual
 // module lands under `.default` rather than on the top-level object.
 const chromium = require('@sparticuz/chromium').default;
 const puppeteer = require('puppeteer-core');
 const ApiError = require('../utils/ApiError');
+
+// @sparticuz/chromium only bundles a Linux binary (built for Render's
+// hosting, per getBrowser() below) — chromium.executablePath() has nothing
+// to resolve to on a Windows/Mac dev machine and fails with ENOENT. Local
+// dev instead reuses a real browser already on the box: an explicit
+// PUPPETEER_EXECUTABLE_PATH wins if set, otherwise the first Chrome/Edge
+// found at its usual Windows install location.
+function findLocalExecutablePath() {
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
+  if (process.platform !== 'win32') return null;
+
+  const candidates = [
+    `${process.env['PROGRAMFILES']}\\Google\\Chrome\\Application\\chrome.exe`,
+    `${process.env['PROGRAMFILES(X86)']}\\Google\\Chrome\\Application\\chrome.exe`,
+    `${process.env['LOCALAPPDATA']}\\Google\\Chrome\\Application\\chrome.exe`,
+    `${process.env['PROGRAMFILES(X86)']}\\Microsoft\\Edge\\Application\\msedge.exe`,
+    `${process.env['PROGRAMFILES']}\\Microsoft\\Edge\\Application\\msedge.exe`,
+  ];
+  return candidates.find((p) => fsSync.existsSync(p)) || null;
+}
 
 function escapeHtml(value) {
   return String(value)
@@ -67,11 +88,14 @@ function fillTemplate(html, data) {
 let browserPromise = null;
 async function getBrowser() {
   if (!browserPromise) {
-    browserPromise = puppeteer.launch({
-      args: chromium.args,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-    });
+    const localExecutablePath = findLocalExecutablePath();
+    browserPromise = localExecutablePath
+      ? puppeteer.launch({ executablePath: localExecutablePath, headless: true })
+      : puppeteer.launch({
+          args: chromium.args,
+          executablePath: await chromium.executablePath(),
+          headless: chromium.headless,
+        });
   }
   return browserPromise;
 }

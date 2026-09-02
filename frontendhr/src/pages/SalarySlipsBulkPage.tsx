@@ -46,9 +46,13 @@ const OUTCOME_VARIANT: Record<BulkSlipOutcome, 'success' | 'warning' | 'destruct
 }
 
 export default function SalarySlipsBulkPage() {
+  // Default to the last fully-completed month, not the current one — the
+  // backend rejects generating a slip for a period that hasn't ended yet,
+  // and the current calendar month always fails that check on day one.
   const now = new Date()
-  const [month, setMonth] = useState(now.getMonth() + 1)
-  const [year, setYear] = useState(now.getFullYear())
+  const lastCompletedMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const [month, setMonth] = useState(lastCompletedMonth.getMonth() + 1)
+  const [year, setYear] = useState(lastCompletedMonth.getFullYear())
   const [confirmOpen, setConfirmOpen] = useState(false)
   const generate = useGenerateBulkSalarySlips()
   const downloadZip = useDownloadBulkSalarySlipZip()
@@ -89,9 +93,12 @@ export default function SalarySlipsBulkPage() {
             }
           )
         },
-        onError: () => {
+        onError: (err) => {
           setConfirmOpen(false)
-          toast.error('Could not generate salary slips')
+          const message =
+            (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+            'Could not generate salary slips'
+          toast.error(message)
         },
       }
     )
