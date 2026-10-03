@@ -28,7 +28,12 @@ const resolve = asyncHandler(async (req, res) => {
 });
 
 const reject = asyncHandler(async (req, res) => {
-  const request = await attendanceRequestService.rejectRequest(req.params.id, req.user.id, req.body.reason);
+  const request = await attendanceRequestService.rejectRequest(
+    req.params.id,
+    req.user.id,
+    req.body.reason,
+    req.user.role
+  );
   res.json({ request });
 });
 
@@ -71,9 +76,18 @@ const mineUnseen = asyncHandler(async (req, res) => {
 // Paid Leave option at all. Safe to call unconditionally: an account with no
 // linked employee simply isn't eligible.
 const paidLeaveEligibility = asyncHandler(async (req, res) => {
-  if (!req.user.employeeLink) return res.json({ eligible: false });
-  const eligible = await attendanceRequestService.checkPaidLeaveEligibility(req.user.employeeLink, req.query.date);
-  res.json({ eligible });
+  if (!req.user.employeeLink) return res.json({ eligible: false, reason: 'probation' });
+  const result = await attendanceRequestService.checkPaidLeaveEligibility(req.user.employeeLink, req.query.date);
+  res.json(result);
+});
+
+// Self-scoped — the employee's own Late/Short Leave/Half Day tally for the
+// month of `date`, shown in the "apply for leave" dialog. Approvers get the
+// same numbers attached to each request instead (see listRequests).
+const monthlyCounts = asyncHandler(async (req, res) => {
+  if (!req.user.employeeLink) return res.json({ counts: null });
+  const counts = await attendanceRequestService.getMonthlyCounts(req.user.employeeLink, req.query.date);
+  res.json({ counts });
 });
 
 module.exports = {
@@ -85,6 +99,7 @@ module.exports = {
   acknowledge,
   mineUnseen,
   paidLeaveEligibility,
+  monthlyCounts,
   cmApprove,
   pendingForContentManager,
 };

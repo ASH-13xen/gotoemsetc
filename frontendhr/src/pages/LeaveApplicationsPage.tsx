@@ -26,7 +26,13 @@ import {
 import { STATUS_CONFIG } from '@/components/attendance/statusConfig'
 import type { AttendanceStatus } from '@/api/attendance.api'
 import type { AttendanceModificationRequest } from '@/api/attendanceRequests.api'
-import { LEAVE_APPLICATION_STATUS_LABEL } from '@/api/attendanceRequests.api'
+import {
+  HALF_DAY_PERIOD_LABEL,
+  SHORT_LEAVE_SECOND_HALF_LABEL,
+  leaveApplicationLabel,
+} from '@/api/attendanceRequests.api'
+import { MonthlyLeaveCountsNote } from '@/components/attendance/MonthlyLeaveCountsNote'
+import { useAuth } from '@/hooks/useAuth'
 
 const NO_STATUS = '__none__'
 
@@ -52,7 +58,15 @@ const REQUEST_STATUS_BADGE_VARIANT: Record<
 }
 
 function RequestRow({ request }: { request: AttendanceModificationRequest }) {
-  const [status, setStatus] = useState<string>(NO_STATUS)
+  // Pre-filled with what the employee actually applied for (when there is
+  // one) so clicking Approve without touching the dropdown still marks
+  // attendance correctly — leaving this at "no change" was a silent way for
+  // an approved leave application to never reach AttendanceRecord, and
+  // therefore never show up on the company calendar's "who's out" layer.
+  // "Multiple Days" applications carry no requestedStatus by design (see
+  // AttendanceModificationRequest.js), so those still start unset and HR
+  // must choose explicitly.
+  const [status, setStatus] = useState<string>(request.requestedStatus ?? NO_STATUS)
   const [overtimeMinutes, setOvertimeMinutes] = useState('')
   const [isLate, setIsLate] = useState(false)
   const [earlyDeparture, setEarlyDeparture] = useState(request.requestedEarlyDeparture ?? false)
@@ -67,6 +81,16 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
       ? request.employee
       : `${request.employee.firstName} ${request.employee.lastName ?? ''}`.trim()
   const awaitingContentManager = request.status === 'pending' && request.approvalStage === 'content_manager'
+  const awaitingCeo = request.status === 'pending' && request.approvalStage === 'ceo'
+  // Unpaid Leave goes CM -> HR -> CEO: HR's approval only forwards it (with
+  // HR's chosen statuses) and the CEO's applies it. The CEO or admin
+  // approving at the HR stage finalizes it directly — see
+  // attendanceRequest.service.js#resolveRequest.
+  const { user } = useAuth()
+  const isFinalApprover = user?.role === 'ceo' || user?.role === 'admin'
+  const forwardsToCeo = Boolean(request.requestedMultiDayLeave) && !isFinalApprover
+  const appliedLabel = leaveApplicationLabel(request)
+  const pendingUpdate = request.pendingAttendanceUpdate
 
   const onApprove = () => {
     resolve.mutate(
@@ -78,8 +102,25 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
         earlyDeparture,
       },
       {
-        onSuccess: () => toast.success('Application approved'),
-        onError: () => toast.error('Could not approve application'),
+        onSuccess: () =>
+          toast.success(forwardsToCeo ? 'Approved — sent to the CEO for final approval' : 'Application approved'),
+        onError: (err) =>
+          toast.error(
+            (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Could not approve application'
+          ),
+      }
+    )
+  }
+
+  const onCeoApprove = () => {
+    resolve.mutate(
+      { id: request._id },
+      {
+        onSuccess: () => toast.success('Unpaid leave approved'),
+        onError: (err) =>
+          toast.error(
+            (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Could not approve application'
+          ),
       }
     )
   }
@@ -112,15 +153,17 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
           <p className="text-xs text-muted-foreground">{formatDateRange(request)}</p>
         </div>
         <div className="flex items-center gap-2">
-          {request.requestedStatus && (
-            <Badge variant="outline">Applied: {LEAVE_APPLICATION_STATUS_LABEL[request.requestedStatus]}</Badge>
+          {appliedLabel && <Badge variant="outline">Applied: {appliedLabel}</Badge>}
+          {request.requestedHalfDayPeriod && (
+            <Badge variant="outline">{HALF_DAY_PERIOD_LABEL[request.requestedHalfDayPeriod]}</Badge>
           )}
-          {request.requestedEarlyDeparture && <Badge variant="outline">Applied: Early Departure</Badge>}
           {awaitingContentManager && <Badge variant="warning">Awaiting Content Manager</Badge>}
+          {awaitingCeo && <Badge variant="warning">Awaiting CEO</Badge>}
           <Badge variant={REQUEST_STATUS_BADGE_VARIANT[request.status]}>{request.status}</Badge>
         </div>
       </div>
       <p className="text-sm text-foreground/80">{request.reason}</p>
+      {request.monthlyCounts && <MonthlyLeaveCountsNote counts={request.monthlyCounts} />}
       {request.status === 'rejected' && request.rejectionReason && (
         <p className="text-xs text-muted-foreground">Reason: {request.rejectionReason}</p>
       )}
@@ -140,10 +183,45 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
         </div>
       )}
 
+      {/* Unpaid Leave HR has already approved — HR's choice is shown, and
+          only the CEO (or admin) can give the final approval. */}
+      {awaitingCeo && (
+        <div className="grid gap-2 rounded-lg bg-secondary/40 p-3 text-xs">
+          <p className="text-muted-foreground">
+            Approved by HR. On final approval this will be applied to every day from {formatDate(request.date)} to{' '}
+            {formatDate(request.endDate)}:{' '}
+            <span className="font-medium text-foreground">
+              {pendingUpdate?.status ? STATUS_CONFIG[pendingUpdate.status].label : 'no status change'}
+              {pendingUpdate?.isLate ? ', Late' : ''}
+              {pendingUpdate?.earlyDeparture ? `, ${SHORT_LEAVE_SECOND_HALF_LABEL}` : ''}
+              {pendingUpdate?.overtimeMinutes ? `, ${pendingUpdate.overtimeMinutes} OT min` : ''}
+            </span>
+          </p>
+          {isFinalApprover ? (
+            !rejecting && (
+              <div className="flex gap-2">
+                <Button size="sm" onClick={onCeoApprove} disabled={resolve.isPending}>
+                  <CheckCircle2 className="size-4" />
+                  Final approve
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setRejecting(true)}>
+                  <XCircle className="size-4" />
+                  Reject
+                </Button>
+              </div>
+            )
+          ) : (
+            <p className="text-muted-foreground">Waiting for the CEO's final approval.</p>
+          )}
+        </div>
+      )}
+
       {request.status === 'pending' && request.approvalStage === 'hr' && request.endDate && request.endDate.slice(0, 10) !== request.date.slice(0, 10) && (
         <p className="text-xs text-amber-600">
           Multi-day span — approving applies the chosen status to every day from {formatDate(request.date)} to{' '}
           {formatDate(request.endDate)}.
+          {request.requestedMultiDayLeave &&
+            ' This application carries no default status — leaving Status at "No change" will approve it without marking any attendance.'}
         </p>
       )}
 
@@ -207,12 +285,12 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
                 onChange={(e) => setEarlyDeparture(e.target.checked)}
                 className="size-4 rounded border-border text-primary focus:ring-primary cursor-pointer accent-primary"
               />
-              Early departure
+              {SHORT_LEAVE_SECOND_HALF_LABEL}
             </label>
           </div>
           <Button size="sm" onClick={onApprove} disabled={resolve.isPending}>
             <CheckCircle2 className="size-4" />
-            Approve
+            {forwardsToCeo ? 'Approve & send to CEO' : 'Approve'}
           </Button>
           <Button size="sm" variant="outline" onClick={() => setRejecting(true)}>
             <XCircle className="size-4" />
@@ -252,28 +330,59 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
   )
 }
 
+const STATUS_FILTERS: { key: AttendanceModificationRequest['status'] | 'all'; label: string }[] = [
+  { key: 'pending', label: 'Pending' },
+  { key: 'resolved', label: 'Approved' },
+  { key: 'rejected', label: 'Rejected' },
+  { key: 'revoked', label: 'Revoked' },
+  { key: 'all', label: 'All' },
+]
+
 export default function LeaveApplicationsPage() {
-  const { data, isLoading } = useAttendanceRequests()
+  // Defaults to Pending — the queue HR actually needs to act on — rather
+  // than dumping every request ever filed (approved/rejected/revoked included)
+  // into one endless list.
+  const [filter, setFilter] = useState<AttendanceModificationRequest['status'] | 'all'>('pending')
+  const { data, isLoading } = useAttendanceRequests(filter === 'all' ? undefined : filter)
   const requests = data?.requests ?? []
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-8 py-8">
       <PageHeader
-        eyebrow="HR Work"
+        eyebrow="HRMS"
         title="Leave/Modification Requests"
         description="Structured leave applications and free-text attendance correction requests — approve, reject, or revoke."
       />
+
+      <div className="flex flex-wrap gap-2">
+        {STATUS_FILTERS.map((f) => (
+          <Button
+            key={f.key}
+            type="button"
+            size="sm"
+            variant={filter === f.key ? 'default' : 'outline'}
+            onClick={() => setFilter(f.key)}
+          >
+            {f.label}
+          </Button>
+        ))}
+      </div>
+
       <Card className="p-6">
-        <CardContent className="grid gap-2 p-0">
+        <CardContent className="p-0">
           {isLoading ? (
             <Skeleton className="h-16 w-full bg-secondary/40 rounded-xl" />
           ) : requests.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-16 text-center">
               <Inbox className="size-8 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">No requests yet.</p>
+              <p className="text-sm text-muted-foreground">No requests here.</p>
             </div>
           ) : (
-            requests.map((request) => <RequestRow key={request._id} request={request} />)
+            <div className="grid max-h-168 gap-2 overflow-y-auto pr-1">
+              {requests.map((request) => (
+                <RequestRow key={request._id} request={request} />
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>

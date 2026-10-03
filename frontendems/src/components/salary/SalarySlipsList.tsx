@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSalarySlips } from '@/hooks/useSalarySlips'
-import { downloadSalarySlip } from '@/api/salarySlips.api'
+import { downloadEmployeeSalarySlip } from '@/api/salarySlips.api'
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -22,7 +22,7 @@ export function SalarySlipsList({ employeeId, employeeName }: { employeeId: stri
 
   const onDownload = async (slipId: string, startDate: string, endDate: string) => {
     try {
-      await downloadSalarySlip(slipId, `${employeeName}-${startDate}_to_${endDate}.pdf`)
+      await downloadEmployeeSalarySlip(employeeId, slipId, `${employeeName}-${startDate}_to_${endDate}.pdf`)
     } catch {
       toast.error('Could not download salary slip')
     }

@@ -16,7 +16,10 @@ function SelectTrigger({
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
       className={cn(
-        "data-[placeholder]:text-muted-foreground/70 flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-transparent bg-secondary/60 px-3.5 py-2 text-sm whitespace-nowrap outline-none focus-visible:border-primary/40 focus-visible:bg-card focus-visible:ring-2 focus-visible:ring-primary/15 transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        // See input.tsx's matching comment — disabled reads as plain text,
+        // not a washed-out control (the chevron icon is hidden too, since
+        // there's nothing to open).
+        "data-[placeholder]:text-muted-foreground/70 flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-transparent bg-secondary/60 px-3.5 py-2 text-sm whitespace-nowrap outline-none focus-visible:border-primary/40 focus-visible:bg-card focus-visible:ring-2 focus-visible:ring-primary/15 transition-colors duration-150 disabled:cursor-default disabled:border-transparent disabled:bg-transparent disabled:pl-0 disabled:opacity-100 [&_svg]:pointer-events-none [&_svg]:shrink-0 disabled:[&_svg]:hidden",
         className
       )}
       {...props}

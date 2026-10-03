@@ -18,8 +18,8 @@ import {
 import { useOpenEmployeeDirectory } from '@/hooks/useEmployees'
 import { useCreateAnnouncement } from '@/hooks/useAnnouncements'
 
-// HR/admin and the other 5 leadership roles (ceo, digital_admin, team_lead,
-// account_manager, operations_manager) — matches the backend's
+// HR/admin and every other non-worker role (ceo, digital_admin, team_lead,
+// operations_manager, cto, cfo, sales, technical, finance) — matches the backend's
 // requireAnnouncementCreateAccess() exactly. A plain worker can still read
 // and acknowledge an announcement addressed to them; they just can't send
 // one, so this trigger is hidden for that role rather than disabled.

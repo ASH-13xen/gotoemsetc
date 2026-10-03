@@ -15,7 +15,7 @@ const AttendanceRecord = require('../models/AttendanceRecord');
 function upsertForDate(
   employeeId,
   date,
-  { status, overtimeMinutes, notes, isLate, earlyDeparture, isHalfDayBoost, isSlDayBoost },
+  { status, overtimeMinutes, notes, isLate, earlyDeparture, isHalfDayBoost, isSlDayBoost, paidLeaveAwarded },
   isBackdated,
   isAutoMarked = false,
   modifiedByRequest,
@@ -34,6 +34,9 @@ function upsertForDate(
     isSlDayBoost,
   };
   if (modifiedByRequest !== undefined) update.modifiedByRequest = modifiedByRequest;
+  // Awarded/taken only applies to a Paid Leave day — any other status clears it.
+  if (paidLeaveAwarded !== undefined) update.paidLeaveAwarded = paidLeaveAwarded;
+  else if (status !== undefined && status !== 'O') update.paidLeaveAwarded = false;
   return AttendanceRecord.findOneAndUpdate(
     { employee: employeeId, date },
     update,

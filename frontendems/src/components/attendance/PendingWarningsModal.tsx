@@ -6,6 +6,14 @@ import { usePendingWarnings } from '@/hooks/useAttendanceWarnings'
 import { useMarkNotificationRead } from '@/hooks/useNotifications'
 import { CATEGORY_LABEL } from '@/api/attendanceWarnings.api'
 
+// Bare toLocaleDateString() follows the browser's own locale (often
+// M/D/YYYY) rather than the DD-MM-YYYY this company works in.
+function formatDDMMYYYY(iso: string) {
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`
+}
+
 // Shown to an employee, on their own record, the moment they have any
 // unacknowledged "not informed" warnings. Deliberately not dismissible via
 // Escape/outside-click/the corner X — the only way out is the "Mark as
@@ -45,7 +53,7 @@ export function PendingWarningsModal({ employeeId }: { employeeId: string }) {
               <div className="mb-2 flex items-center justify-between gap-2">
                 <Badge variant="warning">{CATEGORY_LABEL[warning.category]}</Badge>
                 <span className="text-xs text-muted-foreground">
-                  {new Date(warning.date).toLocaleDateString()}
+                  {formatDDMMYYYY(warning.date)}
                 </span>
               </div>
               <p className="text-sm text-foreground">{warning.message}</p>

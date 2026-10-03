@@ -22,12 +22,12 @@ export function ShellNav() {
     { to: "/sales", label: "Sales" },
     { to: "/followups", label: "Task Management" },
     ...(user?.role === "admin" || user?.role === "hr" || user?.role === "ceo"
-      ? [{ to: "/hr", label: "HR Work" }]
+      ? [{ to: "/hr", label: "HRMS" }]
       : []),
     ...(user?.role === "admin" || user?.role === "ceo" || user?.role === "operations_manager"
       ? [{ to: "/operations", label: "Operations" }]
       : []),
-    ...(user?.role === "admin" || user?.role === "ceo" || user?.role === "account_manager" || user?.role === "operations_manager"
+    ...(user?.role === "admin" || user?.role === "ceo" || user?.role === "cfo" || user?.role === "finance" || user?.role === "operations_manager"
       ? [{ to: "/finance", label: "Finance" }]
       : []),
     ...(user?.role === "admin" || user?.role === "hr"

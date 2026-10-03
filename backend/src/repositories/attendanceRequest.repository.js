@@ -34,6 +34,22 @@ function advanceToHrStage(id, cmApprovedBy) {
   );
 }
 
+// Unpaid Leave only — HR's approval forwards the request to the CEO stage,
+// still 'pending', carrying HR's chosen change to apply on final approval.
+// See attendanceRequest.service.js#resolveRequest.
+function advanceToCeoStage(id, hrApprovedBy, pendingAttendanceUpdate) {
+  return AttendanceModificationRequest.findByIdAndUpdate(
+    id,
+    {
+      approvalStage: ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO,
+      hrApprovedBy,
+      hrApprovedAt: new Date(),
+      pendingAttendanceUpdate,
+    },
+    { new: true }
+  );
+}
+
 function resolve(id, resolvedBy, { attendanceWasModified = false, previousRecordSnapshot = null } = {}) {
   return AttendanceModificationRequest.findByIdAndUpdate(
     id,
@@ -79,7 +95,11 @@ function markSeen(id) {
 function listUnseenForEmployee(employeeId) {
   return AttendanceModificationRequest.find({
     employee: employeeId,
-    $or: [{ requestedStatus: { $exists: true, $ne: null } }, { requestedEarlyDeparture: true }],
+    $or: [
+      { requestedStatus: { $exists: true, $ne: null } },
+      { requestedEarlyDeparture: true },
+      { requestedMultiDayLeave: true },
+    ],
     status: {
       $in: [ATTENDANCE_REQUEST_STATUS.RESOLVED, ATTENDANCE_REQUEST_STATUS.REJECTED, ATTENDANCE_REQUEST_STATUS.REVOKED],
     },
@@ -87,4 +107,15 @@ function listUnseenForEmployee(employeeId) {
   }).sort({ updatedAt: -1 });
 }
 
-module.exports = { create, list, findById, advanceToHrStage, resolve, reject, revoke, markSeen, listUnseenForEmployee };
+module.exports = {
+  create,
+  list,
+  findById,
+  advanceToHrStage,
+  advanceToCeoStage,
+  resolve,
+  reject,
+  revoke,
+  markSeen,
+  listUnseenForEmployee,
+};

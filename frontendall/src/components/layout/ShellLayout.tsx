@@ -14,6 +14,7 @@ import {
   Wrench,
   Wallet,
   Flag,
+  Network,
   X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -30,9 +31,17 @@ import "./ShellLayout.css";
 export function ShellLayout({
   children,
   section,
+  fullBleed = false,
+  wide = false,
 }: {
   children: ReactNode;
   section?: string;
+  // Edge-to-edge content with no max width or padding — for canvases like
+  // the Organisation chart that manage their own space.
+  fullBleed?: boolean;
+  // Normal padding and scrolling, but no max width — for wide grids like
+  // the Weekly Calendar.
+  wide?: boolean;
 }) {
   const { user, signOut } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
@@ -53,7 +62,7 @@ export function ShellLayout({
   }, [location.pathname]);
 
   // Deliberately only admin + HR — the newer roles (ceo, digital admin,
-  // operations/account manager, team lead) have no permissions wired up yet,
+  // operations manager, team lead, cto/cfo/sales/technical/finance) have no permissions wired up yet,
   // so Audit Log stays admin/HR-only until they do.
   const isAdmin = user?.role === "admin" || user?.role === "hr";
   // HR Work additionally lets ceo in, matching the backend's
@@ -64,14 +73,15 @@ export function ShellLayout({
   // Deliberately NOT isAdmin above: HR is excluded from this one on purpose.
   const canAccessOperations =
     user?.role === "admin" || user?.role === "ceo" || user?.role === "operations_manager";
-  // Finance — admin/ceo/account_manager, matching the backend's
+  // Finance — admin/ceo/cfo/finance, matching the backend's
   // requireFinanceAccess, widened to operations_manager since that role
   // still needs the remote for the Monthly Bills tab (see
   // frontendfinance/src/lib/roles.ts#canEnterFinance).
   const canAccessFinance =
     isAdmin ||
     user?.role === "ceo" ||
-    user?.role === "account_manager" ||
+    user?.role === "cfo" ||
+    user?.role === "finance" ||
     user?.role === "operations_manager";
   // Performance Flags history — same admin/hr/ceo audience the flag
   // milestone notifications go to (backend's requireHrWorkAccess).
@@ -80,10 +90,8 @@ export function ShellLayout({
   const links = [
     { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: "/ems", label: "EMS", icon: Users },
-    // Unconditional — every role can view; the calendar's own management
-    // actions (mark holiday/half day, add events) are gated inline via
-    // canManage, matching canAccessHrWork below.
-    { to: "/calendar", label: "Calendar", icon: CalendarDays },
+    // Everyone plans their week here — meetings, events, blocked time.
+    { to: "/calendar", label: "Weekly Calendar", icon: CalendarDays },
     // Every employee needs Task Management and Client Management —
     // role-dependent capability differences are handled inside each feature,
     // not at the nav.
@@ -104,6 +112,8 @@ export function ShellLayout({
     ...(isAdmin
       ? [{ to: "/audit-log", label: "Audit Log", icon: ShieldAlert }]
       : []),
+    // Everyone can view the chart; only admin can change it.
+    { to: "/organisation", label: "Organisation", icon: Network },
   ];
 
   return (
@@ -254,7 +264,16 @@ export function ShellLayout({
         </header>
 
         {/* Workspace body */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 sm:py-6 lg:px-8 max-w-6xl w-full mx-auto">
+        <main
+          className={cn(
+            "flex-1 w-full",
+            fullBleed
+              ? "relative overflow-hidden"
+              : wide
+                ? "overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 sm:py-5"
+                : "overflow-y-auto overflow-x-hidden px-4 py-4 sm:px-6 sm:py-6 lg:px-8 max-w-6xl mx-auto"
+          )}
+        >
           {children}
         </main>
       </div>

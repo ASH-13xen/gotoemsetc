@@ -28,6 +28,11 @@ const allFrontendUrls = parseOrigins(process.env.ALL_FRONTEND_URL, 'http://local
 // own, later at sales.crm.gotofriend.in. Its own CORS group so it can be
 // pointed at a different origin without touching the internal apps' lists.
 const salesChatFrontendUrls = parseOrigins(process.env.SALES_CHAT_FRONTEND_URL, 'http://localhost:5177');
+// The client-facing dashboard (folder: clientdashboard/, a separate Next.js
+// app, hosted on its own — not part of this module-federation shell). Own
+// CORS group for the same reason as salesChatFrontendUrls above. Next.js's
+// own dev-server default port.
+const clientDashboardFrontendUrls = parseOrigins(process.env.CLIENT_DASHBOARD_URL, 'http://localhost:3000');
 
 const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -36,13 +41,19 @@ const env = {
   salesFrontendUrl: salesFrontendUrls[0],
   followupsFrontendUrl: followupsFrontendUrls[0],
   allFrontendUrl: allFrontendUrls[0],
+  // The address people open from links in emails (e.g. Weekly Calendar
+  // invite Accept/Decline). Must be reachable from their own devices — the
+  // deployed frontendall, not localhost. Falls back to ALL_FRONTEND_URL.
+  publicAppUrl: (process.env.PUBLIC_APP_URL || allFrontendUrls[0]).replace(/\/+$/, ''),
   salesChatFrontendUrl: salesChatFrontendUrls[0],
+  clientDashboardFrontendUrl: clientDashboardFrontendUrls[0],
   // Every allowed origin per app, for CORS (see app.js / websocket/clientChat.js).
   frontendUrls,
   salesFrontendUrls,
   followupsFrontendUrls,
   allFrontendUrls,
   salesChatFrontendUrls,
+  clientDashboardFrontendUrls,
 
   mongodbUri: required('MONGODB_URI'),
 
@@ -114,6 +125,18 @@ const env = {
     // Soft target is ~8 turns (see the system prompt); at this many the
     // post-turn policy stops asking questions and forces an offer or handoff.
     maxUserTurns: Number(process.env.SALES_CHAT_MAX_TURNS) || 14,
+  },
+
+  // ---------------------------------------------------------------------
+  // Client dashboard (folder: clientdashboard/, routes: /api/client-portal)
+  // ---------------------------------------------------------------------
+  clientPortal: {
+    // Deliberately NOT JWT_SECRET — same reasoning as salesChat.sessionSecret
+    // above: a client's portal token should never be mistakable for a staff
+    // login, even if both happened to decode under the same key. Falls back
+    // to JWT_SECRET only so local dev boots without a second secret set.
+    sessionSecret: process.env.CLIENT_PORTAL_SESSION_SECRET || process.env.JWT_SECRET || '',
+    sessionTtl: process.env.CLIENT_PORTAL_SESSION_TTL || '12h',
   },
 
   sofficePath: process.env.SOFFICE_PATH || '',

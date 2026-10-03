@@ -21,7 +21,7 @@ interface AppProps {
 }
 
 // Every route here is wrapped in RequireFinanceAccess, not just RequireAuth
-// — like frontendop, this whole remote is admin/ceo/account_manager-only,
+// — like frontendop, this whole remote is admin/ceo/cfo/finance-only,
 // there's no self-service surface to fall back to for anyone else.
 export default function App({ basename }: AppProps = {}) {
   return (

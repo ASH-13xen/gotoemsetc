@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, Receipt } from 'lucide-react'
+import { Eye, Loader2, Receipt } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -42,6 +42,7 @@ function claimableDates() {
 
 export function ClaimReimbursementDialog() {
   const [open, setOpen] = useState(false)
+  const [infoOpen, setInfoOpen] = useState(false)
   const [category, setCategory] = useState<ReimbursementCategory>('miscellaneous')
   const [travelMode, setTravelMode] = useState<TravelMode>('cab')
   const [clientId, setClientId] = useState<string>('')
@@ -109,14 +110,18 @@ export function ClaimReimbursementDialog() {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" className="rounded-xl">
-          <Receipt className="size-4" />
-          Claim reimbursement
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
+    <div className="inline-flex items-stretch overflow-hidden rounded-xl border border-border">
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex h-10 items-center gap-2 px-4 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-secondary/60"
+          >
+            <Receipt className="size-4" />
+            Claim reimbursement
+          </button>
+        </DialogTrigger>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Claim a reimbursement</DialogTitle>
           <DialogDescription>Approved claims are paid on Saturdays.</DialogDescription>
@@ -268,7 +273,87 @@ export function ClaimReimbursementDialog() {
             Submit claim
           </Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+
+      <div className="my-1.5 w-px bg-border" />
+
+      <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex h-10 items-center justify-center px-2.5 text-muted-foreground transition-colors duration-150 hover:bg-secondary/60 hover:text-foreground"
+            aria-label="How claiming a reimbursement works"
+          >
+            <Eye className="size-4" />
+          </button>
+        </DialogTrigger>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>How claiming a reimbursement works</DialogTitle>
+            <DialogDescription>What each field means, and what happens after you submit.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 text-sm">
+            <div className="grid gap-1">
+              <p className="font-semibold text-foreground">When you can claim</p>
+              <p className="text-muted-foreground">
+                Only for an expense from today or yesterday — you can't backdate further than that. The one
+                exception: on a Sunday, "yesterday" (Saturday) isn't offered, since Saturday is payment day and
+                anything from that far back is expected to already be paid, not newly claimed.
+              </p>
+            </div>
+            <div className="grid gap-1">
+              <p className="font-semibold text-foreground">Category</p>
+              <p className="text-muted-foreground">
+                Pick whichever fits: Client Work, Grocery, Travel, Stationery, Influencer, Camera/Accessories, Meta
+                Ads, or Miscellaneous.
+              </p>
+            </div>
+            <div className="grid gap-1">
+              <p className="font-semibold text-foreground">Travel mode (Travel only)</p>
+              <p className="text-muted-foreground">Required when the category is Travel — Cab (Ola/Rapido/Uber) or Bike/Petrol.</p>
+            </div>
+            <div className="grid gap-1">
+              <p className="font-semibold text-foreground">Client / brand (Client Work only)</p>
+              <p className="text-muted-foreground">
+                Pick the client from the list if they're already registered, or just type the brand name if they're
+                not — either is fine, and both are optional.
+              </p>
+            </div>
+            <div className="grid gap-1">
+              <p className="font-semibold text-foreground">Start / End, description, amount</p>
+              <p className="text-muted-foreground">
+                Start and End are optional timestamps for the work itself. Description and Amount are required —
+                describe what the expense was for and how much to reimburse.
+              </p>
+            </div>
+            <div className="grid gap-1">
+              <p className="font-semibold text-foreground">People involved</p>
+              <p className="text-muted-foreground">Optional — tag any other employees who were part of this expense.</p>
+            </div>
+            <div className="grid gap-1">
+              <p className="font-semibold text-foreground">Receipt</p>
+              <p className="text-muted-foreground">
+                Optional. Attach a PDF or image and it uploads right after the claim is created — you don't need one
+                to submit.
+              </p>
+            </div>
+            <div className="grid gap-1 border-t border-border pt-3">
+              <p className="font-semibold text-foreground">What happens after you submit</p>
+              <p className="text-muted-foreground">
+                Finance is notified immediately and reviews it — they'll either approve or reject with a reason.
+                Once approved, it's paid out in the weekly Saturday payment batch. You can track the status (Pending
+                / Approved / Paid / Rejected) on your dashboard.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInfoOpen(false)} className="w-full">
+              Got it
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }

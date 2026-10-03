@@ -6,6 +6,14 @@ import { usePendingWarnings } from '@/hooks/useAttendanceWarnings'
 import { useMarkNotificationRead } from '@/hooks/useNotifications'
 import { CATEGORY_LABEL } from '@/api/attendanceWarnings.api'
 
+// Bare toLocaleDateString() follows the browser's own locale (often
+// M/D/YYYY) rather than the DD-MM-YYYY this company works in.
+function formatDDMMYYYY(iso: string) {
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`
+}
+
 // Shown on the dashboard, the moment the logged-in employee has any
 // unacknowledged "not informed" attendance warnings — this is the shell's
 // own copy so it fires right after login regardless of whether the
@@ -48,7 +56,7 @@ export function PendingWarningsModal() {
               <div className="mb-2 flex items-center justify-between gap-2">
                 <Badge variant="warning">{CATEGORY_LABEL[warning.category]}</Badge>
                 <span className="text-xs font-semibold text-muted-foreground">
-                  {new Date(warning.date).toLocaleDateString()}
+                  {formatDDMMYYYY(warning.date)}
                 </span>
               </div>
               <p className="text-sm text-foreground">{warning.message}</p>

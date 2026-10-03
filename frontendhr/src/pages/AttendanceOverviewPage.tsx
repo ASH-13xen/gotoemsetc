@@ -14,7 +14,14 @@ import {
 import { cn } from '@/lib/utils'
 import { useMonthlyOverview } from '@/hooks/useAttendance'
 import { STATUS_CONFIG } from '@/components/attendance/statusConfig'
-import type { MonthlyOverviewRecord } from '@/api/attendance.api'
+import type { AttendanceStatus, MonthlyOverviewRecord } from '@/api/attendance.api'
+
+const ALL_STATUSES = Object.keys(STATUS_CONFIG) as AttendanceStatus[]
+// Present is the overwhelming majority of records on any given day — showing
+// it by default buries the exceptions this page exists to surface. Every
+// other status starts selected, matching the page's previous hardcoded
+// "anything but Present" behavior, but now toggleable.
+const DEFAULT_STATUSES = ALL_STATUSES.filter((s) => s !== 'P')
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -35,8 +42,18 @@ export default function AttendanceOverviewPage() {
   const [month, setMonth] = useState(now.getUTCMonth() + 1)
   const [year, setYear] = useState(now.getUTCFullYear())
   const [showOvertime, setShowOvertime] = useState(false)
+  const [selectedStatuses, setSelectedStatuses] = useState<Set<AttendanceStatus>>(new Set(DEFAULT_STATUSES))
   const { data, isLoading } = useMonthlyOverview(month, year)
   const records = data?.records ?? []
+
+  const toggleStatus = (status: AttendanceStatus) => {
+    setSelectedStatuses((prev) => {
+      const next = new Set(prev)
+      if (next.has(status)) next.delete(status)
+      else next.add(status)
+      return next
+    })
+  }
 
   const byDate = useMemo(() => {
     const map = new Map<string, MonthlyOverviewRecord[]>()
@@ -58,7 +75,7 @@ export default function AttendanceOverviewPage() {
   return (
     <div className="mx-auto flex max-w-[1600px] flex-col gap-6 py-8">
       <PageHeader
-        eyebrow="HR Work"
+        eyebrow="HRMS"
         title="All merged attendance"
         description="Every employee who was late, absent, on leave, or worked overtime — one month at a glance."
         actions={
@@ -98,6 +115,28 @@ export default function AttendanceOverviewPage() {
         }
       />
 
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-xs font-medium text-muted-foreground">Show:</span>
+        {ALL_STATUSES.map((status) => {
+          const cfg = STATUS_CONFIG[status]
+          const active = selectedStatuses.has(status)
+          return (
+            <button
+              key={status}
+              type="button"
+              onClick={() => toggleStatus(status)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors',
+                active ? cn('border-transparent', cfg.cell) : 'border-border text-muted-foreground/60 hover:bg-secondary/50'
+              )}
+            >
+              <span className={cn('size-1.5 rounded-full', active ? cfg.dot : 'bg-muted-foreground/40')} />
+              {cfg.label}
+            </button>
+          )
+        })}
+      </div>
+
       {/* This is a dense, 7-column-wide report — on a narrow screen it
           scrolls horizontally as one unit (min-w-227.5 keeps every day
           column at a legible ~130px) rather than squeezing each day down to
@@ -120,7 +159,7 @@ export default function AttendanceOverviewPage() {
               if (day === null) return <div key={`blank-${i}`} />
               const key = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
               const dayRecords = byDate.get(key) ?? []
-              const notable = dayRecords.filter((r) => r.status && r.status !== 'P')
+              const notable = dayRecords.filter((r) => r.status && selectedStatuses.has(r.status))
               const overtime = dayRecords.filter((r) => r.overtimeMinutes > 0)
 
               return (

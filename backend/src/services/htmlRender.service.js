@@ -105,7 +105,8 @@ async function getBrowser() {
 // asset paths (e.g. `assets/logo.png`) resolve exactly the way they would
 // if you just double-clicked the template file open in a browser, so
 // previewing a template edit needs no special tooling.
-async function renderPdfFromHtml(html, templateDir) {
+// `landscape` is for wide tables (e.g. the Master Salary Sheet).
+async function renderPdfFromHtml(html, templateDir, { landscape = false } = {}) {
   const browser = await getBrowser();
   const page = await browser.newPage();
   const tempFile = path.join(templateDir, `.render-${crypto.randomUUID()}.html`);
@@ -119,6 +120,7 @@ async function renderPdfFromHtml(html, templateDir) {
     // be wrapped before it's ever stored.
     const pdfBytes = await page.pdf({
       format: 'A4',
+      landscape,
       printBackground: true,
       margin: { top: '12mm', bottom: '20mm', left: '18mm', right: '10mm' },
     });

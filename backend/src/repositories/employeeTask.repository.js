@@ -153,19 +153,24 @@ async function listMine({ employeeId, isAdmin, type }) {
 }
 
 // Dashboard-widget feed — broader than listMine: includes subtasks
-// explicitly assigned to this employee, not just top-level tasks.
-async function listUpcomingForEmployee(employeeId, { limit = 6 } = {}) {
+// explicitly assigned to this employee, not just top-level tasks. Every
+// unfinished task due within `withinDays` from now, no count cap — still
+// includes anything already overdue (endAt in the past is <= the cutoff
+// too), same as before.
+async function listUpcomingForEmployee(employeeId, { withinDays = 7 } = {}) {
   const teamIds = await findTeamIdsForEmployee(employeeId);
+  const cutoff = new Date(Date.now() + withinDays * 24 * 60 * 60 * 1000);
   const query = {
     isDeleted: false,
     status: { $ne: EMPLOYEE_TASK_STATUS.COMPLETED },
+    endAt: { $lte: cutoff },
     $or: [
       { assignedEmployees: employeeId },
       { parentTask: null, team: { $in: teamIds } },
       { parentTask: null, extraMembers: employeeId },
     ],
   };
-  return basePopulate(EmployeeTask.find(query).sort({ endAt: 1 }).limit(limit));
+  return basePopulate(EmployeeTask.find(query).sort({ endAt: 1 }));
 }
 
 // Shared by the two Plan Next Day queries below: "overdue" is genuinely in

@@ -32,6 +32,9 @@ const salarySlipSchema = new Schema(
     incentives: { type: Number, default: 0 },
     travelAllowance: { type: Number, default: 0 },
     otherEarning1: { type: Number, default: 0 },
+    // Calculated, never typed — one day's pay when no paid leave of the
+    // employee's own was taken (salaryCalculation.service.js#paidLeaveCompensationFor).
+    paidLeaveCompensation: { type: Number, default: 0 },
     reimbursement1: { type: Number, default: 0 },
     reimbursement2: { type: Number, default: 0 },
 

@@ -1,5 +1,15 @@
 module.exports = {
   EMPLOYEE_STATUS: { DRAFT: 'draft', ACTIVE: 'active', OFFBOARDED: 'offboarded' },
+  // The categorized inventory system (Employee.inventoryItems) — additive,
+  // alongside the older flat `inventory` object, which keeps its exact
+  // field names for the Hardware Consent Form's auto-fill and stays the
+  // one source for that document. See models/Employee.js.
+  INVENTORY_ITEM_CATEGORY: {
+    OFFICE_PHONE: 'office_phone',
+    PERSONAL_PHONE: 'personal_phone',
+    OFFICE_LAPTOP: 'office_laptop',
+    PERSONAL_LAPTOP: 'personal_laptop',
+  },
   UPLOAD_REQUEST_STATUS: {
     PENDING: 'pending',
     PARTIALLY_FULFILLED: 'partially_fulfilled',
@@ -134,10 +144,17 @@ module.exports = {
     // Manager to review it before it ever reaches HR — see
     // attendanceRequest.service.js#resolveApprovalStage.
     LEAVE_APPLICATION_PENDING_CM_REVIEW: 'leave_application_pending_cm_review',
+    // An Unpaid Leave application HR has approved and forwarded for the
+    // CEO's final sign-off — see attendanceRequest.service.js#resolveRequest.
+    LEAVE_APPLICATION_PENDING_CEO_REVIEW: 'leave_application_pending_ceo_review',
     // Fired whenever HR (not admin) manually marks/edits an attendance day —
     // carries HR's required reason, notified to admins for oversight. See
     // attendance.service.js#markAttendance.
     ATTENDANCE_MANUAL_EDIT: 'attendance_manual_edit',
+    // HR asked to change attendance older than 2 days — goes to the CEO and
+    // admin for approval. See attendanceEditRequest.service.js.
+    ATTENDANCE_EDIT_REQUESTED: 'attendance_edit_requested',
+    ATTENDANCE_EDIT_REQUEST_DECIDED: 'attendance_edit_request_decided',
     // Client birthday/anniversary or brand anniversary — manually entered
     // (see CompanyEvent) rather than derived from an Employee record, unlike
     // BIRTHDAY_TODAY/UPCOMING above.
@@ -195,14 +212,20 @@ module.exports = {
     // meeting offer, the "talk to a human" button, or the fallback form).
     // See services/salesChat/notify.js.
     SALES_LEAD_ROUTED: 'sales_lead_routed',
+    // Weekly Calendar — see weeklyCalendar.service.js.
+    WEEKLY_INVITE: 'weekly_invite',
+    WEEKLY_INVITE_RESPONSE: 'weekly_invite_response',
+    WEEKLY_EVENT_UPDATED: 'weekly_event_updated',
+    WEEKLY_EVENT_CANCELLED: 'weekly_event_cancelled',
+    WEEKLY_EVENT_REMINDER: 'weekly_event_reminder',
+    WEEKLY_NOTE_ADDED: 'weekly_note_added',
   },
   // HR sits below Admin but is treated as admin-equivalent everywhere except
   // one explicit restriction (can't edit attendance older than 2 days — see
   // attendance.service.js#assertCanEditAttendanceDate). See
   // auth.middleware.js's isAdminLike for where this equivalence is applied.
   //
-  // The five roles below (CEO through OPERATIONS_MANAGER) are mostly
-  // placeholders: each exists so frontendall can render a different
+  // The roles below (CEO onwards) are mostly placeholders: each exists so frontendall can render a different
   // dashboard per role, but isn't otherwise wired into any authorisation
   // check. They behave like a worker with zero permissions — sign in, see
   // the shell, and every admin-gated route refuses them — with two deliberate
@@ -211,16 +234,19 @@ module.exports = {
   // OPERATIONS_MANAGER (alongside admin/ceo) is folded into
   // requireOperationsAccess() for the Operations module (complaint.*,
   // keyHolder.* — reassigning who holds an office key) — notably NOT into
-  // isAdminLike, so HR stays excluded from Operations.
+  // isAdminLike, so HR stays excluded from Operations. Likewise CFO and
+  // FINANCE (alongside admin/ceo) carry the Finance module — see
+  // requireFinanceAccess() — the access the old account_manager role held.
+  // SALES, TECHNICAL and CTO are pure placeholders for now.
   //
   // TEAM_LEAD here is a *login role*, deliberately distinct from
   // WorkTeam.leader, which is a per-team assignment and is what actually
   // grants task/calendar authority. Holding this role does not make anyone a
   // team's leader, and being a team's leader does not require it.
   //
-  // There is deliberately no SALES role: it was removed once the org chart
-  // settled. Client Management write access, which it used to carry, now sits
-  // with admin alone — see isCmsAdmin() in utils/cmsAccess.js.
+  // SALES was removed once and has since been re-added as a placeholder
+  // only: Client Management write access, which it used to carry, stays with
+  // admin/digital_admin — see isCmsAdmin() in utils/cmsAccess.js.
   USER_ROLES: {
     ADMIN: 'admin',
     WORKER: 'worker',
@@ -228,11 +254,16 @@ module.exports = {
     CEO: 'ceo',
     DIGITAL_ADMIN: 'digital_admin',
     TEAM_LEAD: 'team_lead',
-    ACCOUNT_MANAGER: 'account_manager',
     OPERATIONS_MANAGER: 'operations_manager',
+    CTO: 'cto',
+    CFO: 'cfo',
+    SALES: 'sales',
+    TECHNICAL: 'technical',
+    FINANCE: 'finance',
   },
   // Org chart for the login roles above: admin at the top, ceo beneath it,
-  // the four function heads reporting to ceo, and ordinary employees under
+  // the function heads reporting to ceo (technical under cto, finance under
+  // cfo), and ordinary employees under
   // HR — HR owns the employee record, so that's where the reporting line
   // sits regardless of which team a person works on day to day.
   //
@@ -248,8 +279,12 @@ module.exports = {
     digital_admin: { level: 2, reportsTo: 'ceo', label: 'Digital Admin' },
     hr: { level: 2, reportsTo: 'ceo', label: 'HR' },
     operations_manager: { level: 2, reportsTo: 'ceo', label: 'Operations Manager' },
-    account_manager: { level: 2, reportsTo: 'ceo', label: 'Account Manager' },
+    cto: { level: 2, reportsTo: 'ceo', label: 'CTO' },
+    cfo: { level: 2, reportsTo: 'ceo', label: 'CFO' },
+    sales: { level: 2, reportsTo: 'ceo', label: 'Sales' },
     team_lead: { level: 2, reportsTo: 'ceo', label: 'Team Lead' },
+    technical: { level: 3, reportsTo: 'cto', label: 'Technical' },
+    finance: { level: 3, reportsTo: 'cfo', label: 'Finance' },
     worker: { level: 3, reportsTo: 'hr', label: 'Employee' },
   },
 
@@ -271,7 +306,16 @@ module.exports = {
   // Two-stage approval for a structured leave application — see
   // attendanceRequest.service.js#resolveApprovalStage. A free-text
   // modification request (frontendems) always starts and stays at 'hr'.
-  ATTENDANCE_REQUEST_APPROVAL_STAGE: { CONTENT_MANAGER: 'content_manager', HR: 'hr' },
+  // Unpaid Leave (requestedMultiDayLeave) adds a third stage after HR: HR
+  // picks the per-day statuses, then the CEO gives the final approval.
+  ATTENDANCE_REQUEST_APPROVAL_STAGE: { CONTENT_MANAGER: 'content_manager', HR: 'hr', CEO: 'ceo' },
+  // Which half of the day a Half Day leave application (requestedStatus:
+  // 'H') covers — purely informational context for whoever resolves the
+  // request (shown alongside the reason); it has no AttendanceRecord
+  // counterpart, since the auto-classifier's own Half Day status has never
+  // distinguished which half. Required only when requestedStatus is 'H' —
+  // see attendanceRequest.validator.js#create.
+  ATTENDANCE_REQUEST_HALF_DAY_PERIOD: { FIRST_HALF: 'first_half', SECOND_HALF: 'second_half' },
   // Granular capabilities a worker credential can be individually granted
   // (via Add Credentials) on top of their base self-only access — an admin
   // always implicitly has every one of these. See auth.middleware.js's
@@ -371,6 +415,11 @@ module.exports = {
   // the spec requires collective assignment when a team has more than one
   // person tagged with the same role (e.g. two SMMs sharing daily stories).
   // See WorkTeam.js#memberRoleSchema and utils/teamRoles.js#membersWithRole.
+  // Admin's Organisation chart (see models/OrgNode.js). A position is any
+  // box (CEO, HR, Team Lead…); a team box links to a WorkTeam; a team role
+  // box sits under a team and maps to one TEAM_MEMBER_ROLE, kept in sync
+  // with that WorkTeam's memberRoles (see orgChart.service.js#syncTeam).
+  ORG_NODE_KIND: { POSITION: 'position', TEAM: 'team', TEAM_ROLE: 'team_role' },
   TEAM_MEMBER_ROLE: {
     VIDEOGRAPHER: 'videographer',
     EDITOR: 'editor',
@@ -622,4 +671,33 @@ module.exports = {
   },
   SALES_KB_STATUS: { ACTIVE: 'active', ARCHIVED: 'archived' },
   SALES_CHAT_CHANNEL: { WEB: 'web' },
+
+  // Weekly Calendar (see models/WeeklyEvent.js). Times are minutes since
+  // midnight IST on the grid's 30-minute slots, 06:30–20:30 — the template
+  // the CEO's weekly planner PDF uses. Lunch is a fixed company block.
+  WEEKLY_EVENT_CATEGORY: {
+    TEAM: 'team',
+    SALES: 'sales',
+    HR: 'hr',
+    CLIENT: 'client',
+    EVENT: 'event',
+    TRAINING: 'training',
+    ADMIN: 'admin',
+    OTHER: 'other',
+  },
+  WEEKLY_INVITE_STATUS: { INVITED: 'invited', ACCEPTED: 'accepted', DECLINED: 'declined' },
+  WEEKLY_NOTE_KIND: { NOTE: 'note', ACTION: 'action' },
+  WEEKLY_GRID: { START: 390, END: 1230, SLOT: 30, LUNCH_START: 810, LUNCH_END: 870 },
+
+  // HR's request to change attendance older than 2 days (see
+  // models/AttendanceEditRequest.js) — decided by the CEO or admin.
+  ATTENDANCE_EDIT_REQUEST_STATUS: { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected' },
+
+  // Paid leave: an employee may take one paid leave (status O) a month of
+  // their own once probation is over; HR may award any number of extra paid
+  // days on top. A whole-month salary slip from this month on pays one
+  // day's pay as Paid Leave Compensation when no paid leave was taken. See
+  // utils/probation.js and salaryCalculation.service.js#paidLeaveCompensation.
+  PROBATION_MONTHS: 3,
+  PAID_LEAVE_COMPENSATION_FROM: '2026-09-01',
 };

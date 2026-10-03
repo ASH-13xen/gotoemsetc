@@ -7,7 +7,7 @@ const salarySlipController = require('../controllers/salarySlip.controller');
 
 const router = Router();
 
-// Finance section — admin/ceo/account_manager. Mounted ahead of the
+// Finance section — admin/ceo/cfo/finance. Mounted ahead of the
 // permission-gated /:id/file route below since "finance" would otherwise be
 // captured by that route's :id param.
 router.get(
@@ -35,6 +35,13 @@ router.post(
   requireHrWorkAccess(),
   validate(salarySlipValidator.generateBulk),
   salarySlipController.generateBulk
+);
+
+router.get(
+  '/master-sheet',
+  requireHrWorkAccess(),
+  validate(salarySlipValidator.masterSheet),
+  salarySlipController.downloadMasterSheet
 );
 
 router.post(

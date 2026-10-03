@@ -11,7 +11,20 @@ import { useSendWarning } from '@/hooks/useAttendanceWarnings'
 import { formatPunchTime } from './formatPunchTime'
 import { WARNING_TEMPLATES, type DailyReportRow, type WarningCategory } from '@/api/attendanceWarnings.api'
 
-export function WarningRow({ row, category, date }: { row: DailyReportRow; category: WarningCategory; date: string }) {
+export function WarningRow({
+  row,
+  category,
+  date,
+  compact,
+}: {
+  row: DailyReportRow
+  category: WarningCategory
+  date: string
+  // The daily report's per-category cards are narrower than the old
+  // full-width table, so they drop the Designation column entirely rather
+  // than squeezing it in.
+  compact?: boolean
+}) {
   const [open, setOpen] = useState(false)
   const [message, setMessage] = useState('')
   const sendWarning = useSendWarning()
@@ -48,7 +61,7 @@ export function WarningRow({ row, category, date }: { row: DailyReportRow; categ
           </Badge>
         )}
       </TableCell>
-      <TableCell className="text-sm text-muted-foreground">{row.employee.designation}</TableCell>
+      {!compact && <TableCell className="text-sm text-muted-foreground">{row.employee.designation}</TableCell>}
       <TableCell className="text-sm text-muted-foreground">{formatPunchTime(row.firstPunchAt)}</TableCell>
       <TableCell className="text-sm text-muted-foreground">{formatPunchTime(row.lastPunchAt)}</TableCell>
       <TableCell>

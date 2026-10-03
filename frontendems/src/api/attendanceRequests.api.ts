@@ -11,6 +11,15 @@ export interface AttendanceModificationRequest {
   // Only ever set by frontendall's structured "apply for leave" flow — a
   // free-text request created here in frontendems never has this.
   requestedStatus?: 'SL' | 'L' | 'H' | 'O'
+  // Set only when requestedStatus is 'H' — which half of the day.
+  requestedHalfDayPeriod?: 'first_half' | 'second_half'
+  // The "Multiple Days" type — a general, uncapped multi-day leave request
+  // with no requestedStatus set at all.
+  requestedMultiDayLeave?: boolean
+  // Evening "Short Leave (2nd half)" — see frontendall's ApplyLeaveDialog.
+  requestedEarlyDeparture?: boolean
+  // Which tier must act next while pending — Unpaid Leave ends at 'ceo'.
+  approvalStage?: 'content_manager' | 'hr' | 'ceo'
   status: AttendanceRequestStatus
   rejectionReason?: string
   resolvedBy?: string

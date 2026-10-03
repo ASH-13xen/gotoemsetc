@@ -23,6 +23,7 @@ async function createForUsers(
     monthlyBill,
     reimbursement,
     salesLead,
+    weeklyEvent,
   }
 ) {
   const uniqueIds = [...new Set(userIds.map((id) => id.toString()))];
@@ -47,6 +48,7 @@ async function createForUsers(
         monthlyBill,
         reimbursement,
         salesLead,
+        weeklyEvent,
       }))
     );
   } catch (err) {

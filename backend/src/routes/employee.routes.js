@@ -170,7 +170,11 @@ router.post(
 );
 router.get(
   '/:id/salary-slips',
-  requirePermission(PERMISSIONS.VIEW_SALARY_SLIP),
+  // Self-access: an employee can see their own full slip history (moved
+  // here from the frontendall self-service dashboard) — HR/admin/
+  // view_salary_slip holders can still see anyone's. Generating a new slip
+  // (above) stays permission-only; this is read-only.
+  requireSelfOrPermission(PERMISSIONS.VIEW_SALARY_SLIP),
   validate(salarySlipValidator.listForEmployee),
   salarySlipController.listForEmployee
 );

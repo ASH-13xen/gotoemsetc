@@ -58,6 +58,11 @@ const attendanceRecordSchema = new Schema(
     // Half-Day-territory arrival never sets this. See
     // attendanceClassifier.service.js#applySlDayForEmployee.
     isSlDayBoost: { type: Boolean, default: false },
+    // Only meaningful on a status: 'O' (Paid Leave) day. False = the
+    // employee's own paid leave (one a month, after probation); true = an
+    // extra paid day HR awarded, which never counts against that allowance.
+    // Cleared whenever the day stops being 'O'.
+    paidLeaveAwarded: { type: Boolean, default: false },
     notes: String,
   },
   { timestamps: true }

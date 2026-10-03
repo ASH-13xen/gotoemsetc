@@ -123,3 +123,26 @@ export async function downloadSignedFile(documentId: string, filename: string): 
   link.remove()
   window.URL.revokeObjectURL(url)
 }
+
+// Nested-under-employee equivalent of downloadSignedFile above — same file,
+// but through the self-or-permission route (GET
+// /employees/:id/documents/:docId/signed-file) instead of the flat
+// admin-only one, so viewing your own record can download your own signed
+// copy without holding generate_documents.
+export async function downloadMySignedDocument(
+  employeeId: string,
+  documentId: string,
+  filename: string
+): Promise<void> {
+  const { data } = await apiClient.get(`/employees/${employeeId}/documents/${documentId}/signed-file`, {
+    responseType: 'blob',
+  })
+  const url = window.URL.createObjectURL(data as Blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}

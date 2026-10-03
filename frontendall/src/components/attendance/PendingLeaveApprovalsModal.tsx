@@ -6,7 +6,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { useMyPendingCmReviews, useCmApproveRequest, useCmRejectRequest } from '@/hooks/useAttendanceRequests'
-import { LEAVE_APPLICATION_STATUS_LABEL, type AttendanceModificationRequest } from '@/api/attendanceRequests.api'
+import {
+  HALF_DAY_PERIOD_LABEL,
+  leaveApplicationLabel,
+  type AttendanceModificationRequest,
+} from '@/api/attendanceRequests.api'
+import { MonthlyLeaveCountsNote } from './MonthlyLeaveCountsNote'
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' })
@@ -54,11 +59,14 @@ function RequestCard({ request }: { request: AttendanceModificationRequest }) {
           <p className="text-xs text-muted-foreground">{formatRange(request)}</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-1.5">
-          {request.requestedStatus && <Badge variant="outline">{LEAVE_APPLICATION_STATUS_LABEL[request.requestedStatus]}</Badge>}
-          {request.requestedEarlyDeparture && <Badge variant="outline">Early Departure</Badge>}
+          <Badge variant="outline">{leaveApplicationLabel(request)}</Badge>
+          {request.requestedHalfDayPeriod && (
+            <Badge variant="outline">{HALF_DAY_PERIOD_LABEL[request.requestedHalfDayPeriod]}</Badge>
+          )}
         </div>
       </div>
       <p className="text-sm text-foreground/80">{request.reason}</p>
+      {request.monthlyCounts && <MonthlyLeaveCountsNote counts={request.monthlyCounts} />}
 
       {!rejecting ? (
         <div className="flex gap-2">

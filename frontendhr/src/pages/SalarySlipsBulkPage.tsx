@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Loader2, PlayCircle } from 'lucide-react'
+import { FileSpreadsheet, Loader2, PlayCircle } from 'lucide-react'
 
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -31,7 +31,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { useDownloadBulkSalarySlipZip, useGenerateBulkSalarySlips } from '@/hooks/useSalarySlips'
+import {
+  useDownloadBulkSalarySlipZip,
+  useDownloadMasterSalarySheet,
+  useGenerateBulkSalarySlips,
+} from '@/hooks/useSalarySlips'
 import type { BulkSlipOutcome } from '@/api/salarySlips.api'
 
 const MONTHS = [
@@ -56,6 +60,7 @@ export default function SalarySlipsBulkPage() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const generate = useGenerateBulkSalarySlips()
   const downloadZip = useDownloadBulkSalarySlipZip()
+  const masterSheet = useDownloadMasterSalarySheet()
 
   // Triggers the browser's native download by momentarily attaching a
   // hidden <a download> to the DOM — there's no way to hand a Blob straight
@@ -104,10 +109,23 @@ export default function SalarySlipsBulkPage() {
     )
   }
 
+  const onDownloadMasterSheet = () => {
+    masterSheet.mutate(
+      { month, year },
+      {
+        onSuccess: (blob) => {
+          saveBlobAs(blob, `master-salary-sheet-${MONTHS[month - 1]}-${year}.pdf`)
+          toast.success('Master salary sheet downloaded')
+        },
+        onError: () => toast.error('Could not build the master salary sheet — has this month ended yet?'),
+      }
+    )
+  }
+
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-8 py-8">
       <PageHeader
-        eyebrow="HR Work"
+        eyebrow="HRMS"
         title="Generate salary slips"
         description="Generate every active employee's salary slip for one calendar month in a single action. An employee who joined mid-month gets their slip clipped to start from their actual join date."
       />
@@ -141,6 +159,10 @@ export default function SalarySlipsBulkPage() {
           <Button onClick={() => setConfirmOpen(true)} disabled={generate.isPending}>
             {generate.isPending ? <Loader2 className="size-4 animate-spin" /> : <PlayCircle className="size-4" />}
             Generate for all employees
+          </Button>
+          <Button variant="outline" onClick={onDownloadMasterSheet} disabled={masterSheet.isPending}>
+            {masterSheet.isPending ? <Loader2 className="size-4 animate-spin" /> : <FileSpreadsheet className="size-4" />}
+            Download master salary sheet
           </Button>
         </CardContent>
       </Card>

@@ -24,20 +24,22 @@ export interface AttendanceRecord {
   // False while the day is still provisional (real-time classification
   // could still revise it later today); true once finalized.
   isSettled: boolean
+  // Only on a Paid Leave (O) day: true = an extra paid day HR awarded,
+  // false = the employee's own paid leave (one a month, after probation).
+  paidLeaveAwarded?: boolean
   notes?: string
 }
 
-export async function markAttendance(
-  employeeId: string,
-  date: string,
-  input: {
-    status?: AttendanceStatus
-    overtimeMinutes?: number
-    isLate?: boolean
-    earlyDeparture?: boolean
-    notes?: string
-  }
-): Promise<{ record: AttendanceRecord }> {
+export interface MarkAttendanceInput {
+  status?: AttendanceStatus
+  overtimeMinutes?: number
+  isLate?: boolean
+  earlyDeparture?: boolean
+  paidLeaveAwarded?: boolean
+  notes?: string
+}
+
+export async function markAttendance(employeeId: string, date: string, input: MarkAttendanceInput): Promise<{ record: AttendanceRecord }> {
   const { data } = await apiClient.post(`/employees/${employeeId}/attendance`, {
     date,
     ...input,
@@ -93,5 +95,41 @@ export async function getAttendanceSummary(
 // Attendance page's "already marked" badge and bottom-of-list sort.
 export async function getAttendanceMarkedToday(): Promise<{ employeeIds: string[] }> {
   const { data } = await apiClient.get('/employees/attendance-today')
+  return data
+}
+
+// ---------------------------------------------------------------------------
+// HR's requests to change attendance older than 2 days — decided by the CEO
+// or admin (see backend attendanceEditRequest.service.js).
+// ---------------------------------------------------------------------------
+
+export type AttendanceEditRequestStatus = 'pending' | 'approved' | 'rejected'
+
+export interface AttendanceEditRequest {
+  _id: string
+  employee: { _id: string; firstName: string; lastName?: string; employeeCode?: string; designation?: string }
+  date: string
+  change: Omit<MarkAttendanceInput, 'notes'>
+  reason: string
+  previous: { status: AttendanceStatus | null; overtimeMinutes: number; isLate: boolean; earlyDeparture: boolean; paidLeaveAwarded: boolean } | null
+  requestedBy: { _id: string; username: string; role: string }
+  status: AttendanceEditRequestStatus
+  decidedBy?: { _id: string; username: string; role: string }
+  decidedAt?: string
+  decisionNote?: string
+  createdAt: string
+}
+
+export async function createAttendanceEditRequest(
+  input: { employeeId: string; date: string; reason: string } & Omit<MarkAttendanceInput, 'notes'>
+): Promise<{ request: AttendanceEditRequest }> {
+  const { data } = await apiClient.post('/attendance-edit-requests', input)
+  return data
+}
+
+export async function listAttendanceEditRequests(params: { status?: AttendanceEditRequestStatus; employeeId?: string } = {}): Promise<{
+  requests: AttendanceEditRequest[]
+}> {
+  const { data } = await apiClient.get('/attendance-edit-requests', { params })
   return data
 }

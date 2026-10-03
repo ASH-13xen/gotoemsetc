@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as attendanceApi from '@/api/attendance.api'
-import type { AttendanceStatus } from '@/api/attendance.api'
 
 export function useAttendance(employeeId: string | undefined, month: number, year: number) {
   return useQuery({
@@ -29,24 +28,29 @@ export function useAttendanceMarkedToday(options?: { enabled?: boolean }) {
 export function useMarkAttendance(employeeId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({
-      date,
-      status,
-      overtimeMinutes,
-      isLate,
-      earlyDeparture,
-      notes,
-    }: {
-      date: string
-      status?: AttendanceStatus
-      overtimeMinutes?: number
-      isLate?: boolean
-      earlyDeparture?: boolean
-      notes?: string
-    }) => attendanceApi.markAttendance(employeeId, date, { status, overtimeMinutes, isLate, earlyDeparture, notes }),
+    mutationFn: ({ date, ...input }: { date: string } & attendanceApi.MarkAttendanceInput) =>
+      attendanceApi.markAttendance(employeeId, date, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['attendance', employeeId] })
       queryClient.invalidateQueries({ queryKey: ['attendance-marked-today'] })
     },
+  })
+}
+
+// HR's own change requests for one employee — to show which old days are
+// waiting on the CEO/admin.
+export function useAttendanceEditRequests(employeeId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['attendance-edit-requests', employeeId],
+    queryFn: () => attendanceApi.listAttendanceEditRequests({ employeeId }),
+    enabled: Boolean(employeeId) && enabled,
+  })
+}
+
+export function useCreateAttendanceEditRequest() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: attendanceApi.createAttendanceEditRequest,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['attendance-edit-requests'] }),
   })
 }

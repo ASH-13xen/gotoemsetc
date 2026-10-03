@@ -33,11 +33,19 @@ const LEAVE_TYPE_LABEL: Record<'SL' | 'L' | 'H' | 'O', string> = {
   SL: 'Short Leave',
   L: 'Late',
   H: 'Half Day',
-  O: 'Leave',
+  O: 'Paid Leave',
+}
+
+const HALF_DAY_PERIOD_LABEL: Record<'first_half' | 'second_half', string> = {
+  first_half: 'First Half (9:30 AM – 2:00 PM)',
+  second_half: 'Second Half (2:00 PM – 6:30 PM)',
 }
 
 function RequestRow({ request }: { request: AttendanceModificationRequest }) {
-  const [status, setStatus] = useState<string>(NO_STATUS)
+  // Pre-filled with what the employee applied for, so Resolve without
+  // touching the dropdown still marks attendance — see the matching comment
+  // in frontendhr's LeaveApplicationsPage.tsx.
+  const [status, setStatus] = useState<string>(request.requestedStatus ?? NO_STATUS)
   const [overtimeMinutes, setOvertimeMinutes] = useState('')
   const [isLate, setIsLate] = useState(false)
   const resolve = useResolveAttendanceRequest()
@@ -57,7 +65,10 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
       },
       {
         onSuccess: () => toast.success('Request resolved'),
-        onError: () => toast.error('Could not resolve request'),
+        onError: (err) =>
+          toast.error(
+            (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Could not resolve request'
+          ),
       }
     )
   }
@@ -73,13 +84,26 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
         </div>
         <Badge variant={REQUEST_STATUS_BADGE_VARIANT[request.status]}>{request.status}</Badge>
       </div>
-      {request.requestedStatus && (
+      {(request.requestedStatus || request.requestedMultiDayLeave || request.requestedEarlyDeparture) && (
         <p className="text-xs font-semibold text-primary">
-          Employee applied for: {LEAVE_TYPE_LABEL[request.requestedStatus]}
+          Employee applied for:{' '}
+          {[
+            request.requestedStatus && LEAVE_TYPE_LABEL[request.requestedStatus],
+            request.requestedMultiDayLeave && 'Unpaid Leave',
+            request.requestedEarlyDeparture && 'Short Leave (2nd half)',
+          ]
+            .filter(Boolean)
+            .join(' + ')}
+          {request.requestedHalfDayPeriod && ` — ${HALF_DAY_PERIOD_LABEL[request.requestedHalfDayPeriod]}`}
         </p>
       )}
       <p className="text-sm text-foreground/80">{request.reason}</p>
-      {request.status === 'pending' && (
+      {request.status === 'pending' && request.approvalStage === 'ceo' && (
+        <p className="text-xs text-amber-600">
+          Approved by HR — waiting for the CEO's final approval in HR Work → Leave Applications.
+        </p>
+      )}
+      {request.status === 'pending' && request.approvalStage !== 'ceo' && (
         <div className="flex flex-wrap items-end gap-2">
           <div className="grid gap-1">
             <label className="text-xs text-muted-foreground">Status</label>
@@ -159,13 +183,17 @@ export function AttendanceRequestsPanel() {
           <CardTitle>Attendance modification requests</CardTitle>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-2 px-0 pb-0">
+      <CardContent className="px-0 pb-0">
         {isLoading ? (
           <Skeleton className="h-16 w-full bg-secondary/40 rounded-xl" />
         ) : requests.length === 0 ? (
           <p className="text-sm text-muted-foreground">No requests yet.</p>
         ) : (
-          requests.map((request) => <RequestRow key={request._id} request={request} />)
+          <div className="grid max-h-[36rem] gap-2 overflow-y-auto pr-1">
+            {requests.map((request) => (
+              <RequestRow key={request._id} request={request} />
+            ))}
+          </div>
         )}
       </CardContent>
     </Card>

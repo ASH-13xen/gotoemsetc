@@ -1,0 +1,82 @@
+/* Organisation chart canvas — React Flow base styles plus the chart's own
+   look. Colours come from the app's theme tokens so dark mode just works. */
+@import '@xyflow/react/dist/style.css';
+
+.org-canvas {
+  --xy-background-color: transparent;
+  --xy-edge-stroke: color-mix(in oklch, var(--muted-foreground) 45%, transparent);
+  --xy-edge-stroke-width: 1.6;
+  --xy-minimap-background-color: var(--card);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--secondary);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  background:
+    radial-gradient(1200px 600px at 15% -10%, color-mix(in oklch, var(--primary) 10%, transparent), transparent 60%),
+    radial-gradient(900px 500px at 110% 110%, color-mix(in oklch, #a855f7 9%, transparent), transparent 60%),
+    var(--background);
+}
+
+.org-canvas .react-flow__node {
+  /* Cards draw their own chrome. */
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.org-canvas .react-flow__node.dragging {
+  cursor: grabbing;
+  z-index: 1000 !important;
+}
+
+.org-canvas .react-flow__node.dragging .org-card {
+  transform: rotate(-1.2deg) scale(1.02);
+  box-shadow: 0 30px 60px -18px rgba(15, 23, 42, 0.45);
+}
+
+.org-canvas .react-flow__minimap,
+.org-canvas .react-flow__controls {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  box-shadow: 0 12px 30px -16px rgba(15, 23, 42, 0.35);
+}
+
+.org-canvas .react-flow__attribution {
+  display: none;
+}
+
+/* Highlighted path edges — a flowing dash towards the match. */
+.org-canvas .react-flow__edge.org-edge-path .react-flow__edge-path {
+  stroke-dasharray: 6 6;
+  animation: org-edge-flow 0.8s linear infinite;
+}
+
+@keyframes org-edge-flow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+
+.org-pulse {
+  animation: org-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes org-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.org-glass {
+  background: color-mix(in oklch, var(--card) 82%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid var(--border);
+  box-shadow: 0 16px 40px -20px rgba(15, 23, 42, 0.35);
+}

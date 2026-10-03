@@ -19,9 +19,9 @@ export type RoleGate = 'admin' | 'worker' | 'cms' | 'hr-work' | 'operations' | '
 //                   requireOperationsAccess. Deliberately excludes hr, unlike
 //                   every other elevated gate above — the Operations module
 //                   (Complaint Register) is admin/ceo/operations_manager only.
-//   "finance"     — admin + ceo + account_manager + operations_manager. The
+//   "finance"     — admin + ceo + cfo + finance + operations_manager. The
 //                   last is wider than the backend's requireFinanceAccess
-//                   (admin/ceo/account_manager) — operations_manager only
+//                   (admin/ceo/cfo/finance) — operations_manager only
 //                   has access to the Monthly Bills tab within the remote
 //                   (matching requireBillsAccess), gated in-page by
 //                   frontendfinance's own canAccessFinance/canManageBills,
@@ -42,7 +42,8 @@ export function RequireRole({ role, children }: { role: RoleGate; children: Reac
     allowed =
       user?.role === 'admin' ||
       user?.role === 'ceo' ||
-      user?.role === 'account_manager' ||
+      user?.role === 'cfo' ||
+      user?.role === 'finance' ||
       user?.role === 'operations_manager'
   else allowed = user?.role === role
 

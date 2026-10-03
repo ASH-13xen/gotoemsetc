@@ -1,5 +1,5 @@
 const { Schema, model } = require('mongoose');
-const { EMPLOYEE_STATUS } = require('../config/constants');
+const { EMPLOYEE_STATUS, INVENTORY_ITEM_CATEGORY } = require('../config/constants');
 const { attachExtraDetailsEncryption } = require('../utils/extraDetailsCrypto');
 
 const addressSchema = new Schema(
@@ -101,6 +101,54 @@ const inventorySchema = new Schema(
   { _id: false }
 );
 
+// The newer, explicitly-categorized inventory system — Office Phone /
+// Personal Phone / Office Laptop / Personal Laptop, any number of items per
+// category (a replaced phone stays on record; the new one gets its own
+// entry). Deliberately separate from `inventorySchema` above, which must
+// keep its exact field names for the Hardware Consent Form's auto-fill (see
+// that schema's own comment) and stays the one source for that document —
+// this is purely additive, migrated from the legacy fields once per
+// employee the first time their record is read (see
+// employee.service.js#getEmployee).
+//
+// One schema shape for every category, rather than a phone-shaped and a
+// laptop-shaped schema, so there's no laptopSerialNumber-vs-serialNumber
+// duplication to keep in sync — `category` alone decides which of the
+// phone-only/laptop-only fields the UI shows for a given item.
+const inventoryItemSchema = new Schema(
+  {
+    category: { type: String, enum: Object.values(INVENTORY_ITEM_CATEGORY), required: true },
+    deviceName: { type: String, trim: true },
+    serialNumber: { type: String, trim: true }, // IMEI for a phone, serial number for a laptop
+    color: { type: String, trim: true },
+    condition: { type: String, trim: true },
+    password: { type: String, trim: true },
+    theftProtection: Boolean,
+    findMyDevice: Boolean,
+    thumbOrFace: Boolean,
+    // Phone-only — left blank for a laptop item.
+    simProvider: { type: String, trim: true },
+    simPhoneNumber: { type: String, trim: true },
+    screenGuard: Boolean,
+    backCover: Boolean,
+    powerAdapter: Boolean,
+    cable: Boolean,
+    mobileOS: { type: String, trim: true },
+    appleId: { type: String, trim: true },
+    whatsappTwoFactor: Boolean,
+    whatsappTwoFactorBackupMail: { type: String, trim: true },
+    whatsappTwoFactorPin: { type: String, trim: true },
+    whatsappNameUpdated: Boolean,
+    whatsappProfiling: Boolean,
+    whatsappBackupInEmployeeMail: Boolean,
+    galleryBackupInEmployeeMail: Boolean,
+    trueCallerUpdated: Boolean,
+    // Laptop-only.
+    mouse: Boolean,
+  },
+  { timestamps: true }
+);
+
 // Freeform performance markers HR/admin can drop on any date, any number —
 // red for poor work, green for good work. Deliberately not tied to a
 // specific incident/task record; just a lightweight running log shown on
@@ -180,6 +228,7 @@ const employeeSchema = new Schema(
     aadharNumber: String,
     extraDetails: [extraDetailSchema],
     inventory: inventorySchema,
+    inventoryItems: [inventoryItemSchema],
 
     // Onboarding checklist — plain manual checkboxes, ticked off by HR.
     biometricVerificationAdded: { type: Boolean, default: false },
@@ -188,6 +237,16 @@ const employeeSchema = new Schema(
     personalPhoneAdded: { type: Boolean, default: false },
     assetAccessAdded: { type: Boolean, default: false },
     updatedIn12345: { type: Boolean, default: false },
+    // Probation ends PROBATION_MONTHS after dateOfJoining on its own (see
+    // utils/probation.js). Ticking this ends it early — from
+    // probationCompletedAt, stamped when it's ticked. Boxes ticked before that
+    // date was recorded carry no date and change nothing.
+    probationCompleted: { type: Boolean, default: false },
+    probationCompletedAt: { type: Date },
+    // Left out of salary slips and master salary sheets entirely (e.g.
+    // founders, demo/test records) — see employee.repository.js
+    // #listPayableForPeriod and salarySlip.service.js#generateSlip.
+    excludeFromPayroll: { type: Boolean, default: false },
 
     status: {
       type: String,

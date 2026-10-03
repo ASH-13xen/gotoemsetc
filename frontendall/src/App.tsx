@@ -11,9 +11,12 @@ import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
 import AuditLogPage from '@/pages/AuditLogPage'
 import PerformanceFlagsPage from '@/pages/PerformanceFlagsPage'
+import OrgChartPage from '@/pages/OrgChartPage'
 import EventsPage from '@/pages/EventsPage'
 import EventDetailPage from '@/pages/EventDetailPage'
 import CompanyCalendarPage from '@/pages/CompanyCalendarPage'
+import WeeklyCalendarPage from '@/pages/WeeklyCalendarPage'
+import CalendarInvitePage from '@/pages/CalendarInvitePage'
 import { ShellLayout } from '@/components/layout/ShellLayout'
 import { ensureRemoteStyles } from '@/lib/remoteStyles'
 
@@ -60,6 +63,8 @@ export default function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              {/* From the Weekly Calendar invite email — no login needed. */}
+              <Route path="/calendar-invite/:token" element={<CalendarInvitePage />} />
               <Route
                 path="/"
                 element={
@@ -74,7 +79,19 @@ export default function App() {
                 path="/calendar"
                 element={
                   <RequireAuth>
-                    <ShellLayout section="Calendar">
+                    <ShellLayout section="Weekly Calendar" wide>
+                      <WeeklyCalendarPage />
+                    </ShellLayout>
+                  </RequireAuth>
+                }
+              />
+              {/* The month view of holidays, half days and who's out — opened
+                  from the dashboard calendar's "View full calendar" link. */}
+              <Route
+                path="/company-calendar"
+                element={
+                  <RequireAuth>
+                    <ShellLayout section="Company Calendar">
                       <CompanyCalendarPage />
                     </ShellLayout>
                   </RequireAuth>
@@ -113,6 +130,16 @@ export default function App() {
                         <AuditLogPage />
                       </ShellLayout>
                     </RequireRole>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/organisation"
+                element={
+                  <RequireAuth>
+                    <ShellLayout section="Organisation" fullBleed>
+                      <OrgChartPage />
+                    </ShellLayout>
                   </RequireAuth>
                 }
               />

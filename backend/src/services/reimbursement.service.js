@@ -90,7 +90,7 @@ async function listAll(status) {
   return reimbursementRepository.listAll({ status });
 }
 
-// CEO-only (see requireRole(CEO) at the route).
+// Finance-only — admin/ceo/cfo/finance (see requireFinanceAccess at the route).
 async function approve(id, actingUser) {
   const existing = await reimbursementRepository.findById(id);
   if (!existing) throw ApiError.notFound('Reimbursement not found');

@@ -3,6 +3,7 @@ import { Search } from 'lucide-react'
 
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -13,59 +14,57 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { cn } from '@/lib/utils'
 import { useInventoryReport } from '@/hooks/useInventory'
-import type { EmployeeInventory } from '@/api/inventory.api'
+import {
+  INVENTORY_ITEM_CATEGORY_LABEL,
+  type InventoryItemCategory,
+  type InventoryItemRow,
+} from '@/api/inventory.api'
 
-type ColumnKey = keyof EmployeeInventory
+type ColumnKey = keyof Omit<InventoryItemRow, 'itemId' | 'employeeId' | 'employeeName' | 'employeeCode' | 'designation' | 'category'>
 
-const COLUMNS: { key: ColumnKey; label: string; kind: 'text' | 'boolean' }[] = [
-  { key: 'deviceName', label: 'Device Name', kind: 'text' },
-  { key: 'imeiOrSerialNumber', label: 'IMEI / Serial', kind: 'text' },
-  { key: 'deviceColor', label: 'Color', kind: 'text' },
-  { key: 'simProvider', label: 'SIM Provider', kind: 'text' },
-  { key: 'simPhoneNumber', label: 'SIM Number', kind: 'text' },
-  { key: 'screenGuard', label: 'Screen Guard', kind: 'boolean' },
-  { key: 'backCover', label: 'Back Cover', kind: 'boolean' },
-  { key: 'powerAdapter', label: 'Power Adapter', kind: 'boolean' },
-  { key: 'cable', label: 'Cable', kind: 'boolean' },
+const CATEGORIES: InventoryItemCategory[] = ['office_phone', 'personal_phone', 'office_laptop', 'personal_laptop']
 
-  { key: 'hasMobile', label: 'Has Mobile', kind: 'boolean' },
-  { key: 'mobileOS', label: 'Mobile OS', kind: 'text' },
-  { key: 'deviceCondition', label: 'Condition', kind: 'text' },
-  { key: 'whatsappTwoFactor', label: 'W/A 2 Factor', kind: 'boolean' },
-  { key: 'whatsappTwoFactorBackupMail', label: 'W/A 2 Factor Backup Mail', kind: 'text' },
-  { key: 'whatsappTwoFactorPin', label: 'W/A 2 Factor PIN', kind: 'text' },
-  { key: 'whatsappNameUpdated', label: 'W/A Name Updated', kind: 'boolean' },
-  { key: 'whatsappProfiling', label: 'W/A Profiling', kind: 'boolean' },
-  { key: 'whatsappBackupInEmployeeMail', label: 'W/A Backup In Employee Mail', kind: 'boolean' },
-  { key: 'galleryBackupInEmployeeMail', label: 'Gallery Backup In Employee Mail', kind: 'boolean' },
-  { key: 'trueCallerUpdated', label: 'True Caller Updated', kind: 'boolean' },
-  { key: 'theftProtection', label: 'Theft Protection', kind: 'boolean' },
-  { key: 'findMyDevice', label: 'Find My Device', kind: 'boolean' },
-  { key: 'appleId', label: 'Apple ID', kind: 'text' },
-  { key: 'password', label: 'Password', kind: 'text' },
-  { key: 'thumbOrFace', label: 'Thumb/Face', kind: 'boolean' },
+function isPhoneCategory(c: InventoryItemCategory) {
+  return c === 'office_phone' || c === 'personal_phone'
+}
 
-  { key: 'hasLaptop', label: 'Has Laptop', kind: 'boolean' },
-  { key: 'laptopDeviceName', label: 'Laptop', kind: 'text' },
-  { key: 'laptopSerialNumber', label: 'Laptop Serial', kind: 'text' },
-  { key: 'laptopColor', label: 'Laptop Color', kind: 'text' },
-  { key: 'laptopCondition', label: 'Laptop Condition', kind: 'text' },
-  { key: 'laptopTheftProtection', label: 'Laptop Theft Protection', kind: 'boolean' },
-  { key: 'laptopFindMyDevice', label: 'Laptop Find My Device', kind: 'boolean' },
-  { key: 'laptopPassword', label: 'Laptop Password', kind: 'text' },
-  { key: 'laptopThumbOrFace', label: 'Laptop Thumb/Face', kind: 'boolean' },
-  { key: 'laptopMouse', label: 'Mouse', kind: 'boolean' },
+// Scoped so the column picker only ever offers fields relevant to the
+// category filter currently active — the whole point of splitting inventory
+// into categories was to stop phone and laptop fields cluttering one giant
+// list together.
+const COLUMNS: { key: ColumnKey; label: string; kind: 'text' | 'boolean'; scope: 'common' | 'phone' | 'laptop' }[] = [
+  { key: 'deviceName', label: 'Device Name', kind: 'text', scope: 'common' },
+  { key: 'serialNumber', label: 'IMEI / Serial', kind: 'text', scope: 'common' },
+  { key: 'color', label: 'Color', kind: 'text', scope: 'common' },
+  { key: 'condition', label: 'Condition', kind: 'text', scope: 'common' },
+  { key: 'password', label: 'Password', kind: 'text', scope: 'common' },
+  { key: 'theftProtection', label: 'Theft Protection', kind: 'boolean', scope: 'common' },
+  { key: 'findMyDevice', label: 'Find My Device', kind: 'boolean', scope: 'common' },
+  { key: 'thumbOrFace', label: 'Thumb/Face', kind: 'boolean', scope: 'common' },
 
-  { key: 'consentFormLink', label: 'Consent Form Link', kind: 'text' },
-  { key: 'gotofriendLoggedIn', label: 'Gotofriend12345 Logged In', kind: 'boolean' },
-  { key: 'employeeMailLoggedIn', label: 'Employee Mail Logged In', kind: 'boolean' },
-  { key: 'clientMailLoggedIn', label: 'Client Mail Logged In', kind: 'boolean' },
-  { key: 'goToDataTransfer', label: 'GO-TO Data Transfer', kind: 'boolean' },
-  { key: 'podcastDataTransfer', label: 'Podcast Data Transfer', kind: 'boolean' },
+  { key: 'simProvider', label: 'SIM Provider', kind: 'text', scope: 'phone' },
+  { key: 'simPhoneNumber', label: 'SIM Number', kind: 'text', scope: 'phone' },
+  { key: 'screenGuard', label: 'Screen Guard', kind: 'boolean', scope: 'phone' },
+  { key: 'backCover', label: 'Back Cover', kind: 'boolean', scope: 'phone' },
+  { key: 'powerAdapter', label: 'Power Adapter', kind: 'boolean', scope: 'phone' },
+  { key: 'cable', label: 'Cable', kind: 'boolean', scope: 'phone' },
+  { key: 'mobileOS', label: 'Mobile OS', kind: 'text', scope: 'phone' },
+  { key: 'appleId', label: 'Apple ID', kind: 'text', scope: 'phone' },
+  { key: 'whatsappTwoFactor', label: 'W/A 2 Factor', kind: 'boolean', scope: 'phone' },
+  { key: 'whatsappTwoFactorBackupMail', label: 'W/A 2 Factor Backup Mail', kind: 'text', scope: 'phone' },
+  { key: 'whatsappTwoFactorPin', label: 'W/A 2 Factor PIN', kind: 'text', scope: 'phone' },
+  { key: 'whatsappNameUpdated', label: 'W/A Name Updated', kind: 'boolean', scope: 'phone' },
+  { key: 'whatsappProfiling', label: 'W/A Profiling', kind: 'boolean', scope: 'phone' },
+  { key: 'whatsappBackupInEmployeeMail', label: 'W/A Backup In Employee Mail', kind: 'boolean', scope: 'phone' },
+  { key: 'galleryBackupInEmployeeMail', label: 'Gallery Backup In Employee Mail', kind: 'boolean', scope: 'phone' },
+  { key: 'trueCallerUpdated', label: 'True Caller Updated', kind: 'boolean', scope: 'phone' },
+
+  { key: 'mouse', label: 'Mouse Issued', kind: 'boolean', scope: 'laptop' },
 ]
 
-const DEFAULT_COLUMNS: ColumnKey[] = ['deviceName', 'imeiOrSerialNumber', 'simProvider', 'simPhoneNumber']
+const DEFAULT_COLUMNS: ColumnKey[] = ['deviceName', 'serialNumber', 'color', 'simProvider', 'simPhoneNumber']
 
 function renderCell(value: string | boolean | undefined, kind: 'text' | 'boolean') {
   if (kind === 'boolean') return value ? 'Yes' : 'No'
@@ -74,9 +73,19 @@ function renderCell(value: string | boolean | undefined, kind: 'text' | 'boolean
 
 export default function InventoryReportPage() {
   const { data, isLoading } = useInventoryReport()
-  const employees = data?.employees ?? []
+  const items = data?.items ?? []
+  const [selectedCategories, setSelectedCategories] = useState<Set<InventoryItemCategory>>(new Set(CATEGORIES))
   const [selectedColumns, setSelectedColumns] = useState<Set<ColumnKey>>(new Set(DEFAULT_COLUMNS))
   const [search, setSearch] = useState('')
+
+  const toggleCategory = (c: InventoryItemCategory) => {
+    setSelectedCategories((prev) => {
+      const next = new Set(prev)
+      if (next.has(c)) next.delete(c)
+      else next.add(c)
+      return next
+    })
+  }
 
   const toggleColumn = (key: ColumnKey) => {
     setSelectedColumns((prev) => {
@@ -87,27 +96,56 @@ export default function InventoryReportPage() {
     })
   }
 
+  const activeHasPhone = [...selectedCategories].some(isPhoneCategory)
+  const activeHasLaptop = [...selectedCategories].some((c) => !isPhoneCategory(c))
+  const availableColumns = COLUMNS.filter(
+    (c) => c.scope === 'common' || (c.scope === 'phone' && activeHasPhone) || (c.scope === 'laptop' && activeHasLaptop)
+  )
+  const activeColumns = availableColumns.filter((c) => selectedColumns.has(c.key))
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
-    if (!q) return employees
-    return employees.filter(
-      (e) => (e.employeeName ?? '').toLowerCase().includes(q) || (e.employeeCode ?? '').toLowerCase().includes(q)
-    )
-  }, [employees, search])
-
-  const activeColumns = COLUMNS.filter((c) => selectedColumns.has(c.key))
+    return items
+      .filter((item) => selectedCategories.has(item.category))
+      .filter(
+        (item) =>
+          !q || item.employeeName.toLowerCase().includes(q) || (item.employeeCode ?? '').toLowerCase().includes(q)
+      )
+  }, [items, selectedCategories, search])
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-8 py-8">
       <PageHeader
-        eyebrow="HR Work"
+        eyebrow="HRMS"
         title="Inventory details"
-        description="Pick the columns you want, then see every employee's inventory values in one table."
+        description="Every categorized inventory item, across every employee — filter by category, pick the columns you want."
       />
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="mr-1 text-xs font-medium text-muted-foreground">Category:</span>
+        {CATEGORIES.map((c) => {
+          const active = selectedCategories.has(c)
+          return (
+            <button
+              key={c}
+              type="button"
+              onClick={() => toggleCategory(c)}
+              className={cn(
+                'rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                active
+                  ? 'border-transparent bg-primary/10 text-primary'
+                  : 'border-border text-muted-foreground/60 hover:bg-secondary/50'
+              )}
+            >
+              {INVENTORY_ITEM_CATEGORY_LABEL[c]}
+            </button>
+          )
+        })}
+      </div>
 
       <Card className="p-6">
         <CardContent className="flex flex-wrap gap-x-6 gap-y-2 p-0">
-          {COLUMNS.map((col) => (
+          {availableColumns.map((col) => (
             <label key={col.key} className="flex cursor-pointer items-center gap-2 text-sm select-none">
               <input
                 type="checkbox"
@@ -135,6 +173,8 @@ export default function InventoryReportPage() {
         <Skeleton className="h-64 w-full rounded-xl" />
       ) : activeColumns.length === 0 ? (
         <p className="text-sm text-muted-foreground">Pick at least one column above to see the report.</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No inventory items match the current category filter.</p>
       ) : (
         <div className="overflow-hidden rounded-xl border border-border">
           <Table>
@@ -142,19 +182,23 @@ export default function InventoryReportPage() {
               <TableRow>
                 <TableHead>Employee</TableHead>
                 <TableHead>Code</TableHead>
+                <TableHead>Category</TableHead>
                 {activeColumns.map((col) => (
                   <TableHead key={col.key}>{col.label}</TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((row) => (
-                <TableRow key={row.employeeId}>
+              {filtered.map((row, i) => (
+                <TableRow key={row.itemId ?? `${row.employeeId}-${row.category}-${i}`}>
                   <TableCell className="font-medium text-foreground">{row.employeeName}</TableCell>
                   <TableCell className="font-mono text-xs text-muted-foreground">{row.employeeCode}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{INVENTORY_ITEM_CATEGORY_LABEL[row.category]}</Badge>
+                  </TableCell>
                   {activeColumns.map((col) => (
                     <TableCell key={col.key} className="text-sm text-muted-foreground">
-                      {renderCell(row.inventory[col.key], col.kind)}
+                      {renderCell(row[col.key], col.kind)}
                     </TableCell>
                   ))}
                 </TableRow>

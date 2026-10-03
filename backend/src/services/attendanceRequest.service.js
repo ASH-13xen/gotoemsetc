@@ -14,7 +14,9 @@ const {
   ATTENDANCE_STATUS,
   TEAM_MEMBER_ROLE,
   NOTIFICATION_TYPES,
+  USER_ROLES,
 } = require('../config/constants');
+const { isPastProbation } = require('../utils/probation');
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const REQUEST_SUBMISSION_CUTOFF_DAYS = 2;
@@ -37,32 +39,136 @@ function enumerateDates(start, end) {
   return dates;
 }
 
-// One paid leave (status O) per employee per calendar month — checked
-// against both the month's actual AttendanceRecords (covers a paid leave
-// applied directly by HR/admin, not just one that went through this request
-// flow) and any pending/resolved leave-application request already targeting
-// that month (so an employee can't queue up a second one before the first is
-// decided). Only the month containing `date` is checked — a span that
-// crosses a month boundary is not specially handled beyond that.
-async function isEligibleForPaidLeave(employeeId, date) {
-  const from = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
-  const to = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
+function monthBounds(date) {
+  return {
+    from: new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1)),
+    to: new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)),
+  };
+}
 
+const PAID_LEAVE_INELIGIBLE_REASON = {
+  PROBATION: 'probation',
+  ALREADY_USED: 'already_used',
+};
+
+// One paid leave (status O) of their own per employee per calendar month,
+// and only once past probation (joining date + 3 months, or earlier if HR
+// ticked "Probation completed" — see utils/probation.js). Paid days HR
+// awarded (paidLeaveAwarded) never count. The monthly
+// limit is checked against both the month's actual AttendanceRecords
+// (covers a paid leave applied directly by HR/admin, not just one that went
+// through this request flow) and any pending/resolved leave-application
+// request already targeting that month (so an employee can't queue up a
+// second one before the first is decided). Only the month containing `date`
+// is checked — a span that crosses a month boundary is not specially
+// handled beyond that. Returns { eligible, reason } — reason is null when
+// eligible.
+async function paidLeaveEligibility(employeeId, date) {
+  const employee = await employeeRepository.findById(employeeId);
+  if (!employee || !isPastProbation(employee, date)) {
+    return { eligible: false, reason: PAID_LEAVE_INELIGIBLE_REASON.PROBATION };
+  }
+
+  const { from, to } = monthBounds(date);
   const records = await attendanceRepository.listForEmployee(employeeId, { from, to });
-  if (records.some((r) => r.status === ATTENDANCE_STATUS.PAID_LEAVE)) return false;
+  if (records.some((r) => r.status === ATTENDANCE_STATUS.PAID_LEAVE && !r.paidLeaveAwarded)) {
+    return { eligible: false, reason: PAID_LEAVE_INELIGIBLE_REASON.ALREADY_USED };
+  }
 
   const existingRequests = await attendanceRequestRepository.list({ employeeId });
-  return !existingRequests.some((r) => {
+  const alreadyApplied = existingRequests.some((r) => {
     if (r.requestedStatus !== ATTENDANCE_STATUS.PAID_LEAVE) return false;
     if (![ATTENDANCE_REQUEST_STATUS.PENDING, ATTENDANCE_REQUEST_STATUS.RESOLVED].includes(r.status)) return false;
     return r.date.getTime() >= from.getTime() && r.date.getTime() <= to.getTime();
   });
+  if (alreadyApplied) return { eligible: false, reason: PAID_LEAVE_INELIGIBLE_REASON.ALREADY_USED };
+
+  return { eligible: true, reason: null };
 }
 
 async function checkPaidLeaveEligibility(employeeId, dateStr) {
   const date = dateStr ? new Date(dateStr) : todayUTCMidnight();
   if (Number.isNaN(date.getTime())) throw ApiError.badRequest('Invalid date');
-  return isEligibleForPaidLeave(employeeId, date);
+  return paidLeaveEligibility(employeeId, date);
+}
+
+// The calendar month containing `date`, tallied exactly the way payroll
+// does (salaryCalculation.service.js): Late = Late-status days plus days
+// flagged isLate; Short Leave = Short-Leave-status days plus early
+// departures (an evening "Short Leave (2nd half)"), with the early
+// departures also broken out on their own. `pending` counts leave
+// applications for the same month that haven't been decided yet, so an
+// approver can see what's already queued up.
+async function computeMonthlyCounts(employeeId, date) {
+  const { from, to } = monthBounds(date);
+  const records = await attendanceRepository.listForEmployee(employeeId, { from, to });
+
+  let late = 0;
+  let shortLeave = 0;
+  let earlyDeparture = 0;
+  let halfDay = 0;
+  for (const record of records) {
+    if (record.status === ATTENDANCE_STATUS.LATE) late += 1;
+    if (record.isLate) late += 1;
+    if (record.status === ATTENDANCE_STATUS.SHORT_LEAVE) shortLeave += 1;
+    if (record.earlyDeparture) {
+      shortLeave += 1;
+      earlyDeparture += 1;
+    }
+    if (record.status === ATTENDANCE_STATUS.HALF_DAY) halfDay += 1;
+  }
+
+  const employeeRequests = await attendanceRequestRepository.list({ employeeId });
+  const pending = { late: 0, shortLeave: 0, halfDay: 0 };
+  for (const r of employeeRequests) {
+    if (r.status !== ATTENDANCE_REQUEST_STATUS.PENDING) continue;
+    if (r.date.getTime() < from.getTime() || r.date.getTime() > to.getTime()) continue;
+    if (r.requestedStatus === ATTENDANCE_STATUS.LATE) pending.late += 1;
+    if (r.requestedStatus === ATTENDANCE_STATUS.SHORT_LEAVE || r.requestedEarlyDeparture) pending.shortLeave += 1;
+    if (r.requestedStatus === ATTENDANCE_STATUS.HALF_DAY) pending.halfDay += 1;
+  }
+
+  return { late, shortLeave, earlyDeparture, halfDay, pending };
+}
+
+async function getMonthlyCounts(employeeId, dateStr) {
+  const date = dateStr ? new Date(dateStr) : todayUTCMidnight();
+  if (Number.isNaN(date.getTime())) throw ApiError.badRequest('Invalid date');
+  return computeMonthlyCounts(employeeId, date);
+}
+
+// Attaches `monthlyCounts` (for the month of each request's start date) to
+// every structured leave application in the list, so approvers see the
+// employee's month-to-date tally right on the request. Free-text
+// modification requests are left as-is. One attendance + request lookup per
+// employee-month, however many of their requests are in the list.
+async function withMonthlyCounts(requests) {
+  const cache = new Map();
+  return Promise.all(
+    requests.map(async (request) => {
+      const json = request.toObject ? request.toObject() : request;
+      const isLeaveApplication =
+        request.requestedStatus || request.requestedEarlyDeparture || request.requestedMultiDayLeave;
+      const employeeId = request.employee?._id || request.employee;
+      if (!isLeaveApplication || !employeeId) return json;
+
+      const key = `${employeeId}-${request.date.getUTCFullYear()}-${request.date.getUTCMonth()}`;
+      if (!cache.has(key)) cache.set(key, computeMonthlyCounts(employeeId, request.date));
+      const counts = await cache.get(key);
+      // The cached tally includes this request itself if it's pending —
+      // take it back out so "already this month" never counts the ask
+      // currently being reviewed.
+      const pending = { ...counts.pending };
+      if (request.status === ATTENDANCE_REQUEST_STATUS.PENDING) {
+        if (request.requestedStatus === ATTENDANCE_STATUS.LATE) pending.late -= 1;
+        if (request.requestedStatus === ATTENDANCE_STATUS.SHORT_LEAVE || request.requestedEarlyDeparture) {
+          pending.shortLeave -= 1;
+        }
+        if (request.requestedStatus === ATTENDANCE_STATUS.HALF_DAY) pending.halfDay -= 1;
+      }
+      return { ...json, monthlyCounts: { ...counts, pending } };
+    })
+  );
 }
 
 // Which tier must review a structured leave application first — the
@@ -104,7 +210,10 @@ async function resolveApprovalStage(employeeId, isLeaveApplication) {
 // the entire point of the structured flow, so future dates are only
 // rejected for the free-text case (neither field set). Both still share the
 // same 2-day backdating cutoff.
-async function createRequest(employeeId, { date, endDate, reason, requestedStatus, requestedEarlyDeparture }) {
+async function createRequest(
+  employeeId,
+  { date, endDate, reason, requestedStatus, requestedEarlyDeparture, requestedHalfDayPeriod, requestedMultiDayLeave }
+) {
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) throw ApiError.notFound('Employee not found');
 
@@ -128,7 +237,7 @@ async function createRequest(employeeId, { date, endDate, reason, requestedStatu
     }
   }
 
-  const isLeaveApplication = Boolean(requestedStatus || requestedEarlyDeparture);
+  const isLeaveApplication = Boolean(requestedStatus || requestedEarlyDeparture || requestedMultiDayLeave);
   const today = todayUTCMidnight();
   if (!isLeaveApplication && normalizedDate.getTime() > today.getTime()) {
     throw ApiError.badRequest('Cannot request a modification for a future date');
@@ -139,9 +248,13 @@ async function createRequest(employeeId, { date, endDate, reason, requestedStatu
   }
 
   if (requestedStatus === ATTENDANCE_STATUS.PAID_LEAVE) {
-    const eligible = await isEligibleForPaidLeave(employeeId, normalizedDate);
+    const { eligible, reason: ineligibleReason } = await paidLeaveEligibility(employeeId, normalizedDate);
     if (!eligible) {
-      throw ApiError.conflict('Only one paid leave is allowed per month, and it has already been used or applied for this month');
+      throw ApiError.conflict(
+        ineligibleReason === PAID_LEAVE_INELIGIBLE_REASON.PROBATION
+          ? 'Paid leave is available only once your probation period is completed'
+          : 'Only one paid leave is allowed per month, and it has already been used or applied for this month'
+      );
     }
   }
 
@@ -154,6 +267,8 @@ async function createRequest(employeeId, { date, endDate, reason, requestedStatu
     reason,
     requestedStatus,
     requestedEarlyDeparture,
+    requestedHalfDayPeriod: requestedStatus === ATTENDANCE_STATUS.HALF_DAY ? requestedHalfDayPeriod : undefined,
+    requestedMultiDayLeave: Boolean(requestedMultiDayLeave),
     approvalStage: stage,
   });
 
@@ -184,7 +299,23 @@ async function createRequest(employeeId, { date, endDate, reason, requestedStatu
 }
 
 async function listRequests({ employeeId, status } = {}) {
-  return attendanceRequestRepository.list({ employeeId, status });
+  const requests = await attendanceRequestRepository.list({ employeeId, status });
+  return withMonthlyCounts(requests);
+}
+
+async function notifyCeosOfUnpaidLeave(request) {
+  const employee = await employeeRepository.findById(request.employee);
+  const employeeName = employee ? `${employee.firstName} ${employee.lastName || ''}`.trim() : 'An employee';
+  const ceoUsers = await userRepository.findCeos();
+  await notificationService.createForUsers(
+    ceoUsers.map((u) => u._id),
+    {
+      type: NOTIFICATION_TYPES.LEAVE_APPLICATION_PENDING_CEO_REVIEW,
+      title: 'Unpaid leave needs your approval',
+      message: `${employeeName}'s unpaid leave application was approved by HR and now needs your final approval.`,
+      employee: request.employee,
+    }
+  );
 }
 
 // Resolving is the actual correction — attendanceUpdate is optional
@@ -214,6 +345,35 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actingUser
     throw ApiError.conflict('This request is still awaiting content manager review');
   }
 
+  // Unpaid Leave goes CM -> HR -> CEO. HR's approval only forwards it, with
+  // HR's chosen per-day change parked on the request; the CEO's approval is
+  // what actually applies that change. The CEO or admin approving at the HR
+  // stage finalizes it directly, since they'd be the final approver anyway.
+  const canGiveFinalApproval = actingUserRole === USER_ROLES.CEO || actingUserRole === USER_ROLES.ADMIN;
+  if (request.approvalStage === ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO) {
+    if (!canGiveFinalApproval) throw ApiError.forbidden('Only the CEO can give the final approval for unpaid leave');
+    attendanceUpdate = request.pendingAttendanceUpdate || undefined;
+  }
+
+  // Approving as Paid Leave makes it the employee's own paid leave — one a
+  // month, after probation. Extra paid days are awarded from the calendar.
+  if (attendanceUpdate?.status === ATTENDANCE_STATUS.PAID_LEAVE) {
+    const employee = await employeeRepository.findById(request.employee);
+    await attendanceService.assertOwnPaidLeaveAllowed(employee, enumerateDates(request.date, request.endDate || request.date));
+    attendanceUpdate = { ...attendanceUpdate, paidLeaveAwarded: false };
+  }
+
+  if (request.approvalStage !== ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO && request.requestedMultiDayLeave && !canGiveFinalApproval) {
+    for (const date of enumerateDates(request.date, request.endDate || request.date)) {
+      attendanceService.assertCanEditAttendanceDate(actingUserRole, date);
+      // eslint-disable-next-line no-await-in-loop
+      await attendanceService.assertStatusForOvertime(request.employee, date, attendanceUpdate);
+    }
+    const forwarded = await attendanceRequestRepository.advanceToCeoStage(id, resolvedByUserId, attendanceUpdate || null);
+    await notifyCeosOfUnpaidLeave(request);
+    return forwarded;
+  }
+
   const hasChange =
     attendanceUpdate &&
     (attendanceUpdate.status ||
@@ -226,6 +386,8 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actingUser
     const dates = enumerateDates(request.date, request.endDate || request.date);
     for (const date of dates) {
       attendanceService.assertCanEditAttendanceDate(actingUserRole, date);
+      // eslint-disable-next-line no-await-in-loop
+      await attendanceService.assertStatusForOvertime(request.employee, date, attendanceUpdate);
     }
 
     previousRecordSnapshot = [];
@@ -308,21 +470,29 @@ async function listPendingForContentManager(cmEmployeeId) {
   const teams = await workTeamRepository.listWhereEmployeeIsContentManager(cmEmployeeId);
   if (teams.length === 0) return [];
   const employeeIds = [...new Set(teams.flatMap((t) => [t.leader, ...t.members].map((id) => id.toString())))];
-  return attendanceRequestRepository.list({
+  const requests = await attendanceRequestRepository.list({
     status: ATTENDANCE_REQUEST_STATUS.PENDING,
     approvalStage: ATTENDANCE_REQUEST_APPROVAL_STAGE.CONTENT_MANAGER,
     employeeIds,
   });
+  return withMonthlyCounts(requests);
 }
 
 // A request denied outright — no AttendanceRecord is ever touched, so there
 // is nothing for revokeRequest to act on later (it only accepts requests
 // currently in the 'resolved' state).
-async function rejectRequest(id, resolvedByUserId, reason) {
+async function rejectRequest(id, resolvedByUserId, reason, actingUserRole) {
   const request = await attendanceRequestRepository.findById(id);
   if (!request) throw ApiError.notFound('Attendance modification request not found');
   if (request.status !== ATTENDANCE_REQUEST_STATUS.PENDING) {
     throw ApiError.conflict('This request has already been handled');
+  }
+  if (
+    request.approvalStage === ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO &&
+    actingUserRole !== USER_ROLES.CEO &&
+    actingUserRole !== USER_ROLES.ADMIN
+  ) {
+    throw ApiError.forbidden('This request is awaiting the CEO');
   }
   return attendanceRequestRepository.reject(id, resolvedByUserId, reason);
 }
@@ -384,6 +554,7 @@ module.exports = {
   acknowledgeRequest,
   listUnseenForEmployee,
   checkPaidLeaveEligibility,
+  getMonthlyCounts,
   isEligibleContentManagerFor,
   approveAtContentManagerStage,
   listPendingForContentManager,

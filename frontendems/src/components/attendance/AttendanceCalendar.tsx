@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { CalendarOff, ChevronLeft, ChevronRight, Clock3 } from 'lucide-react'
+import { CalendarOff, ChevronLeft, ChevronRight, Clock3, Gift, Hourglass } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { useAttendance, useMarkAttendance } from '@/hooks/useAttendance'
+import { useAttendance, useAttendanceEditRequests, useCreateAttendanceEditRequest, useMarkAttendance } from '@/hooks/useAttendance'
 import { useCreateHoliday, useDeleteHoliday, useHolidays } from '@/hooks/useHolidays'
 import { useAuth } from '@/hooks/useAuth'
 import { hasPermission, isAdminLike } from '@/lib/permissions'
@@ -72,6 +72,17 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10)
 }
 
+// HR can change the last 2 days directly; anything older goes to the CEO or
+// admin as a change request (see backend attendanceEditRequest.service.js).
+const HR_EDIT_CUTOFF_DAYS = 2
+function daysAgo(dateKey: string) {
+  return Math.round((Date.parse(todayKey()) - Date.parse(dateKey)) / 86_400_000)
+}
+
+function apiMessage(err: unknown, fallback: string) {
+  return (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? fallback
+}
+
 export function AttendanceCalendar({ employeeId, compact = false }: { employeeId: string; compact?: boolean }) {
   const { user } = useAuth()
   const isAdmin = isAdminLike(user)
@@ -79,6 +90,7 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
   // HR must justify every manual edit with a reason; admin doesn't need to
   // (see attendance.service.js#assertReasonProvidedForHr).
   const reasonRequired = user?.role === 'hr'
+  const isHr = user?.role === 'hr'
 
   const [monthDate, setMonthDate] = useState(() => {
     const now = new Date()
@@ -90,12 +102,19 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
   const [pendingIsLate, setPendingIsLate] = useState(false)
   const [pendingEarlyDeparture, setPendingEarlyDeparture] = useState(false)
   const [pendingNotes, setPendingNotes] = useState('')
+  // Paid Leave only: an extra day HR is awarding, not the employee's own.
+  const [pendingAwarded, setPendingAwarded] = useState(false)
 
   const month = monthDate.getUTCMonth() + 1
   const year = monthDate.getUTCFullYear()
   const { data, isLoading } = useAttendance(employeeId, month, year)
   const { data: holidaysData } = useHolidays(month, year)
   const markAttendance = useMarkAttendance(employeeId)
+  const createEditRequest = useCreateAttendanceEditRequest()
+  const { data: editRequestsData } = useAttendanceEditRequests(employeeId, isHr && canMark)
+  const pendingRequestByDate = new Map(
+    (editRequestsData?.requests ?? []).filter((r) => r.status === 'pending').map((r) => [r.date.slice(0, 10), r])
+  )
   const createHoliday = useCreateHoliday()
   const deleteHoliday = useDeleteHoliday()
 
@@ -121,21 +140,36 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
       toast.error('Reason is required when HR marks or changes attendance')
       return
     }
+    const change = {
+      status,
+      overtimeMinutes,
+      isLate: pendingIsLate,
+      earlyDeparture: pendingEarlyDeparture,
+      paidLeaveAwarded: status === 'O' ? pendingAwarded : undefined,
+    }
+    // Older than 2 days: HR can't change it directly — it goes to the CEO
+    // or admin for approval instead.
+    if (isHr && daysAgo(dateKey) > HR_EDIT_CUTOFF_DAYS) {
+      createEditRequest.mutate(
+        { employeeId, date: dateKey, reason: pendingNotes.trim(), ...change },
+        {
+          onSuccess: () => {
+            toast.success('Change request sent — the CEO or admin will approve it')
+            setOpenDay(null)
+          },
+          onError: (err) => toast.error(apiMessage(err, 'Could not send the change request')),
+        }
+      )
+      return
+    }
     markAttendance.mutate(
-      {
-        date: dateKey,
-        status,
-        overtimeMinutes,
-        isLate: pendingIsLate,
-        earlyDeparture: pendingEarlyDeparture,
-        notes: pendingNotes.trim() || undefined,
-      },
+      { date: dateKey, ...change, notes: pendingNotes.trim() || undefined },
       {
         onSuccess: () => {
-          toast.success('Attendance saved')
+          toast.success(status === 'O' && pendingAwarded ? 'Paid leave awarded' : 'Attendance saved')
           setOpenDay(null)
         },
-        onError: () => toast.error('Could not save attendance'),
+        onError: (err) => toast.error(apiMessage(err, 'Could not save attendance')),
       }
     )
   }
@@ -233,6 +267,11 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                 const record = recordByDate.get(dateKey)
                 const holiday = holidayByDate.get(dateKey)
                 const isFuture = dateKey > today
+                // Future days open only for someone who can mark — to give
+                // paid leave ahead of time; nothing else is markable there.
+                const futureLocked = isFuture && !canMark
+                const pendingRequest = pendingRequestByDate.get(dateKey)
+                const asRequest = isHr && daysAgo(dateKey) > HR_EDIT_CUTOFF_DAYS
                 const dayNum = Number(dateKey.slice(8, 10))
                 const isSunday = new Date(dateKey).getUTCDay() === 0
                 const isOffDay = isSunday || Boolean(holiday)
@@ -243,9 +282,10 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                     key={dateKey}
                     open={openDay === dateKey}
                     onOpenChange={(open) => {
-                      if (isFuture) return
+                      if (futureLocked) return
                       setOpenDay(open ? dateKey : null)
-                      setPendingStatus(record?.status ?? NO_STATUS)
+                      setPendingStatus(isFuture && record?.status !== 'O' ? 'O' : (record?.status ?? NO_STATUS))
+                      setPendingAwarded(record?.paidLeaveAwarded ?? false)
                       setPendingOvertimeMinutes(record?.overtimeMinutes ? String(record.overtimeMinutes) : '')
                       setPendingIsLate(record?.isLate ?? false)
                       setPendingEarlyDeparture(record?.earlyDeparture ?? false)
@@ -255,13 +295,15 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                     <PopoverTrigger asChild>
                       <button
                         type="button"
-                        disabled={isFuture}
+                        disabled={futureLocked}
                         className={cn(
                           'relative flex aspect-square flex-col items-center justify-center rounded-xl border font-semibold transition-colors duration-150',
                           compact ? 'gap-0 text-[10px]' : 'gap-0.5 text-sm',
-                          isFuture
+                          futureLocked
                             ? 'cursor-not-allowed border-border/40 bg-secondary/10 text-muted-foreground/40'
-                            : 'border-border bg-card text-foreground hover:bg-secondary/60',
+                            : isFuture
+                              ? 'border-dashed border-border/60 bg-secondary/10 text-muted-foreground/60 hover:bg-secondary/40'
+                              : 'border-border bg-card text-foreground hover:bg-secondary/60',
                           !config && isOffDay && 'border-border bg-secondary/30 text-muted-foreground/60',
                           config && cn(config.box, 'hover:brightness-95'),
                           dateKey === today && 'ring-2 ring-inset ring-primary'
@@ -269,7 +311,22 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                       >
                         <span className={compact ? 'text-[11px]' : 'text-base'}>{dayNum}</span>
                         {config && !compact && (
-                          <span className="text-[9px] font-bold tracking-wide uppercase opacity-80">{config.code}</span>
+                          <span className="text-[9px] font-bold tracking-wide uppercase opacity-80">
+                            {config.code}
+                            {record?.status === 'O' && record.paidLeaveAwarded ? '*' : ''}
+                          </span>
+                        )}
+                        {record?.status === 'O' && record.paidLeaveAwarded && (
+                          <Gift
+                            className={cn('absolute top-1 right-1 text-sky-600', compact ? 'size-2' : 'size-3')}
+                            aria-label="Paid leave awarded by HR"
+                          />
+                        )}
+                        {pendingRequest && (
+                          <Hourglass
+                            className={cn('absolute bottom-1 left-1/2 -translate-x-1/2 text-amber-600', compact ? 'size-2' : 'size-3')}
+                            aria-label="Change request waiting for approval"
+                          />
                         )}
                         {record?.overtimeMinutes && !compact ? (
                           <span className="text-[9px] font-medium opacity-70">+{record.overtimeMinutes}min</span>
@@ -324,6 +381,17 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                           <p className="text-xs text-primary">Auto-marked from biometric scans</p>
                         )}
                         {record?.modifiedByRequest && <p className="text-xs text-amber-600">Modified by HR</p>}
+                        {record?.status === 'O' && (
+                          <p className="text-xs font-medium text-sky-700">
+                            {record.paidLeaveAwarded ? 'Paid leave awarded by HR (extra day)' : "The employee's own paid leave for this month"}
+                          </p>
+                        )}
+                        {pendingRequest && (
+                          <div className="grid gap-0.5 rounded-lg bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-300">
+                            <p className="font-semibold">Change request waiting for the CEO/admin</p>
+                            <p>Asked: {pendingRequest.change.status ?? 'no status change'}{pendingRequest.change.status === 'O' ? (pendingRequest.change.paidLeaveAwarded ? ' (awarded)' : ' (own)') : ''} — “{pendingRequest.reason}”</p>
+                          </div>
+                        )}
                         {record && !record.isSettled && (
                           <p className="text-xs text-yellow-600">Pending — may still change today</p>
                         )}
@@ -346,7 +414,15 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                             <p className="text-xs font-medium text-foreground">{record.notes}</p>
                           </div>
                         )}
-                        {canMark && (
+                        {canMark && isFuture && (
+                          <p className="text-xs text-muted-foreground">Upcoming day — only paid leave can be given ahead of time.</p>
+                        )}
+                        {canMark && asRequest && !pendingRequest && (
+                          <p className="rounded-lg bg-secondary/60 p-2.5 text-xs text-muted-foreground">
+                            This day is more than {HR_EDIT_CUTOFF_DAYS} days old, so your change goes to the <b>CEO or admin</b> for approval.
+                          </p>
+                        )}
+                        {canMark && !(asRequest && pendingRequest) && (
                           <>
                             <Select
                               value={pendingStatus}
@@ -363,14 +439,38 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value={NO_STATUS}>— No status —</SelectItem>
-                                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                                {!isFuture && <SelectItem value={NO_STATUS}>— No status —</SelectItem>}
+                                {Object.entries(STATUS_CONFIG)
+                                  .filter(([key]) => !isFuture || key === 'O')
+                                  .map(([key, cfg]) => (
                                   <SelectItem key={key} value={key}>
                                     {cfg.code} — {cfg.label}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
+                            {pendingStatus === 'O' && (
+                              <label
+                                htmlFor={`awarded-${dateKey}`}
+                                className="flex cursor-pointer select-none items-start gap-2 rounded-lg border border-sky-500/30 bg-sky-500/5 p-2.5 text-xs text-foreground"
+                              >
+                                <input
+                                  id={`awarded-${dateKey}`}
+                                  type="checkbox"
+                                  checked={pendingAwarded}
+                                  onChange={(e) => setPendingAwarded(e.target.checked)}
+                                  className="mt-0.5 size-4 cursor-pointer rounded border-border accent-sky-600"
+                                />
+                                <span>
+                                  <span className="font-semibold">Awarded by HR</span>
+                                  <span className="block text-[11px] text-muted-foreground">
+                                    An extra paid day — doesn't use the employee's one own paid leave this month.
+                                  </span>
+                                </span>
+                              </label>
+                            )}
+                            {!isFuture && (
+                            <>
                             <div className="grid gap-1.5">
                               <Label htmlFor={`ot-${dateKey}`} className="text-xs text-muted-foreground">
                                 Overtime minutes
@@ -381,19 +481,11 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                                 min="0"
                                 step="1"
                                 value={pendingOvertimeMinutes}
-                                disabled={pendingEarlyDeparture}
-                                onChange={(e) => {
-                                  setPendingOvertimeMinutes(e.target.value)
-                                  // Overtime and an early departure are opposite
-                                  // ends of the same departure scan — can't both
-                                  // be true for the same day.
-                                  if (Number(e.target.value) > 0) setPendingEarlyDeparture(false)
-                                }}
-                                className="disabled:opacity-50"
+                                // Overtime and an early departure can share a day
+                                // — e.g. arriving well before shift start (morning
+                                // overtime) and still leaving early.
+                                onChange={(e) => setPendingOvertimeMinutes(e.target.value)}
                               />
-                              {pendingEarlyDeparture && (
-                                <p className="text-[10px] text-muted-foreground">Can't combine with Early departure</p>
-                              )}
                             </div>
                             <label
                               htmlFor={`late-${dateKey}`}
@@ -417,26 +509,18 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                             )}
                             <label
                               htmlFor={`early-${dateKey}`}
-                              className={cn(
-                                'flex select-none items-center gap-2 text-xs text-muted-foreground',
-                                Number(pendingOvertimeMinutes) > 0 ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
-                              )}
+                              className="flex cursor-pointer select-none items-center gap-2 text-xs text-muted-foreground"
                             >
                               <input
                                 id={`early-${dateKey}`}
                                 type="checkbox"
                                 checked={pendingEarlyDeparture}
-                                disabled={Number(pendingOvertimeMinutes) > 0}
-                                onChange={(e) => {
-                                  setPendingEarlyDeparture(e.target.checked)
-                                  if (e.target.checked) setPendingOvertimeMinutes('')
-                                }}
-                                className="size-4 cursor-pointer rounded border-border text-primary accent-primary focus:ring-primary disabled:cursor-not-allowed"
+                                onChange={(e) => setPendingEarlyDeparture(e.target.checked)}
+                                className="size-4 cursor-pointer rounded border-border text-primary accent-primary focus:ring-primary"
                               />
                               Early departure
                             </label>
-                            {Number(pendingOvertimeMinutes) > 0 && (
-                              <p className="-mt-2 text-[10px] text-muted-foreground">Can't combine with Overtime Minutes</p>
+                            </>
                             )}
                             <div className="grid gap-1.5">
                               <Label htmlFor={`notes-${dateKey}`} className="text-xs text-muted-foreground">
@@ -450,8 +534,8 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                                 className="min-h-16"
                               />
                             </div>
-                            <Button size="sm" onClick={() => onSave(dateKey)} disabled={markAttendance.isPending}>
-                              Save
+                            <Button size="sm" onClick={() => onSave(dateKey)} disabled={markAttendance.isPending || createEditRequest.isPending}>
+                              {asRequest ? 'Send for approval' : 'Save'}
                             </Button>
                           </>
                         )}

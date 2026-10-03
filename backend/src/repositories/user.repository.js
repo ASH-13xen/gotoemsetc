@@ -15,6 +15,18 @@ function findByEmployeeId(employeeId) {
   return User.findOne({ employeeLink: employeeId });
 }
 
+// Off-boarding/removing an employee revokes every login linked to them —
+// the same soft delete (isActive: false) as deleting a credential by hand,
+// so an admin can still see it, and re-activate it if someone is rehired.
+function deactivateForEmployee(employeeId) {
+  return User.updateMany({ employeeLink: employeeId, isActive: true }, { isActive: false });
+}
+
+// Cheap per-request check that a token's account still exists and is active.
+function isActiveId(id) {
+  return User.exists({ _id: id, isActive: true });
+}
+
 function findByIdAny(id) {
   return User.findById(id);
 }
@@ -68,27 +80,27 @@ function findCmsOversightUsers() {
   });
 }
 
-// The Finance module's own oversight set — admin/ceo/account_manager, same
-// three roles requireFinanceAccess() (auth.middleware.js) gates writes to.
+// The Finance module's own oversight set — admin/ceo/cfo/finance, same
+// roles requireFinanceAccess() (auth.middleware.js) gates writes to.
 // Used to notify about salary/FnF/invoice/reimbursement events that aren't
 // scoped to one specific already-known recipient.
 function findFinanceUsers() {
   return User.find({
-    role: { $in: [USER_ROLES.ADMIN, USER_ROLES.CEO, USER_ROLES.ACCOUNT_MANAGER] },
+    role: { $in: [USER_ROLES.ADMIN, USER_ROLES.CEO, USER_ROLES.CFO, USER_ROLES.FINANCE] },
     isActive: true,
   });
 }
 
 // Monthly Bills' base reminder audience (see jobs/monthlyBillCycle.job.js) —
-// deliberately just this one role, not findFinanceUsers (which also pulls in
+// deliberately just cfo + finance, not findFinanceUsers (which also pulls in
 // admin/ceo): the spec has ceo joining only inside the 1-day escalation, and
 // admin isn't part of the reminder audience at all.
-function findAccountManagers() {
-  return User.find({ role: USER_ROLES.ACCOUNT_MANAGER, isActive: true });
+function findFinanceTeam() {
+  return User.find({ role: { $in: [USER_ROLES.CFO, USER_ROLES.FINANCE] }, isActive: true });
 }
 
 // Who signs off on an auto-generated invoice before it goes to the client —
-// admin/ceo only, narrower than findFinanceUsers (account_manager tracks and
+// admin/ceo only, narrower than findFinanceUsers (cfo/finance track and
 // collects payment but doesn't approve). See invoice.service.js.
 function findInvoiceApprovers() {
   return User.find({ role: { $in: [USER_ROLES.ADMIN, USER_ROLES.CEO] }, isActive: true });
@@ -104,6 +116,8 @@ module.exports = {
   findById,
   findByEmployeeId,
   findByIdAny,
+  deactivateForEmployee,
+  isActiveId,
   create,
   updateById,
   list,
@@ -113,7 +127,7 @@ module.exports = {
   findTeamLeads,
   findCmsOversightUsers,
   findFinanceUsers,
-  findAccountManagers,
+  findFinanceTeam,
   findInvoiceApprovers,
   findCeos,
 };

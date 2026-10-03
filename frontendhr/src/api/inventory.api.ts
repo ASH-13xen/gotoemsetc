@@ -1,19 +1,40 @@
 import { apiClient } from './client'
 
-export interface EmployeeInventory {
+export type InventoryItemCategory = 'office_phone' | 'personal_phone' | 'office_laptop' | 'personal_laptop'
+
+export const INVENTORY_ITEM_CATEGORY_LABEL: Record<InventoryItemCategory, string> = {
+  office_phone: 'Office Phone',
+  personal_phone: 'Personal Phone',
+  office_laptop: 'Office Laptop',
+  personal_laptop: 'Personal Laptop',
+}
+
+// One row per categorized inventory item — an employee with 2 phones and a
+// laptop appears 3 times here, once per item. See
+// backend/src/services/inventoryReport.service.js.
+export interface InventoryItemRow {
+  itemId?: string
+  employeeId: string
+  employeeName: string
+  employeeCode: string
+  designation?: string
+  category: InventoryItemCategory
   deviceName?: string
-  imeiOrSerialNumber?: string
-  deviceColor?: string
+  serialNumber?: string
+  color?: string
+  condition?: string
+  password?: string
+  theftProtection?: boolean
+  findMyDevice?: boolean
+  thumbOrFace?: boolean
   simProvider?: string
   simPhoneNumber?: string
   screenGuard?: boolean
   backCover?: boolean
   powerAdapter?: boolean
   cable?: boolean
-
-  hasMobile?: boolean
-  mobileOS?: 'android' | 'ios' | ''
-  deviceCondition?: string
+  mobileOS?: string
+  appleId?: string
   whatsappTwoFactor?: boolean
   whatsappTwoFactorBackupMail?: string
   whatsappTwoFactorPin?: string
@@ -22,40 +43,10 @@ export interface EmployeeInventory {
   whatsappBackupInEmployeeMail?: boolean
   galleryBackupInEmployeeMail?: boolean
   trueCallerUpdated?: boolean
-  theftProtection?: boolean
-  findMyDevice?: boolean
-  appleId?: string
-  password?: string
-  thumbOrFace?: boolean
-
-  hasLaptop?: boolean
-  laptopDeviceName?: string
-  laptopSerialNumber?: string
-  laptopColor?: string
-  laptopCondition?: string
-  laptopTheftProtection?: boolean
-  laptopFindMyDevice?: boolean
-  laptopPassword?: string
-  laptopThumbOrFace?: boolean
-  laptopMouse?: boolean
-
-  consentFormLink?: string
-  gotofriendLoggedIn?: boolean
-  employeeMailLoggedIn?: boolean
-  clientMailLoggedIn?: boolean
-  goToDataTransfer?: boolean
-  podcastDataTransfer?: boolean
+  mouse?: boolean
 }
 
-export interface InventoryRow {
-  employeeId: string
-  employeeName: string
-  employeeCode: string
-  designation?: string
-  inventory: EmployeeInventory
-}
-
-export async function listInventoryReport(): Promise<{ employees: InventoryRow[] }> {
+export async function listInventoryReport(): Promise<{ items: InventoryItemRow[] }> {
   const { data } = await apiClient.get('/inventory-report')
   return data
 }

@@ -8,6 +8,7 @@ const notificationService = require('./notification.service');
 const { dateKey, isOffDay } = require('../utils/attendanceDays');
 const { ATTENDANCE_STATUS, USER_ROLES, NOTIFICATION_TYPES } = require('../config/constants');
 const { computeEffectiveUnits } = require('../utils/attendancePenalties');
+const { isPastProbation, probationEndDate } = require('../utils/probation');
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const HR_EDIT_CUTOFF_DAYS = 2;
@@ -26,7 +27,9 @@ function assertCanEditAttendanceDate(actingUserRole, date) {
   if (actingUserRole !== USER_ROLES.HR) return;
   const ageDays = (todayUTCMidnight().getTime() - date.getTime()) / MS_PER_DAY;
   if (ageDays > HR_EDIT_CUTOFF_DAYS) {
-    throw ApiError.forbidden('HR cannot modify attendance older than 2 days');
+    throw ApiError.forbidden(
+      'HR cannot change attendance older than 2 days directly — send it as a change request for the CEO or admin to approve'
+    );
   }
 }
 
@@ -42,10 +45,99 @@ function assertReasonProvidedForHr(actingUserRole, notes) {
   }
 }
 
+// Overtime can never sit on a working day without a status — that left a
+// day looking "attended" (it had a record) while carrying no attendance at
+// all, which payroll then treats as unpaid. Checked against what the record
+// will look like after the write: `update.status` when given, otherwise
+// the status already on the record. Sundays and holidays are exempt — work
+// on an off day is recorded purely as overtime, with no status, by design
+// (see attendanceClassifier.service.js#computeOffDayOvertime).
+async function assertStatusForOvertime(employeeId, date, update = {}) {
+  const existing = await attendanceRepository.findForDate(employeeId, date);
+  const overtimeMinutes =
+    update.overtimeMinutes !== undefined ? Number(update.overtimeMinutes) : existing?.overtimeMinutes || 0;
+  const status = update.status !== undefined ? update.status : existing?.status;
+  if (!overtimeMinutes || status) return;
+
+  const holidays = await holidayRepository.list({ from: date, to: date });
+  if (isOffDay(date, new Set(holidays.map((h) => dateKey(h.date))))) return;
+  throw ApiError.badRequest(
+    `Overtime can't be recorded without an attendance status on a working day (${dateKey(date)}) — choose a status too`
+  );
+}
+
+const fullName = (employee) => `${employee.firstName} ${employee.lastName || ''}`.trim();
+
+// An employee's OWN paid leave (status O, not awarded by HR): only once past
+// probation, and one per calendar month. `dates` are the days about to
+// become their own paid leave; those same days' current records are left out
+// of the count, so re-saving a day doesn't trip over itself. HR can always
+// award extra paid days instead — those are never limited.
+async function assertOwnPaidLeaveAllowed(employee, dates) {
+  const name = fullName(employee);
+  for (const date of dates) {
+    if (!isPastProbation(employee, date)) {
+      const end = probationEndDate(employee);
+      throw ApiError.conflict(
+        `${name} is still on probation on ${dateKey(date)}${end ? ` (until ${dateKey(end)})` : ''}, so it can't be their own paid leave — tick "Awarded by HR" to give it as an extra paid day`
+      );
+    }
+  }
+  const byMonth = new Map();
+  for (const date of dates) {
+    const key = dateKey(date).slice(0, 7);
+    byMonth.set(key, [...(byMonth.get(key) || []), date]);
+  }
+  for (const [month, monthDates] of byMonth) {
+    if (monthDates.length > 1) {
+      throw ApiError.conflict(
+        `Only one paid leave a month can be ${name}'s own — mark the other days in ${month} as "Awarded by HR" or a different status`
+      );
+    }
+    const [y, m] = month.split('-').map(Number);
+    // eslint-disable-next-line no-await-in-loop
+    const records = await attendanceRepository.listForEmployee(employee._id, {
+      from: new Date(Date.UTC(y, m - 1, 1)),
+      to: new Date(Date.UTC(y, m, 0)),
+    });
+    const skip = new Set(monthDates.map(dateKey));
+    const taken = records.find(
+      (r) => r.status === ATTENDANCE_STATUS.PAID_LEAVE && !r.paidLeaveAwarded && !skip.has(dateKey(r.date))
+    );
+    if (taken) {
+      throw ApiError.conflict(
+        `${name} already took their own paid leave this month (${dateKey(taken.date)}) — only one a month is allowed. Tick "Awarded by HR" to give an extra paid day`
+      );
+    }
+  }
+}
+
+// Every rule a manual change must pass, apart from who may make it and how
+// far back — shared by direct marking and by HR's change requests (checked
+// both when HR asks and again when the CEO/admin approves).
+async function validateAttendanceChange(employee, date, { status, overtimeMinutes, paidLeaveAwarded }) {
+  // Paid leave is the only thing that can be set ahead of time — everything
+  // else describes a day that has actually happened.
+  if (date.getTime() > todayUTCMidnight().getTime() && status !== ATTENDANCE_STATUS.PAID_LEAVE) {
+    throw ApiError.badRequest('Only paid leave can be marked for a future date');
+  }
+  await assertStatusForOvertime(employee._id, date, { status, overtimeMinutes });
+  if (status === ATTENDANCE_STATUS.PAID_LEAVE && !paidLeaveAwarded) {
+    await assertOwnPaidLeaveAllowed(employee, [date]);
+  }
+}
+
 // `dateStr` is a plain 'YYYY-MM-DD' string, which the spec guarantees parses
 // as UTC midnight — kept consistent with todayUTCMidnight() so the backdated
 // comparison never drifts by a day depending on the server's local timezone.
-async function markAttendance(employeeId, dateStr, { status, overtimeMinutes, notes, isLate, earlyDeparture }, actingUserRole) {
+// `paidLeaveAwarded` only matters with status 'O': true = an extra paid day
+// HR awarded, false = the employee's own paid leave.
+async function markAttendance(
+  employeeId,
+  dateStr,
+  { status, overtimeMinutes, notes, isLate, earlyDeparture, paidLeaveAwarded },
+  actingUserRole
+) {
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) throw ApiError.notFound('Employee not found');
 
@@ -53,23 +145,23 @@ async function markAttendance(employeeId, dateStr, { status, overtimeMinutes, no
   if (Number.isNaN(date.getTime())) throw ApiError.badRequest('Invalid date');
 
   const today = todayUTCMidnight();
-  if (date.getTime() > today.getTime()) {
-    throw ApiError.badRequest('Cannot mark attendance for a future date');
-  }
   assertCanEditAttendanceDate(actingUserRole, date);
   assertReasonProvidedForHr(actingUserRole, notes);
+  await validateAttendanceChange(employee, date, { status, overtimeMinutes, paidLeaveAwarded });
 
   const isBackdated = date.getTime() < today.getTime();
+  const awarded = status === ATTENDANCE_STATUS.PAID_LEAVE ? Boolean(paidLeaveAwarded) : undefined;
 
   const record = await attendanceRepository.upsertForDate(
     employeeId,
     date,
-    { status, overtimeMinutes, notes, isLate, earlyDeparture },
+    { status, overtimeMinutes, notes, isLate, earlyDeparture, paidLeaveAwarded: awarded },
     isBackdated
   );
   await activityService.log(employeeId, 'ATTENDANCE_MARKED', {
     date: dateStr,
     status,
+    paidLeaveAwarded: awarded,
     overtimeMinutes,
     isLate,
     earlyDeparture,
@@ -287,4 +379,8 @@ module.exports = {
   getMonthlyOverview,
   listWhosOutForMonth,
   assertCanEditAttendanceDate,
+  assertStatusForOvertime,
+  assertOwnPaidLeaveAllowed,
+  validateAttendanceChange,
+  HR_EDIT_CUTOFF_DAYS,
 };

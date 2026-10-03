@@ -8,8 +8,12 @@ export type AppRole =
   | 'digital_admin'
   | 'hr'
   | 'operations_manager'
-  | 'account_manager'
+  | 'cto'
+  | 'cfo'
+  | 'sales'
   | 'team_lead'
+  | 'technical'
+  | 'finance'
   | 'worker'
 
 // Coarse gate only. Client Management's real access rules are per-client and

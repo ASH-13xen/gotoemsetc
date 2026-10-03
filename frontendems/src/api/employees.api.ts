@@ -81,6 +81,53 @@ export interface Inventory {
   podcastDataTransfer?: boolean
 }
 
+export type InventoryItemCategory = 'office_phone' | 'personal_phone' | 'office_laptop' | 'personal_laptop'
+
+export const INVENTORY_ITEM_CATEGORY_LABEL: Record<InventoryItemCategory, string> = {
+  office_phone: 'Office Phone',
+  personal_phone: 'Personal Phone',
+  office_laptop: 'Office Laptop',
+  personal_laptop: 'Personal Laptop',
+}
+
+// The newer, explicitly-categorized inventory system — any number of items
+// per category. Separate from Inventory above, which keeps its exact field
+// names for the Hardware Consent Form's auto-fill and stays untouched; this
+// is purely additive. One shape for every category — `category` alone
+// decides which of the phone-only/laptop-only fields the form shows for a
+// given item. See backend/src/models/Employee.js's matching comment.
+export interface InventoryItem {
+  _id?: string
+  category: InventoryItemCategory
+  deviceName?: string
+  serialNumber?: string // IMEI for a phone, serial number for a laptop
+  color?: string
+  condition?: string
+  password?: string
+  theftProtection?: boolean
+  findMyDevice?: boolean
+  thumbOrFace?: boolean
+  // Phone-only.
+  simProvider?: string
+  simPhoneNumber?: string
+  screenGuard?: boolean
+  backCover?: boolean
+  powerAdapter?: boolean
+  cable?: boolean
+  mobileOS?: MobileOS
+  appleId?: string
+  whatsappTwoFactor?: boolean
+  whatsappTwoFactorBackupMail?: string
+  whatsappTwoFactorPin?: string
+  whatsappNameUpdated?: boolean
+  whatsappProfiling?: boolean
+  whatsappBackupInEmployeeMail?: boolean
+  galleryBackupInEmployeeMail?: boolean
+  trueCallerUpdated?: boolean
+  // Laptop-only.
+  mouse?: boolean
+}
+
 export interface EmployeeFlag {
   _id: string
   color: 'red' | 'green'
@@ -131,6 +178,7 @@ export interface Employee {
   aadharNumber?: string
   extraDetails?: ExtraDetail[]
   inventory?: Inventory
+  inventoryItems?: InventoryItem[]
 
   biometricVerificationAdded?: boolean
   companyLoginAdded?: boolean
@@ -138,6 +186,9 @@ export interface Employee {
   personalPhoneAdded?: boolean
   assetAccessAdded?: boolean
   updatedIn12345?: boolean
+  probationCompleted?: boolean
+  probationCompletedAt?: string | null
+  excludeFromPayroll?: boolean
 
   // Offboarding-only — meaningful once status is 'offboarded'.
   endDate?: string

@@ -61,3 +61,26 @@ export async function downloadSalarySlip(slipId: string, filename: string): Prom
   link.remove()
   window.URL.revokeObjectURL(url)
 }
+
+// Nested-under-employee equivalent of downloadSalarySlip above — same file,
+// but through the self-or-permission route (GET
+// /employees/:id/salary-slips/:slipId/file) instead of the flat admin-only
+// one, so this also works when the viewer is looking at their own record
+// without holding view_salary_slip themselves.
+export async function downloadEmployeeSalarySlip(
+  employeeId: string,
+  slipId: string,
+  filename: string
+): Promise<void> {
+  const { data } = await apiClient.get(`/employees/${employeeId}/salary-slips/${slipId}/file`, {
+    responseType: 'blob',
+  })
+  const url = window.URL.createObjectURL(data)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}

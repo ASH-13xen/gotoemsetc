@@ -2,11 +2,11 @@ const asyncHandler = require('../utils/asyncHandler');
 const attendanceService = require('../services/attendance.service');
 
 const mark = asyncHandler(async (req, res) => {
-  const { date, status, overtimeMinutes, isLate, earlyDeparture, notes } = req.body;
+  const { date, status, overtimeMinutes, isLate, earlyDeparture, paidLeaveAwarded, notes } = req.body;
   const record = await attendanceService.markAttendance(
     req.params.id,
     date,
-    { status, overtimeMinutes, isLate, earlyDeparture, notes },
+    { status, overtimeMinutes, isLate, earlyDeparture, paidLeaveAwarded, notes },
     req.user.role
   );
   res.status(201).json({ record });

@@ -66,6 +66,21 @@ function listActive() {
   return Employee.find({ isDeleted: false, status: EMPLOYEE_STATUS.ACTIVE });
 }
 
+// Everyone owed a salary slip for a period starting at `periodStart`:
+// every active employee, plus anyone offboarded whose last day (endDate)
+// falls on or after it — so a person who leaves mid-month still gets their
+// final slip. The slip itself is clipped to their employment dates.
+function listPayableForPeriod(periodStart) {
+  return Employee.find({
+    isDeleted: false,
+    excludeFromPayroll: { $ne: true },
+    $or: [
+      { status: EMPLOYEE_STATUS.ACTIVE },
+      { status: EMPLOYEE_STATUS.OFFBOARDED, endDate: { $gte: periodStart } },
+    ],
+  });
+}
+
 function create(data) {
   return Employee.create(data);
 }
@@ -122,5 +137,6 @@ module.exports = {
   countByStatus,
   listAllWithDob,
   listActive,
+  listPayableForPeriod,
   listAllForFlagHistory,
 };

@@ -22,6 +22,8 @@ const notificationSchema = new Schema(
     reimbursement: { type: Schema.Types.ObjectId, ref: 'Reimbursement' },
     // Sales chatbot — see services/salesChat/notify.js.
     salesLead: { type: Schema.Types.ObjectId, ref: 'SalesLead' },
+    // Weekly Calendar — see services/weeklyCalendar.service.js.
+    weeklyEvent: { type: Schema.Types.ObjectId, ref: 'WeeklyEvent' },
     isRead: { type: Boolean, default: false },
   },
   { timestamps: true }

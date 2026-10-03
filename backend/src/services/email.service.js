@@ -7,7 +7,9 @@ const client = env.resendConfigured ? new Resend(env.resend.apiKey) : null;
 // attachments: [{ filename, content }] — content is a Buffer or base64
 // string, passed straight through to Resend. Used by Finance (FnF settlement
 // PDFs) — no other feature in this codebase emails a file yet.
-async function sendEmail({ to, subject, html, from, attachments }) {
+// `text` is the plain-text version sent alongside the HTML — mail without
+// one is a common spam signal. `replyTo` is where a reply lands.
+async function sendEmail({ to, subject, html, text, from, replyTo, attachments }) {
   if (!client) {
     logger.warn({ to, subject }, 'Resend not configured — skipping email send');
     return;
@@ -18,6 +20,8 @@ async function sendEmail({ to, subject, html, from, attachments }) {
     to,
     subject,
     html,
+    ...(text ? { text } : {}),
+    ...(replyTo ? { replyTo } : {}),
     ...(attachments && attachments.length > 0 ? { attachments } : {}),
   });
 

@@ -1,5 +1,5 @@
 const { z } = require('zod');
-const { BLOOD_GROUPS } = require('../config/constants');
+const { BLOOD_GROUPS, INVENTORY_ITEM_CATEGORY } = require('../config/constants');
 
 const addressSchema = z
   .object({
@@ -103,6 +103,38 @@ const inventorySchema = z
   })
   .partial();
 
+// The categorized inventory system — see models/Employee.js's matching
+// comment for why this is a separate, additive schema from inventorySchema
+// above rather than a rename/replacement of it.
+const inventoryItemSchema = z.object({
+  category: z.enum(Object.values(INVENTORY_ITEM_CATEGORY)),
+  deviceName: z.string().optional(),
+  serialNumber: z.string().optional(),
+  color: z.string().optional(),
+  condition: z.string().optional(),
+  password: z.string().optional(),
+  theftProtection: z.boolean().optional(),
+  findMyDevice: z.boolean().optional(),
+  thumbOrFace: z.boolean().optional(),
+  simProvider: z.string().optional(),
+  simPhoneNumber: z.string().optional(),
+  screenGuard: z.boolean().optional(),
+  backCover: z.boolean().optional(),
+  powerAdapter: z.boolean().optional(),
+  cable: z.boolean().optional(),
+  mobileOS: z.enum(['android', 'ios']).optional().or(z.literal('')),
+  appleId: z.string().optional(),
+  whatsappTwoFactor: z.boolean().optional(),
+  whatsappTwoFactorBackupMail: z.string().optional(),
+  whatsappTwoFactorPin: z.string().optional(),
+  whatsappNameUpdated: z.boolean().optional(),
+  whatsappProfiling: z.boolean().optional(),
+  whatsappBackupInEmployeeMail: z.boolean().optional(),
+  galleryBackupInEmployeeMail: z.boolean().optional(),
+  trueCallerUpdated: z.boolean().optional(),
+  mouse: z.boolean().optional(),
+});
+
 const mutableFields = {
   // The employee's code / biometric device PIN — admin-only, see
   // employee.service.js#updateEmployee, which strips this from the payload
@@ -146,6 +178,7 @@ const mutableFields = {
   aadharNumber: z.string().optional(),
   extraDetails: z.array(extraDetailSchema).optional(),
   inventory: inventorySchema.optional(),
+  inventoryItems: z.array(inventoryItemSchema).optional(),
 
   // Onboarding checklist.
   biometricVerificationAdded: z.boolean().optional(),
@@ -154,6 +187,8 @@ const mutableFields = {
   personalPhoneAdded: z.boolean().optional(),
   assetAccessAdded: z.boolean().optional(),
   updatedIn12345: z.boolean().optional(),
+  probationCompleted: z.boolean().optional(),
+  excludeFromPayroll: z.boolean().optional(),
 
   // Offboarding-only — meaningful once status is 'offboarded'.
   endDate: z.coerce.date().optional(),
@@ -218,6 +253,8 @@ const create = {
     personalPhoneAdded: true,
     assetAccessAdded: true,
     updatedIn12345: true,
+    probationCompleted: true,
+    excludeFromPayroll: true,
   }).superRefine(assertWorkingHoursSane),
 };
 

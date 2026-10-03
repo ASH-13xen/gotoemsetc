@@ -60,6 +60,11 @@ router.get(
   validate(attendanceRequestValidator.paidLeaveEligibility),
   attendanceRequestController.paidLeaveEligibility
 );
+router.get(
+  '/monthly-counts',
+  validate(attendanceRequestValidator.monthlyCounts),
+  attendanceRequestController.monthlyCounts
+);
 
 router.post('/', validate(attendanceRequestValidator.create), attendanceRequestController.create);
 router.get('/', validate(attendanceRequestValidator.list), attendanceRequestController.list);

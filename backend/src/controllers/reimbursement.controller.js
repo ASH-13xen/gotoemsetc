@@ -27,7 +27,7 @@ const downloadReceipt = asyncHandler(async (req, res) => {
   const reimbursement = await reimbursementRepository.findByIdWithFile(req.params.id);
   if (!reimbursement) throw ApiError.notFound('Reimbursement not found');
   const isOwner = req.user.employeeLink && req.user.employeeLink === reimbursement.employee.toString();
-  const isFinanceOrCeo = [USER_ROLES.ADMIN, USER_ROLES.CEO, USER_ROLES.ACCOUNT_MANAGER].includes(req.user.role);
+  const isFinanceOrCeo = [USER_ROLES.ADMIN, USER_ROLES.CEO, USER_ROLES.CFO, USER_ROLES.FINANCE].includes(req.user.role);
   if (!isOwner && !isFinanceOrCeo) throw ApiError.forbidden();
   if (!reimbursement.receiptFile?.data) throw ApiError.notFound('No receipt on file');
   res.set('Content-Type', reimbursement.receiptFile.contentType);

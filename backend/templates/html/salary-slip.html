@@ -75,8 +75,9 @@
     <tr><td class="label">Employee ID</td><td>{employeeCode}</td><td class="label">Bank A/C No.</td><td>{bankAccountNumber}</td></tr>
     <tr><td class="label">Date of Joining</td><td>{dateOfJoiningFormatted}</td><td class="label">IFSC Code</td><td>{bankIFSC}</td></tr>
     <tr><td class="label">Department</td><td>{department}</td><td class="label">UAN Number</td><td>NA</td></tr>
-    <tr><td class="label">Pay Date</td><td>{payDateFormatted}</td><td class="label">Days Worked</td><td>{daysWorked}</td></tr>
-    <tr><td class="label">Total Days in Period</td><td>{totalDaysInPeriod}</td><td class="label">Location</td><td>GO-TO Friend Pvt. Ltd., 3rd Floor, H.R. Vertex, Raipur</td></tr>
+    <tr><td class="label">Pay Date</td><td>{payDateFormatted}</td><td class="label">Total Days in Period</td><td>{totalDaysInPeriod}</td></tr>
+    <tr><td class="label">Days Worked</td><td>{totalWorkingDays}</td><td class="label">Days Payable</td><td>{daysWorked}</td></tr>
+    <tr><td class="label">Location</td><td colspan="3">GO-TO Friend Pvt. Ltd., 3rd Floor, H.R. Vertex, Raipur</td></tr>
   </table>
 
   <div class="pay-columns">
@@ -89,7 +90,8 @@
         <tr><td>Compensation Off</td><td class="num">{compensationOff}</td><td class="num">{compensationOff}</td></tr>
         <tr><td>Incentives</td><td class="num">{incentives}</td><td class="num">{incentives}</td></tr>
         <tr><td>Travel Allowance</td><td class="num">{travelAllowance}</td><td class="num">{travelAllowance}</td></tr>
-        <tr><td>Other Earning 1</td><td class="num">{otherEarning1}</td><td class="num">{otherEarning1}</td></tr>
+        <tr><td>Paid Leave Compensation</td><td class="num">{paidLeaveCompensation}</td><td class="num">{paidLeaveCompensation}</td></tr>
+        <tr><td>Other Earning</td><td class="num">{otherEarning1}</td><td class="num">{otherEarning1}</td></tr>
         <tr class="total"><td colspan="2">Gross Earnings</td><td class="num">{grossEarnings}</td></tr>
       </table>
       <table class="pay">
@@ -106,7 +108,7 @@
         <tr><td>Profession Tax</td><td class="num">{professionTax}</td></tr>
         <tr><td>P.F.</td><td class="num">{pf}</td></tr>
         <tr><td>Half Day Deductions</td><td class="num">{halfDayDeductions}</td></tr>
-        <tr><td>Unpaid Off Deductions</td><td class="num">{unpaidOffDeductions}</td></tr>
+        <tr><td>Unpaid Day Deductions</td><td class="num">{unpaidOffDeductions}</td></tr>
         <tr><td>Other Deduction 3</td><td class="num">{otherDeduction3}</td></tr>
         <tr class="total"><td>Total Deductions</td><td class="num">{totalDeductions}</td></tr>
       </table>
@@ -132,29 +134,32 @@
 
     <div class="legend">
       <div class="legend-item"><span class="legend-swatch" style="background:#cceecc"></span>P = Full Day Present</div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#c7e0ff"></span>O = Paid Leave</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#c7e0ff"></span>O = Paid Leave (own) · O* = Paid Leave awarded by HR</div>
       <div class="legend-item"><span class="legend-swatch" style="background:#fff2b3"></span>H = Half Day</div>
       <div class="legend-item"><span class="legend-swatch" style="background:#ffd8a8"></span>L = Late</div>
       <div class="legend-item"><span class="legend-swatch" style="background:#ffc7c7"></span>SL = Short Leave</div>
       <div class="legend-item"><span class="legend-swatch" style="background:#e0d0ff"></span>W = Work From Home</div>
       <div class="legend-item"><span class="legend-swatch" style="background:#d9d9d9"></span>Off Day (Sunday/Holiday)</div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#ffb3b3"></span>Unpaid Absent</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#ffb3b3"></span>Unpaid (Absent, unmarked "?", or OFF ✗ = Sunday/holiday unpaid because absent all week)</div>
       <div class="legend-item"><span style="color:#b3261e;font-weight:700;font-size:8pt;">ED</span>&nbsp;= Early Departure (independent of the day's status above)</div>
     </div>
 
     <div class="summary-box">
       <div><strong>Summary</strong></div>
       <div>Full Day Present (P): {countP}</div>
-      <div>Paid Leave (O): {countO}</div>
+      <div>Paid Leave (O): {countO} ({countOwnPaidLeave} own, {countAwardedPaidLeave} awarded by HR)</div>
+      <div>Paid Leave Compensation: {paidLeaveNote}</div>
       <div>Half Day (H): {countH}</div>
       <div>Late (L): {countL}</div>
       <div>Short Leave (SL): {countSL}</div>
       <div>Work From Home (W): {countW}</div>
       <div>Total Overtime (minutes): {totalOvertimeMinutes}</div>
-      <div>Working Days in Period: {workingDaysInPeriod}</div>
-      <div>Off Days (Sundays/Holidays): {offDaysInPeriod}</div>
-      <div>Unpaid Absent Days: {unpaidAbsentDays}</div>
-      <div>Days Worked (for pay): {daysWorked}</div>
+      <div>Working Days in Period (excl. Sundays/Holidays): {workingDaysInPeriod}</div>
+      <div>Sundays/Holidays: {offDaysInPeriod} ({unpaidOffDays} unpaid)</div>
+      <div>Unpaid Working Days: {unpaidAbsentDays}</div>
+      <div>Days Worked (paid days, incl. Sundays/Holidays): {totalWorkingDays}</div>
+      <div>Half Days Deducted: {halfDayUnitsDeducted}</div>
+      <div>Days Payable (for pay): {daysWorked}</div>
     </div>
   </div>
 

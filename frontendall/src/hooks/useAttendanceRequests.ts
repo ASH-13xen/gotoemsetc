@@ -1,14 +1,24 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as attendanceRequestsApi from '@/api/attendanceRequests.api'
-import type { LeaveApplicationStatus } from '@/api/attendanceRequests.api'
+import type { LeaveApplicationStatus, HalfDayPeriod } from '@/api/attendanceRequests.api'
 
 const UNSEEN_KEY = ['my-attendance-outcomes-unseen']
 const PENDING_CM_REVIEWS_KEY = ['pending-cm-reviews']
+const MY_REQUESTS_KEY = ['my-attendance-requests']
 
 export function useMyUnseenAttendanceOutcomes() {
   return useQuery({
     queryKey: UNSEEN_KEY,
     queryFn: () => attendanceRequestsApi.listMyUnseenAttendanceOutcomes(),
+  })
+}
+
+// Dashboard widget feed — every leave/attendance request this employee has
+// filed, any status, newest first.
+export function useMyAttendanceRequests() {
+  return useQuery({
+    queryKey: MY_REQUESTS_KEY,
+    queryFn: () => attendanceRequestsApi.listMyAttendanceRequests(),
   })
 }
 
@@ -20,9 +30,16 @@ export function useCreateLeaveApplication() {
       endDate: string
       reason: string
       requestedStatus?: LeaveApplicationStatus
+      requestedHalfDayPeriod?: HalfDayPeriod
       requestedEarlyDeparture?: boolean
+      requestedMultiDayLeave?: boolean
     }) => attendanceRequestsApi.createLeaveApplication(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: UNSEEN_KEY }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: UNSEEN_KEY })
+      queryClient.invalidateQueries({ queryKey: MY_REQUESTS_KEY })
+      queryClient.invalidateQueries({ queryKey: ['monthly-leave-counts'] })
+      queryClient.invalidateQueries({ queryKey: ['paid-leave-eligibility'] })
+    },
   })
 }
 
@@ -61,10 +78,21 @@ export function usePaidLeaveEligibility(date: string) {
   })
 }
 
+export function useMyMonthlyLeaveCounts(date: string) {
+  return useQuery({
+    queryKey: ['monthly-leave-counts', date],
+    queryFn: () => attendanceRequestsApi.getMyMonthlyLeaveCounts(date),
+    enabled: Boolean(date),
+  })
+}
+
 export function useAcknowledgeAttendanceRequest() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (id: string) => attendanceRequestsApi.acknowledgeAttendanceRequest(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: UNSEEN_KEY }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: UNSEEN_KEY })
+      queryClient.invalidateQueries({ queryKey: MY_REQUESTS_KEY })
+    },
   })
 }

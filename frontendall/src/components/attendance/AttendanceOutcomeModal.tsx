@@ -3,7 +3,11 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useMyUnseenAttendanceOutcomes, useAcknowledgeAttendanceRequest } from '@/hooks/useAttendanceRequests'
-import { LEAVE_APPLICATION_STATUS_LABEL, type AttendanceRequestStatus } from '@/api/attendanceRequests.api'
+import {
+  HALF_DAY_PERIOD_LABEL,
+  leaveApplicationLabel,
+  type AttendanceRequestStatus,
+} from '@/api/attendanceRequests.api'
 
 const OUTCOME_LABEL: Partial<Record<AttendanceRequestStatus, string>> = {
   resolved: 'Approved',
@@ -68,7 +72,9 @@ export function AttendanceOutcomeModal() {
                 </span>
               </div>
               <p className="text-sm text-foreground">
-                {outcome.requestedStatus && LEAVE_APPLICATION_STATUS_LABEL[outcome.requestedStatus]} — {outcome.reason}
+                {leaveApplicationLabel(outcome)}
+                {outcome.requestedHalfDayPeriod && ` (${HALF_DAY_PERIOD_LABEL[outcome.requestedHalfDayPeriod]})`} —{' '}
+                {outcome.reason}
               </p>
               {outcome.status === 'rejected' && outcome.rejectionReason && (
                 <p className="mt-2 text-xs text-muted-foreground">Reason: {outcome.rejectionReason}</p>

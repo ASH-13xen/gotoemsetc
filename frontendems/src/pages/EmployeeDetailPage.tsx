@@ -20,6 +20,7 @@ import {
 import { QuickActions, QuickActionItem } from '@/components/layout/QuickActions'
 import { StatusBadge } from '@/components/employees/StatusBadge'
 import { GeneratedDocumentsList } from '@/components/documents/GeneratedDocumentsList'
+import { MySignedDocumentsCard } from '@/components/documents/MySignedDocumentsCard'
 import { UploadedDocumentsList } from '@/components/documents/UploadedDocumentsList'
 import { UploadedDocumentImage } from '@/components/documents/UploadedDocumentImage'
 import { RequestDocumentsModal } from '@/components/uploadRequests/RequestDocumentsModal'
@@ -33,13 +34,24 @@ import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummary
 import { AttendanceCalendar } from '@/components/attendance/AttendanceCalendar'
 import { NotInformedWarningsCard } from '@/components/attendance/NotInformedWarningsCard'
 import { PendingWarningsModal } from '@/components/attendance/PendingWarningsModal'
+import { InventoryItemsManager } from '@/components/employees/InventoryItemsManager'
+import { OffboardDialog, type OffboardDetails } from '@/components/employees/OffboardDialog'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { extractApiErrorMessage } from '@/lib/errors'
 import { hasAnyPermission, hasPermission, isAdminLike } from '@/lib/permissions'
 import { useDeleteEmployee, useEmployee, useEmployees, useUpdateEmployee } from '@/hooks/useEmployees'
 import { useUploadedDocuments } from '@/hooks/useUploadRequests'
-import { BLOOD_GROUPS, type Address, type Employee, type EmployeeStatus, type EmploymentType, type Inventory, type MobileOS } from '@/api/employees.api'
+import {
+  BLOOD_GROUPS,
+  type Address,
+  type Employee,
+  type EmployeeStatus,
+  type EmploymentType,
+  type Inventory,
+  type InventoryItem,
+  type MobileOS,
+} from '@/api/employees.api'
 
 type InventoryForm = {
   deviceName: string
@@ -97,7 +109,7 @@ type AddressForm = {
   country: string
 }
 
-type FormValues = {
+export type FormValues = {
   employeeCode: string
   firstName: string
   lastName: string
@@ -133,12 +145,15 @@ type FormValues = {
   personalPhoneAdded: boolean
   assetAccessAdded: boolean
   updatedIn12345: boolean
+  probationCompleted: boolean
+  excludeFromPayroll: boolean
   endDate: string
   reasonForLeaving: string
   removedFromGroupsAndReels: boolean
   mailDeactivated: boolean
   extraDetails: { key: string; value: string }[]
   inventory: InventoryForm
+  inventoryItems: InventoryItem[]
 }
 
 const NO_MANAGER = '__none__'
@@ -251,12 +266,15 @@ function toFormValues(employee: Employee): FormValues {
     personalPhoneAdded: employee.personalPhoneAdded ?? false,
     assetAccessAdded: employee.assetAccessAdded ?? false,
     updatedIn12345: employee.updatedIn12345 ?? false,
+    probationCompleted: employee.probationCompleted ?? false,
+    excludeFromPayroll: employee.excludeFromPayroll ?? false,
     endDate: toDateInputValue(employee.endDate),
     reasonForLeaving: employee.reasonForLeaving ?? '',
     removedFromGroupsAndReels: employee.removedFromGroupsAndReels ?? false,
     mailDeactivated: employee.mailDeactivated ?? false,
     extraDetails: (employee.extraDetails ?? []).map((d) => ({ key: d.key, value: d.value ?? '' })),
     inventory: toInventoryForm(employee.inventory),
+    inventoryItems: employee.inventoryItems ?? [],
   }
 }
 
@@ -346,6 +364,28 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
 
   const permanentAddress = watch('permanentAddress')
   const status = watch('status')
+  const [offboardOpen, setOffboardOpen] = useState(false)
+
+  // Confirming the off-boarding modal saves straight away — status plus the
+  // off-boarding details together — rather than waiting for "Save changes",
+  // so an employee is never left half off-boarded with no last working day.
+  const onConfirmOffboard = (details: OffboardDetails) => {
+    updateEmployee.mutate(
+      { status: 'offboarded', ...details },
+      {
+        onSuccess: () => {
+          setValue('status', 'offboarded')
+          setValue('endDate', details.endDate)
+          setValue('reasonForLeaving', details.reasonForLeaving)
+          setValue('removedFromGroupsAndReels', details.removedFromGroupsAndReels)
+          setValue('mailDeactivated', details.mailDeactivated)
+          setOffboardOpen(false)
+          toast.success('Employee off-boarded — their EMS login has been deactivated')
+        },
+        onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not off-board this employee')),
+      }
+    )
+  }
   const [sameAsPermanent, setSameAsPermanent] = useState(() => addressesEqual(toFormValues(employee).permanentAddress, toFormValues(employee).localAddress))
 
   const onToggleSameAsPermanent = (checked: boolean) => {
@@ -397,18 +437,23 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
       {/* PROFILE HEADER — the passport photo (once one's on file, see
           requested documents) renders as a fixed-size portrait beside the
           name, not a background — same layout for both an admin/HR viewer
-          and the employee viewing their own profile. */}
-      <div className="sticky top-0 z-30 flex flex-col gap-6 border-b border-border bg-background py-4 sm:flex-row sm:items-start sm:justify-between">
+          and the employee viewing their own profile. Tinted with the
+          brand primary (same blue-indigo token the login page's accent
+          family is built from) so this, the first thing an employee sees
+          after signing in, doesn't read as a bare white bar. */}
+      <div className="sticky top-0 z-30 flex flex-col gap-6 rounded-2xl border border-border bg-gradient-to-br from-primary/[0.08] via-card to-card px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex gap-4">
           {photoDoc && (
             <UploadedDocumentImage
               documentId={photoDoc._id}
               alt={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
-              className="h-28 w-20 shrink-0 rounded-lg border border-border object-cover"
+              className="h-28 w-20 shrink-0 rounded-lg border border-primary/20 object-cover"
             />
           )}
           <div className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">Employee profile</span>
+            <span className="inline-flex w-fit items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+              Employee profile
+            </span>
             <h1 className="text-3xl font-semibold uppercase tracking-tight text-foreground sm:text-4xl">
               {employee.firstName} {employee.lastName}
             </h1>
@@ -427,6 +472,19 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         )}
       </div>
 
+      <OffboardDialog
+        open={offboardOpen}
+        onOpenChange={setOffboardOpen}
+        employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
+        initial={{
+          endDate: toDateInputValue(employee.endDate),
+          reasonForLeaving: employee.reasonForLeaving ?? '',
+          removedFromGroupsAndReels: employee.removedFromGroupsAndReels ?? false,
+          mailDeactivated: employee.mailDeactivated ?? false,
+        }}
+        isPending={updateEmployee.isPending}
+        onConfirm={onConfirmOffboard}
+      />
       <QuickActions>
         {canGenerateDocs && (
           <QuickActionItem
@@ -609,7 +667,19 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                       control={control}
                       name="status"
                       render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
+                        <Select
+                          value={field.value}
+                          onValueChange={(value) => {
+                            // Off-boarding goes through the confirmation modal
+                            // (last working day etc.) — the status only changes
+                            // once that's confirmed and saved.
+                            if (value === 'offboarded' && employee.status !== 'offboarded') {
+                              setOffboardOpen(true)
+                              return
+                            }
+                            field.onChange(value)
+                          }}
+                        >
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
@@ -747,6 +817,17 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   <CheckboxRow label="Updated in 12345?" checked={field.value} onChange={field.onChange} />
                 )}
               />
+              <Controller
+                control={control}
+                name="probationCompleted"
+                render={({ field }) => (
+                  <CheckboxRow
+                    label="End probation early? (otherwise it ends 3 months after joining)"
+                    checked={field.value}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
             </div>
           </Card>
 
@@ -757,7 +838,13 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
               mobile" / "Has laptop" is new and only appears once that
               device's checkbox is ticked. */}
           <Card className="gap-6 p-6">
-            <SectionTitle>Inventory</SectionTitle>
+            <div className="grid gap-1">
+              <SectionTitle>Inventory (legacy)</SectionTitle>
+              <p className="text-xs text-muted-foreground">
+                This single mobile/laptop record feeds the Hardware Consent Form and stays here unchanged — for
+                everything else, use Inventory items below.
+              </p>
+            </div>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="grid gap-1.5">
                 <Label htmlFor="inventory.deviceName" className="text-xs text-muted-foreground">Mobile/laptop name</Label>
@@ -1004,13 +1091,21 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
             </div>
           </Card>
 
+          {/* Categorized inventory — Office/Personal Phone, Office/Personal
+              Laptop, any number of items. Separate card from the legacy
+              section above, which stays untouched for the consent form. */}
+          <Card className="gap-6 p-6">
+            <SectionTitle>Inventory items</SectionTitle>
+            <InventoryItemsManager control={control} register={register} disabled={!canEditDetails} />
+          </Card>
+
           {/* Offboarding — only meaningful once status is set to Offboarded */}
           {status === 'offboarded' && (
             <Card className="gap-6 p-6">
               <SectionTitle>Offboarding</SectionTitle>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="grid gap-1.5">
-                  <Label htmlFor="endDate" className="text-xs text-muted-foreground">End date</Label>
+                  <Label htmlFor="endDate" className="text-xs text-muted-foreground">Last working day *</Label>
                   <Input id="endDate" type="date" {...register('endDate')} />
                 </div>
                 <div className="grid gap-1.5">
@@ -1077,6 +1172,17 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   <Input id="payDate" type="number" min="1" max="31" {...register('payDate')} />
                 </div>
               </div>
+              <Controller
+                control={control}
+                name="excludeFromPayroll"
+                render={({ field }) => (
+                  <CheckboxRow
+                    label="Exclude from payroll (no salary slips, not on the master salary sheet)"
+                    checked={field.value}
+                    onChange={field.onChange}
+                  />
+                )}
+              />
             </Card>
           )}
 
@@ -1192,10 +1298,11 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
           <AttendanceCalendar employeeId={employeeId} compact />
         </div>
         {isAdmin && <NotInformedWarningsCard employeeId={employeeId} />}
-        {canViewSalary && (
+        {(canViewSalary || isOwnRecord) && (
           <SalarySlipsList employeeId={employeeId} employeeName={`${employee.firstName} ${employee.lastName ?? ''}`} />
         )}
         {canGenerateDocs && <GeneratedDocumentsList employeeId={employeeId} />}
+        {isOwnRecord && !canGenerateDocs && <MySignedDocumentsCard employeeId={employeeId} />}
         {canRequestDocs && (
           <>
             <UploadedDocumentsList employeeId={employeeId} />

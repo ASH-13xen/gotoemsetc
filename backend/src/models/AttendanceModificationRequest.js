@@ -1,5 +1,10 @@
 const { Schema, model } = require('mongoose');
-const { ATTENDANCE_REQUEST_STATUS, ATTENDANCE_STATUS, ATTENDANCE_REQUEST_APPROVAL_STAGE } = require('../config/constants');
+const {
+  ATTENDANCE_REQUEST_STATUS,
+  ATTENDANCE_STATUS,
+  ATTENDANCE_REQUEST_APPROVAL_STAGE,
+  ATTENDANCE_REQUEST_HALF_DAY_PERIOD,
+} = require('../config/constants');
 
 // A worker's ask to correct a specific day's attendance — resolving one
 // (admin-only, see attendanceRequest.service.js#resolve) optionally applies
@@ -26,10 +31,25 @@ const attendanceModificationRequestSchema = new Schema(
     // The approver's own status choice at resolve time is independent and
     // still wins; this is shown to them only as the employee's suggestion.
     requestedStatus: { type: String, enum: Object.values(ATTENDANCE_STATUS) },
+    // Set only when requestedStatus is 'H' — which half of the day the
+    // employee is applying to be out for. See constants.js for why this has
+    // no effect on the eventual AttendanceRecord, only on what the approver
+    // sees.
+    requestedHalfDayPeriod: { type: String, enum: Object.values(ATTENDANCE_REQUEST_HALF_DAY_PERIOD) },
     // Independent of requestedStatus, same as earlyDeparture is independent
     // of status on AttendanceRecord itself — an employee can apply for
     // "Early Departure" on its own, with no other requestedStatus set.
     requestedEarlyDeparture: { type: Boolean, default: false },
+    // The "Multiple Days" type in the Apply-for-leave dialog — a general,
+    // uncapped multi-day leave request that deliberately carries no
+    // requestedStatus (unlike Work From Home, which is 'W'): the employee
+    // isn't claiming a specific status for the span, just asking to be off:
+    // whoever resolves it picks the actual per-day status, same as always.
+    // Independent of requestedStatus/requestedEarlyDeparture, same pattern
+    // as both. See resolveApprovalStage/isLeaveApplication in
+    // attendanceRequest.service.js for why this also needs to count as a
+    // leave application (future dates allowed, CM/HR two-stage routing).
+    requestedMultiDayLeave: { type: Boolean, default: false },
     status: {
       type: String,
       enum: Object.values(ATTENDANCE_REQUEST_STATUS),
@@ -49,6 +69,12 @@ const attendanceModificationRequestSchema = new Schema(
     // stage — see attendanceRequest.service.js#approveAtContentManagerStage.
     cmApprovedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     cmApprovedAt: { type: Date },
+    // Unpaid Leave only — set when HR approves and forwards to the CEO stage.
+    // pendingAttendanceUpdate is HR's chosen per-day change, held here
+    // untouched until the CEO approves (which applies it) or rejects.
+    hrApprovedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    hrApprovedAt: { type: Date },
+    pendingAttendanceUpdate: { type: Schema.Types.Mixed, default: null },
     resolvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     resolvedAt: { type: Date },
     // True only when resolving this request actually applied an

@@ -20,8 +20,8 @@ const teamRoles = require('./teamRoles');
 //                     pipeline step their role tag makes them responsible for
 //
 // isCmsAdmin was admin + sales until the sales role was removed from the org
-// chart, then admin-only with account_manager/digital_admin named as
-// candidates — now admin + digital_admin, closing that gap.
+// chart, then admin-only with the since-removed account_manager and digital_admin
+// named as candidates — now admin + digital_admin, closing that gap.
 function isCmsAdmin(user) {
   return Boolean(user) && (user.role === USER_ROLES.ADMIN || user.role === USER_ROLES.DIGITAL_ADMIN);
 }

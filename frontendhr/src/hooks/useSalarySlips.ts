@@ -7,6 +7,12 @@ export function useGenerateBulkSalarySlips() {
   })
 }
 
+export function useDownloadMasterSalarySheet() {
+  return useMutation({
+    mutationFn: (input: { month: number; year: number }) => salarySlipsApi.downloadMasterSalarySheet(input),
+  })
+}
+
 export function useDownloadBulkSalarySlipZip() {
   return useMutation({
     mutationFn: (input: { slipIds: string[]; filename?: string }) => salarySlipsApi.downloadBulkSalarySlipZip(input),

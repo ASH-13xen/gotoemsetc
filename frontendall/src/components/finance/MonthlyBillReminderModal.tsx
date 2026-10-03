@@ -6,7 +6,7 @@ import { usePendingBillReminders } from '@/hooks/useMonthlyBills'
 import { useMarkNotificationRead } from '@/hooks/useNotifications'
 
 // Direct copy of PendingWarningsModal's shape — a non-dismissible modal
-// driven purely by unread notifications, shown to account_manager/
+// driven purely by unread notifications, shown to cfo/finance/
 // operations_manager (and ceo once a bill is inside its 1-day escalation).
 // See jobs/monthlyBillCycle.job.js: a fresh unread notification is created
 // every day a bill stays unpaid, which is what makes this reappear daily

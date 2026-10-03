@@ -1,0 +1,145 @@
+/* Weekly Calendar — colours come from the app's theme tokens so dark mode
+   just works. */
+
+.wc-page {
+  background:
+    radial-gradient(1100px 520px at 0% -10%, color-mix(in oklch, var(--primary) 9%, transparent), transparent 60%),
+    radial-gradient(900px 480px at 110% 0%, color-mix(in oklch, #a855f7 8%, transparent), transparent 60%);
+}
+
+.wc-glass {
+  background: color-mix(in oklch, var(--card) 84%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border: 1px solid var(--border);
+  box-shadow: 0 16px 40px -22px rgba(15, 23, 42, 0.38);
+}
+
+.wc-today-pill {
+  background: linear-gradient(120deg, #6366f1, #a855f7);
+  box-shadow: 0 6px 16px -6px rgba(99, 102, 241, 0.7);
+}
+
+.wc-today-col {
+  background: linear-gradient(180deg, color-mix(in oklch, var(--primary) 6%, transparent), transparent 70%);
+}
+
+.wc-slot {
+  transition: background-color 0.15s ease;
+}
+.wc-slot:hover {
+  background: color-mix(in oklch, var(--primary) 7%, transparent);
+}
+
+.wc-slot-past,
+.wc-past {
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--muted-foreground) 7%, transparent) 0 1px,
+    transparent 1px 9px
+  );
+}
+
+.wc-leave {
+  background-image: repeating-linear-gradient(
+    45deg,
+    color-mix(in oklch, #f43f5e 9%, transparent) 0 2px,
+    transparent 2px 12px
+  );
+}
+
+.wc-lunch {
+  background: linear-gradient(90deg, color-mix(in oklch, #f59e0b 13%, transparent), color-mix(in oklch, #fbbf24 9%, transparent));
+}
+.wc-lunch-gutter {
+  background: color-mix(in oklch, #f59e0b 10%, transparent);
+}
+
+.wc-folded {
+  background: color-mix(in oklch, var(--secondary) 55%, transparent);
+}
+.wc-folded:hover {
+  background: var(--secondary);
+}
+
+.wc-selection {
+  background: linear-gradient(160deg, color-mix(in oklch, #6366f1 26%, transparent), color-mix(in oklch, #a855f7 22%, transparent));
+  border: 2px solid #6366f1;
+  box-shadow:
+    0 0 0 4px color-mix(in oklch, #6366f1 16%, transparent),
+    0 14px 30px -14px rgba(99, 102, 241, 0.8);
+  transform-origin: top center;
+}
+.wc-selection-clash {
+  background: linear-gradient(160deg, color-mix(in oklch, #f43f5e 24%, transparent), color-mix(in oklch, #f97316 18%, transparent));
+  border-color: #f43f5e;
+  box-shadow: 0 0 0 4px color-mix(in oklch, #f43f5e 16%, transparent);
+}
+
+.wc-block {
+  border: 1px solid color-mix(in oklch, var(--wc-accent, var(--border)) 35%, transparent);
+}
+.wc-tentative {
+  border: 1.5px dashed var(--wc-accent);
+  animation: wc-breathe 2.4s ease-in-out infinite;
+}
+.wc-open {
+  border: 1.5px dotted var(--wc-accent);
+}
+.wc-busy {
+  background-image: repeating-linear-gradient(
+    135deg,
+    color-mix(in oklch, var(--muted-foreground) 14%, var(--card)) 0 6px,
+    color-mix(in oklch, var(--muted-foreground) 6%, var(--card)) 6px 12px
+  );
+}
+
+@keyframes wc-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--wc-accent) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in oklch, var(--wc-accent) 18%, transparent);
+  }
+}
+
+.wc-now-dot {
+  animation: wc-pulse 1.8s ease-out infinite;
+}
+@keyframes wc-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(244, 63, 94, 0);
+  }
+}
+
+.wc-badge-ping {
+  animation: wc-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes wc-ping {
+  75%,
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+.wc-heat-cell {
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.wc-heat-cell:hover {
+  transform: scale(1.06);
+  box-shadow: 0 6px 16px -8px rgba(15, 23, 42, 0.5);
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wc-tentative,
+  .wc-now-dot,
+  .wc-badge-ping {
+    animation: none;
+  }
+}

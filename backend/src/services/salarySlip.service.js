@@ -16,7 +16,7 @@ const salaryCalculation = require('./salaryCalculation.service');
 const { fillTemplate, renderPdfFromHtml } = require('./htmlRender.service');
 const { dateKey } = require('../utils/attendanceDays');
 const { istMonthRange } = require('../utils/istDate');
-const { ATTENDANCE_STATUS, NOTIFICATION_TYPES } = require('../config/constants');
+const { ATTENDANCE_STATUS, NOTIFICATION_TYPES, EMPLOYEE_STATUS } = require('../config/constants');
 const { LATE_CAP, SL_CAP } = require('../utils/attendancePenalties');
 
 const NAMESPACE = 'salary-slips';
@@ -28,7 +28,12 @@ const OFF_BG = '#d9d9d9';
 const UNPAID_BG = '#ffb3b3';
 
 function formatCurrency(value) {
-  return (Number(value) || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
+  return (Number(value) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Day counts can be fractional (half days) — "9.5", "10", never "10.0".
+function formatDays(value) {
+  return String(Number((Number(value) || 0).toFixed(1)));
 }
 
 function formatDateLong(date) {
@@ -47,7 +52,8 @@ function formatDateDDMMYYYY(date) {
 // One grid cell per day, plus leading blanks so day 1 lands under the
 // correct weekday column — fed as a single flat loop into the template's
 // CSS grid (see htmlRender.service.js's {#loop} support).
-function buildAttendanceDays(startDate, summary) {
+function buildAttendanceDays(summary) {
+  const { startDate } = summary;
   const holidayKeys = new Set(summary.holidays.map((h) => dateKey(h.date)));
   const recordByDate = new Map(summary.records.map((r) => [dateKey(r.date), r]));
   const firstWeekday = startDate.getUTCDay();
@@ -65,20 +71,31 @@ function buildAttendanceDays(startDate, summary) {
 
     let bg = '#ffffff';
     let statusText = '';
-    if (record?.status === ATTENDANCE_STATUS.HOLIDAY) {
+    if ((isSunday || isHoliday) && summary.unpaidOffDateKeys.has(key)) {
+      // A Sunday/holiday lost under the whole-week rule (absent every
+      // working day that week) — see salaryCalculation.service.js.
+      bg = UNPAID_BG;
+      statusText = isHoliday ? 'HOL ✗' : 'OFF ✗';
+    } else if (record?.status === ATTENDANCE_STATUS.HOLIDAY) {
       // Auto-marked on every employee the instant a day is marked a company
       // holiday (see attendanceClassifier.service.js#applyHolidayForEmployee)
       // — still reads as a plain off day here, same as before that existed.
       bg = OFF_BG;
       statusText = 'HOL';
+    } else if (record?.status === ATTENDANCE_STATUS.ABSENT) {
+      bg = UNPAID_BG;
+      statusText = 'A';
     } else if (record?.status) {
       bg = STATUS_BG[record.status] || bg;
-      statusText = record.status;
+      // O* = a paid day HR awarded, not the employee's own paid leave.
+      statusText = record.status === ATTENDANCE_STATUS.PAID_LEAVE && record.paidLeaveAwarded ? 'O*' : record.status;
     } else if (isSunday || isHoliday) {
       bg = OFF_BG;
       statusText = isHoliday ? 'HOL' : '';
-    } else if (!record) {
+    } else if (!record || !record.status) {
+      // Never marked, or a record that only logs overtime — unpaid either way.
       bg = UNPAID_BG;
+      statusText = record ? '?' : '';
     }
     const otText = record?.overtimeMinutes ? `+${record.overtimeMinutes}min OT` : '';
     // Independent of status — a day can show e.g. "SL" and still have left
@@ -109,11 +126,20 @@ function formatBreakdownRows(events, { includeOutcome }) {
   }));
 }
 
-function buildMergeData(employee, startDate, endDate, summary, salary) {
+function buildMergeData(employee, summary, salary) {
+  const { startDate, endDate } = summary;
   const employeeName = `${employee.firstName} ${employee.lastName || ''}`.trim();
-  const payDate = employee.payDate
-    ? new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), Math.min(employee.payDate, 28)))
-    : null;
+  // The first occurrence of the employee's pay day *after* the period ends
+  // — e.g. pay day 5 for a September slip is 5 October, never 5 September
+  // (which would be before the work being paid for was even done).
+  let payDate = null;
+  if (employee.payDate) {
+    const day = Math.min(employee.payDate, 28);
+    payDate = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), day));
+    if (payDate.getTime() <= endDate.getTime()) {
+      payDate = new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth() + 1, day));
+    }
+  }
 
   return {
     employeeName,
@@ -126,7 +152,8 @@ function buildMergeData(employee, startDate, endDate, summary, salary) {
     bankIFSC: employee.bankIFSC || '',
     department: employee.department || '',
     payDateFormatted: payDate ? formatDateDDMMYYYY(payDate) : '',
-    daysWorked: String(summary.daysWorkedTotal),
+    totalWorkingDays: formatDays(summary.totalWorkingDays),
+    daysWorked: formatDays(summary.daysWorked),
     totalDaysInPeriod: String(summary.totalDaysInPeriod),
     periodLabel: `${formatDateLong(startDate)} – ${formatDateLong(endDate)}`,
 
@@ -138,6 +165,7 @@ function buildMergeData(employee, startDate, endDate, summary, salary) {
     incentives: formatCurrency(salary.incentives),
     travelAllowance: formatCurrency(salary.travelAllowance),
     otherEarning1: formatCurrency(salary.otherEarning1),
+    paidLeaveCompensation: formatCurrency(salary.paidLeaveCompensation),
     grossEarnings: formatCurrency(salary.grossEarnings),
 
     incomeTaxDeduction: formatCurrency(salary.incomeTaxDeduction),
@@ -152,19 +180,24 @@ function buildMergeData(employee, startDate, endDate, summary, salary) {
     reimbursement2: formatCurrency(salary.reimbursement2),
     totalReimbursements: formatCurrency(salary.totalReimbursements),
 
-    netPayable: (Number(salary.netPayable) || 0).toFixed(2),
+    netPayable: formatCurrency(salary.netPayable),
     netPayableWords: salary.netPayableWords,
 
     countP: String(summary.counts.P),
     countO: String(summary.counts.O),
+    countOwnPaidLeave: String(summary.paidLeave.takenDates.length),
+    countAwardedPaidLeave: String(summary.paidLeave.awardedDates.length),
+    paidLeaveNote: summary.paidLeave.reason,
     countH: String(summary.counts.H),
     countL: String(summary.counts.L),
     countSL: String(summary.counts.SL),
     countW: String(summary.counts.W),
     totalOvertimeMinutes: String(summary.totalOvertimeMinutes),
     workingDaysInPeriod: String(summary.workingDaysInPeriod),
-    offDaysInPeriod: String(summary.totalDaysInPeriod - summary.workingDaysInPeriod),
+    offDaysInPeriod: String(summary.offDaysInPeriod),
+    unpaidOffDays: String(summary.unpaidOffDays),
     unpaidAbsentDays: String(summary.unpaidAbsentDays),
+    halfDayUnitsDeducted: formatDays(summary.totalHalfDayUnits * 0.5),
 
     // Exact per-date reasoning behind the Half Day Deductions line — see
     // attendancePenalties.js#computeEffectiveUnitsBreakdown. Every Late and
@@ -178,13 +211,28 @@ function buildMergeData(employee, startDate, endDate, summary, salary) {
     slEvents: formatBreakdownRows(summary.deductionBreakdown.slEvents, { includeOutcome: true }),
     halfDayEvents: formatBreakdownRows(summary.deductionBreakdown.halfDayEvents, { includeOutcome: false }),
 
-    attendanceDays: buildAttendanceDays(startDate, summary),
+    attendanceDays: buildAttendanceDays(summary),
   };
+}
+
+// Calculates and renders one slip without saving anything — the period is
+// clipped to the employee's employment dates inside
+// computeAttendanceSummary. Used by generateSlip (which then persists it)
+// and by previews.
+async function renderSlip(employee, startDate, endDate, manualInputs = {}) {
+  const summary = await salaryCalculation.computeAttendanceSummary(employee, startDate, endDate);
+  const salary = salaryCalculation.computeSalary(employee, summary, manualInputs);
+  const mergeData = buildMergeData(employee, summary, salary);
+  const templateHtml = await fs.readFile(path.join(env.templatesHtmlDir, TEMPLATE_FILE), 'utf8');
+  const filledHtml = fillTemplate(templateHtml, mergeData);
+  const pdfBuffer = await renderPdfFromHtml(filledHtml, env.templatesHtmlDir);
+  return { summary, salary, pdfBuffer };
 }
 
 async function generateSlip(employeeId, input, createdBy) {
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) throw ApiError.notFound('Employee not found');
+  if (employee.excludeFromPayroll) throw ApiError.badRequest('This employee is excluded from payroll');
 
   const { startDate: startStr, endDate: endStr, ...manualInputs } = input;
 
@@ -200,26 +248,26 @@ async function generateSlip(employeeId, input, createdBy) {
     throw ApiError.badRequest('End date cannot be in the future');
   }
 
-  const summary = await salaryCalculation.computeAttendanceSummary(employeeId, startDate, endDate);
-  const salary = salaryCalculation.computeSalary(employee, summary, manualInputs);
+  const { summary, salary, pdfBuffer } = await renderSlip(employee, startDate, endDate, manualInputs);
 
-  const mergeData = buildMergeData(employee, startDate, endDate, summary, salary);
-  const templateHtml = await fs.readFile(path.join(env.templatesHtmlDir, TEMPLATE_FILE), 'utf8');
-  const filledHtml = fillTemplate(templateHtml, mergeData);
-  const pdfBuffer = await renderPdfFromHtml(filledHtml, env.templatesHtmlDir);
-
-  const relativePath = path.join(String(employeeId), `${startStr}_${endStr}-${Date.now()}.pdf`);
+  const relativePath = path.join(
+    String(employeeId),
+    `${toDateStr(summary.startDate)}_${toDateStr(summary.endDate)}-${Date.now()}.pdf`
+  );
   const filePath = await localFileStorage.saveBuffer(pdfBuffer, relativePath, NAMESPACE);
 
+  // The clipped dates (actual employment within the requested range) are
+  // what's stored, so the slip record matches what it pays for.
   return salarySlipRepository.create({
     employee: employeeId,
-    startDate,
-    endDate,
+    startDate: summary.startDate,
+    endDate: summary.endDate,
     ...manualInputs,
     basicMaster: salary.basicMaster,
     basicEarnings: salary.basicEarnings,
     otMaster: salary.otMaster,
     otEarnings: salary.otEarnings,
+    paidLeaveCompensation: salary.paidLeaveCompensation,
     halfDayDeductions: salary.halfDayDeductions,
     unpaidOffDeductions: salary.unpaidOffDeductions,
     grossEarnings: salary.grossEarnings,
@@ -232,25 +280,17 @@ async function generateSlip(employeeId, input, createdBy) {
   });
 }
 
-function startOfUTCDate(date) {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-}
-
 function toDateStr(date) {
   return date.toISOString().slice(0, 10);
 }
 
 // HR Work's "Generate all salary slips together" (frontendhr). One calendar
-// month, every active employee — reuses generateSlip's exact code path per
-// employee (same persisted SalarySlip + PDF-on-disk as the single-employee
-// generator, nothing skipped). An employee who joined mid-period gets their
-// slip clipped to start from their actual dateOfJoining instead of the 1st.
-//
-// That clip is recomputed fresh from the employee's current stored
-// dateOfJoining on every call — never a remembered "day 15" — so running
-// this again for the same calendar month next year naturally stops clipping
-// the moment their join date falls before that year's period start, and all
-// their attendance from periodStart onward is correctly included.
+// month, every active employee plus anyone who left during or after it —
+// reuses generateSlip's exact code path per employee (same persisted
+// SalarySlip + PDF-on-disk as the single-employee generator, nothing
+// skipped). Clipping to each person's joining/leaving date happens inside
+// the calculation itself (salaryCalculation.service.js#clipToEmployment), so
+// a mid-month joiner or leaver is paid only for the days they were employed.
 async function generateBulkSlips({ month, year }, createdBy) {
   const periodStart = new Date(Date.UTC(year, month - 1, 1));
   const periodEnd = new Date(Date.UTC(year, month, 0));
@@ -258,24 +298,23 @@ async function generateBulkSlips({ month, year }, createdBy) {
     throw ApiError.badRequest('Cannot generate salary slips for a period that has not ended yet');
   }
 
-  const employees = await employeeRepository.listActive();
+  const employees = await employeeRepository.listPayableForPeriod(periodStart);
   const results = [];
 
   for (const employee of employees) {
     const employeeName = `${employee.firstName} ${employee.lastName || ''}`.trim();
     const row = { employeeId: employee._id, employeeName, employeeCode: employee.employeeCode };
 
-    const joinDate = employee.dateOfJoining ? startOfUTCDate(new Date(employee.dateOfJoining)) : null;
-    if (joinDate && joinDate.getTime() > periodEnd.getTime()) {
-      results.push({ ...row, outcome: 'skipped', message: 'Not yet joined during this period' });
+    const employment = salaryCalculation.clipToEmployment(employee, periodStart, periodEnd);
+    if (employment.startDate.getTime() > employment.endDate.getTime()) {
+      results.push({ ...row, outcome: 'skipped', message: 'Not employed during this period' });
       continue;
     }
-    const effectiveStart = joinDate && joinDate.getTime() > periodStart.getTime() ? joinDate : periodStart;
 
     try {
       const slip = await generateSlip(
         employee._id.toString(),
-        { startDate: toDateStr(effectiveStart), endDate: toDateStr(periodEnd) },
+        { startDate: toDateStr(periodStart), endDate: toDateStr(periodEnd) },
         createdBy
       );
       results.push({ ...row, outcome: 'generated', slipId: slip._id, netPayable: slip.netPayable });
@@ -285,6 +324,120 @@ async function generateBulkSlips({ month, year }, createdBy) {
   }
 
   return results;
+}
+
+const MASTER_SHEET_TEMPLATE_FILE = 'master-salary-sheet.html';
+
+// HR Work's Master Salary Sheet — one PDF listing every active employee for
+// a calendar month: current monthly salary, days worked, overtime minutes
+// and net payable, as a final cross-check before paying out. Net payable
+// comes from that month's latest generated slip (exactly what's being paid);
+// an employee with no slip yet is calculated live with no manual
+// additions/deductions and flagged as such. Attendance and overtime are
+// always computed fresh, clipped to each person's employment dates.
+// `useGeneratedSlips: false` ignores saved slips and calculates every row
+// live (used for previews before slips are regenerated).
+async function buildMasterSheet({ month, year }, { useGeneratedSlips = true } = {}) {
+  const periodStart = new Date(Date.UTC(year, month - 1, 1));
+  const periodEnd = new Date(Date.UTC(year, month, 0));
+  if (periodEnd.getTime() > Date.now()) {
+    throw ApiError.badRequest('Cannot build the master salary sheet for a month that has not ended yet');
+  }
+
+  const [employees, slips] = await Promise.all([
+    employeeRepository.listPayableForPeriod(periodStart),
+    salarySlipRepository.listByStartDateMonth(periodStart, new Date(Date.UTC(year, month, 1))),
+  ]);
+  // Sorted newest first, so the first slip seen per employee is their latest.
+  const latestSlipByEmployee = new Map();
+  for (const slip of slips) {
+    const key = slip.employee?._id?.toString();
+    if (key && !latestSlipByEmployee.has(key)) latestSlipByEmployee.set(key, slip);
+  }
+
+  const rows = [];
+  const sorted = [...employees].sort((a, b) =>
+    `${a.firstName} ${a.lastName || ''}`.localeCompare(`${b.firstName} ${b.lastName || ''}`)
+  );
+  for (const employee of sorted) {
+    const employment = salaryCalculation.clipToEmployment(employee, periodStart, periodEnd);
+    if (employment.startDate.getTime() > employment.endDate.getTime()) continue;
+
+    // eslint-disable-next-line no-await-in-loop
+    const summary = await salaryCalculation.computeAttendanceSummary(employee, periodStart, periodEnd);
+    const slip = useGeneratedSlips ? latestSlipByEmployee.get(employee._id.toString()) : null;
+    const salary = salaryCalculation.computeSalary(employee, summary, {});
+    const netPayable = slip ? slip.netPayable || 0 : salary.netPayable;
+
+    let netNote = '';
+    if (!salary.basicMaster) netNote = 'No salary set';
+    else if (useGeneratedSlips && !slip) netNote = 'Slip not generated';
+    if (employee.status === EMPLOYEE_STATUS.OFFBOARDED) netNote = [netNote, 'Left on ' + formatDateDDMMYYYY(employment.endDate)].filter(Boolean).join(' · ');
+    if (summary.unmarkedWorkingDates.length > 0) {
+      netNote = [netNote, `${summary.unmarkedWorkingDates.length} unmarked day(s)`].filter(Boolean).join(' · ');
+    }
+
+    // Only the slip's "Other Deduction 3" field — a live-calculated row has
+    // no manual deductions.
+    const otherDeduction = slip ? slip.otherDeduction3 || 0 : 0;
+    const otherEarning = slip ? slip.otherEarning1 || 0 : 0;
+    const paidLeaveCompensation = slip ? slip.paidLeaveCompensation || 0 : salary.paidLeaveCompensation;
+    rows.push({
+      employeeName: `${employee.firstName} ${employee.lastName || ''}`.trim(),
+      designation: employee.designation || '',
+      currentSalary: salary.basicMaster,
+      totalDaysInPeriod: summary.totalDaysInPeriod,
+      daysPayable: summary.daysWorked,
+      overtimeMinutes: summary.totalOvertimeMinutes,
+      paidLeaveCompensation,
+      otherEarning,
+      otherDeduction,
+      netPayable,
+      netNote,
+    });
+  }
+
+  return renderMasterSheet({
+    periodLabel: periodStart.toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+    rows,
+  });
+}
+
+// Renders the Master Salary Sheet PDF from plain numeric rows — shared by
+// buildMasterSheet above and by one-off sheets built from a folder of slip
+// PDFs. Each row: { employeeName, designation, currentSalary,
+// totalDaysInPeriod, daysPayable, overtimeMinutes, otherEarning,
+// otherDeduction, netPayable, netNote? }. Other Earning / Other Deduction
+// show "—" when zero.
+async function renderMasterSheet({ periodLabel, rows }) {
+  const sum = (key) => rows.reduce((total, row) => total + (Number(row[key]) || 0), 0);
+  const templateHtml = await fs.readFile(path.join(env.templatesHtmlDir, MASTER_SHEET_TEMPLATE_FILE), 'utf8');
+  const filledHtml = fillTemplate(templateHtml, {
+    periodLabel,
+    employeeCount: rows.length,
+    generatedOn: formatDateLong(new Date()),
+    rows: rows.map((row, i) => ({
+      index: i + 1,
+      employeeName: row.employeeName,
+      designation: row.designation || '',
+      currentSalary: formatCurrency(row.currentSalary),
+      totalDaysInPeriod: formatDays(row.totalDaysInPeriod),
+      daysPayable: formatDays(row.daysPayable),
+      overtimeMinutes: Math.round(row.overtimeMinutes || 0).toLocaleString('en-IN'),
+      paidLeaveCompensation: row.paidLeaveCompensation ? formatCurrency(row.paidLeaveCompensation) : '—',
+      otherEarning: row.otherEarning ? formatCurrency(row.otherEarning) : '—',
+      otherDeduction: row.otherDeduction ? formatCurrency(row.otherDeduction) : '—',
+      netPayable: formatCurrency(row.netPayable),
+      netNote: row.netNote || '',
+    })),
+    totalCurrentSalary: formatCurrency(sum('currentSalary')),
+    totalOvertimeMinutes: Math.round(sum('overtimeMinutes')).toLocaleString('en-IN'),
+    totalPaidLeaveCompensation: formatCurrency(sum('paidLeaveCompensation')),
+    totalOtherEarning: formatCurrency(sum('otherEarning')),
+    totalOtherDeduction: formatCurrency(sum('otherDeduction')),
+    totalNetPayable: formatCurrency(sum('netPayable')),
+  });
+  return renderPdfFromHtml(filledHtml, env.templatesHtmlDir, { landscape: true });
 }
 
 // HR Work's "Download all as ZIP" companion to generateBulkSlips — bundles
@@ -469,6 +622,9 @@ async function markSalaryPaid(id, transactionDetails, actingUser) {
 }
 
 module.exports = {
+  renderMasterSheet,
+  renderSlip,
+  buildMasterSheet,
   generateSlip,
   generateBulkSlips,
   buildBulkZip,

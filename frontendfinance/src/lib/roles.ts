@@ -1,12 +1,12 @@
 import type { StoredUser } from '@/lib/authStorage'
 
 // Matches the backend's requireFinanceAccess (see
-// backend/src/middlewares/auth.middleware.js): admin, ceo, and the
-// account_manager role only — HR and operations_manager are excluded, unlike
+// backend/src/middlewares/auth.middleware.js): admin, ceo, cfo and
+// finance only — HR and operations_manager are excluded, unlike
 // the Monthly Bills tab specifically (see canManageBills below). Gates every
 // tab except Monthly Bills.
 export function canAccessFinance(user: StoredUser | null | undefined): boolean {
-  return user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'account_manager'
+  return user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'cfo' || user?.role === 'finance'
 }
 
 // Monthly Bills' viewing/mark-paid audience is wider than the rest of
@@ -32,7 +32,9 @@ export function canCreateBills(user: StoredUser | null | undefined): boolean {
   return user?.role === 'admin' || user?.role === 'ceo'
 }
 
-// Reimbursement approve/reject is CEO-only.
+// Reimbursement approve/reject is Finance (admin/ceo/cfo/finance) — same
+// audience as the rest of this tab. Matches backend's requireFinanceAccess
+// on the approve/reject routes.
 export function canApproveReimbursements(user: StoredUser | null | undefined): boolean {
-  return user?.role === 'ceo'
+  return canAccessFinance(user)
 }

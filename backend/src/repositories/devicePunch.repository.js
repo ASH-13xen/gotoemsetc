@@ -15,7 +15,7 @@ function listRecent({ limit = 100, employeeId, from, to } = {}) {
   return DevicePunch.find(query)
     .sort({ timestamp: -1 })
     .limit(limit)
-    .populate('employee', 'firstName lastName employeeCode designation');
+    .populate('employee', 'firstName lastName employeeCode designation workingHoursStart workingHoursEnd');
 }
 
 // Every scan for one employee on one calendar day, oldest first — this is

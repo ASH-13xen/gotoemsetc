@@ -10,7 +10,9 @@ function Textarea({ className, ...props }: React.ComponentProps<'textarea'>) {
         'placeholder:text-muted-foreground/70 selection:bg-primary/20 selection:text-foreground',
         'focus-visible:border-primary/40 focus-visible:bg-card focus-visible:ring-2 focus-visible:ring-primary/15',
         'aria-invalid:border-destructive/40 aria-invalid:bg-destructive/5 aria-invalid:text-destructive',
-        'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
+        // See input.tsx's matching comment — disabled reads as plain text,
+        // not a washed-out control.
+        'disabled:pointer-events-none disabled:cursor-default disabled:border-transparent disabled:bg-transparent disabled:text-foreground disabled:opacity-100',
         className
       )}
       {...props}

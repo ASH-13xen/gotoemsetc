@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Cake, CalendarDays, CalendarOff, ChevronLeft, ChevronRight, Clock3, LogOut, PartyPopper, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -71,9 +72,9 @@ function whosOutLabel(entry: WhosOutEntry) {
 // grid. Ported from the old frontendems CalendarPage.tsx (now removed —
 // HR Work links here instead) and extended with the who's-out layer. Lives
 // in frontendall itself, not a remote, so it's reachable at all times from
-// every role's dashboard as well as its own /calendar route — see
-// CompanyCalendarPage.tsx and ShellLayout.tsx's nav entry.
-export function CompanyCalendarGrid() {
+// every role's dashboard as well as its own /company-calendar route — see
+// CompanyCalendarPage.tsx. (/calendar is now the Weekly Calendar.)
+export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } = {}) {
   const { user } = useAuth()
   // Matches ShellLayout.tsx's canAccessHrWork exactly (admin/hr/ceo), which
   // in turn matches the backend's requireHrWorkAccess() gate on
@@ -183,47 +184,52 @@ export function CompanyCalendarGrid() {
 
   return (
     <Card className="overflow-hidden rounded-xl border border-border p-0">
-      <div className="flex items-center justify-between border-b border-border p-5">
+      <div className={cn('flex items-center justify-between border-b border-border', compact ? 'p-3' : 'p-5')}>
         <div className="flex items-center gap-2.5">
-          <CalendarDays className="size-4 text-muted-foreground" />
-          <h2 className="text-base font-semibold text-foreground">Company Calendar</h2>
+          <CalendarDays className={compact ? 'size-3.5 text-muted-foreground' : 'size-4 text-muted-foreground'} />
+          <h2 className={cn('font-semibold text-foreground', compact ? 'text-sm' : 'text-base')}>Company Calendar</h2>
         </div>
-        <div className="flex items-center gap-3">
+        <div className={cn('flex items-center', compact ? 'gap-1.5' : 'gap-3')}>
           <Button
             variant="outline"
             size="icon"
-            className="size-8"
+            className={compact ? 'size-6' : 'size-8'}
             onClick={() => setMonthDate((d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1)))}
           >
-            <ChevronLeft className="size-4" />
+            <ChevronLeft className={compact ? 'size-3' : 'size-4'} />
           </Button>
-          <span className="min-w-32 text-center text-sm font-medium text-foreground">
-            {monthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' })}
+          <span className={cn('text-center font-medium text-foreground', compact ? 'min-w-20 text-xs' : 'min-w-32 text-sm')}>
+            {monthDate.toLocaleDateString('en-US', { month: compact ? 'short' : 'long', year: 'numeric', timeZone: 'UTC' })}
           </span>
           <Button
             variant="outline"
             size="icon"
-            className="size-8"
+            className={compact ? 'size-6' : 'size-8'}
             onClick={() => setMonthDate((d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)))}
           >
-            <ChevronRight className="size-4" />
+            <ChevronRight className={compact ? 'size-3' : 'size-4'} />
           </Button>
         </div>
       </div>
 
-      <CardContent className="p-5">
+      <CardContent className={compact ? 'p-3' : 'p-5'}>
         {holidaysLoading ? (
-          <Skeleton className="h-64 w-full" />
+          <Skeleton className={compact ? 'h-48 w-full' : 'h-64 w-full'} />
         ) : (
           <>
-            <div className="grid grid-cols-7 gap-1.5 text-center text-xs font-medium text-muted-foreground">
+            <div
+              className={cn(
+                'grid grid-cols-7 text-center font-medium text-muted-foreground',
+                compact ? 'gap-1 text-[9px]' : 'gap-1.5 text-xs'
+              )}
+            >
               {WEEKDAYS.map((d) => (
                 <div key={d} className="py-1">
-                  {d}
+                  {compact ? d.slice(0, 1) : d}
                 </div>
               ))}
             </div>
-            <div className="mt-1.5 grid grid-cols-7 gap-1.5">
+            <div className={cn('mt-1.5 grid grid-cols-7', compact ? 'gap-1' : 'gap-1.5')}>
               {cells.map((dateKey, i) => {
                 if (!dateKey) return <div key={`blank-${i}`} />
                 const dayNum = Number(dateKey.slice(8, 10))
@@ -242,7 +248,8 @@ export function CompanyCalendarGrid() {
                       <button
                         type="button"
                         className={cn(
-                          'relative flex aspect-square flex-col items-center justify-center rounded-lg text-sm font-medium transition-colors duration-150',
+                          'relative flex aspect-square flex-col items-center justify-center rounded-lg font-medium transition-colors duration-150',
+                          compact ? 'text-xs' : 'text-sm',
                           'bg-secondary/50 text-foreground hover:bg-secondary/80',
                           (isSunday || holiday) && !isHalfDay && !isSlDay && 'bg-secondary/25 text-muted-foreground/60',
                           isHalfDay && 'bg-indigo-500/10 text-indigo-700',
@@ -251,28 +258,42 @@ export function CompanyCalendarGrid() {
                         )}
                       >
                         <span>{dayNum}</span>
-                        <div className="absolute bottom-0.5 flex items-center gap-0.5">
-                          {birthdays.length > 0 && <Cake className="size-3 text-yellow-500" />}
+                        {/* Markers stay visible at every size — a compact calendar with
+                            no birthday/event/holiday indicators just looks empty, which
+                            defeats the point of glancing at it. Only the icon size and
+                            the who's-out overflow cap shrink in compact mode. */}
+                        <div className={cn('absolute bottom-0.5 flex items-center', compact ? 'gap-px' : 'gap-0.5')}>
+                          {birthdays.length > 0 && (
+                            <Cake className={cn(compact ? 'size-2.5' : 'size-3', 'text-yellow-500')} />
+                          )}
                           {dayEvents.map((e) => {
                             const { Icon, color } = eventVisual(e.type)
-                            return <Icon key={e._id} className={cn('size-3', color)} />
+                            return <Icon key={e._id} className={cn(compact ? 'size-2.5' : 'size-3', color)} />
                           })}
-                          {whosOut.slice(0, 4).map((entry, idx) => (
+                          {whosOut.slice(0, compact ? 3 : 4).map((entry, idx) => (
                             <span
                               key={idx}
-                              className={cn('size-1.5 rounded-full', entry.status ? STATUS_CONFIG[entry.status].dot : 'bg-rose-500')}
+                              className={cn(
+                                compact ? 'size-1' : 'size-1.5',
+                                'rounded-full',
+                                entry.status ? STATUS_CONFIG[entry.status].dot : 'bg-rose-500'
+                              )}
                             />
                           ))}
-                          {whosOut.length > 4 && <span className="text-[9px] font-bold text-muted-foreground">+{whosOut.length - 4}</span>}
+                          {whosOut.length > (compact ? 3 : 4) && (
+                            <span className="text-[9px] font-bold text-muted-foreground">
+                              +{whosOut.length - (compact ? 3 : 4)}
+                            </span>
+                          )}
                         </div>
                         {holiday && (
                           <span className="absolute top-1 left-1">
                             {isHalfDay ? (
-                              <Clock3 className="size-3 text-indigo-600" />
+                              <Clock3 className={cn(compact ? 'size-2.5' : 'size-3', 'text-indigo-600')} />
                             ) : isSlDay ? (
-                              <Clock3 className="size-3 text-teal-600" />
+                              <Clock3 className={cn(compact ? 'size-2.5' : 'size-3', 'text-teal-600')} />
                             ) : (
-                              <CalendarOff className="size-3 text-muted-foreground" />
+                              <CalendarOff className={cn(compact ? 'size-2.5' : 'size-3', 'text-muted-foreground')} />
                             )}
                           </span>
                         )}
@@ -412,7 +433,7 @@ export function CompanyCalendarGrid() {
                 )
               })}
             </div>
-            <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-border pt-4">
+            <div className={cn('mt-6 flex-wrap gap-x-5 gap-y-2 border-t border-border pt-4', compact ? 'hidden' : 'flex')}>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Cake className="size-3.5 text-yellow-500" />
                 Employee birthday
@@ -456,6 +477,14 @@ export function CompanyCalendarGrid() {
                 Early Departure
               </div>
             </div>
+            {compact && (
+              <Link
+                to="/company-calendar"
+                className="mt-4 flex items-center justify-center gap-1 text-xs font-semibold text-primary hover:underline"
+              >
+                View full calendar →
+              </Link>
+            )}
           </>
         )}
       </CardContent>

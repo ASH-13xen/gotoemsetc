@@ -11,7 +11,7 @@ export default function HrWorkPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-8 py-8">
       <PageHeader
-        eyebrow="HR Work"
+        eyebrow="HRMS"
         title="HR Work"
         description="Attendance review, payroll, documents, and inventory — the admin/HR/CEO-only toolkit."
       />

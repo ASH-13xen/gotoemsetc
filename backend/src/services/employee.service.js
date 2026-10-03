@@ -1,19 +1,83 @@
 const employeeRepository = require('../repositories/employee.repository');
 const counterRepository = require('../repositories/counter.repository');
 const userRepository = require('../repositories/user.repository');
+const orgChartService = require('./orgChart.service');
 const activityService = require('./activity.service');
 const notificationService = require('./notification.service');
 const ApiError = require('../utils/ApiError');
 const { isAdminLike } = require('../utils/roles');
-const { NOTIFICATION_TYPES } = require('../config/constants');
+const { NOTIFICATION_TYPES, INVENTORY_ITEM_CATEGORY, EMPLOYEE_STATUS } = require('../config/constants');
 
 async function listEmployees(params) {
   return employeeRepository.list(params);
 }
 
+// One-time, lazy carry-forward into the newer categorized inventory system:
+// an employee's existing single Mobile/Laptop (the old `inventory` object)
+// becomes their first Office Phone / Office Laptop item the first time
+// their record is read after this feature shipped. Never touches
+// `inventory` itself (still the source the Hardware Consent Form reads),
+// and never runs again once inventoryItems has at least one entry — so a
+// later Personal Phone/Laptop the employee adds by hand is never
+// overwritten or duplicated.
+function synthesizeLegacyInventoryItems(inventory) {
+  if (!inventory) return [];
+  const items = [];
+  if (inventory.hasMobile) {
+    items.push({
+      category: INVENTORY_ITEM_CATEGORY.OFFICE_PHONE,
+      deviceName: inventory.deviceName,
+      serialNumber: inventory.imeiOrSerialNumber,
+      color: inventory.deviceColor,
+      condition: inventory.deviceCondition,
+      password: inventory.password,
+      theftProtection: inventory.theftProtection,
+      findMyDevice: inventory.findMyDevice,
+      thumbOrFace: inventory.thumbOrFace,
+      simProvider: inventory.simProvider,
+      simPhoneNumber: inventory.simPhoneNumber,
+      screenGuard: inventory.screenGuard,
+      backCover: inventory.backCover,
+      powerAdapter: inventory.powerAdapter,
+      cable: inventory.cable,
+      mobileOS: inventory.mobileOS || undefined,
+      appleId: inventory.appleId,
+      whatsappTwoFactor: inventory.whatsappTwoFactor,
+      whatsappTwoFactorBackupMail: inventory.whatsappTwoFactorBackupMail,
+      whatsappTwoFactorPin: inventory.whatsappTwoFactorPin,
+      whatsappNameUpdated: inventory.whatsappNameUpdated,
+      whatsappProfiling: inventory.whatsappProfiling,
+      whatsappBackupInEmployeeMail: inventory.whatsappBackupInEmployeeMail,
+      galleryBackupInEmployeeMail: inventory.galleryBackupInEmployeeMail,
+      trueCallerUpdated: inventory.trueCallerUpdated,
+    });
+  }
+  if (inventory.hasLaptop) {
+    items.push({
+      category: INVENTORY_ITEM_CATEGORY.OFFICE_LAPTOP,
+      deviceName: inventory.laptopDeviceName,
+      serialNumber: inventory.laptopSerialNumber,
+      color: inventory.laptopColor,
+      condition: inventory.laptopCondition,
+      password: inventory.laptopPassword,
+      theftProtection: inventory.laptopTheftProtection,
+      findMyDevice: inventory.laptopFindMyDevice,
+      thumbOrFace: inventory.laptopThumbOrFace,
+      mouse: inventory.laptopMouse,
+    });
+  }
+  return items;
+}
+
 async function getEmployee(id) {
   const employee = await employeeRepository.findById(id);
   if (!employee) throw ApiError.notFound('Employee not found');
+  if ((employee.inventoryItems ?? []).length === 0) {
+    const migrated = synthesizeLegacyInventoryItems(employee.inventory);
+    if (migrated.length > 0) {
+      return employeeRepository.updateById(id, { inventoryItems: migrated });
+    }
+  }
   return employee;
 }
 
@@ -58,7 +122,19 @@ const DEFAULT_EXTRA_DETAILS = [
   { key: 'COMPANY MAIL PASSWORD', value: '' },
 ];
 
+// An employee can only be off-boarded with their last working day on record
+// — it decides their final salary slip (see
+// salaryCalculation.service.js#clipToEmployment). `existing` is the record
+// before this change (null when creating).
+function assertOffboardingHasLastDay(data, existing) {
+  const status = data.status ?? existing?.status;
+  if (status !== EMPLOYEE_STATUS.OFFBOARDED) return;
+  const lastDay = data.endDate !== undefined ? data.endDate : existing?.endDate;
+  if (!lastDay) throw ApiError.badRequest('A last working day is required to off-board an employee');
+}
+
 async function createEmployee(data) {
+  assertOffboardingHasLastDay(data, null);
   // Plain incrementing number, starting at 1001 — see
   // scripts/seedEmployeeCounter.js, which seeds the counter to 1000 so the
   // first call here returns 1001. Doubles as the biometric device PIN,
@@ -77,15 +153,29 @@ async function updateEmployee(id, data, actingUserRole) {
   // dropped for anyone else rather than erroring, so the rest of a
   // non-admin's edit still goes through.
   const payload = isAdminLike({ role: actingUserRole }) ? data : { ...data, employeeCode: undefined };
+  const existing = await employeeRepository.findById(id);
+  if (!existing) throw ApiError.notFound('Employee not found');
+  assertOffboardingHasLastDay(payload, existing);
+  // Ticking "probation completed" ends probation early from today; unticking
+  // it goes back to the automatic joining-date + 3 months.
+  if (payload.probationCompleted === true && !existing.probationCompleted) payload.probationCompletedAt = new Date();
+  if (payload.probationCompleted === false) payload.probationCompletedAt = null;
   const employee = await employeeRepository.updateById(id, payload);
   if (!employee) throw ApiError.notFound('Employee not found');
   await activityService.log(employee._id, 'EMPLOYEE_UPDATED', { fields: Object.keys(payload) });
+  // An off-boarded employee can no longer sign in to the EMS.
+  if (employee.status === EMPLOYEE_STATUS.OFFBOARDED) {
+    await userRepository.deactivateForEmployee(employee._id);
+    await orgChartService.removeEmployeeEverywhere(employee._id);
+  }
   return employee;
 }
 
 async function deleteEmployee(id) {
   const employee = await employeeRepository.softDeleteById(id);
   if (!employee) throw ApiError.notFound('Employee not found');
+  await userRepository.deactivateForEmployee(employee._id);
+  await orgChartService.removeEmployeeEverywhere(employee._id);
   await activityService.log(employee._id, 'EMPLOYEE_REMOVED', {});
   return employee;
 }
@@ -172,4 +262,5 @@ module.exports = {
   addFlag,
   removeFlag,
   getFlagHistory,
+  synthesizeLegacyInventoryItems,
 };

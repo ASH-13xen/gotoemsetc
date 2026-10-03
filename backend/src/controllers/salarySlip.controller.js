@@ -44,6 +44,17 @@ const generateBulk = asyncHandler(async (req, res) => {
   res.status(201).json({ results });
 });
 
+// HR Work's Master Salary Sheet — one PDF for the whole month, built on
+// demand and streamed back; nothing is stored.
+const downloadMasterSheet = asyncHandler(async (req, res) => {
+  const month = Number(req.query.month);
+  const year = Number(req.query.year);
+  const pdf = await salarySlipService.buildMasterSheet({ month, year });
+  res.attachment(`master-salary-sheet-${year}-${String(month).padStart(2, '0')}.pdf`);
+  res.type('application/pdf');
+  res.send(pdf);
+});
+
 // Companion to generateBulk — bundles a chosen set of already-generated
 // slips (normally every 'generated' row from the response above) into one
 // zip download, streamed straight through rather than buffered in memory.
@@ -77,6 +88,7 @@ module.exports = {
   generate,
   listForEmployee,
   downloadFile,
+  downloadMasterSheet,
   listRecentMonths,
   downloadOwnFile,
   generateBulk,

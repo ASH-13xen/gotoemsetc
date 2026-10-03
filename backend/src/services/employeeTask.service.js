@@ -487,9 +487,9 @@ function listMine(user, { type } = {}) {
   return employeeTaskRepository.listMine({ employeeId: user.employeeLink, isAdmin, type });
 }
 
-function listUpcoming(user, { limit } = {}) {
+function listUpcoming(user, { withinDays } = {}) {
   if (!user.employeeLink) return [];
-  return employeeTaskRepository.listUpcomingForEmployee(user.employeeLink, { limit });
+  return employeeTaskRepository.listUpcomingForEmployee(user.employeeLink, { withinDays });
 }
 
 async function listReview(user) {

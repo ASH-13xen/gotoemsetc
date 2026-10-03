@@ -3,16 +3,30 @@ const ApiError = require('../utils/ApiError');
 const env = require('../config/env');
 const { isAdminLike } = require('../utils/roles');
 const { USER_ROLES, PERMISSIONS } = require('../config/constants');
+const userRepository = require('../repositories/user.repository');
 
-function verifyToken(req, res, next) {
+// Besides the signature, the account must still exist and be active — so a
+// credential deleted by hand, or revoked by off-boarding the employee (see
+// employee.service.js#updateEmployee), is locked out immediately rather
+// than staying usable until its token expires.
+async function verifyToken(req, res, next) {
   const header = req.headers.authorization || '';
   const [scheme, token] = header.split(' ');
   if (scheme !== 'Bearer' || !token) {
     return next(ApiError.unauthorized());
   }
 
+  let payload;
   try {
-    const payload = jwt.verify(token, env.jwtSecret);
+    payload = jwt.verify(token, env.jwtSecret);
+  } catch {
+    return next(ApiError.unauthorized('Invalid or expired token'));
+  }
+
+  try {
+    if (!(await userRepository.isActiveId(payload.sub))) {
+      return next(ApiError.unauthorized('This account no longer has access'));
+    }
     req.user = {
       id: payload.sub,
       username: payload.username,
@@ -21,8 +35,8 @@ function verifyToken(req, res, next) {
       permissions: payload.permissions || [],
     };
     next();
-  } catch {
-    next(ApiError.unauthorized('Invalid or expired token'));
+  } catch (err) {
+    next(err);
   }
 }
 
@@ -125,7 +139,7 @@ function requireOperationsAccess() {
   };
 }
 
-// admin/ceo/account_manager only — deliberately NOT isAdminLike (HR has no
+// admin/ceo/cfo/finance only — deliberately NOT isAdminLike (HR has no
 // business in Finance) and NOT operations_manager (see requireBillsAccess
 // below for the one place that role is folded in). Backs the entire Finance
 // module (/salary-slips finance routes, /fnf-settlements, /invoices,
@@ -137,7 +151,8 @@ function requireFinanceAccess() {
     if (!req.user) return next(ApiError.unauthorized());
     if (req.user.role === USER_ROLES.ADMIN) return next();
     if (req.user.role === USER_ROLES.CEO) return next();
-    if (req.user.role === USER_ROLES.ACCOUNT_MANAGER) return next();
+    if (req.user.role === USER_ROLES.CFO) return next();
+    if (req.user.role === USER_ROLES.FINANCE) return next();
     return next(ApiError.forbidden());
   };
 }
@@ -152,7 +167,8 @@ function requireBillsAccess() {
     if (!req.user) return next(ApiError.unauthorized());
     if (req.user.role === USER_ROLES.ADMIN) return next();
     if (req.user.role === USER_ROLES.CEO) return next();
-    if (req.user.role === USER_ROLES.ACCOUNT_MANAGER) return next();
+    if (req.user.role === USER_ROLES.CFO) return next();
+    if (req.user.role === USER_ROLES.FINANCE) return next();
     if (req.user.role === USER_ROLES.OPERATIONS_MANAGER) return next();
     return next(ApiError.forbidden());
   };
@@ -213,9 +229,9 @@ function requireSelfOrDirectoryAccess(paramName = 'id') {
   };
 }
 
-// Every login role except plain worker — admin/hr plus the 5 other
-// leadership roles (ceo, digital_admin, team_lead, account_manager,
-// operations_manager). Used only for creating an Announcement; any employee,
+// Every login role except plain worker — admin/hr plus the other
+// leadership/function roles (ceo, digital_admin, team_lead,
+// operations_manager, cto, cfo, sales, technical, finance). Used only for creating an Announcement; any employee,
 // worker included, can still read and acknowledge one addressed to them
 // (self-scoped, gated elsewhere).
 function requireAnnouncementCreateAccess() {

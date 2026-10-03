@@ -142,7 +142,7 @@ export function ReimbursementsTab() {
       ) : reimbursements.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing here.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           {reimbursements.map((r) => (
             <ReimbursementRow key={r._id} reimbursement={r} />
           ))}

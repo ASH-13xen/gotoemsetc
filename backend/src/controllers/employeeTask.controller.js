@@ -10,7 +10,7 @@ const listMine = asyncHandler(async (req, res) => {
 });
 
 const listUpcoming = asyncHandler(async (req, res) => {
-  const tasks = await employeeTaskService.listUpcoming(req.user, { limit: 6 });
+  const tasks = await employeeTaskService.listUpcoming(req.user, { withinDays: 7 });
   res.json({ tasks });
 });
 

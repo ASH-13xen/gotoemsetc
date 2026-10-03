@@ -5,6 +5,8 @@ const { publicUploadLimiter } = require('../middlewares/rateLimiter.middleware')
 const uploadRequestValidator = require('../validators/uploadRequest.validator');
 const publicUploadController = require('../controllers/publicUpload.controller');
 const googleFormWebhookController = require('../controllers/googleFormWebhook.controller');
+const weeklyCalendarValidator = require('../validators/weeklyCalendar.validator');
+const weeklyCalendarController = require('../controllers/weeklyCalendar.controller');
 
 const router = Router();
 
@@ -15,6 +17,11 @@ router.use(publicUploadLimiter);
 // it can't just be scoped here: the global parser already consumes the
 // request stream before this router runs).
 router.post('/applicants/google-form', googleFormWebhookController.submit);
+
+// Weekly Calendar invite emails — Accept/Decline without logging in. The
+// signed token in the link says exactly which invite and which person.
+router.get('/calendar-invites/:token', validate(weeklyCalendarValidator.publicToken), weeklyCalendarController.publicInvite);
+router.post('/calendar-invites/:token', validate(weeklyCalendarValidator.publicRespond), weeklyCalendarController.publicRespond);
 
 router.post(
   '/upload-requests/:token/verify',

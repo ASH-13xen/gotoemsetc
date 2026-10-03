@@ -689,7 +689,62 @@ async function runNightlyBackstop(dateLabel = todayUTCMidnight()) {
   return { settled };
 }
 
+const SCAN_CATEGORY = {
+  LATE: 'late',
+  SHORT_LEAVE: 'short_leave',
+  HALF_DAY: 'half_day',
+  ABSENT: 'absent',
+};
+
+// Display-only colour coding for the admin scan feed: which of one
+// employee's scans that day were a non-normal arrival or departure, using
+// the exact windows classifyPunches uses. Returns Map<punchId, category>;
+// a normal scan (on-time arrival, departure at/after shift end, or any
+// scan in between or in a dead zone) has no entry. Arrival: Late / Short
+// Leave (before 11:30am) / Half Day (before 2pm) / Absent (first scan at or
+// after 2pm). Departure: 4:30pm to shift end is an evening Short Leave
+// (early departure); a last valid scan before 2pm is a Half Day.
+// Off days (Sunday) are never coloured — there's no arrival window there.
+function scanCategories(punches, employee) {
+  const categories = new Map();
+  if (punches.length === 0) return categories;
+  const sorted = [...punches].sort((a, b) => a.timestamp - b.timestamp);
+  if (istDateLabel(sorted[0].timestamp).getUTCDay() === 0) return categories;
+
+  const early = nonNightPunches(sorted);
+  if (early.length === 0) return categories;
+  if (istMinutesOfDay(early[0].timestamp) >= MIDDAY_DEAD_ZONE_START) {
+    categories.set(early[0]._id.toString(), SCAN_CATEGORY.ABSENT);
+    return categories;
+  }
+
+  const valid = validPunches(sorted);
+  const { graceCutoff, lateCutoff, shiftEnd } = employeeBoundaries(employee);
+  const arrival = valid[0];
+  const arrivalMinutes = istMinutesOfDay(arrival.timestamp);
+  if (arrivalMinutes > lateCutoff) {
+    categories.set(
+      arrival._id.toString(),
+      arrivalMinutes < HALF_DAY_ARRIVAL_START ? SCAN_CATEGORY.SHORT_LEAVE : SCAN_CATEGORY.HALF_DAY
+    );
+  } else if (arrivalMinutes > graceCutoff) {
+    categories.set(arrival._id.toString(), SCAN_CATEGORY.LATE);
+  }
+
+  if (valid.length > 1) {
+    const departure = valid[valid.length - 1];
+    const departureMinutes = istMinutesOfDay(departure.timestamp);
+    if (departureMinutes < MIDDAY_DEAD_ZONE_START) {
+      categories.set(departure._id.toString(), SCAN_CATEGORY.HALF_DAY);
+    } else if (departureMinutes >= EARLY_DEPARTURE_START && departureMinutes < shiftEnd) {
+      categories.set(departure._id.toString(), SCAN_CATEGORY.SHORT_LEAVE);
+    }
+  }
+  return categories;
+}
+
 module.exports = {
+  scanCategories,
   handlePunchEvent,
   settleDay,
   runNightlyBackstop,
@@ -702,4 +757,5 @@ module.exports = {
   applySlDayToAllEmployees,
   revertSlDayForAllEmployees,
   istDayBoundsUTC,
+  istDateLabel,
 };

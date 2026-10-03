@@ -36,7 +36,7 @@ function eventVisual(type: CompanyEventType) {
 // 2 days — mirrors the "Upcoming" strip on the full Company Calendar page
 // (see CompanyCalendarGrid.tsx), just inline on the dashboard instead of its
 // own page. Only rendered when something is actually coming up.
-export function UpcomingCalendarWidget() {
+export function UpcomingCalendarWidget({ compact = false }: { compact?: boolean } = {}) {
   const todayDate = new Date()
   const month = todayDate.getUTCMonth() + 1
   const year = todayDate.getUTCFullYear()
@@ -77,7 +77,7 @@ export function UpcomingCalendarWidget() {
   if (rowsWithSomething.length === 0) return null
 
   return (
-    <Card className="rounded-xl border border-border p-6">
+    <Card className={cn('rounded-xl border border-border', compact ? 'p-3' : 'p-6')}>
       <CardContent className="p-0 space-y-3">
         <h2 className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
           <CalendarDays className="size-4" />
@@ -85,7 +85,7 @@ export function UpcomingCalendarWidget() {
         </h2>
         <div className="grid gap-2 sm:grid-cols-3">
           {rowsWithSomething.map((row) => (
-            <div key={row.dateKey} className="rounded-xl bg-secondary/40 p-3 space-y-1.5">
+            <div key={row.dateKey} className={cn('rounded-xl bg-secondary/40 space-y-1.5', compact ? 'p-2' : 'p-3')}>
               <p className="text-xs font-bold text-foreground">
                 {row.date.toLocaleDateString('en-US', {
                   weekday: 'short',

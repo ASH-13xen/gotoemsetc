@@ -35,6 +35,13 @@ const generateBulk = {
   }),
 };
 
+const masterSheet = {
+  query: z.object({
+    month: z.coerce.number().int().min(1).max(12),
+    year: z.coerce.number().int().min(2000).max(3000),
+  }),
+};
+
 const bulkZip = {
   body: z.object({
     slipIds: z.array(z.string().min(1)).min(1, 'No salary slips to zip'),
@@ -66,6 +73,7 @@ module.exports = {
   recentMonths,
   ownFile,
   generateBulk,
+  masterSheet,
   bulkZip,
   listForFinance,
   markPaid,

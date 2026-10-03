@@ -13,6 +13,16 @@ const MONTH_LABEL = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
+// Bare toLocaleDateString() follows the browser's own locale (often
+// M/D/YYYY) rather than the DD-MM-YYYY this company works in — explicit
+// formatting here, rather than relying on 'en-IN' (which renders D/M/YYYY,
+// slashes not hyphens).
+function formatDDMMYYYY(iso: string) {
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()}`
+}
+
 // Not-informed warning history — permanent, browsable month by month, never
 // pruned once the month ends (mirrors the "keep data always" requirement).
 // Sits alongside AttendanceSummaryCard on the Employee Detail page,
@@ -67,7 +77,7 @@ export function NotInformedWarningsCard({ employeeId }: { employeeId: string }) 
               {data.warnings.map((warning) => (
                 <div key={warning._id} className="rounded-lg bg-secondary/40 p-3 text-sm">
                   <p className="font-medium text-foreground">
-                    {CATEGORY_LABEL[warning.category]} — {new Date(warning.date).toLocaleDateString()}
+                    {CATEGORY_LABEL[warning.category]} — {formatDDMMYYYY(warning.date)}
                     {warning.sentBy && <span className="font-normal text-muted-foreground"> · by {warning.sentBy.username}</span>}
                   </p>
                   <p className="text-muted-foreground">{warning.message}</p>

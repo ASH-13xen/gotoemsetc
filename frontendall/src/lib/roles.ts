@@ -11,8 +11,12 @@ export type AppRole =
   | 'digital_admin'
   | 'hr'
   | 'operations_manager'
-  | 'account_manager'
+  | 'cto'
+  | 'cfo'
+  | 'sales'
   | 'team_lead'
+  | 'technical'
+  | 'finance'
   | 'worker'
 
 export interface RoleNode {
@@ -27,8 +31,12 @@ export const ROLE_HIERARCHY: Record<AppRole, RoleNode> = {
   digital_admin: { level: 2, reportsTo: 'ceo', label: 'Digital Admin' },
   hr: { level: 2, reportsTo: 'ceo', label: 'HR' },
   operations_manager: { level: 2, reportsTo: 'ceo', label: 'Operations Manager' },
-  account_manager: { level: 2, reportsTo: 'ceo', label: 'Account Manager' },
+  cto: { level: 2, reportsTo: 'ceo', label: 'CTO' },
+  cfo: { level: 2, reportsTo: 'ceo', label: 'CFO' },
+  sales: { level: 2, reportsTo: 'ceo', label: 'Sales' },
   team_lead: { level: 2, reportsTo: 'ceo', label: 'Team Lead' },
+  technical: { level: 3, reportsTo: 'cto', label: 'Technical' },
+  finance: { level: 3, reportsTo: 'cfo', label: 'Finance' },
   worker: { level: 3, reportsTo: 'hr', label: 'Employee' },
 }
 

@@ -1,7 +1,9 @@
+const ApiError = require('../utils/ApiError');
 const { numberToIndianWords } = require('./mergeData.service');
 const attendanceRepository = require('../repositories/attendance.repository');
 const holidayRepository = require('../repositories/holiday.repository');
-const { ATTENDANCE_STATUS } = require('../config/constants');
+const { ATTENDANCE_STATUS, PAID_LEAVE_COMPENSATION_FROM } = require('../config/constants');
+const { isPastProbation, probationEndDate } = require('../utils/probation');
 const { dateKey, isOffDay } = require('../utils/attendanceDays');
 const { computeEffectiveUnitsBreakdown } = require('../utils/attendancePenalties');
 
@@ -37,18 +39,143 @@ function minDaysAcrossTouchedMonths(startDate, endDate) {
   return min;
 }
 
+function startOfUTCDate(date) {
+  const d = new Date(date);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
+function addDays(date, days) {
+  return new Date(date.getTime() + days * MS_PER_DAY);
+}
+
+// Monday of the Monday–Sunday week `date` falls in.
+function weekMonday(date) {
+  return addDays(date, -((date.getUTCDay() + 6) % 7));
+}
+
+// The part of [startDate, endDate] the employee was actually employed for —
+// from their dateOfJoining and, once offboarded, up to their last day
+// (endDate on the Employee record). Days outside it are neither paid nor
+// counted as absent; they simply aren't part of the slip. Returns
+// { startDate, endDate } with startDate > endDate when there's no overlap.
+function clipToEmployment(employee, startDate, endDate) {
+  const joinDate = employee.dateOfJoining ? startOfUTCDate(employee.dateOfJoining) : null;
+  const exitDate = employee.endDate ? startOfUTCDate(employee.endDate) : null;
+  return {
+    startDate: joinDate && joinDate > startDate ? joinDate : startDate,
+    endDate: exitDate && exitDate < endDate ? exitDate : endDate,
+  };
+}
+
+// Days that count as "worked" for paid leave compensation — present in
+// any form, including from home.
+const WORKED_STATUSES = new Set([
+  ATTENDANCE_STATUS.PRESENT,
+  ATTENDANCE_STATUS.LATE,
+  ATTENDANCE_STATUS.SHORT_LEAVE,
+  ATTENDANCE_STATUS.HALF_DAY,
+  ATTENDANCE_STATUS.WORK_FROM_HOME,
+]);
+
+function ddmmyyyy(date) {
+  return `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`;
+}
+
+// Paid Leave Compensation — one day's pay when the employee didn't take
+// their own paid leave that month. Decided purely from attendance, and only
+// when ALL of these hold:
+//  * the slip is for one whole calendar month (1st to last day), from
+//    PAID_LEAVE_COMPENSATION_FROM onwards;
+//  * the employee was employed for that whole month;
+//  * probation was already over when the month started (utils/probation.js);
+//  * they worked at least one day that month (P, L, SL, H or W);
+//  * none of the month's O days is their own (paid leave HR awarded —
+//    paidLeaveAwarded — never counts).
+// Always returns why, so the slip can say so either way.
+function paidLeaveCompensationFor(employee, requestedStart, requestedEnd, employed, records) {
+  const takenDates = records.filter((r) => r.status === ATTENDANCE_STATUS.PAID_LEAVE && !r.paidLeaveAwarded).map((r) => r.date);
+  const awardedDates = records.filter((r) => r.status === ATTENDANCE_STATUS.PAID_LEAVE && r.paidLeaveAwarded).map((r) => r.date);
+  const result = (eligible, reason) => ({ eligible, reason, takenDates, awardedDates });
+
+  const monthStart = new Date(Date.UTC(requestedStart.getUTCFullYear(), requestedStart.getUTCMonth(), 1));
+  const monthEnd = new Date(Date.UTC(requestedStart.getUTCFullYear(), requestedStart.getUTCMonth() + 1, 0));
+  if (requestedStart.getTime() !== monthStart.getTime() || requestedEnd.getTime() !== monthEnd.getTime()) {
+    return result(false, 'Only on a whole-month slip (1st to last day of the month)');
+  }
+  if (monthStart.getTime() < new Date(`${PAID_LEAVE_COMPENSATION_FROM}T00:00:00.000Z`).getTime()) {
+    return result(false, 'Applies from September 2026 slips onwards');
+  }
+  if (employed.startDate.getTime() !== monthStart.getTime() || employed.endDate.getTime() !== monthEnd.getTime()) {
+    return result(false, 'Not employed for the whole month');
+  }
+  if (!isPastProbation(employee, monthStart)) {
+    const end = probationEndDate(employee);
+    return result(false, end ? `On probation until ${ddmmyyyy(end)}` : 'On probation');
+  }
+  if (!records.some((r) => WORKED_STATUSES.has(r.status))) {
+    return result(false, 'No day worked this month');
+  }
+  if (takenDates.length > 0) {
+    return result(false, `Own paid leave taken on ${takenDates.map(ddmmyyyy).join(', ')}`);
+  }
+  return result(true, 'No paid leave taken this month — 1 day paid');
+}
+
+// A working day with no attendance record, no status (e.g. a record that
+// only logs overtime), or status Absent earns nothing.
+function isUnpaidWorkingDay(record) {
+  return !record || !record.status || record.status === ATTENDANCE_STATUS.ABSENT;
+}
+
 // Attendance is stored one record per calendar day, so any admin-picked
 // [startDate, endDate] range (inclusive, both UTC midnight) can be
-// summarized directly — nothing here is anchored to a calendar month.
-async function computeAttendanceSummary(employeeId, startDate, endDate) {
-  const [records, holidays] = await Promise.all([
-    attendanceRepository.listForEmployee(employeeId, { from: startDate, to: endDate }),
-    holidayRepository.list({ from: startDate, to: endDate }),
+// summarized directly — nothing here is anchored to a calendar month. The
+// range is first clipped to the employee's employment (see
+// clipToEmployment); summary.startDate/endDate are the clipped dates.
+//
+// Day counts: every working day (not Sunday/holiday) is either unpaid (see
+// isUnpaidWorkingDay) or paid. A Sunday or company holiday is paid unless
+// the employee was unpaid on every working day of that Monday–Sunday week
+// (the whole-week rule), so someone absent all week isn't paid for that
+// week's off days. totalWorkingDays = every paid day, Sundays/holidays
+// included; daysWorked = totalWorkingDays minus half a day per half-day
+// unit, and is exactly what Basic pay is computed from.
+async function computeAttendanceSummary(employee, requestedStart, requestedEnd) {
+  const { startDate, endDate } = clipToEmployment(employee, requestedStart, requestedEnd);
+  if (startDate.getTime() > endDate.getTime()) {
+    throw ApiError.badRequest('The employee was not employed during this period');
+  }
+
+  // The whole-week rule can need attendance from just outside the pay
+  // period (a week that starts in the previous month), but never from
+  // outside the employment itself.
+  const employment = clipToEmployment(employee, weekMonday(startDate), addDays(weekMonday(endDate), 6));
+  const [allRecords, holidays] = await Promise.all([
+    attendanceRepository.listForEmployee(employee._id, { from: employment.startDate, to: employment.endDate }),
+    holidayRepository.list({ from: employment.startDate, to: employment.endDate }),
   ]);
+  const inPeriod = (date) => date.getTime() >= startDate.getTime() && date.getTime() <= endDate.getTime();
+  const records = allRecords.filter((r) => inPeriod(r.date));
 
   const totalDaysInPeriod = Math.round((endDate.getTime() - startDate.getTime()) / MS_PER_DAY) + 1;
   const holidayDateKeys = new Set(holidays.map((h) => dateKey(h.date)));
-  const recordByDate = new Map(records.map((r) => [dateKey(r.date), r]));
+  const recordByDate = new Map(allRecords.map((r) => [dateKey(r.date), r]));
+
+  // Off days in a week are paid if at least one working day that week
+  // (within employment) was paid. A week with no working days at all inside
+  // employment has nothing to judge by, so its off days stay paid.
+  function isOffDayPaid(date) {
+    const monday = weekMonday(date);
+    let workingDays = 0;
+    for (let i = 0; i < 7; i += 1) {
+      const day = addDays(monday, i);
+      if (day < employment.startDate || day > employment.endDate) continue;
+      if (isOffDay(day, holidayDateKeys)) continue;
+      workingDays += 1;
+      if (!isUnpaidWorkingDay(recordByDate.get(dateKey(day)))) return true;
+    }
+    return workingDays === 0;
+  }
 
   const counts = { P: 0, O: 0, H: 0, L: 0, SL: 0, W: 0, A: 0, HL: 0 };
   let totalOvertimeMinutes = 0;
@@ -90,22 +217,29 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
 
   let offDaysInPeriod = 0;
   let unpaidAbsentDays = 0;
+  const unpaidOffDateKeys = new Set();
+  // Working days carrying no status — almost always a day that needs
+  // marking (e.g. only overtime was logged). Unpaid, and listed so HR can
+  // fix the attendance before generating.
+  const unmarkedWorkingDates = [];
   for (let i = 0; i < totalDaysInPeriod; i += 1) {
-    const date = new Date(startDate.getTime() + i * MS_PER_DAY);
-    const off = isOffDay(date, holidayDateKeys);
-    if (off) {
+    const date = addDays(startDate, i);
+    if (isOffDay(date, holidayDateKeys)) {
       offDaysInPeriod += 1;
+      if (!isOffDayPaid(date)) unpaidOffDateKeys.add(dateKey(date));
       continue;
     }
-    // A day with no record at all (never marked) and a day auto-marked
-    // Absent (see attendanceClassifier.service.js) both cost a full day's
-    // pay — Absent still has a record, so it wouldn't otherwise be caught
-    // by the "no record" check alone.
     const record = recordByDate.get(dateKey(date));
-    if (!record || record.status === ATTENDANCE_STATUS.ABSENT) unpaidAbsentDays += 1;
+    if (isUnpaidWorkingDay(record)) {
+      unpaidAbsentDays += 1;
+      if (record && !record.status) unmarkedWorkingDates.push(date);
+    }
   }
 
+  const paidLeave = paidLeaveCompensationFor(employee, requestedStart, requestedEnd, { startDate, endDate }, records);
+
   const workingDaysInPeriod = totalDaysInPeriod - offDaysInPeriod;
+  const unpaidOffDays = unpaidOffDateKeys.size;
 
   // At most 2 Lates and 2 Short-Leave units count in full; the overflow
   // demotes down to Half-Day units (see attendancePenalties.js) — computed
@@ -125,15 +259,27 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
   // Half Day Deductions line. Same count as deductionBreakdown.halfDayEvents.length.
   const totalHalfDayUnits = counts.H + halfDayPenaltyUnits;
 
-  const daysWorkedTotal =
-    counts.P + counts.O + counts.W + cappedLateUnits + cappedSLUnits + totalHalfDayUnits * 0.5;
+  // Every paid day — present in any form (P, L, SL, H, W) or on Paid Leave,
+  // plus paid Sundays/holidays. e.g. 10 days attended incl. 2 Half Days ->
+  // totalWorkingDays 10, daysWorked 9.
+  const totalWorkingDays = totalDaysInPeriod - unpaidAbsentDays - unpaidOffDays;
+  const daysWorked = totalWorkingDays - totalHalfDayUnits * 0.5;
 
   return {
+    startDate,
+    endDate,
     totalDaysInPeriod,
-    dailyRateDivisor: minDaysAcrossTouchedMonths(startDate, endDate),
+    // Divides by the requested months' length, not the clipped period, so a
+    // mid-month joiner's daily rate is the normal one.
+    dailyRateDivisor: minDaysAcrossTouchedMonths(requestedStart, requestedEnd),
     workingDaysInPeriod,
+    offDaysInPeriod,
+    unpaidOffDays,
+    unpaidOffDateKeys,
+    unmarkedWorkingDates,
     counts,
-    daysWorkedTotal,
+    totalWorkingDays,
+    daysWorked,
     lateFlagCount,
     earlyDepartureCount,
     lateToSLUnits,
@@ -145,9 +291,23 @@ async function computeAttendanceSummary(employeeId, startDate, endDate) {
     deductionBreakdown,
     unpaidAbsentDays,
     totalOvertimeMinutes,
+    paidLeave,
     records,
     holidays,
   };
+}
+
+// "Five Thousand Three Hundred Fifty Seven Rupees and Forty Paise" — whole
+// rupees are floored (not rounded) so the paise part is never counted twice.
+function amountInWords(amount) {
+  const rupees = Math.floor(Math.abs(amount));
+  const paise = Math.round((Math.abs(amount) - rupees) * 100);
+  const words = `${numberToIndianWords(rupees)} Rupees`;
+  return paise > 0 ? `${words} and ${numberToIndianWords(paise)} Paise` : words;
+}
+
+function round2(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
 }
 
 function computeSalary(employee, summary, manualInputs) {
@@ -175,12 +335,11 @@ function computeSalary(employee, summary, manualInputs) {
   // Earnings row except Basic, Master and Earnings carry the same value here.
   const otMinuteRate = dailyRate / 9 / 60;
   const otEarnings = otMinuteRate * summary.totalOvertimeMinutes;
-  const otMaster = otEarnings;
 
   const halfDayDeductions = summary.totalHalfDayUnits * (dailyRate / 2);
-  const unpaidOffDeductions = summary.unpaidAbsentDays * dailyRate;
-  const totalDeductions =
-    incomeTaxDeduction + professionTax + pf + halfDayDeductions + unpaidOffDeductions + otherDeduction3;
+  // Unpaid working days plus Sundays/holidays lost under the whole-week rule
+  // (see computeAttendanceSummary).
+  const unpaidOffDeductions = (summary.unpaidAbsentDays + summary.unpaidOffDays) * dailyRate;
 
   // Master = the employee's flat monthly reference rate, shown as-is.
   // Earnings = what was actually earned this specific period — prorated by
@@ -192,23 +351,47 @@ function computeSalary(employee, summary, manualInputs) {
   // than a month) Earnings must scale down, or the employee gets paid a
   // full month's Basic for only part of it.
   const basicEarnings = dailyRate * summary.totalDaysInPeriod;
-  const grossEarnings = basicEarnings + otMaster + compensationOff + incentives + travelAllowance + otherEarning1;
-
+  // One day's pay — see paidLeaveCompensationFor.
+  const paidLeaveCompensation = summary.paidLeave?.eligible ? dailyRate : 0;
   const totalReimbursements = reimbursement1 + reimbursement2;
-  const netPayable = grossEarnings - totalDeductions + totalReimbursements;
+
+  // Every amount is rounded to the paisa, and the totals are re-added from
+  // the rounded lines, so the slip's lines always add up to exactly its
+  // totals.
+  const rounded = {
+    basicEarnings: round2(basicEarnings),
+    otEarnings: round2(otEarnings),
+    halfDayDeductions: round2(halfDayDeductions),
+    unpaidOffDeductions: round2(unpaidOffDeductions),
+    paidLeaveCompensation: round2(paidLeaveCompensation),
+  };
+  const roundedGross = round2(
+    rounded.basicEarnings +
+      rounded.otEarnings +
+      rounded.paidLeaveCompensation +
+      compensationOff +
+      incentives +
+      travelAllowance +
+      otherEarning1
+  );
+  const roundedDeductions = round2(
+    incomeTaxDeduction + professionTax + pf + rounded.halfDayDeductions + rounded.unpaidOffDeductions + otherDeduction3
+  );
+  const roundedNet = round2(roundedGross - roundedDeductions + totalReimbursements);
 
   return {
-    basicMaster,
-    basicEarnings,
-    otMaster,
-    otEarnings,
-    halfDayDeductions,
-    unpaidOffDeductions,
-    grossEarnings,
-    totalDeductions,
-    totalReimbursements,
-    netPayable,
-    netPayableWords: numberToIndianWords(netPayable),
+    basicMaster: round2(basicMaster),
+    basicEarnings: rounded.basicEarnings,
+    otMaster: rounded.otEarnings,
+    otEarnings: rounded.otEarnings,
+    paidLeaveCompensation: rounded.paidLeaveCompensation,
+    halfDayDeductions: rounded.halfDayDeductions,
+    unpaidOffDeductions: rounded.unpaidOffDeductions,
+    grossEarnings: roundedGross,
+    totalDeductions: roundedDeductions,
+    totalReimbursements: round2(totalReimbursements),
+    netPayable: roundedNet,
+    netPayableWords: amountInWords(roundedNet),
     incomeTaxDeduction,
     professionTax,
     pf,
@@ -222,4 +405,4 @@ function computeSalary(employee, summary, manualInputs) {
   };
 }
 
-module.exports = { computeAttendanceSummary, computeSalary, ATTENDANCE_STATUS };
+module.exports = { computeAttendanceSummary, computeSalary, clipToEmployment, ATTENDANCE_STATUS };

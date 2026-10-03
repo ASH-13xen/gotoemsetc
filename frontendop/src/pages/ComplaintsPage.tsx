@@ -41,6 +41,21 @@ function formatDateTime(iso?: string) {
   })
 }
 
+// How long it took Operations to resolve this complaint — filed to
+// completed, in the coarsest two units that still read clearly (e.g. "2d
+// 3h", "4h 12m", "18m"). Used to spot slow turnarounds at a glance.
+function formatDuration(fromIso: string, toIso: string) {
+  const ms = new Date(toIso).getTime() - new Date(fromIso).getTime()
+  if (!Number.isFinite(ms) || ms < 0) return null
+  const minutes = Math.round(ms / 60_000)
+  const days = Math.floor(minutes / 1440)
+  const hours = Math.floor((minutes % 1440) / 60)
+  const mins = minutes % 60
+  if (days > 0) return `${days}d ${hours}h`
+  if (hours > 0) return `${hours}h ${mins}m`
+  return `${mins}m`
+}
+
 function StarRow({ value }: { value: number }) {
   return (
     <div className="flex items-center gap-0.5">
@@ -54,6 +69,7 @@ function StarRow({ value }: { value: number }) {
 function ComplaintRow({ complaint }: { complaint: Complaint }) {
   const markCompleted = useMarkComplaintCompleted()
   const employeeName = `${complaint.employee.firstName} ${complaint.employee.lastName ?? ''}`.trim()
+  const resolutionTime = complaint.completedAt ? formatDuration(complaint.createdAt, complaint.completedAt) : null
 
   const onMarkCompleted = () => {
     markCompleted.mutate(complaint._id, {
@@ -81,6 +97,7 @@ function ComplaintRow({ complaint }: { complaint: Complaint }) {
         <p className="text-xs text-muted-foreground">
           Completed {formatDateTime(complaint.completedAt)}
           {complaint.completedBy && ` · by ${complaint.completedBy.username}`}
+          {resolutionTime && <span className="ml-1 font-medium text-foreground/70">· took {resolutionTime}</span>}
         </p>
       )}
 
@@ -121,7 +138,7 @@ export default function ComplaintsPage() {
   const complaints = data?.complaints ?? []
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-8 py-8">
+    <div className="mx-auto flex max-w-6xl flex-col gap-8 py-8">
       <PageHeader
         eyebrow="Operations"
         title="Complaint Register"
@@ -143,16 +160,23 @@ export default function ComplaintsPage() {
       </div>
 
       <Card className="p-6">
-        <CardContent className="grid gap-3 p-0">
+        <CardContent className="p-0">
           {isLoading ? (
-            <Skeleton className="h-16 w-full rounded-xl bg-secondary/40" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Skeleton className="h-32 w-full rounded-xl bg-secondary/40" />
+              <Skeleton className="h-32 w-full rounded-xl bg-secondary/40" />
+            </div>
           ) : complaints.length === 0 ? (
             <div className="flex flex-col items-center gap-3 py-16 text-center">
               <Inbox className="size-8 text-muted-foreground/40" />
               <p className="text-sm text-muted-foreground">No complaints here.</p>
             </div>
           ) : (
-            complaints.map((complaint) => <ComplaintRow key={complaint._id} complaint={complaint} />)
+            <div className="grid gap-3 sm:grid-cols-2">
+              {complaints.map((complaint) => (
+                <ComplaintRow key={complaint._id} complaint={complaint} />
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>

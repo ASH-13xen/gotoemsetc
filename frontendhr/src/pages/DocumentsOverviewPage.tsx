@@ -98,7 +98,7 @@ export default function DocumentsOverviewPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-8 py-8">
       <PageHeader
-        eyebrow="HR Work"
+        eyebrow="HRMS"
         title="Generated documents"
         description="Pick a document template to see who has it generated, generated and signed, or not generated at all."
         actions={

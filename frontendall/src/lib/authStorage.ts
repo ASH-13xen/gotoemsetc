@@ -4,7 +4,7 @@ const USER_KEY = 'ems_auth_user'
 export interface StoredUser {
   id: string
   username: string
-  role: 'admin' | 'ceo' | 'digital_admin' | 'hr' | 'operations_manager' | 'account_manager' | 'team_lead' | 'worker'
+  role: 'admin' | 'ceo' | 'digital_admin' | 'hr' | 'operations_manager' | 'cto' | 'cfo' | 'sales' | 'team_lead' | 'technical' | 'finance' | 'worker'
   // Already present on the backend's /auth/me response (see
   // frontendems/src/api/auth.api.ts's identical AuthUser) — just never typed
   // here until the self-service dashboard widgets needed it.

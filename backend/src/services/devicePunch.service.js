@@ -67,8 +67,26 @@ async function processAttLogBody(body, deviceSerial) {
   return recorded;
 }
 
-function listRecent(query) {
-  return devicePunchRepository.listRecent(query);
+// Each matched punch also carries `timeCategory` (late / short_leave /
+// half_day / absent, or null when normal) for the admin scan feed's colour
+// coding — computed per employee per IST day, with the same windows the
+// attendance classifier uses. See attendanceClassifier.service.js#scanCategories.
+async function listRecent(query) {
+  const punches = await devicePunchRepository.listRecent(query);
+  const groups = new Map();
+  for (const punch of punches) {
+    if (!punch.employee) continue;
+    const key = `${punch.employee._id}-${attendanceClassifierService.istDateLabel(punch.timestamp).getTime()}`;
+    if (!groups.has(key)) groups.set(key, { employee: punch.employee, punches: [] });
+    groups.get(key).punches.push(punch);
+  }
+  const categories = new Map();
+  for (const { employee, punches: dayPunches } of groups.values()) {
+    for (const [id, category] of attendanceClassifierService.scanCategories(dayPunches, employee)) {
+      categories.set(id, category);
+    }
+  }
+  return punches.map((punch) => ({ ...punch.toObject(), timeCategory: categories.get(punch._id.toString()) || null }));
 }
 
 module.exports = { processAttLogBody, listRecent };

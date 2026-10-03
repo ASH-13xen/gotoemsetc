@@ -8,18 +8,18 @@ const logger = require('../utils/logger');
 // Every Saturday, 09:00 IST — the weekly payment batch reminder. Every
 // approved-but-unpaid reimbursement is paid on Saturdays (see
 // reimbursement.service.js#assertClaimWindow for the matching claim-window
-// rule); this just nudges CEO + account_manager to actually do it, whatever
+// rule); this just nudges CEO + cfo/finance to actually do it, whatever
 // its expenseDate — payment batches by approval state, not by which week the
 // expense itself falls in.
 async function remindPendingPayouts() {
   const pending = await reimbursementRepository.listApprovedUnpaid();
   if (pending.length === 0) return;
 
-  const [ceoUsers, accountManagers] = await Promise.all([
+  const [ceoUsers, financeTeam] = await Promise.all([
     userRepository.findCeos(),
-    userRepository.findAccountManagers(),
+    userRepository.findFinanceTeam(),
   ]);
-  const recipientIds = [...new Set([...ceoUsers, ...accountManagers].map((u) => u._id.toString()))];
+  const recipientIds = [...new Set([...ceoUsers, ...financeTeam].map((u) => u._id.toString()))];
   if (recipientIds.length === 0) return;
 
   const total = pending.reduce((sum, r) => sum + (r.amount || 0), 0);
