@@ -1,3 +1,4 @@
+import { can } from '@/lib/access'
 import type { ReactNode } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
@@ -12,7 +13,7 @@ export function RequireOwnEmployee({ children }: { children: ReactNode }) {
   const { id } = useParams<{ id: string }>()
 
   if (!isReady) return null
-  if (user?.role === 'admin') return <>{children}</>
+  if (can(user, 'ems_all')) return <>{children}</>
   if (user?.employeeLink && user.employeeLink === id) return <>{children}</>
   if (hasAnyPermission(user)) return <>{children}</>
   return <Navigate to="/" replace />

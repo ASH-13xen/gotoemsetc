@@ -10,6 +10,14 @@ export interface StoredUser {
   // here until the self-service dashboard widgets needed it.
   employeeLink: string | null
   permissions: string[]
+  // Live from the server (backend access.service.js): the login's role plus
+  // every Organisation chart post held, and what those allow — see
+  // lib/access.ts. Refreshed every minute and whenever the tab regains focus.
+  roles?: string[]
+  postRoles?: string[]
+  access?: string[]
+  displayName?: string
+  features?: { TASK_MANAGEMENT?: boolean; CLIENT_MANAGEMENT?: boolean }
 }
 
 export function getToken(): string | null {
@@ -35,6 +43,11 @@ export function getStoredUser(): StoredUser | null {
   }
 }
 
+// Remote apps (EMS, HR Work, Operations, Finance) read the same stored user —
+// this event tells them it changed so they re-read it.
+export const AUTH_USER_EVENT = 'ems-auth-user-updated'
+
 export function setStoredUser(user: StoredUser): void {
   localStorage.setItem(USER_KEY, JSON.stringify(user))
+  window.dispatchEvent(new Event(AUTH_USER_EVENT))
 }

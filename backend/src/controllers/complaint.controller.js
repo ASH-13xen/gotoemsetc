@@ -1,7 +1,9 @@
 const asyncHandler = require('../utils/asyncHandler');
+const { can } = require('../utils/roles');
+const { ACCESS } = require('../config/access');
 const ApiError = require('../utils/ApiError');
 const complaintService = require('../services/complaint.service');
-const { COMPLAINT_STATUS, USER_ROLES } = require('../config/constants');
+const { COMPLAINT_STATUS } = require('../config/constants');
 
 const file = asyncHandler(async (req, res) => {
   if (!req.user.employeeLink) {
@@ -22,7 +24,7 @@ const file = asyncHandler(async (req, res) => {
 // what they pass — never trust the client for whose complaints these are.
 const list = asyncHandler(async (req, res) => {
   const canSeeAll =
-    req.user.role === USER_ROLES.ADMIN || req.user.role === USER_ROLES.CEO || req.user.role === USER_ROLES.OPERATIONS_MANAGER;
+    can(req.user, ACCESS.OPERATIONS);
   const employeeId = canSeeAll ? undefined : req.user.employeeLink;
   const complaints = await complaintService.listComplaints({ employeeId, status: req.query.status });
   res.json({ complaints });

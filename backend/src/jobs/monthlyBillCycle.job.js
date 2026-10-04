@@ -38,16 +38,14 @@ async function sendDueReminders() {
   const bills = await monthlyBillRepository.listActive();
   const now = new Date();
 
-  // Base audience is just cfo/finance + operations_manager — ceo joins
-  // only inside the 1-day escalation below, and admin isn't part of this
-  // reminder audience at all (see findFinanceTeam's comment).
-  const [financeTeam, opsUsers, ceoUsers] = await Promise.all([
+  // Base audience is Finance (cfo/finance, by login or post); the 1-day
+  // escalation adds Finance's approvers (admin, CFO).
+  const [financeTeam, approverUsers] = await Promise.all([
     userRepository.findFinanceTeam(),
-    userRepository.findOperationsManagers(),
-    userRepository.findCeos(),
+    userRepository.findInvoiceApprovers(),
   ]);
-  const baseRecipientIds = [...new Set([...financeTeam, ...opsUsers].map((u) => u._id.toString()))];
-  const ceoRecipientIds = ceoUsers.map((u) => u._id.toString());
+  const baseRecipientIds = [...new Set(financeTeam.map((u) => u._id.toString()))];
+  const ceoRecipientIds = approverUsers.map((u) => u._id.toString());
 
   let sent = 0;
   for (const bill of bills) {

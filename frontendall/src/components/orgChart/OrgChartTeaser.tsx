@@ -1,3 +1,4 @@
+import { can } from '@/lib/access'
 import { Link } from 'react-router-dom'
 import { ArrowUpRight, Network } from 'lucide-react'
 import { useOrgChart } from '@/hooks/useOrgChart'
@@ -8,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth'
 export function OrgChartTeaser() {
   const { data } = useOrgChart()
   const { user } = useAuth()
-  const canEdit = user?.role === 'admin'
+  const canEdit = can(user, 'org_chart_edit')
   const nodes = data?.nodes ?? []
   // A team box is a container, not a seat — only its role boxes count.
   const vacant = nodes.filter((n) => n.assignees.length === 0 && n.kind !== 'team').length

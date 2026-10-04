@@ -18,6 +18,9 @@ const { dateKey } = require('../utils/attendanceDays');
 const { istMonthRange } = require('../utils/istDate');
 const { ATTENDANCE_STATUS, NOTIFICATION_TYPES, EMPLOYEE_STATUS } = require('../config/constants');
 const { LATE_CAP, SL_CAP } = require('../utils/attendancePenalties');
+const { isSelf } = require('../utils/roles');
+const { ACCESS, GRANTS } = require('../config/access');
+const accessService = require('./access.service');
 
 const NAMESPACE = 'salary-slips';
 const TEMPLATE_FILE = 'salary-slip.html';
@@ -229,7 +232,8 @@ async function renderSlip(employee, startDate, endDate, manualInputs = {}) {
   return { summary, salary, pdfBuffer };
 }
 
-async function generateSlip(employeeId, input, createdBy) {
+async function generateSlip(employeeId, input, createdBy, actor) {
+  if (isSelf(actor, employeeId)) throw ApiError.forbidden("You can't generate your own salary slip — someone else has to");
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) throw ApiError.notFound('Employee not found');
   if (employee.excludeFromPayroll) throw ApiError.badRequest('This employee is excluded from payroll');
@@ -277,6 +281,7 @@ async function generateSlip(employeeId, input, createdBy) {
     netPayableWords: salary.netPayableWords,
     generatedFile: { filePath },
     createdBy,
+    createdAs: actor ? accessService.actingRole(actor, GRANTS[ACCESS.EMS_ALL]) : undefined,
   });
 }
 
@@ -291,7 +296,7 @@ function toDateStr(date) {
 // skipped). Clipping to each person's joining/leaving date happens inside
 // the calculation itself (salaryCalculation.service.js#clipToEmployment), so
 // a mid-month joiner or leaver is paid only for the days they were employed.
-async function generateBulkSlips({ month, year }, createdBy) {
+async function generateBulkSlips({ month, year }, createdBy, actor) {
   const periodStart = new Date(Date.UTC(year, month - 1, 1));
   const periodEnd = new Date(Date.UTC(year, month, 0));
   if (periodEnd.getTime() > Date.now()) {
@@ -311,11 +316,17 @@ async function generateBulkSlips({ month, year }, createdBy) {
       continue;
     }
 
+    if (isSelf(actor, employee._id)) {
+      results.push({ ...row, outcome: 'skipped', message: 'Your own slip — someone else has to generate it' });
+      continue;
+    }
+
     try {
       const slip = await generateSlip(
         employee._id.toString(),
         { startDate: toDateStr(periodStart), endDate: toDateStr(periodEnd) },
-        createdBy
+        createdBy,
+        actor
       );
       results.push({ ...row, outcome: 'generated', slipId: slip._id, netPayable: slip.netPayable });
     } catch (err) {

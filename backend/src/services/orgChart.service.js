@@ -3,6 +3,7 @@ const OrgNode = require('../models/OrgNode');
 const WorkTeam = require('../models/WorkTeam');
 const employeeRepository = require('../repositories/employee.repository');
 const { ORG_NODE_KIND, EMPLOYEE_STATUS } = require('../config/constants');
+const accessService = require('./access.service');
 
 const ASSIGNEE_FIELDS = 'firstName lastName designation employeeCode status';
 
@@ -136,9 +137,17 @@ async function nextOrder(parentId) {
   return last ? last.order + 1 : 0;
 }
 
-async function createNode({ title, description, kind = ORG_NODE_KIND.POSITION, parent, workTeam, teamRole, isTeamHead }) {
+// The access a box gives — only a position below the top box can give one.
+function assertGrantable(kind, isRoot, grantsRole) {
+  if (!grantsRole) return;
+  if (isRoot) throw ApiError.badRequest('The Admin box gives admin access to the admin login only');
+  if (kind !== ORG_NODE_KIND.POSITION) throw ApiError.badRequest('Only a position can give access');
+}
+
+async function createNode({ title, description, kind = ORG_NODE_KIND.POSITION, parent, workTeam, teamRole, isTeamHead, grantsRole }) {
   const hasRoot = await OrgNode.exists({ parent: null });
   if (!parent && hasRoot) throw ApiError.badRequest('There can only be one top box — choose a parent');
+  assertGrantable(kind, !parent, grantsRole);
   if (parent) await assertValidPlacement({ kind, parentId: parent });
   if (kind === ORG_NODE_KIND.TEAM_ROLE && !teamRole) throw ApiError.badRequest('Choose which team role this is');
   if (kind === ORG_NODE_KIND.TEAM) await assertWorkTeamFree(workTeam, null);
@@ -152,17 +161,23 @@ async function createNode({ title, description, kind = ORG_NODE_KIND.POSITION, p
     workTeam: kind === ORG_NODE_KIND.TEAM ? workTeam || null : null,
     teamRole: kind === ORG_NODE_KIND.TEAM_ROLE ? teamRole : null,
     isTeamHead: kind === ORG_NODE_KIND.TEAM_ROLE ? Boolean(isTeamHead) : false,
+    grantsRole: grantsRole || null,
   });
   if (node.kind === ORG_NODE_KIND.TEAM) await syncTeam(node._id);
+  accessService.invalidate();
   return node;
 }
 
 // Title/description, and the kind-specific links. Changing a team box's
 // linked work team, or a role box's role/head flag, re-syncs the team.
-async function updateNode(id, { title, description, workTeam, teamRole, isTeamHead }) {
+async function updateNode(id, { title, description, workTeam, teamRole, isTeamHead, grantsRole }) {
   const node = await findNodeOrThrow(id);
   if (title !== undefined) node.title = title;
   if (description !== undefined) node.description = description;
+  if (grantsRole !== undefined) {
+    assertGrantable(node.kind, !node.parent, grantsRole);
+    node.grantsRole = grantsRole || null;
+  }
   if (node.kind === ORG_NODE_KIND.TEAM && workTeam !== undefined) {
     await assertWorkTeamFree(workTeam, node._id);
     node.workTeam = workTeam || null;
@@ -173,6 +188,7 @@ async function updateNode(id, { title, description, workTeam, teamRole, isTeamHe
   }
   await node.save();
   await syncTeamsFor([node._id]);
+  accessService.invalidate();
   return node;
 }
 
@@ -204,6 +220,7 @@ async function moveNode(id, { parent, order }) {
   );
 
   await syncTeamsFor([node._id, oldParent]);
+  accessService.invalidate();
   return node;
 }
 
@@ -239,6 +256,7 @@ async function deleteNode(id, { mode = 'lift' } = {}) {
     await clearRoleOnTeam(affectedTeams[0], node.teamRole, node.assignees);
   }
   await syncTeamsFor(affectedTeams);
+  accessService.invalidate();
   return { deleted: idOf(node._id) };
 }
 
@@ -266,6 +284,7 @@ async function clearRoleOnTeam(teamNodeId, role, employeeIds) {
 // Replaces who holds a box. Only active employees can be assigned.
 async function setAssignees(id, employeeIds) {
   const node = await findNodeOrThrow(id);
+  if (!node.parent) throw ApiError.badRequest('The Admin box is the admin login only — no one can be placed in it');
   const unique = [...new Set(employeeIds.map(String))];
   if (unique.length) {
     const employees = await employeeRepository.findByIds(unique);
@@ -280,6 +299,7 @@ async function setAssignees(id, employeeIds) {
     await clearRoleOnTeam(node.parent, node.teamRole, removed);
   }
   await syncTeamsFor([node._id]);
+  accessService.invalidate();
   return node;
 }
 
@@ -290,6 +310,7 @@ async function removeEmployeeEverywhere(employeeId) {
   if (nodes.length === 0) return;
   await OrgNode.updateMany({ assignees: employeeId }, { $pull: { assignees: employeeId } });
   await syncTeamsFor(nodes.map((n) => n._id));
+  accessService.invalidate();
 }
 
 // Work teams not yet linked to a team box — for the "link a work team"

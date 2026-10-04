@@ -699,5 +699,13 @@ module.exports = {
   // day's pay as Paid Leave Compensation when no paid leave was taken. See
   // utils/probation.js and salaryCalculation.service.js#paidLeaveCompensation.
   PROBATION_MONTHS: 3,
+
+  // Whole sections switched off for now — hidden in every app, their
+  // reminder jobs paused, and anything that would create work in them
+  // refused. Nothing is deleted; flip these back to true to bring them back.
+  FEATURES: {
+    TASK_MANAGEMENT: false,
+    CLIENT_MANAGEMENT: false,
+  },
   PAID_LEAVE_COMPENSATION_FROM: '2026-09-01',
 };

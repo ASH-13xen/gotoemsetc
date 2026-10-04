@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const validate = require('../middlewares/validate.middleware');
-const { requireRole, requireBillsAccess } = require('../middlewares/auth.middleware');
-const { USER_ROLES } = require('../config/constants');
+const { requireAccess, requireBillsAccess } = require('../middlewares/auth.middleware');
+const { ACCESS } = require('../config/access');
 const monthlyBillValidator = require('../validators/monthlyBill.validator');
 const monthlyBillController = require('../controllers/monthlyBill.controller');
 
@@ -18,13 +18,13 @@ router.get('/reminders/mine', monthlyBillController.pendingReminders);
 // and marking an instance paid (finance, operations, admin, or ceo).
 router.post(
   '/',
-  requireRole(USER_ROLES.ADMIN, USER_ROLES.CEO),
+  requireAccess(ACCESS.FINANCE_APPROVE),
   validate(monthlyBillValidator.create),
   monthlyBillController.create
 );
 router.patch(
   '/:id/active',
-  requireRole(USER_ROLES.ADMIN, USER_ROLES.CEO),
+  requireAccess(ACCESS.FINANCE_APPROVE),
   validate(monthlyBillValidator.setActive),
   monthlyBillController.setActive
 );

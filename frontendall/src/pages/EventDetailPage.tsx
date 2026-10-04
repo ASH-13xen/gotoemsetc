@@ -1,3 +1,4 @@
+import { can } from '@/lib/access'
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -24,7 +25,7 @@ export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const isAdmin = user?.role === 'admin' || user?.role === 'hr'
+  const isAdmin = can(user, 'events')
 
   const { data, isLoading } = useEvent(id)
   const completeEvent = useCompleteEvent(id ?? '')

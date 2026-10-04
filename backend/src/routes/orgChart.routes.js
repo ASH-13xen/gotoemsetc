@@ -1,6 +1,6 @@
 const { Router } = require('express');
-const { requireRole } = require('../middlewares/auth.middleware');
-const { USER_ROLES } = require('../config/constants');
+const { requireAccess } = require('../middlewares/auth.middleware');
+const { ACCESS } = require('../config/access');
 const validate = require('../middlewares/validate.middleware');
 const orgChartValidator = require('../validators/orgChart.validator');
 const orgChartController = require('../controllers/orgChart.controller');
@@ -9,7 +9,7 @@ const orgChartController = require('../controllers/orgChart.controller');
 const router = Router();
 
 router.get('/', orgChartController.getTree);
-router.use(requireRole(USER_ROLES.ADMIN));
+router.use(requireAccess(ACCESS.ORG_CHART_EDIT));
 router.post('/nodes', validate(orgChartValidator.createNode), orgChartController.createNode);
 router.patch('/nodes/:id', validate(orgChartValidator.updateNode), orgChartController.updateNode);
 router.post('/nodes/:id/move', validate(orgChartValidator.moveNode), orgChartController.moveNode);

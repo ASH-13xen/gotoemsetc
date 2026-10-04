@@ -18,7 +18,8 @@ import { cn } from '@/lib/utils'
 import { useAttendance, useAttendanceEditRequests, useCreateAttendanceEditRequest, useMarkAttendance } from '@/hooks/useAttendance'
 import { useCreateHoliday, useDeleteHoliday, useHolidays } from '@/hooks/useHolidays'
 import { useAuth } from '@/hooks/useAuth'
-import { hasPermission, isAdminLike } from '@/lib/permissions'
+import { hasPermission } from '@/lib/permissions'
+import { can, hasRole } from '@/lib/access'
 import { useDevicePunches } from '@/hooks/useDevicePunches'
 import { STATUS_CONFIG } from './statusConfig'
 import type { AttendanceStatus } from '@/api/attendance.api'
@@ -85,12 +86,15 @@ function apiMessage(err: unknown, fallback: string) {
 
 export function AttendanceCalendar({ employeeId, compact = false }: { employeeId: string; compact?: boolean }) {
   const { user } = useAuth()
-  const isAdmin = isAdminLike(user)
+  // Marking holidays / half days / SL days is part of HR Work.
+  const isAdmin = can(user, 'hrms')
   const canMark = hasPermission(user, 'mark_attendance')
   // HR must justify every manual edit with a reason; admin doesn't need to
   // (see attendance.service.js#assertReasonProvidedForHr).
-  const reasonRequired = user?.role === 'hr'
-  const isHr = user?.role === 'hr'
+  // HR — by login or post — without CEO/admin-level access: needs a reason,
+  // and can't change days older than 2 directly (the less restricted rule wins).
+  const isHr = hasRole(user, 'hr') && !can(user, 'attendance_no_time_limit')
+  const reasonRequired = isHr
 
   const [monthDate, setMonthDate] = useState(() => {
     const now = new Date()

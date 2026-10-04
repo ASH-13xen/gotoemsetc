@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const validate = require('../middlewares/validate.middleware');
-const { requireRole } = require('../middlewares/auth.middleware');
-const { USER_ROLES } = require('../config/constants');
+const { requireAccess } = require('../middlewares/auth.middleware');
+const { ACCESS } = require('../config/access');
 const eventValidator = require('../validators/event.validator');
 const eventController = require('../controllers/event.controller');
 
@@ -23,7 +23,7 @@ router.post('/:id/cancel', validate(eventValidator.getOrDeleteEvent), eventContr
 // Only admin fills in the after-the-fact summary, per the product ask.
 router.patch(
   '/:id/summary',
-  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
+  requireAccess(ACCESS.EVENTS),
   validate(eventValidator.fillSummary),
   eventController.fillSummary
 );

@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { can, featureOn } from "@/lib/access";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "./NotificationBell";
 
@@ -19,20 +20,12 @@ export function ShellNav() {
   const links = [
     { to: "/", label: "Home", end: true },
     { to: "/ems", label: "EMS" },
-    { to: "/sales", label: "Sales" },
-    { to: "/followups", label: "Task Management" },
-    ...(user?.role === "admin" || user?.role === "hr" || user?.role === "ceo"
-      ? [{ to: "/hr", label: "HRMS" }]
-      : []),
-    ...(user?.role === "admin" || user?.role === "ceo" || user?.role === "operations_manager"
-      ? [{ to: "/operations", label: "Operations" }]
-      : []),
-    ...(user?.role === "admin" || user?.role === "ceo" || user?.role === "cfo" || user?.role === "finance" || user?.role === "operations_manager"
-      ? [{ to: "/finance", label: "Finance" }]
-      : []),
-    ...(user?.role === "admin" || user?.role === "hr"
-      ? [{ to: "/audit-log", label: "Audit Log" }]
-      : []),
+    ...(featureOn(user, "CLIENT_MANAGEMENT") ? [{ to: "/sales", label: "Sales" }] : []),
+    ...(featureOn(user, "TASK_MANAGEMENT") ? [{ to: "/followups", label: "Task Management" }] : []),
+    ...(can(user, "hrms") ? [{ to: "/hr", label: "HRMS" }] : []),
+    ...(can(user, "operations") ? [{ to: "/operations", label: "Operations" }] : []),
+    ...(can(user, "finance") ? [{ to: "/finance", label: "Finance" }] : []),
+    ...(can(user, "audit_log") ? [{ to: "/audit-log", label: "Audit Log" }] : []),
   ];
 
   return (

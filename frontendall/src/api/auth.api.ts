@@ -6,6 +6,14 @@ export interface AuthUser {
   role: 'admin' | 'ceo' | 'digital_admin' | 'hr' | 'operations_manager' | 'cto' | 'cfo' | 'sales' | 'team_lead' | 'technical' | 'finance' | 'worker'
   employeeLink: string | null
   permissions: string[]
+  // Live from the server (backend access.service.js): the login's role plus
+  // every Organisation chart post held, and what those allow — see
+  // lib/access.ts. Refreshed every minute and whenever the tab regains focus.
+  roles?: string[]
+  postRoles?: string[]
+  access?: string[]
+  displayName?: string
+  features?: { TASK_MANAGEMENT?: boolean; CLIENT_MANAGEMENT?: boolean }
 }
 
 export interface LoginInput {

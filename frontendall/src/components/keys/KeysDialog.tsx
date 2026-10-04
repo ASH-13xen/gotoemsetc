@@ -1,3 +1,4 @@
+import { can } from '@/lib/access'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Key, Loader2, ChevronDown } from 'lucide-react'
@@ -24,7 +25,7 @@ import { OFFICE_KEYS, KEY_LABEL, KEY_COLOR, type KeyHolderEntry, type OfficeKey 
 // backend's requireOperationsAccess() exactly (deliberately excludes hr).
 function useCanManageKeys() {
   const { user } = useAuth()
-  return user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'operations_manager'
+  return can(user, 'office_keys_edit')
 }
 
 function holderNames(entry: KeyHolderEntry): string {

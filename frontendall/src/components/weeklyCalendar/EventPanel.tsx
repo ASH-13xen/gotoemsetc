@@ -29,6 +29,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
+import { featureOn } from '@/lib/access'
 import type { CalEvent, CalNote, CalPerson, Scope, WeeklyCategory } from '@/api/weeklyCalendar.api'
 import {
   useAddNote,
@@ -559,6 +560,8 @@ function NotesSection({ event, members, viewerId, isAdmin }: { event: CalEvent; 
 }
 
 function NoteCard({ event, note, canDelete, members }: { event: CalEvent; note: CalNote; canDelete: boolean; members: CalPerson[] }) {
+  const { user } = useAuth()
+  const tasksOn = featureOn(user, 'TASK_MANAGEMENT')
   const update = useUpdateNote()
   const remove = useDeleteNote()
   const toTask = useNoteToTask()
@@ -652,7 +655,7 @@ function NoteCard({ event, note, canDelete, members }: { event: CalEvent; note: 
             <span className="ml-auto flex items-center gap-1 rounded-lg bg-emerald-500/12 px-2 py-1 font-bold text-emerald-700 dark:text-emerald-300">
               <ClipboardList className="size-3" /> In Task Management
             </span>
-          ) : (
+          ) : !tasksOn ? null : (
             <button
               type="button"
               disabled={toTask.isPending || !note.assignee}

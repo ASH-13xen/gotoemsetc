@@ -17,6 +17,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUserState] = useState<StoredUser | null>(() => getStoredUser())
   const [isReady, setIsReady] = useState(false)
 
+  // The host app (frontendall) re-reads the person's access every minute —
+  // pick up what it stored so menus and buttons here follow along.
+  useEffect(() => {
+    const reload = () => setUserState(getStoredUser())
+    window.addEventListener('ems-auth-user-updated', reload)
+    window.addEventListener('storage', reload)
+    return () => {
+      window.removeEventListener('ems-auth-user-updated', reload)
+      window.removeEventListener('storage', reload)
+    }
+  }, [])
+
   useEffect(() => {
     if (!token) {
       setIsReady(true)

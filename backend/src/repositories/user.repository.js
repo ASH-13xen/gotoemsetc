@@ -19,6 +19,7 @@ function findByEmployeeId(employeeId) {
 // the same soft delete (isActive: false) as deleting a credential by hand,
 // so an admin can still see it, and re-activate it if someone is rehired.
 function deactivateForEmployee(employeeId) {
+  require('../services/access.service').invalidate();
   return User.updateMany({ employeeLink: employeeId, isActive: true }, { isActive: false });
 }
 
@@ -47,10 +48,15 @@ function findAdmins() {
   return User.find({ role: USER_ROLES.ADMIN, isActive: true });
 }
 
+// Every finder below returns the role's own login(s) PLUS everyone holding
+// a post that gives that role in the Organisation chart — so Juhika, as HR,
+// gets HR's notifications on her own login too. See access.service.js.
+const withRoles = (...roles) => require('../services/access.service').findUsersWithRoles(roles);
+
 // Attendance modification requests route to HR specifically (not admin) —
 // see attendanceRequest.service.js#createRequest.
 function findHr() {
-  return User.find({ role: USER_ROLES.HR, isActive: true });
+  return withRoles(USER_ROLES.HR);
 }
 
 // A filed complaint notifies admins plus whoever holds the operations_manager
@@ -58,14 +64,14 @@ function findHr() {
 // image spec calls out "operational manager & admin" specifically, even
 // though CEO separately has full view/act access to the Operations module.
 function findOperationsManagers() {
-  return User.find({ role: USER_ROLES.OPERATIONS_MANAGER, isActive: true });
+  return withRoles(USER_ROLES.OPERATIONS_MANAGER);
 }
 
 // The company-wide Team Leader — any account holding the team_lead login
 // role, not tied to any one WorkTeam. Used to notify whoever's responsible
 // for the "lead" step of a client pipeline — see cmsNotify.service.js.
 function findTeamLeads() {
-  return User.find({ role: USER_ROLES.TEAM_LEAD, isActive: true });
+  return withRoles(USER_ROLES.TEAM_LEAD);
 }
 
 // Digital Admin + CEO + the global Team Leader — company-wide oversight of
@@ -74,21 +80,15 @@ function findTeamLeads() {
 // client's team (see companyEvent's client-scoped reminders and the
 // Meetings/MOM feature).
 function findCmsOversightUsers() {
-  return User.find({
-    role: { $in: [USER_ROLES.DIGITAL_ADMIN, USER_ROLES.CEO, USER_ROLES.TEAM_LEAD] },
-    isActive: true,
-  });
+  return withRoles(USER_ROLES.DIGITAL_ADMIN, USER_ROLES.CEO, USER_ROLES.TEAM_LEAD);
 }
 
-// The Finance module's own oversight set — admin/ceo/cfo/finance, same
-// roles requireFinanceAccess() (auth.middleware.js) gates writes to.
-// Used to notify about salary/FnF/invoice/reimbursement events that aren't
-// scoped to one specific already-known recipient.
+// The Finance module's own oversight set — admin/cfo/finance, the same
+// roles the Finance tab is open to (config/access.js). Used to notify about
+// salary/FnF/invoice/reimbursement events that aren't scoped to one
+// specific already-known recipient.
 function findFinanceUsers() {
-  return User.find({
-    role: { $in: [USER_ROLES.ADMIN, USER_ROLES.CEO, USER_ROLES.CFO, USER_ROLES.FINANCE] },
-    isActive: true,
-  });
+  return withRoles(USER_ROLES.ADMIN, USER_ROLES.CFO, USER_ROLES.FINANCE);
 }
 
 // Monthly Bills' base reminder audience (see jobs/monthlyBillCycle.job.js) —
@@ -96,19 +96,17 @@ function findFinanceUsers() {
 // admin/ceo): the spec has ceo joining only inside the 1-day escalation, and
 // admin isn't part of the reminder audience at all.
 function findFinanceTeam() {
-  return User.find({ role: { $in: [USER_ROLES.CFO, USER_ROLES.FINANCE] }, isActive: true });
+  return withRoles(USER_ROLES.CFO, USER_ROLES.FINANCE);
 }
 
-// Who signs off on an auto-generated invoice before it goes to the client —
-// admin/ceo only, narrower than findFinanceUsers (cfo/finance track and
-// collects payment but doesn't approve). See invoice.service.js.
+// Who signs off inside Finance — invoices before they go to the client,
+// bill templates — admin and the CFO (config/access.js FINANCE_APPROVE).
 function findInvoiceApprovers() {
-  return User.find({ role: { $in: [USER_ROLES.ADMIN, USER_ROLES.CEO] }, isActive: true });
+  return withRoles(USER_ROLES.ADMIN, USER_ROLES.CFO);
 }
 
-// Reimbursement approval is CEO-only per spec — see reimbursement.service.js.
 function findCeos() {
-  return User.find({ role: USER_ROLES.CEO, isActive: true });
+  return withRoles(USER_ROLES.CEO);
 }
 
 module.exports = {

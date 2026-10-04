@@ -1,53 +1,25 @@
 import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { can, featureOn, type AccessKey } from '@/lib/access'
 
-export type RoleGate = 'admin' | 'worker' | 'cms' | 'hr-work' | 'operations' | 'finance'
-
-// Five gates, not five roles:
-//   "admin"       — admin + hr, the existing module lockdown (Events, Audit Log)
-//   "worker"      — that literal role
-//   "cms"         — anyone logged in may reach Client Management; what they can
-//                   actually see and do is scoped server-side by cmsAccess.js
-//                   (sales/admin write, hr read-only, employees see only their own
-//                   team's clients), which a role check here can't express.
-//   "hr-work"     — admin + hr + ceo, matching the backend's
-//                   requireAttendanceApprovalAccess and the salary-slip/document-
-//                   overview routes HR Work's tools call — ceo included, unlike
-//                   "admin" above, since ceo needs sign-off authority there too.
-//   "operations"  — admin + ceo + operations_manager, matching the backend's
-//                   requireOperationsAccess. Deliberately excludes hr, unlike
-//                   every other elevated gate above — the Operations module
-//                   (Complaint Register) is admin/ceo/operations_manager only.
-//   "finance"     — admin + ceo + cfo + finance + operations_manager. The
-//                   last is wider than the backend's requireFinanceAccess
-//                   (admin/ceo/cfo/finance) — operations_manager only
-//                   has access to the Monthly Bills tab within the remote
-//                   (matching requireBillsAccess), gated in-page by
-//                   frontendfinance's own canAccessFinance/canManageBills,
-//                   not here. This gate just decides who can enter at all.
-export function RequireRole({ role, children }: { role: RoleGate; children: ReactNode }) {
+// Route gate by access (lib/access.ts) — what the person's login plus their
+// Organisation chart posts allow, worked out by the server. Mirrors the
+// backend's requireAccess exactly, so a page someone can open is a page its
+// API will serve them.
+export function RequireAccess({ access, children }: { access: AccessKey; children: ReactNode }) {
   const { user, token, isReady } = useAuth()
-
   if (!isReady) return null
   if (!token) return <Navigate to="/login" replace />
+  if (!can(user, access)) return <Navigate to="/" replace />
+  return <>{children}</>
+}
 
-  let allowed: boolean
-  if (role === 'admin') allowed = user?.role === 'admin' || user?.role === 'hr'
-  else if (role === 'cms') allowed = Boolean(user)
-  else if (role === 'hr-work') allowed = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'ceo'
-  else if (role === 'operations')
-    allowed = user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'operations_manager'
-  else if (role === 'finance')
-    allowed =
-      user?.role === 'admin' ||
-      user?.role === 'ceo' ||
-      user?.role === 'cfo' ||
-      user?.role === 'finance' ||
-      user?.role === 'operations_manager'
-  else allowed = user?.role === role
-
-  if (!allowed) return <Navigate to="/" replace />
-
+// Whole sections switched off for now (Task Management, Client Management).
+export function RequireFeature({ feature, children }: { feature: 'TASK_MANAGEMENT' | 'CLIENT_MANAGEMENT'; children: ReactNode }) {
+  const { user, token, isReady } = useAuth()
+  if (!isReady) return null
+  if (!token) return <Navigate to="/login" replace />
+  if (!featureOn(user, feature)) return <Navigate to="/" replace />
   return <>{children}</>
 }

@@ -1,5 +1,8 @@
 const { z } = require('zod');
 const { ORG_NODE_KIND, TEAM_MEMBER_ROLE } = require('../config/constants');
+const { GRANTABLE_ROLES } = require('../config/access');
+
+const grantsRole = z.enum(GRANTABLE_ROLES).nullable().optional();
 
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid id');
 const idParam = { params: z.object({ id: objectId }) };
@@ -13,6 +16,7 @@ const createNode = {
     workTeam: objectId.nullable().optional(),
     teamRole: z.enum(Object.values(TEAM_MEMBER_ROLE)).optional(),
     isTeamHead: z.boolean().optional(),
+    grantsRole,
   }),
 };
 
@@ -24,6 +28,7 @@ const updateNode = {
     workTeam: objectId.nullable().optional(),
     teamRole: z.enum(Object.values(TEAM_MEMBER_ROLE)).optional(),
     isTeamHead: z.boolean().optional(),
+    grantsRole,
   }),
 };
 

@@ -1,23 +1,22 @@
 import type { StoredUser } from '@/lib/authStorage'
 import type { Permission } from '@/api/credentials.api'
+import { can } from '@/lib/access'
 
-// HR is admin-equivalent everywhere except the attendance-edit age limit
-// (enforced server-side) — single source of truth so it doesn't drift
-// component by component.
+// Everyone's EMS (view + edit) — admin, CEO and HR, by login or by holding
+// that post in the Organisation chart. Implies every grantable permission.
 export function isAdminLike(user: StoredUser | null | undefined): boolean {
-  return user?.role === 'admin' || user?.role === 'hr'
+  return can(user, 'ems_all')
 }
 
-// Strictly the admin role — unlike isAdminLike, HR does NOT pass. Only for
-// the handful of things product explicitly wants admin-only (e.g. the
-// Upload Documents section), not the general admin/HR equivalence above.
+// Attaching a document directly (the Upload Documents section) — the admin
+// login only.
 export function isAdmin(user: StoredUser | null | undefined): boolean {
-  return user?.role === 'admin'
+  return can(user, 'direct_document_upload')
 }
 
-// Admin (and HR) always have everything implicitly — every check in this
-// app should go through this helper rather than reading user.permissions
-// directly.
+// Everyone's-EMS access, or this permission granted on their own credential
+// via Add Credentials. Every check in this app goes through here rather
+// than reading user.permissions directly.
 export function hasPermission(user: StoredUser | null | undefined, permission: Permission): boolean {
   if (!user) return false
   if (isAdminLike(user)) return true

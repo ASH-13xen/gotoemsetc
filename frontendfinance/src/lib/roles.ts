@@ -1,40 +1,31 @@
 import type { StoredUser } from '@/lib/authStorage'
+import { can } from '@/lib/access'
 
-// Matches the backend's requireFinanceAccess (see
-// backend/src/middlewares/auth.middleware.js): admin, ceo, cfo and
-// finance only — HR and operations_manager are excluded, unlike
-// the Monthly Bills tab specifically (see canManageBills below). Gates every
-// tab except Monthly Bills.
+// Finance — admin, CFO and Finance, by login or by holding that post in the
+// Organisation chart (the CEO and Operations no longer have it). Matches the
+// backend's FINANCE access. Monthly Bills are part of Finance.
 export function canAccessFinance(user: StoredUser | null | undefined): boolean {
-  return user?.role === 'admin' || user?.role === 'ceo' || user?.role === 'cfo' || user?.role === 'finance'
+  return can(user, 'finance')
 }
 
-// Monthly Bills' viewing/mark-paid audience is wider than the rest of
-// Finance — mirrors the backend's requireBillsAccess.
 export function canManageBills(user: StoredUser | null | undefined): boolean {
-  return canAccessFinance(user) || user?.role === 'operations_manager'
+  return can(user, 'finance')
 }
 
-// The remote's own entry gate (RequireFinanceAccess) — anyone who can reach
-// at least one tab. Individual tabs still gate themselves narrower.
 export function canEnterFinance(user: StoredUser | null | undefined): boolean {
-  return canManageBills(user)
+  return can(user, 'finance')
 }
 
-// Invoice approval and plan-price edits are narrower — admin/ceo only.
+// Approving inside Finance — invoices, plan prices, bill templates — admin
+// and the CFO.
 export function canApproveInvoices(user: StoredUser | null | undefined): boolean {
-  return user?.role === 'admin' || user?.role === 'ceo'
+  return can(user, 'finance_approve')
 }
 
-// Creating/pausing a bill template is admin/ceo only, per spec — narrower
-// than canManageBills below, which also covers viewing + marking paid.
 export function canCreateBills(user: StoredUser | null | undefined): boolean {
-  return user?.role === 'admin' || user?.role === 'ceo'
+  return can(user, 'finance_approve')
 }
 
-// Reimbursement approve/reject is Finance (admin/ceo/cfo/finance) — same
-// audience as the rest of this tab. Matches backend's requireFinanceAccess
-// on the approve/reject routes.
 export function canApproveReimbursements(user: StoredUser | null | undefined): boolean {
-  return canAccessFinance(user)
+  return can(user, 'finance')
 }

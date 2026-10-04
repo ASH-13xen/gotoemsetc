@@ -1,3 +1,5 @@
+import { can } from '@/lib/access'
+import type { StoredUser } from '@/lib/authStorage'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Megaphone, Loader2 } from 'lucide-react'
@@ -18,13 +20,10 @@ import {
 import { useOpenEmployeeDirectory } from '@/hooks/useEmployees'
 import { useCreateAnnouncement } from '@/hooks/useAnnouncements'
 
-// HR/admin and every other non-worker role (ceo, digital_admin, team_lead,
-// operations_manager, cto, cfo, sales, technical, finance) — matches the backend's
-// requireAnnouncementCreateAccess() exactly. A plain worker can still read
-// and acknowledge an announcement addressed to them; they just can't send
-// one, so this trigger is hidden for that role rather than disabled.
-export function canCreateAnnouncements(role: string | undefined): boolean {
-  return Boolean(role) && role !== 'worker'
+// Admin, CEO, CTO, CFO, HR, Team Lead, Operations and Sales — by login or by
+// holding that post — matching the backend's ANNOUNCEMENTS_CREATE access.
+export function canCreateAnnouncements(user: StoredUser | null | undefined): boolean {
+  return can(user, 'announcements_create')
 }
 
 export function CreateAnnouncementDialog() {

@@ -12,6 +12,7 @@ const meetingReminderJob = require('./jobs/meetingReminder.job');
 const monthlyBillCycleJob = require('./jobs/monthlyBillCycle.job');
 const reimbursementPaymentReminderJob = require('./jobs/reimbursementPaymentReminder.job');
 const invoiceGenerationJob = require('./jobs/invoiceGeneration.job');
+const { FEATURES } = require('./config/constants');
 const weeklyCalendarJob = require('./jobs/weeklyCalendar.job');
 
 async function main() {
@@ -19,9 +20,11 @@ async function main() {
   interviewReminderJob.start();
   birthdayReminderJob.start();
   attendanceClassifierJob.start();
-  employeeTaskFollowUpReminderJob.start();
+  // Task Management and Client Management are hidden for now — their
+  // reminders would only point people at pages they can't open.
+  if (FEATURES.TASK_MANAGEMENT) employeeTaskFollowUpReminderJob.start();
   cmsMonthCloseJob.start();
-  meetingReminderJob.start();
+  if (FEATURES.CLIENT_MANAGEMENT) meetingReminderJob.start();
   monthlyBillCycleJob.start();
   reimbursementPaymentReminderJob.start();
   invoiceGenerationJob.start();

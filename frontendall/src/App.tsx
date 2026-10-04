@@ -6,7 +6,7 @@ import { Toaster } from 'sonner'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { AuthProvider } from '@/context/AuthContext'
 import { RequireAuth } from '@/components/auth/RequireAuth'
-import { RequireRole } from '@/components/auth/RequireRole'
+import { RequireAccess, RequireFeature } from '@/components/auth/RequireRole'
 import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
 import AuditLogPage from '@/pages/AuditLogPage'
@@ -101,11 +101,11 @@ export default function App() {
                 path="/events"
                 element={
                   <RequireAuth>
-                    <RequireRole role="admin">
+                    <RequireAccess access="events">
                       <ShellLayout section="Event Management">
                         <EventsPage />
                       </ShellLayout>
-                    </RequireRole>
+                    </RequireAccess>
                   </RequireAuth>
                 }
               />
@@ -113,11 +113,11 @@ export default function App() {
                 path="/events/:id"
                 element={
                   <RequireAuth>
-                    <RequireRole role="admin">
+                    <RequireAccess access="events">
                       <ShellLayout section="Event Management">
                         <EventDetailPage />
                       </ShellLayout>
-                    </RequireRole>
+                    </RequireAccess>
                   </RequireAuth>
                 }
               />
@@ -125,11 +125,11 @@ export default function App() {
                 path="/audit-log"
                 element={
                   <RequireAuth>
-                    <RequireRole role="admin">
+                    <RequireAccess access="audit_log">
                       <ShellLayout section="Audit Log">
                         <AuditLogPage />
                       </ShellLayout>
-                    </RequireRole>
+                    </RequireAccess>
                   </RequireAuth>
                 }
               />
@@ -147,11 +147,11 @@ export default function App() {
                 path="/performance-flags"
                 element={
                   <RequireAuth>
-                    <RequireRole role="hr-work">
+                    <RequireAccess access="performance_flags">
                       <ShellLayout section="Performance Flags">
                         <PerformanceFlagsPage />
                       </ShellLayout>
-                    </RequireRole>
+                    </RequireAccess>
                   </RequireAuth>
                 }
               />
@@ -171,13 +171,13 @@ export default function App() {
                 path="/sales/*"
                 element={
                   <RequireAuth>
-                    <RequireRole role="cms">
+                    <RequireFeature feature="CLIENT_MANAGEMENT">
                       <ShellLayout section="Client Management">
                         <Suspense fallback={<RemoteFallback />}>
                           <RemoteSales basename="/sales" />
                         </Suspense>
                       </ShellLayout>
-                    </RequireRole>
+                    </RequireFeature>
                   </RequireAuth>
                 }
               />
@@ -185,11 +185,13 @@ export default function App() {
                 path="/followups/*"
                 element={
                   <RequireAuth>
-                    <ShellLayout section="Task Management">
+                    <RequireFeature feature="TASK_MANAGEMENT">
+                      <ShellLayout section="Task Management">
                       <Suspense fallback={<RemoteFallback />}>
                         <RemoteFollowups basename="/followups" />
                       </Suspense>
                     </ShellLayout>
+                    </RequireFeature>
                   </RequireAuth>
                 }
               />
@@ -197,13 +199,13 @@ export default function App() {
                 path="/hr/*"
                 element={
                   <RequireAuth>
-                    <RequireRole role="hr-work">
+                    <RequireAccess access="hrms">
                       <ShellLayout section="HR Work">
                         <Suspense fallback={<RemoteFallback />}>
                           <RemoteHr basename="/hr" />
                         </Suspense>
                       </ShellLayout>
-                    </RequireRole>
+                    </RequireAccess>
                   </RequireAuth>
                 }
               />
@@ -211,13 +213,13 @@ export default function App() {
                 path="/operations/*"
                 element={
                   <RequireAuth>
-                    <RequireRole role="operations">
+                    <RequireAccess access="operations">
                       <ShellLayout section="Operations">
                         <Suspense fallback={<RemoteFallback />}>
                           <RemoteOperations basename="/operations" />
                         </Suspense>
                       </ShellLayout>
-                    </RequireRole>
+                    </RequireAccess>
                   </RequireAuth>
                 }
               />
@@ -225,13 +227,13 @@ export default function App() {
                 path="/finance/*"
                 element={
                   <RequireAuth>
-                    <RequireRole role="finance">
+                    <RequireAccess access="finance">
                       <ShellLayout section="Finance">
                         <Suspense fallback={<RemoteFallback />}>
                           <RemoteFinance basename="/finance" />
                         </Suspense>
                       </ShellLayout>
-                    </RequireRole>
+                    </RequireAccess>
                   </RequireAuth>
                 }
               />

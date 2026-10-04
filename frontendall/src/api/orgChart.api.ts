@@ -45,6 +45,35 @@ export interface OrgNode {
   workTeam: { _id: string; name: string; isDeleted?: boolean } | null
   teamRole: TeamRole | null
   isTeamHead: boolean
+  // Positions only — the access this post gives whoever holds it (see the
+  // backend's config/access.js). Never on the top (Admin) box.
+  grantsRole: GrantableRole | null
+}
+
+export type GrantableRole =
+  | 'ceo'
+  | 'cto'
+  | 'cfo'
+  | 'hr'
+  | 'operations_manager'
+  | 'sales'
+  | 'technical'
+  | 'team_lead'
+  | 'digital_admin'
+  | 'finance'
+
+// What each post's access means, in plain words — shown in the edit panel.
+export const GRANT_INFO: Record<GrantableRole, { label: string; gives: string }> = {
+  ceo: { label: 'CEO', gives: 'EMS for everyone (view + edit), HR Work, Operations, Performance Flags, Events, announcements, final approvals' },
+  hr: { label: 'HR', gives: 'EMS for everyone (view + edit), HR Work, Events, announcements' },
+  cfo: { label: 'CFO', gives: 'Finance (incl. approvals), announcements' },
+  finance: { label: 'Finance', gives: 'Finance' },
+  operations_manager: { label: 'Operations', gives: 'Operations tab, office keys, announcements' },
+  cto: { label: 'CTO', gives: 'Announcements' },
+  sales: { label: 'Sales', gives: 'Announcements' },
+  team_lead: { label: 'Team Lead', gives: 'Announcements' },
+  technical: { label: 'Technical', gives: 'Nothing extra yet' },
+  digital_admin: { label: 'Digital Admin', gives: 'Nothing extra yet' },
 }
 
 export interface LinkableWorkTeam {
@@ -66,6 +95,7 @@ export interface CreateOrgNodeInput {
   workTeam?: string | null
   teamRole?: TeamRole
   isTeamHead?: boolean
+  grantsRole?: GrantableRole | null
 }
 
 export async function createOrgNode(input: CreateOrgNodeInput) {
@@ -75,7 +105,7 @@ export async function createOrgNode(input: CreateOrgNodeInput) {
 
 export async function updateOrgNode(
   id: string,
-  input: Partial<Pick<OrgNode, 'title' | 'description' | 'teamRole' | 'isTeamHead'>> & { workTeam?: string | null }
+  input: Partial<Pick<OrgNode, 'title' | 'description' | 'teamRole' | 'isTeamHead' | 'grantsRole'>> & { workTeam?: string | null }
 ) {
   const { data } = await apiClient.patch(`/org-chart/nodes/${id}`, input)
   return data

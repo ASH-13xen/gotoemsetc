@@ -37,6 +37,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
+  // Access follows the Organisation chart and can change any time — re-read
+  // it every minute and whenever the tab comes back into focus, so a menu
+  // appears (or disappears) without signing out.
+  useEffect(() => {
+    if (!token) return
+    const refresh = () =>
+      fetchMe()
+        .then(({ user: freshUser }) => {
+          setUserState((prev) => (JSON.stringify(prev) === JSON.stringify(freshUser) ? prev : freshUser))
+          setStoredUser(freshUser)
+        })
+        .catch(() => {
+          // a 401 is handled by the API client (signs out); ignore blips
+        })
+    const timer = setInterval(refresh, 60_000)
+    const onFocus = () => document.visibilityState === 'visible' && refresh()
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+    }
+  }, [token])
+
   function signIn(nextToken: string, nextUser: StoredUser) {
     setToken(nextToken)
     setStoredUser(nextUser)

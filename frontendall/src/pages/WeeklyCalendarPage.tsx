@@ -1,3 +1,4 @@
+import { can } from '@/lib/access'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import gsap from 'gsap'
@@ -62,7 +63,7 @@ function AnimatedNumber({ value }: { value: number }) {
 export default function WeeklyCalendarPage() {
   const { user } = useAuth()
   const viewerId = user?.id ?? ''
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = can(user, 'calendar_see_all')
   const [params, setParams] = useSearchParams()
 
   const weekStart = mondayOf(params.get('week') ?? nowIst().day)

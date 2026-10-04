@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { can } from "@/lib/access";
 
 // A slim persistent bar shown above every embedded remote app, so switching
 // sections never requires the browser back button — the remote itself has no
@@ -23,7 +24,7 @@ export function RemoteShellBar({ section }: { section: string }) {
         </span>
       </div>
       <div className="flex items-center gap-4">
-        {(user?.role === "admin" || user?.role === "hr") && (
+        {can(user, "audit_log") && (
           <Link
             to="/audit-log"
             className="text-sm font-semibold text-foreground hover:text-primary transition-colors"

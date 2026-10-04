@@ -7,6 +7,8 @@ const userRepository = require('../repositories/user.repository');
 const attendanceService = require('./attendance.service');
 const notificationService = require('./notification.service');
 const { USER_ROLES, NOTIFICATION_TYPES, ATTENDANCE_EDIT_REQUEST_STATUS } = require('../config/constants');
+const { ACCESS } = require('../config/access');
+const { can, hasRole, isSelf } = require('../utils/roles');
 
 // HR can't change attendance more than 2 days old directly. They send the
 // change here instead; only the CEO and admin see these, and whichever of
@@ -17,11 +19,15 @@ const { PENDING, APPROVED, REJECTED } = ATTENDANCE_EDIT_REQUEST_STATUS;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const POPULATE = [
   { path: 'employee', select: 'firstName lastName employeeCode designation' },
-  { path: 'requestedBy', select: 'username role' },
-  { path: 'decidedBy', select: 'username role' },
+  { path: 'requestedBy', select: 'username role employeeLink', populate: { path: 'employeeLink', select: 'firstName lastName' } },
+  { path: 'decidedBy', select: 'username role employeeLink', populate: { path: 'employeeLink', select: 'firstName lastName' } },
 ];
 
-const canDecide = (user) => user.role === USER_ROLES.ADMIN || user.role === USER_ROLES.CEO;
+// The CEO or admin — by login or by post.
+const canDecide = (user) => can(user, ACCESS.ATTENDANCE_FINAL_APPROVAL);
+// HR without CEO/admin-level access is the only one held to the 2-day limit,
+// so the only one who files these.
+const needsRequests = (user) => hasRole(user, USER_ROLES.HR) && !can(user, ACCESS.ATTENDANCE_NO_TIME_LIMIT);
 const dayStr = (date) => date.toISOString().slice(0, 10);
 const nameOf = (employee) => `${employee.firstName} ${employee.lastName || ''}`.trim();
 
@@ -40,8 +46,11 @@ function describeChange(change) {
 }
 
 async function create(user, { employeeId, date: dateStr, reason, ...change }) {
-  if (user.role !== USER_ROLES.HR) {
+  if (!needsRequests(user)) {
     throw ApiError.forbidden('Only HR sends change requests — admin and the CEO can edit attendance directly');
+  }
+  if (isSelf(user, employeeId)) {
+    throw ApiError.forbidden("You can't change your own attendance — someone else in HR, the CEO or admin has to");
   }
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) throw ApiError.notFound('Employee not found');
@@ -93,7 +102,7 @@ async function create(user, { employeeId, date: dateStr, reason, ...change }) {
 async function list(user, { status, employeeId } = {}) {
   const query = {};
   if (!canDecide(user)) {
-    if (user.role !== USER_ROLES.HR) throw ApiError.forbidden();
+    if (!hasRole(user, USER_ROLES.HR)) throw ApiError.forbidden();
     query.requestedBy = user.id;
   }
   if (status) query.status = status;
@@ -106,6 +115,9 @@ async function decide(user, id, { approve, note }) {
   const request = await AttendanceEditRequest.findById(id).populate('employee', 'firstName lastName');
   if (!request) throw ApiError.notFound('Request not found');
   if (request.status !== PENDING) throw ApiError.conflict('This request has already been decided');
+  if (isSelf(user, request.employee._id)) {
+    throw ApiError.forbidden('This is about your own attendance — someone else has to decide it');
+  }
 
   if (approve) {
     // Applied as the approver — no 2-day limit for the CEO/admin, and every
@@ -114,8 +126,8 @@ async function decide(user, id, { approve, note }) {
     await attendanceService.markAttendance(
       request.employee._id.toString(),
       dayStr(request.date),
-      { ...change, notes: `${request.reason} (HR request, approved by ${user.username || user.role})` },
-      user.role
+      { ...change, notes: `${request.reason} (HR request, approved by ${user.displayName || user.username})` },
+      user
     );
   }
 

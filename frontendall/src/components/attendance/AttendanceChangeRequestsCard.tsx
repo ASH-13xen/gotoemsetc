@@ -1,3 +1,4 @@
+import { can } from '@/lib/access'
 import { useLayoutEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { toast } from 'sonner'
@@ -130,7 +131,7 @@ function RequestRow({ request }: { request: AttendanceEditRequest }) {
 
 export function AttendanceChangeRequestsCard() {
   const { user } = useAuth()
-  const canDecide = user?.role === 'admin' || user?.role === 'ceo'
+  const canDecide = can(user, 'attendance_final_approval')
   const { data: requests = [] } = useQuery({
     queryKey: ['attendance-edit-requests', 'pending'],
     queryFn: () => listEditRequests('pending'),

@@ -2,7 +2,9 @@ const bcrypt = require('bcryptjs');
 const ApiError = require('../utils/ApiError');
 const userRepository = require('../repositories/user.repository');
 const { USER_ROLES } = require('../config/constants');
-const { isAdminLike } = require('../utils/roles');
+const { can } = require('../utils/roles');
+const { ACCESS } = require('../config/access');
+const accessService = require('./access.service');
 
 // A non-admin granting permissions (via their own add_credentials grant)
 // can only ever hand out a subset of what they themselves hold — otherwise
@@ -11,7 +13,7 @@ const { isAdminLike } = require('../utils/roles');
 // privilege-escalation path. Admins (and HR, admin-equivalent) are unrestricted.
 function assertNoEscalation(requestedPermissions, actingUser) {
   if (!requestedPermissions || requestedPermissions.length === 0) return;
-  if (isAdminLike(actingUser)) return;
+  if (can(actingUser, ACCESS.EMS_ALL)) return;
   const granted = new Set(actingUser.permissions || []);
   const overreach = requestedPermissions.filter((p) => !granted.has(p));
   if (overreach.length > 0) {
@@ -79,13 +81,14 @@ async function updateCredential(userId, { username, password, permissions }, act
   // Only an admin may change an existing credential's permissions — a
   // non-admin add_credentials holder can grant permissions at creation
   // time (within their own limit) but can't later escalate one further.
-  if (permissions !== undefined && isAdminLike(actingUser)) {
+  if (permissions !== undefined && can(actingUser, ACCESS.EMS_ALL)) {
     patch.permissions = permissions;
   }
 
   try {
     const user = await userRepository.updateById(userId, patch);
     if (!user) throw ApiError.notFound('Credential not found');
+    accessService.invalidate();
     return toCredentialView(user);
   } catch (err) {
     if (err.code === 11000) throw ApiError.conflict('Username already taken');
@@ -96,6 +99,7 @@ async function updateCredential(userId, { username, password, permissions }, act
 async function deleteCredential(userId) {
   const user = await userRepository.updateById(userId, { isActive: false });
   if (!user) throw ApiError.notFound('Credential not found');
+  accessService.invalidate();
   return toCredentialView(user);
 }
 

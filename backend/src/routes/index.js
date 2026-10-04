@@ -1,5 +1,6 @@
 const { Router } = require('express');
-const { verifyToken, requireRole, requirePermission, requireHrWorkAccess } = require('../middlewares/auth.middleware');
+const { verifyToken, requireAccess, requirePermission, requireHrWorkAccess } = require('../middlewares/auth.middleware');
+const { ACCESS } = require('../config/access');
 const auditLogger = require('../middlewares/auditLog.middleware');
 const { USER_ROLES, PERMISSIONS } = require('../config/constants');
 
@@ -83,8 +84,8 @@ router.use('/company-events', companyEventRoutes);
 router.use('/company-calendar', companyCalendarRoutes);
 router.use('/salary-slips', salarySlipRoutes);
 router.use('/notifications', notificationRoutes);
-// Event Management — admin/HR only.
-router.use('/events', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), eventRoutes);
+// Event Management — admin, CEO and HR.
+router.use('/events', requireAccess(ACCESS.EVENTS), eventRoutes);
 router.use('/device-punches', devicePunchRoutes);
 router.use('/attendance-requests', attendanceRequestRoutes);
 // Task Management. Every employee needs access here; admin/HR-only vs.
@@ -129,7 +130,7 @@ router.use('/keys', keyHolderRoutes);
 // Gated per-route inside user.routes.js — some actions there are reachable
 // by a worker with add_credentials, not just admins.
 router.use('/users', userRoutes);
-router.use('/audit-log', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), auditLogRoutes);
+router.use('/audit-log', requireAccess(ACCESS.AUDIT_LOG), auditLogRoutes);
 // Organisation chart — admin only for now.
 // Everyone signed in can view the chart; the router gates writes to admin.
 router.use('/org-chart', orgChartRoutes);

@@ -1,5 +1,9 @@
 const asyncHandler = require('../utils/asyncHandler');
 const attendanceService = require('../services/attendance.service');
+const accessService = require('../services/access.service');
+
+// Who changed a day by hand — only for them and the people above them.
+const ATTRIBUTION = [{ by: 'markedBy', as: 'markedAs' }];
 
 const mark = asyncHandler(async (req, res) => {
   const { date, status, overtimeMinutes, isLate, earlyDeparture, paidLeaveAwarded, notes } = req.body;
@@ -7,14 +11,14 @@ const mark = asyncHandler(async (req, res) => {
     req.params.id,
     date,
     { status, overtimeMinutes, isLate, earlyDeparture, paidLeaveAwarded, notes },
-    req.user.role
+    req.user
   );
   res.status(201).json({ record });
 });
 
 const listForEmployee = asyncHandler(async (req, res) => {
   const records = await attendanceService.listForEmployee(req.params.id, req.query);
-  res.json({ records });
+  res.json({ records: await accessService.shapeAttribution(req.user, records, ATTRIBUTION) });
 });
 
 const getSummary = asyncHandler(async (req, res) => {

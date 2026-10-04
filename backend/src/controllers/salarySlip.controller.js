@@ -1,10 +1,11 @@
 const asyncHandler = require('../utils/asyncHandler');
+const accessService = require('../services/access.service');
 const salarySlipService = require('../services/salarySlip.service');
 const localFileStorage = require('../services/localFileStorage.service');
 const logger = require('../utils/logger');
 
 const generate = asyncHandler(async (req, res) => {
-  const slip = await salarySlipService.generateSlip(req.params.id, req.body, req.user.id);
+  const slip = await salarySlipService.generateSlip(req.params.id, req.body, req.user.id, req.user);
   req.auditContext = {
     action: 'salarySlip.generate',
     resourceType: 'SalarySlip',
@@ -16,7 +17,8 @@ const generate = asyncHandler(async (req, res) => {
 
 const listForEmployee = asyncHandler(async (req, res) => {
   const slips = await salarySlipService.listForEmployee(req.params.id);
-  res.json({ slips });
+  // Who generated each slip — only for them and the people above them.
+  res.json({ slips: await accessService.shapeAttribution(req.user, slips, [{ by: 'createdBy', as: 'createdAs' }]) });
 });
 
 const downloadFile = asyncHandler(async (req, res) => {
@@ -40,7 +42,7 @@ const downloadOwnFile = asyncHandler(async (req, res) => {
 // for the date-of-joining clipping logic. Returns a per-employee outcome
 // summary rather than raw slip payloads, since this can be a lot of PDFs.
 const generateBulk = asyncHandler(async (req, res) => {
-  const results = await salarySlipService.generateBulkSlips(req.body, req.user.id);
+  const results = await salarySlipService.generateBulkSlips(req.body, req.user.id, req.user);
   res.status(201).json({ results });
 });
 

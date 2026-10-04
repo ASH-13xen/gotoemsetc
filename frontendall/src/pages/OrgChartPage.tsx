@@ -1,3 +1,4 @@
+import { can } from '@/lib/access'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { toast } from 'sonner'
@@ -71,7 +72,7 @@ function OrgChartCanvas() {
   const { data, isLoading, isError } = useOrgChart()
   // Everyone can view the chart; only admin can change it.
   const { user } = useAuth()
-  const canEdit = user?.role === 'admin'
+  const canEdit = can(user, 'org_chart_edit')
   const { data: employees = [] } = useOpenEmployeeDirectory()
   const move = useMoveOrgNode()
   const create = useCreateOrgNode()

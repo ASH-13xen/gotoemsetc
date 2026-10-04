@@ -1,5 +1,6 @@
 const { Schema, model } = require('mongoose');
 const { ORG_NODE_KIND, TEAM_MEMBER_ROLE } = require('../config/constants');
+const { GRANTABLE_ROLES } = require('../config/access');
 
 // One box in the admin's Organisation chart. The tree is nothing more than
 // each node pointing at its parent (null for the single root, Admin), so
@@ -16,7 +17,12 @@ const orgNodeSchema = new Schema(
     // Left-to-right position among siblings.
     order: { type: Number, default: 0 },
     // Whoever holds this box — any number, including none ("Vacant").
+    // Never anyone on the top (Admin) box — admin is the admin login only.
     assignees: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
+    // Position boxes only — the access this post gives whoever holds it
+    // (e.g. 'hr' gives everything the HR login can do). See
+    // config/access.js and services/access.service.js.
+    grantsRole: { type: String, enum: [...GRANTABLE_ROLES, null], default: null },
     // Team boxes only — the WorkTeam (Task Management team) this box is.
     workTeam: { type: Schema.Types.ObjectId, ref: 'WorkTeam', default: null },
     // Team role boxes only — which WorkTeam role its assignees hold.

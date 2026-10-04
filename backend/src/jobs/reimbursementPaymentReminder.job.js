@@ -15,11 +15,8 @@ async function remindPendingPayouts() {
   const pending = await reimbursementRepository.listApprovedUnpaid();
   if (pending.length === 0) return;
 
-  const [ceoUsers, financeTeam] = await Promise.all([
-    userRepository.findCeos(),
-    userRepository.findFinanceTeam(),
-  ]);
-  const recipientIds = [...new Set([...ceoUsers, ...financeTeam].map((u) => u._id.toString()))];
+  const financeTeam = await userRepository.findFinanceTeam();
+  const recipientIds = [...new Set(financeTeam.map((u) => u._id.toString()))];
   if (recipientIds.length === 0) return;
 
   const total = pending.reduce((sum, r) => sum + (r.amount || 0), 0);

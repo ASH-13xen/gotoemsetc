@@ -17,6 +17,19 @@ const {
   USER_ROLES,
 } = require('../config/constants');
 const { isPastProbation } = require('../utils/probation');
+const { can, isSelf } = require('../utils/roles');
+const { ACCESS, GRANTS } = require('../config/access');
+const accessService = require('./access.service');
+
+// Nobody approves, rejects or undoes their own leave or attendance request —
+// it passes to the next person up (HR → CEO → admin).
+function assertNotOwnRequest(actor, request) {
+  if (isSelf(actor, request.employee)) {
+    throw ApiError.forbidden('This is your own request — someone else has to decide it');
+  }
+}
+const asHr = (actor) => accessService.actingRole(actor, GRANTS[ACCESS.HRMS]);
+const asFinal = (actor) => accessService.actingRole(actor, GRANTS[ACCESS.ATTENDANCE_FINAL_APPROVAL]);
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const REQUEST_SUBMISSION_CUTOFF_DAYS = 2;
@@ -335,7 +348,7 @@ async function notifyCeosOfUnpaidLeave(request) {
 // is snapshotted onto the request as a {date, snapshot} array — this is the
 // only thing that makes revokeRequest below able to undo this
 // non-destructively later, one day at a time.
-async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actingUserRole) {
+async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actor) {
   const request = await attendanceRequestRepository.findById(id);
   if (!request) throw ApiError.notFound('Attendance modification request not found');
   if (request.status !== ATTENDANCE_REQUEST_STATUS.PENDING) {
@@ -349,7 +362,8 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actingUser
   // HR's chosen per-day change parked on the request; the CEO's approval is
   // what actually applies that change. The CEO or admin approving at the HR
   // stage finalizes it directly, since they'd be the final approver anyway.
-  const canGiveFinalApproval = actingUserRole === USER_ROLES.CEO || actingUserRole === USER_ROLES.ADMIN;
+  assertNotOwnRequest(actor, request);
+  const canGiveFinalApproval = can(actor, ACCESS.ATTENDANCE_FINAL_APPROVAL);
   if (request.approvalStage === ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO) {
     if (!canGiveFinalApproval) throw ApiError.forbidden('Only the CEO can give the final approval for unpaid leave');
     attendanceUpdate = request.pendingAttendanceUpdate || undefined;
@@ -365,11 +379,11 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actingUser
 
   if (request.approvalStage !== ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO && request.requestedMultiDayLeave && !canGiveFinalApproval) {
     for (const date of enumerateDates(request.date, request.endDate || request.date)) {
-      attendanceService.assertCanEditAttendanceDate(actingUserRole, date);
+      attendanceService.assertCanEditAttendanceDate(actor, date);
       // eslint-disable-next-line no-await-in-loop
       await attendanceService.assertStatusForOvertime(request.employee, date, attendanceUpdate);
     }
-    const forwarded = await attendanceRequestRepository.advanceToCeoStage(id, resolvedByUserId, attendanceUpdate || null);
+    const forwarded = await attendanceRequestRepository.advanceToCeoStage(id, resolvedByUserId, attendanceUpdate || null, asHr(actor));
     await notifyCeosOfUnpaidLeave(request);
     return forwarded;
   }
@@ -385,7 +399,7 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actingUser
   if (hasChange) {
     const dates = enumerateDates(request.date, request.endDate || request.date);
     for (const date of dates) {
-      attendanceService.assertCanEditAttendanceDate(actingUserRole, date);
+      attendanceService.assertCanEditAttendanceDate(actor, date);
       // eslint-disable-next-line no-await-in-loop
       await attendanceService.assertStatusForOvertime(request.employee, date, attendanceUpdate);
     }
@@ -407,13 +421,21 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actingUser
           : null,
       });
       // eslint-disable-next-line no-await-in-loop
-      await attendanceRepository.upsertForDate(request.employee, date, attendanceUpdate, false, false, true);
+      await attendanceRepository.upsertForDate(
+        request.employee,
+        date,
+        { ...attendanceUpdate, markedBy: actor?.id, markedAs: canGiveFinalApproval ? asFinal(actor) : asHr(actor) },
+        false,
+        false,
+        true
+      );
     }
   }
 
   return attendanceRequestRepository.resolve(id, resolvedByUserId, {
     attendanceWasModified: Boolean(hasChange),
     previousRecordSnapshot,
+    resolvedAs: canGiveFinalApproval ? asFinal(actor) : asHr(actor),
   });
 }
 
@@ -434,9 +456,10 @@ async function isEligibleContentManagerFor(applicantEmployeeId, cmEmployeeId) {
 // notified fresh here, exactly the same notification the flat single-tier
 // flow already sends, just deferred until now instead of firing at
 // submission time.
-async function approveAtContentManagerStage(id, actingUserId) {
+async function approveAtContentManagerStage(id, actingUserId, actor) {
   const request = await attendanceRequestRepository.findById(id);
   if (!request) throw ApiError.notFound('Attendance modification request not found');
+  if (actor) assertNotOwnRequest(actor, request);
   if (request.status !== ATTENDANCE_REQUEST_STATUS.PENDING) {
     throw ApiError.conflict('This request has already been handled');
   }
@@ -481,20 +504,19 @@ async function listPendingForContentManager(cmEmployeeId) {
 // A request denied outright — no AttendanceRecord is ever touched, so there
 // is nothing for revokeRequest to act on later (it only accepts requests
 // currently in the 'resolved' state).
-async function rejectRequest(id, resolvedByUserId, reason, actingUserRole) {
+async function rejectRequest(id, resolvedByUserId, reason, actor) {
   const request = await attendanceRequestRepository.findById(id);
   if (!request) throw ApiError.notFound('Attendance modification request not found');
   if (request.status !== ATTENDANCE_REQUEST_STATUS.PENDING) {
     throw ApiError.conflict('This request has already been handled');
   }
-  if (
-    request.approvalStage === ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO &&
-    actingUserRole !== USER_ROLES.CEO &&
-    actingUserRole !== USER_ROLES.ADMIN
-  ) {
+  assertNotOwnRequest(actor, request);
+  const isFinal = can(actor, ACCESS.ATTENDANCE_FINAL_APPROVAL);
+  if (request.approvalStage === ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO && !isFinal) {
     throw ApiError.forbidden('This request is awaiting the CEO');
   }
-  return attendanceRequestRepository.reject(id, resolvedByUserId, reason);
+  const rejectedAs = request.approvalStage === ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO ? asFinal(actor) : asHr(actor);
+  return attendanceRequestRepository.reject(id, resolvedByUserId, reason, rejectedAs);
 }
 
 // previousRecordSnapshot is an array of {date, snapshot} for any request
@@ -513,23 +535,24 @@ function snapshotEntries(request) {
 // deletes the AttendanceRecord or the request document itself. Only valid
 // from 'resolved', so a rejected or already-revoked request can't be
 // revoked again.
-async function revokeRequest(id, revokedByUserId, actingUserRole) {
+async function revokeRequest(id, revokedByUserId, actor) {
   const request = await attendanceRequestRepository.findById(id);
   if (!request) throw ApiError.notFound('Attendance modification request not found');
+  assertNotOwnRequest(actor, request);
   if (request.status !== ATTENDANCE_REQUEST_STATUS.RESOLVED) {
     throw ApiError.conflict('Only an approved request can be revoked');
   }
   if (request.attendanceWasModified) {
     const entries = snapshotEntries(request);
     for (const { date } of entries) {
-      attendanceService.assertCanEditAttendanceDate(actingUserRole, date);
+      attendanceService.assertCanEditAttendanceDate(actor, date);
     }
     for (const { date, snapshot } of entries) {
       // eslint-disable-next-line no-await-in-loop
       await attendanceRepository.applySnapshot(request.employee, date, snapshot);
     }
   }
-  return attendanceRequestRepository.revoke(id, revokedByUserId);
+  return attendanceRequestRepository.revoke(id, revokedByUserId, can(actor, ACCESS.ATTENDANCE_FINAL_APPROVAL) ? asFinal(actor) : asHr(actor));
 }
 
 // Self-only — verified against the request's own employee, not trusted from

@@ -2,8 +2,9 @@ const { Router } = require('express');
 const ApiError = require('../utils/ApiError');
 const validate = require('../middlewares/validate.middleware');
 const { requireAttendanceApprovalAccess } = require('../middlewares/auth.middleware');
-const { isAdminLike } = require('../utils/roles');
-const { USER_ROLES, PERMISSIONS, ATTENDANCE_REQUEST_STATUS, ATTENDANCE_REQUEST_APPROVAL_STAGE } = require('../config/constants');
+const { can } = require('../utils/roles');
+const { ACCESS } = require('../config/access');
+const { PERMISSIONS, ATTENDANCE_REQUEST_STATUS, ATTENDANCE_REQUEST_APPROVAL_STAGE } = require('../config/constants');
 const attendanceRequestRepository = require('../repositories/attendanceRequest.repository');
 const attendanceRequestService = require('../services/attendanceRequest.service');
 const attendanceRequestValidator = require('../validators/attendanceRequest.validator');
@@ -23,11 +24,7 @@ function requireCmOrHrApprovalAccess() {
   return async (req, res, next) => {
     try {
       if (!req.user) return next(ApiError.unauthorized());
-      if (
-        isAdminLike(req.user) ||
-        req.user.role === USER_ROLES.CEO ||
-        req.user.permissions.includes(PERMISSIONS.MARK_ATTENDANCE)
-      ) {
+      if (can(req.user, ACCESS.HRMS) || req.user.permissions.includes(PERMISSIONS.MARK_ATTENDANCE)) {
         return next();
       }
 

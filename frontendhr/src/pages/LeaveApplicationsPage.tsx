@@ -1,3 +1,4 @@
+import { can } from '@/lib/access'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { CheckCircle2, Inbox, RotateCcw, XCircle } from 'lucide-react'
@@ -87,7 +88,7 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
   // approving at the HR stage finalizes it directly — see
   // attendanceRequest.service.js#resolveRequest.
   const { user } = useAuth()
-  const isFinalApprover = user?.role === 'ceo' || user?.role === 'admin'
+  const isFinalApprover = can(user, 'attendance_final_approval')
   const forwardsToCeo = Boolean(request.requestedMultiDayLeave) && !isFinalApprover
   const appliedLabel = leaveApplicationLabel(request)
   const pendingUpdate = request.pendingAttendanceUpdate

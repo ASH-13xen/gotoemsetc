@@ -6,7 +6,8 @@ function audit(req, action, eventId, metadata) {
   req.auditContext = { action, resourceType: 'WeeklyEvent', resourceId: eventId, metadata };
 }
 
-const viewer = (req) => ({ id: req.user.id, role: req.user.role, employeeLink: req.user.employeeLink });
+// The signed-in person with their live roles and access (access.service.js).
+const viewer = (req) => req.user;
 
 const people = asyncHandler(async (req, res) => {
   res.json(await weeklyCalendarService.listPeople());

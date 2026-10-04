@@ -12,6 +12,9 @@ const holidayRepository = require('../repositories/holiday.repository');
 const notificationService = require('./notification.service');
 const emailService = require('./email.service');
 const employeeTaskService = require('./employeeTask.service');
+const accessService = require('./access.service');
+const { can } = require('../utils/roles');
+const { ACCESS } = require('../config/access');
 const {
   USER_ROLES,
   EMPLOYEE_STATUS,
@@ -21,6 +24,7 @@ const {
   WEEKLY_NOTE_KIND,
   WEEKLY_GRID,
   EMPLOYEE_TASK_TYPE,
+  FEATURES,
 } = require('../config/constants');
 
 // ---------------------------------------------------------------------------
@@ -161,6 +165,10 @@ function loadPeople() {
 }
 
 async function fetchPeople() {
+  // A role login (ceo, hr…) isn't offered as an invitee when a real person
+  // holds that post — invite the person instead.
+  const org = await accessService.orgMap();
+  const heldRoles = new Set([...org.rolesByEmployee.values()].flatMap((roles) => [...roles]));
   const users = await User.find({ isActive: true })
     .populate('employeeLink', 'firstName lastName designation extraDetails status isDeleted')
     .lean();
@@ -169,7 +177,7 @@ async function fetchPeople() {
     const employee = user.employeeLink;
     if (employee && (employee.isDeleted || employee.status !== EMPLOYEE_STATUS.ACTIVE)) continue;
     const person = toPerson(user);
-    person.listed = Boolean(employee) || user.role !== USER_ROLES.WORKER;
+    person.listed = employee ? true : user.role !== USER_ROLES.WORKER && !heldRoles.has(user.role);
     people.set(person._id, person);
   }
   return people;
@@ -289,7 +297,8 @@ async function assertAllFree(viewer, userIds, occurrences, { selfMessage, people
 
 // ---- Access & shaping ------------------------------------------------------------
 
-const isAdmin = (viewer) => viewer?.role === USER_ROLES.ADMIN;
+// Sees every title, personal ones included — admin only (config/access.js).
+const isAdmin = (viewer) => can(viewer, ACCESS.CALENDAR_SEE_ALL);
 const attendeeOf = (event, userId) => event.attendees.find((a) => idOf(a.user) === userId);
 const isHost = (event, viewer) => idOf(event.host) === viewer.id;
 
@@ -1053,6 +1062,7 @@ async function deleteNote(viewer, id, noteId) {
 
 // An action item becomes a personal task for its assignee in Task Management.
 async function noteToTask(viewer, id, noteId) {
+  if (!FEATURES.TASK_MANAGEMENT) throw ApiError.badRequest('Task Management is switched off for now');
   const event = await noteContext(viewer, id);
   const note = event.notes.id(noteId);
   if (!note) throw ApiError.notFound('Note not found');
@@ -1178,7 +1188,7 @@ async function respondPublic(token, { response, reason }) {
   const { e, u, s } = readInviteToken(token);
   const user = await User.findById(u).select('role isActive');
   if (!user?.isActive) throw ApiError.forbidden('This account is no longer active');
-  return respond({ id: u, role: user.role }, e, { response, reason, scope: s });
+  return respond({ id: u, role: user.role, roles: [user.role], access: [] }, e, { response, reason, scope: s });
 }
 
 // ---- Reminders & daily digest (jobs/weeklyCalendar.job.js) ------------------------------

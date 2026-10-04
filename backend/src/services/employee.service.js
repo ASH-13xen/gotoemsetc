@@ -5,7 +5,8 @@ const orgChartService = require('./orgChart.service');
 const activityService = require('./activity.service');
 const notificationService = require('./notification.service');
 const ApiError = require('../utils/ApiError');
-const { isAdminLike } = require('../utils/roles');
+const { can, isSelf } = require('../utils/roles');
+const { ACCESS } = require('../config/access');
 const { NOTIFICATION_TYPES, INVENTORY_ITEM_CATEGORY, EMPLOYEE_STATUS } = require('../config/constants');
 
 async function listEmployees(params) {
@@ -148,13 +149,45 @@ async function createEmployee(data) {
   return employee;
 }
 
-async function updateEmployee(id, data, actingUserRole) {
-  // employeeCode (the biometric device PIN) is admin/HR-only — silently
-  // dropped for anyone else rather than erroring, so the rest of a
-  // non-admin's edit still goes through.
-  const payload = isAdminLike({ role: actingUserRole }) ? data : { ...data, employeeCode: undefined };
+// Fields nobody may change on their own record — their pay, payroll and
+// employment status. Someone else (HR, the CEO or admin) has to.
+const SELF_LOCKED_FIELDS = [
+  'monthlyPay',
+  'ctcAnnual',
+  'salaryComponents',
+  'payDate',
+  'excludeFromPayroll',
+  'probationCompleted',
+  'status',
+  'endDate',
+  'dateOfJoining',
+  'employeeCode',
+];
+
+function sameValue(a, b) {
+  const norm = (v) => {
+    if (v === undefined || v === null || v === '') return '';
+    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+    if (typeof v === 'object') return JSON.stringify(v);
+    return String(v);
+  };
+  return norm(a) === norm(b);
+}
+
+async function updateEmployee(id, data, actor) {
+  // employeeCode (the biometric device PIN) is EMS-for-everyone only —
+  // silently dropped for anyone else rather than erroring, so the rest of
+  // their edit still goes through.
+  const payload = can(actor, ACCESS.EMS_ALL) ? data : { ...data, employeeCode: undefined };
   const existing = await employeeRepository.findById(id);
   if (!existing) throw ApiError.notFound('Employee not found');
+  if (isSelf(actor, id)) {
+    const changed = SELF_LOCKED_FIELDS.filter((f) => payload[f] !== undefined && !sameValue(payload[f], existing[f]));
+    if (changed.length) {
+      throw ApiError.forbidden(`You can't change your own ${changed.join(', ')} — someone else has to`);
+    }
+  }
   assertOffboardingHasLastDay(payload, existing);
   // Ticking "probation completed" ends probation early from today; unticking
   // it goes back to the automatic joining-date + 3 months.
@@ -201,8 +234,8 @@ async function notifyFlagMilestone(employee, color) {
   }
   if (!message) return;
 
-  const [hrUsers, ceoUsers] = await Promise.all([userRepository.findHr(), userRepository.findCeos()]);
-  const recipientIds = [...new Set([...hrUsers, ...ceoUsers].map((u) => u._id.toString()))];
+  const [adminUsers, ceoUsers] = await Promise.all([userRepository.findAdmins(), userRepository.findCeos()]);
+  const recipientIds = [...new Set([...adminUsers, ...ceoUsers].map((u) => u._id.toString()))];
   if (recipientIds.length === 0) return;
 
   await notificationService.createForUsers(recipientIds, {
@@ -213,7 +246,8 @@ async function notifyFlagMilestone(employee, color) {
   });
 }
 
-async function addFlag(id, { color, note, date }, addedBy) {
+async function addFlag(id, { color, note, date }, addedBy, actor) {
+  if (isSelf(actor, id)) throw ApiError.forbidden("You can't flag yourself");
   const employee = await employeeRepository.addFlag(id, { color, note, date, addedBy });
   if (!employee) throw ApiError.notFound('Employee not found');
   await activityService.log(employee._id, 'EMPLOYEE_FLAG_ADDED', { color, note, date });
@@ -244,7 +278,8 @@ async function getFlagHistory() {
   return entries;
 }
 
-async function removeFlag(id, flagId) {
+async function removeFlag(id, flagId, actor) {
+  if (isSelf(actor, id)) throw ApiError.forbidden("You can't change your own flags");
   const employee = await employeeRepository.removeFlag(id, flagId);
   if (!employee) throw ApiError.notFound('Employee not found');
   await activityService.log(employee._id, 'EMPLOYEE_FLAG_REMOVED', { flagId });

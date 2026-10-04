@@ -54,9 +54,9 @@ async function fileReimbursement(employeeId, input) {
   });
 
   const employeeName = `${employee.firstName} ${employee.lastName || ''}`.trim();
-  const ceoUsers = await userRepository.findCeos();
-  if (ceoUsers.length > 0) {
-    await notificationService.createForUsers(ceoUsers.map((u) => u._id), {
+  const financeUsers = await userRepository.findFinanceUsers();
+  if (financeUsers.length > 0) {
+    await notificationService.createForUsers(financeUsers.map((u) => u._id), {
       type: NOTIFICATION_TYPES.REIMBURSEMENT_CLAIMED,
       title: 'New reimbursement claim',
       message: `${employeeName} claimed ₹${input.amount.toLocaleString('en-IN')} for ${input.category.replace(/_/g, ' ')}.`,
@@ -91,9 +91,17 @@ async function listAll(status) {
 }
 
 // Finance-only — admin/ceo/cfo/finance (see requireFinanceAccess at the route).
+// Nobody decides their own claim.
+function assertNotOwnClaim(existing, actingUser) {
+  if (actingUser?.employeeLink && String(existing.employee?._id ?? existing.employee) === actingUser.employeeLink) {
+    throw ApiError.forbidden('This is your own claim — someone else in Finance has to decide it');
+  }
+}
+
 async function approve(id, actingUser) {
   const existing = await reimbursementRepository.findById(id);
   if (!existing) throw ApiError.notFound('Reimbursement not found');
+  assertNotOwnClaim(existing, actingUser);
   if (existing.status !== REIMBURSEMENT_STATUS.PENDING) {
     throw ApiError.conflict('This reimbursement has already been decided');
   }
@@ -110,6 +118,7 @@ async function approve(id, actingUser) {
 async function reject(id, reason, actingUser) {
   const existing = await reimbursementRepository.findById(id);
   if (!existing) throw ApiError.notFound('Reimbursement not found');
+  assertNotOwnClaim(existing, actingUser);
   if (existing.status !== REIMBURSEMENT_STATUS.PENDING) {
     throw ApiError.conflict('This reimbursement has already been decided');
   }
@@ -130,6 +139,7 @@ async function reject(id, reason, actingUser) {
 async function markPaid(id, transactionDetails, actingUser) {
   const existing = await reimbursementRepository.findById(id);
   if (!existing) throw ApiError.notFound('Reimbursement not found');
+  assertNotOwnClaim(existing, actingUser);
   if (existing.status !== REIMBURSEMENT_STATUS.APPROVED) {
     throw ApiError.conflict('Only an approved reimbursement can be marked paid');
   }

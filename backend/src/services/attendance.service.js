@@ -9,6 +9,9 @@ const { dateKey, isOffDay } = require('../utils/attendanceDays');
 const { ATTENDANCE_STATUS, USER_ROLES, NOTIFICATION_TYPES } = require('../config/constants');
 const { computeEffectiveUnits } = require('../utils/attendancePenalties');
 const { isPastProbation, probationEndDate } = require('../utils/probation');
+const { can, hasRole, isSelf } = require('../utils/roles');
+const { ACCESS, GRANTS } = require('../config/access');
+const accessService = require('./access.service');
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const HR_EDIT_CUTOFF_DAYS = 2;
@@ -18,13 +21,15 @@ function todayUTCMidnight() {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
-// Admin can edit attendance for any date, anytime. HR is admin-equivalent
-// everywhere else in the app, but cannot touch a date more than 2 days old —
-// called from both direct marking (markAttendance) and request resolution
-// (attendanceRequest.service.js#resolveRequest, which writes to the same
-// AttendanceRecord via a different path and would otherwise bypass this).
-function assertCanEditAttendanceDate(actingUserRole, date) {
-  if (actingUserRole !== USER_ROLES.HR) return;
+// HR — by login or by holding the HR post — can only change the last 2 days,
+// unless they also hold access without that limit (CEO/admin): the less
+// restricted rule wins. Called from both direct marking (markAttendance)
+// and request resolution (attendanceRequest.service.js#resolveRequest,
+// which writes to the same AttendanceRecord by a different path).
+const isTimeLimitedHr = (actor) => hasRole(actor, USER_ROLES.HR) && !can(actor, ACCESS.ATTENDANCE_NO_TIME_LIMIT);
+
+function assertCanEditAttendanceDate(actor, date) {
+  if (!isTimeLimitedHr(actor)) return;
   const ageDays = (todayUTCMidnight().getTime() - date.getTime()) / MS_PER_DAY;
   if (ageDays > HR_EDIT_CUTOFF_DAYS) {
     throw ApiError.forbidden(
@@ -38,8 +43,8 @@ function assertCanEditAttendanceDate(actingUserRole, date) {
 // need no reason: admin already has unrestricted access (see
 // assertCanEditAttendanceDate), so this is specifically about HR being
 // answerable for changes within the trust admin has extended to them.
-function assertReasonProvidedForHr(actingUserRole, notes) {
-  if (actingUserRole !== USER_ROLES.HR) return;
+function assertReasonProvidedForHr(actor, notes) {
+  if (!isTimeLimitedHr(actor)) return;
   if (!notes || !notes.trim()) {
     throw ApiError.badRequest('HR must provide a reason when marking attendance manually');
   }
@@ -136,17 +141,21 @@ async function markAttendance(
   employeeId,
   dateStr,
   { status, overtimeMinutes, notes, isLate, earlyDeparture, paidLeaveAwarded },
-  actingUserRole
+  actor
 ) {
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) throw ApiError.notFound('Employee not found');
+  // Nobody changes their own attendance — HR, the CEO or admin has to.
+  if (isSelf(actor, employeeId)) {
+    throw ApiError.forbidden("You can't change your own attendance — someone else in HR, the CEO or admin has to");
+  }
 
   const date = new Date(dateStr);
   if (Number.isNaN(date.getTime())) throw ApiError.badRequest('Invalid date');
 
   const today = todayUTCMidnight();
-  assertCanEditAttendanceDate(actingUserRole, date);
-  assertReasonProvidedForHr(actingUserRole, notes);
+  assertCanEditAttendanceDate(actor, date);
+  assertReasonProvidedForHr(actor, notes);
   await validateAttendanceChange(employee, date, { status, overtimeMinutes, paidLeaveAwarded });
 
   const isBackdated = date.getTime() < today.getTime();
@@ -155,7 +164,18 @@ async function markAttendance(
   const record = await attendanceRepository.upsertForDate(
     employeeId,
     date,
-    { status, overtimeMinutes, notes, isLate, earlyDeparture, paidLeaveAwarded: awarded },
+    {
+      status,
+      overtimeMinutes,
+      notes,
+      isLate,
+      earlyDeparture,
+      paidLeaveAwarded: awarded,
+      // Who changed it and in which role — shown only to them and the
+      // people above that role (see access.service.js#canSeeAttribution).
+      markedBy: actor?.id,
+      markedAs: accessService.actingRole(actor, GRANTS[ACCESS.EMS_ALL]),
+    },
     isBackdated
   );
   await activityService.log(employeeId, 'ATTENDANCE_MARKED', {
@@ -169,7 +189,7 @@ async function markAttendance(
     notes,
   });
 
-  if (actingUserRole === USER_ROLES.HR) {
+  if (isTimeLimitedHr(actor)) {
     const employeeName = `${employee.firstName} ${employee.lastName || ''}`.trim();
     const admins = await userRepository.findAdmins();
     await notificationService.createForUsers(
@@ -177,7 +197,7 @@ async function markAttendance(
       {
         type: NOTIFICATION_TYPES.ATTENDANCE_MANUAL_EDIT,
         title: 'HR edited attendance',
-        message: `HR marked ${employeeName}'s attendance for ${dateStr}. Reason: ${notes}`,
+        message: `${actor.displayName || 'HR'} (HR) marked ${employeeName}'s attendance for ${dateStr}. Reason: ${notes}`,
         employee: employeeId,
       }
     );

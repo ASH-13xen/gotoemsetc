@@ -14,15 +14,15 @@ const salarySlipValidator = require('../validators/salarySlip.validator');
 const salarySlipController = require('../controllers/salarySlip.controller');
 const upload = require('../middlewares/multer.middleware');
 const {
-  requireRole,
+  requireAccess,
   requireSelfOrAdmin,
   requirePermission,
   requireSelfOrPermission,
   requireDirectoryAccess,
   requireSelfOrDirectoryAccess,
-  requireHrWorkAccess,
 } = require('../middlewares/auth.middleware');
-const { USER_ROLES, PERMISSIONS } = require('../config/constants');
+const { PERMISSIONS } = require('../config/constants');
+const { ACCESS } = require('../config/access');
 
 const router = Router();
 
@@ -41,9 +41,8 @@ router.get('/birthdays', employeeController.birthdays);
 // employee.service.js#listDirectory.
 router.get('/directory', employeeController.directory);
 router.get('/attendance-today', requirePermission(PERMISSIONS.MARK_ATTENDANCE), attendanceController.markedToday);
-// Performance Flags history (frontendall) — same admin/hr/ceo audience the
-// flag milestone notifications go to. Must come before /:id.
-router.get('/flags/history', requireHrWorkAccess(), employeeController.flagHistory);
+// Performance Flags history — admin and CEO only. Must come before /:id.
+router.get('/flags/history', requireAccess(ACCESS.PERFORMANCE_FLAGS), employeeController.flagHistory);
 router.get('/:id', requireSelfOrDirectoryAccess(), validate(employeeValidator.getOrDelete), employeeController.getById);
 router.patch(
   '/:id',
@@ -51,20 +50,19 @@ router.patch(
   validate(employeeValidator.update),
   employeeController.update
 );
-// Deletion stays strictly admin-only — not part of the grantable permission set.
-router.delete('/:id', requireRole(USER_ROLES.ADMIN, USER_ROLES.HR), validate(employeeValidator.getOrDelete), employeeController.remove);
+// Deletion — EMS-for-everyone (admin, CEO, HR); not a grantable permission.
+router.delete('/:id', requireAccess(ACCESS.EMS_ALL), validate(employeeValidator.getOrDelete), employeeController.remove);
 
-// Flags (red/green performance markers) — role-only, not a grantable
-// permission, per the product ask.
+// Flags (red/green performance markers) — admin and CEO only.
 router.post(
   '/:id/flags',
-  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
+  requireAccess(ACCESS.PERFORMANCE_FLAGS),
   validate(employeeValidator.addFlag),
   employeeController.addFlag
 );
 router.delete(
   '/:id/flags/:flagId',
-  requireRole(USER_ROLES.ADMIN, USER_ROLES.HR),
+  requireAccess(ACCESS.PERFORMANCE_FLAGS),
   validate(employeeValidator.removeFlag),
   employeeController.removeFlag
 );
@@ -128,7 +126,7 @@ router.get(
 // set like the rest of the Document System.
 router.post(
   '/:id/uploaded-documents',
-  requireRole(USER_ROLES.ADMIN),
+  requireAccess(ACCESS.DIRECT_DOCUMENT_UPLOAD),
   upload.single('file'),
   validate(uploadedDocumentValidator.adminUpload),
   uploadedDocumentController.adminUpload

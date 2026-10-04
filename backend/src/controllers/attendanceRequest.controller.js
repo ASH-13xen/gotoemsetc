@@ -1,8 +1,19 @@
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const attendanceRequestService = require('../services/attendanceRequest.service');
+const accessService = require('../services/access.service');
+
+// Who approved, rejected or undid a request — only for them and the people
+// above them in the Organisation chart.
+const ATTRIBUTION = [
+  { by: 'resolvedBy', as: 'resolvedAs' },
+  { by: 'hrApprovedBy', as: 'hrApprovedAs' },
+  { by: 'revokedBy', as: 'revokedAs' },
+];
+const shape = (req, requests) => accessService.shapeAttribution(req.user, requests, ATTRIBUTION);
 const { PERMISSIONS } = require('../config/constants');
-const { isAdminLike } = require('../utils/roles');
+const { can } = require('../utils/roles');
+const { ACCESS } = require('../config/access');
 
 const create = asyncHandler(async (req, res) => {
   if (!req.user.employeeLink) {
@@ -16,14 +27,14 @@ const create = asyncHandler(async (req, res) => {
 // filtered by status); anyone else only ever sees their own, regardless of
 // what they pass — never trust the client for whose requests these are.
 const list = asyncHandler(async (req, res) => {
-  const canSeeAll = isAdminLike(req.user) || req.user.permissions.includes(PERMISSIONS.MARK_ATTENDANCE);
+  const canSeeAll = can(req.user, ACCESS.HRMS) || req.user.permissions.includes(PERMISSIONS.MARK_ATTENDANCE);
   const employeeId = canSeeAll ? undefined : req.user.employeeLink;
   const requests = await attendanceRequestService.listRequests({ employeeId, status: req.query.status });
-  res.json({ requests });
+  res.json({ requests: await shape(req, requests) });
 });
 
 const resolve = asyncHandler(async (req, res) => {
-  const request = await attendanceRequestService.resolveRequest(req.params.id, req.user.id, req.body, req.user.role);
+  const request = await attendanceRequestService.resolveRequest(req.params.id, req.user.id, req.body, req.user);
   res.json({ request });
 });
 
@@ -32,13 +43,13 @@ const reject = asyncHandler(async (req, res) => {
     req.params.id,
     req.user.id,
     req.body.reason,
-    req.user.role
+    req.user
   );
   res.json({ request });
 });
 
 const cmApprove = asyncHandler(async (req, res) => {
-  const request = await attendanceRequestService.approveAtContentManagerStage(req.params.id, req.user.id);
+  const request = await attendanceRequestService.approveAtContentManagerStage(req.params.id, req.user.id, req.user);
   res.json({ request });
 });
 
@@ -48,11 +59,11 @@ const cmApprove = asyncHandler(async (req, res) => {
 const pendingForContentManager = asyncHandler(async (req, res) => {
   if (!req.user.employeeLink) return res.json({ requests: [] });
   const requests = await attendanceRequestService.listPendingForContentManager(req.user.employeeLink);
-  res.json({ requests });
+  res.json({ requests: await shape(req, requests) });
 });
 
 const revoke = asyncHandler(async (req, res) => {
-  const request = await attendanceRequestService.revokeRequest(req.params.id, req.user.id, req.user.role);
+  const request = await attendanceRequestService.revokeRequest(req.params.id, req.user.id, req.user);
   res.json({ request });
 });
 
@@ -69,7 +80,7 @@ const acknowledge = asyncHandler(async (req, res) => {
 const mineUnseen = asyncHandler(async (req, res) => {
   if (!req.user.employeeLink) return res.json({ requests: [] });
   const requests = await attendanceRequestService.listUnseenForEmployee(req.user.employeeLink);
-  res.json({ requests });
+  res.json({ requests: await shape(req, requests) });
 });
 
 // Self-scoped — drives whether the "apply for leave" dialog even shows a

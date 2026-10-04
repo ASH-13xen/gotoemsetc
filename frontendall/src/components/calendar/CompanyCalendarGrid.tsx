@@ -1,3 +1,4 @@
+import { can } from '@/lib/access'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -79,7 +80,7 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
   // Matches ShellLayout.tsx's canAccessHrWork exactly (admin/hr/ceo), which
   // in turn matches the backend's requireHrWorkAccess() gate on
   // holiday.routes.js — the only roles that can actually call those writes.
-  const canManage = user?.role === 'admin' || user?.role === 'hr' || user?.role === 'ceo'
+  const canManage = can(user, 'hrms')
 
   const [monthDate, setMonthDate] = useState(() => {
     const now = new Date()

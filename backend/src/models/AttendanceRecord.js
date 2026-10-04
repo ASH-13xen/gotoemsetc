@@ -63,6 +63,11 @@ const attendanceRecordSchema = new Schema(
     // extra paid day HR awarded, which never counts against that allowance.
     // Cleared whenever the day stops being 'O'.
     paidLeaveAwarded: { type: Boolean, default: false },
+    // The person who last changed this day by hand, and the role they acted
+    // in ('hr', 'ceo', 'admin'…). Shown only to them and the people above
+    // that role in the Organisation chart. Empty for the classifier's writes.
+    markedBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    markedAs: { type: String, default: null },
     notes: String,
   },
   { timestamps: true }

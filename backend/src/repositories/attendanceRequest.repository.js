@@ -37,12 +37,13 @@ function advanceToHrStage(id, cmApprovedBy) {
 // Unpaid Leave only — HR's approval forwards the request to the CEO stage,
 // still 'pending', carrying HR's chosen change to apply on final approval.
 // See attendanceRequest.service.js#resolveRequest.
-function advanceToCeoStage(id, hrApprovedBy, pendingAttendanceUpdate) {
+function advanceToCeoStage(id, hrApprovedBy, pendingAttendanceUpdate, hrApprovedAs) {
   return AttendanceModificationRequest.findByIdAndUpdate(
     id,
     {
       approvalStage: ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO,
       hrApprovedBy,
+      hrApprovedAs,
       hrApprovedAt: new Date(),
       pendingAttendanceUpdate,
     },
@@ -50,12 +51,13 @@ function advanceToCeoStage(id, hrApprovedBy, pendingAttendanceUpdate) {
   );
 }
 
-function resolve(id, resolvedBy, { attendanceWasModified = false, previousRecordSnapshot = null } = {}) {
+function resolve(id, resolvedBy, { attendanceWasModified = false, previousRecordSnapshot = null, resolvedAs } = {}) {
   return AttendanceModificationRequest.findByIdAndUpdate(
     id,
     {
       status: ATTENDANCE_REQUEST_STATUS.RESOLVED,
       resolvedBy,
+      resolvedAs,
       resolvedAt: new Date(),
       attendanceWasModified,
       previousRecordSnapshot,
@@ -64,10 +66,10 @@ function resolve(id, resolvedBy, { attendanceWasModified = false, previousRecord
   );
 }
 
-function reject(id, resolvedBy, rejectionReason) {
+function reject(id, resolvedBy, rejectionReason, resolvedAs) {
   return AttendanceModificationRequest.findByIdAndUpdate(
     id,
-    { status: ATTENDANCE_REQUEST_STATUS.REJECTED, resolvedBy, resolvedAt: new Date(), rejectionReason },
+    { status: ATTENDANCE_REQUEST_STATUS.REJECTED, resolvedBy, resolvedAs, resolvedAt: new Date(), rejectionReason },
     { new: true }
   );
 }
@@ -76,10 +78,10 @@ function reject(id, resolvedBy, rejectionReason) {
 // forever, same lifecycle as a resolved/rejected one, just with a status
 // that says "approved, then undone" rather than pretending it never
 // happened.
-function revoke(id, revokedBy) {
+function revoke(id, revokedBy, revokedAs) {
   return AttendanceModificationRequest.findByIdAndUpdate(
     id,
-    { status: ATTENDANCE_REQUEST_STATUS.REVOKED, revokedBy, revokedAt: new Date() },
+    { status: ATTENDANCE_REQUEST_STATUS.REVOKED, revokedBy, revokedAs, revokedAt: new Date() },
     { new: true }
   );
 }

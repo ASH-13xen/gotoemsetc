@@ -20,7 +20,15 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import type { EmployeeSummary } from '@/api/employees.api'
-import { TEAM_ROLE_LABEL, type LinkableWorkTeam, type OrgNode, type OrgNodeKind, type TeamRole } from '@/api/orgChart.api'
+import {
+  GRANT_INFO,
+  TEAM_ROLE_LABEL,
+  type GrantableRole,
+  type LinkableWorkTeam,
+  type OrgNode,
+  type OrgNodeKind,
+  type TeamRole,
+} from '@/api/orgChart.api'
 import {
   useCreateOrgNode,
   useDeleteOrgNode,
@@ -393,9 +401,65 @@ export function OrgNodePanel({
           </Section>
         )}
 
+        {/* The top box is the admin login itself — nobody is placed in it. */}
+        {isRoot && (
+          <Section title="Admin">
+            <p className="text-xs text-muted-foreground">
+              Admin access belongs to the <b>admin login</b> only. No one can be placed in this box, and no post can give admin access.
+            </p>
+          </Section>
+        )}
+
+        {/* What holding this post gives — admin sets it. */}
+        {node.kind === 'position' && !isRoot && (
+          <Section title="Gives access of">
+            {readOnly ? (
+              <p className="text-sm text-foreground">
+                {node.grantsRole ? (
+                  <>
+                    <b>{GRANT_INFO[node.grantsRole].label}</b> — {GRANT_INFO[node.grantsRole].gives}
+                  </>
+                ) : (
+                  'No extra access'
+                )}
+              </p>
+            ) : (
+              <>
+                <Select
+                  value={node.grantsRole ?? NONE}
+                  onValueChange={(value) =>
+                    run(
+                      update.mutateAsync({ id: node._id, grantsRole: value === NONE ? null : (value as GrantableRole) }),
+                      value === NONE ? 'This post no longer gives access' : `This post now gives ${GRANT_INFO[value as GrantableRole].label} access`,
+                      'Could not change the access'
+                    )
+                  }
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>No extra access</SelectItem>
+                    {(Object.keys(GRANT_INFO) as GrantableRole[]).map((role) => (
+                      <SelectItem key={role} value={role}>
+                        {GRANT_INFO[role].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[11px] text-muted-foreground">
+                  {node.grantsRole
+                    ? `Whoever holds this post gets: ${GRANT_INFO[node.grantsRole].gives}. Takes effect within a minute — no sign-out needed.`
+                    : 'Whoever holds this post keeps only their own employee access.'}
+                </p>
+              </>
+            )}
+          </Section>
+        )}
+
         {/* People */}
-        {node.kind !== 'team' && (
-        <Section title={`People · ${node.assignees.length || 'Vacant'}`}>
+        {node.kind !== 'team' && !isRoot && (
+        <Section title={`People · ${node.assignees.length || (node.grantsRole ? 'Needs someone' : 'Vacant')}`}>
           {readOnly && node.assignees.length === 0 && <p className="text-xs text-amber-600">No one is in this position yet.</p>}
           {node.assignees.length > 0 && (
             <div className="grid gap-1.5">

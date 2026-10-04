@@ -40,6 +40,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { extractApiErrorMessage } from '@/lib/errors'
 import { hasAnyPermission, hasPermission, isAdminLike } from '@/lib/permissions'
+import { can } from '@/lib/access'
 import { useDeleteEmployee, useEmployee, useEmployees, useUpdateEmployee } from '@/hooks/useEmployees'
 import { useUploadedDocuments } from '@/hooks/useUploadRequests'
 import {
@@ -337,6 +338,9 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   const navigate = useNavigate()
   const { user } = useAuth()
   const isAdmin = isAdminLike(user)
+  // Flags are the CEO's and admin's only.
+  const canFlag = can(user, 'performance_flags')
+  const canSeeWarnings = can(user, 'hrms')
   // A plain employee with no granted permissions always lands back on this
   // exact page (see frontendems/App.tsx's Home()), so "Back to Portal"
   // would just loop them right back here — only worth showing to someone
@@ -461,7 +465,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <StatusBadge status={employee.status} />
               <FlagStrip flags={employee.flags ?? []} />
-              {isAdmin && <EmployeeFlagsManager employeeId={employeeId} flags={employee.flags ?? []} />}
+              {canFlag && <EmployeeFlagsManager employeeId={employeeId} flags={employee.flags ?? []} />}
             </div>
           </div>
         </div>
@@ -1297,7 +1301,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
           <AttendanceSummaryCard employeeId={employeeId} compact />
           <AttendanceCalendar employeeId={employeeId} compact />
         </div>
-        {isAdmin && <NotInformedWarningsCard employeeId={employeeId} />}
+        {canSeeWarnings && <NotInformedWarningsCard employeeId={employeeId} />}
         {(canViewSalary || isOwnRecord) && (
           <SalarySlipsList employeeId={employeeId} employeeName={`${employee.firstName} ${employee.lastName ?? ''}`} />
         )}

@@ -1,8 +1,9 @@
 const asyncHandler = require('../utils/asyncHandler');
+const { can } = require('../utils/roles');
+const { ACCESS } = require('../config/access');
 const ApiError = require('../utils/ApiError');
 const reimbursementService = require('../services/reimbursement.service');
 const reimbursementRepository = require('../repositories/reimbursement.repository');
-const { USER_ROLES } = require('../config/constants');
 
 const file = asyncHandler(async (req, res) => {
   const reimbursement = await reimbursementService.fileReimbursement(req.user.employeeLink, req.body);
@@ -21,14 +22,13 @@ const uploadReceipt = asyncHandler(async (req, res) => {
   res.status(201).json({ reimbursement });
 });
 
-// Self-or-Finance/CEO — an employee reading back their own receipt, or
+// Self-or-Finance — an employee reading back their own receipt, or
 // whoever needs it to decide/pay the claim.
 const downloadReceipt = asyncHandler(async (req, res) => {
   const reimbursement = await reimbursementRepository.findByIdWithFile(req.params.id);
   if (!reimbursement) throw ApiError.notFound('Reimbursement not found');
   const isOwner = req.user.employeeLink && req.user.employeeLink === reimbursement.employee.toString();
-  const isFinanceOrCeo = [USER_ROLES.ADMIN, USER_ROLES.CEO, USER_ROLES.CFO, USER_ROLES.FINANCE].includes(req.user.role);
-  if (!isOwner && !isFinanceOrCeo) throw ApiError.forbidden();
+  if (!isOwner && !can(req.user, ACCESS.FINANCE)) throw ApiError.forbidden();
   if (!reimbursement.receiptFile?.data) throw ApiError.notFound('No receipt on file');
   res.set('Content-Type', reimbursement.receiptFile.contentType);
   res.set('Content-Disposition', `attachment; filename="${reimbursement.receiptFile.filename}"`);

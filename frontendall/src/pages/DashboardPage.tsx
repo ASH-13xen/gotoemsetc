@@ -41,6 +41,16 @@ import { PendingAnnouncementsModal } from '@/components/announcements/PendingAnn
 import { PlanNextDayCard } from '@/components/tasks/PlanNextDayCard'
 import { UpcomingCalendarWidget } from '@/components/calendar/UpcomingCalendarWidget'
 import { CompanyCalendarGrid } from '@/components/calendar/CompanyCalendarGrid'
+import { featureOn } from '@/lib/access'
+import {
+  CeoLeaveApprovalsCard,
+  DashboardToggle,
+  FinanceDashboard,
+  OperationsDashboard,
+  VIEW_META,
+  availableViews,
+  type DashboardView,
+} from '@/components/dashboard/RoleDashboards'
 
 interface DashboardStats {
   totalEmployees: number
@@ -106,162 +116,172 @@ function StatCard({
   )
 }
 
+const VIEW_KEY = 'dashboard:view'
+
 export default function DashboardPage() {
   const { user } = useAuth()
-  const isAdminLike = user?.role === 'admin' || user?.role === 'hr'
   const rootRef = useRef<HTMLDivElement>(null)
+  const tasksOn = featureOn(user, 'TASK_MANAGEMENT')
+
+  // One dashboard per hat (see RoleDashboards.tsx) — the person picks with
+  // the big toggle; the choice is remembered on this device.
+  const views = availableViews(user)
+  const [picked, setPicked] = useState<DashboardView>(() => {
+    try {
+      return (localStorage.getItem(VIEW_KEY) as DashboardView) || views[0]
+    } catch {
+      return views[0]
+    }
+  })
+  const view = views.includes(picked) ? picked : views[0]
+  const choose = (v: DashboardView) => {
+    setPicked(v)
+    try {
+      localStorage.setItem(VIEW_KEY, v)
+    } catch {
+      // storage unavailable — the choice just isn't remembered
+    }
+  }
+  const isOverview = view === 'admin' || view === 'ceo' || view === 'hr'
 
   const { data: stats } = useQuery({
     queryKey: ['dashboardStats'],
     queryFn: getDashboardStats,
-    enabled: isAdminLike,
+    enabled: isOverview,
   })
 
   const { data: totalApplicants } = useQuery({
     queryKey: ['applicantsCount', 'all'],
     queryFn: () => getApplicantsCount(),
-    enabled: isAdminLike,
+    enabled: isOverview,
   })
 
   const { data: upcomingMeetings } = useQuery({
     queryKey: ['applicantsCount', 'interview_scheduled'],
     queryFn: () => getApplicantsCount('interview_scheduled'),
-    enabled: isAdminLike,
+    enabled: isOverview,
   })
 
-  // One quiet entrance for the whole page on first mount — header, then
-  // each section in turn, each section's own cards staggered — never
-  // replays on re-render (empty dep array), and skipped entirely under
-  // prefers-reduced-motion. Deliberately quick (well under a second total):
-  // this is a page people land on every day, not a one-time landing moment.
+  // A quiet entrance whenever the dashboard (or the chosen view) appears —
+  // header, then every card-sized unit in one staggered pass. Skipped under
+  // prefers-reduced-motion.
   useLayoutEffect(() => {
     const root = rootRef.current
     if (!root || prefersReducedMotion()) return
 
     const ctx = gsap.context(() => {
-      // Exactly one element ever gets its opacity animated more than once in
-      // this timeline: nesting a section-level fade around an
-      // already-individually-animated card compounds the two opacity
-      // tweens (each stage's `.from()` snapshots and fights over the same
-      // property), and the outer one can settle before the inner one
-      // finishes — cards stuck at partial opacity forever. So this is flat:
-      // the header once, then every card-sized unit (including the
-      // section-label eyebrows and the calendar block, which aren't
-      // DashboardCards themselves but sit at the same visual tier) in one
-      // staggered pass.
+      // Flat on purpose: nesting a section fade around already-animated cards
+      // compounds the opacity tweens and can leave cards stuck half-faded.
       const tl = gsap.timeline({ defaults: { ease: 'power2.out', duration: 0.45 } })
-      tl.from('.dashboard-header', { y: 10, opacity: 0 }).from(
-        '.dashboard-card',
-        { y: 12, opacity: 0, stagger: 0.06 },
-        0.15
-      )
+      tl.from('.dashboard-view-title', { y: 10, opacity: 0 }).from('.dashboard-card', { y: 12, opacity: 0, stagger: 0.06 }, 0.1)
     }, root)
 
     return () => ctx.revert()
-  }, [])
+  }, [view])
 
-  if (!isAdminLike) {
-    return (
-      <div className="space-y-8 py-4" ref={rootRef}>
-        <PendingWarningsModal />
-        <AttendanceOutcomeModal />
-        <ComplaintReviewModal />
-        <PendingLeaveApprovalsModal />
-        <MonthlyBillReminderModal />
-        <PendingAnnouncementsModal />
-        <div className="dashboard-header flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-3xl font-black tracking-tight text-foreground sm:text-4xl">
-            Welcome, <span className="text-primary">{user?.username}</span>
-          </h1>
-          <div className="flex flex-wrap items-center gap-2">
-            <KeysDialog />
-            {canCreateAnnouncements(user?.role) && <CreateAnnouncementDialog />}
-            <RegisterComplaintDialog />
-            <ApplyLeaveDialog />
-            <ClaimReimbursementDialog />
-          </div>
-        </div>
-
-        <AttendanceChangeRequestsCard />
-
-      <OrgChartTeaser />
-
-        <div className="dashboard-card">
-          <PlanNextDayCard />
-        </div>
-
-        {/* Salary Slips and My Documents moved into EMS (the employee's own
-            record there) — not shown here anymore. My registered complaints
-            and My leave applications sit last, directly above the calendar.
-            No animation class on this wrapper itself — each card inside
-            already carries .dashboard-card via DashboardCard, and animating
-            both levels compounds into cards stuck at partial opacity. */}
-        <div className="space-y-3">
-          <SectionLabel>Your work</SectionLabel>
-          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
-            <MyOvertimeCard />
-            <MyUpcomingTasksWidget />
-            <MyUploadRequestsCard />
-            <MyReimbursementsCard />
-            <MyComplaintsCard />
-            <MyLeaveApplicationsCard />
-          </div>
-        </div>
-
-        {/* Calendar is last and small — a glance, not the focus of the page. */}
-        <div className="space-y-3">
-          <SectionLabel>Calendar</SectionLabel>
-          <div className="dashboard-card grid gap-4 max-w-2xl">
-            <UpcomingCalendarWidget compact />
-            <CompanyCalendarGrid compact />
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const name = user?.displayName ?? user?.username
 
   return (
     <div className="space-y-8 py-4" ref={rootRef}>
+      {/* Pop-ups that apply whichever view is showing. */}
       <PendingWarningsModal />
+      <AttendanceOutcomeModal />
+      <ComplaintReviewModal />
       <PendingLeaveApprovalsModal />
+      <MonthlyBillReminderModal />
       <PendingAnnouncementsModal />
-      <div className="dashboard-header flex flex-wrap items-start justify-between gap-4">
+
+      <DashboardToggle views={views} value={view} onChange={choose} />
+
+      <div className="dashboard-view-title flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground sm:text-4xl">
-            Welcome, <span className="text-primary">{user?.username}</span>
+          <h1 className="text-3xl font-black tracking-tight text-foreground capitalize sm:text-4xl">
+            Welcome, <span className="text-primary">{name?.toLowerCase()}</span>
           </h1>
-          <p className="text-sm text-muted-foreground mt-2">
-            Here is a quick snapshot of the telemetry metrics, summary reports, and active recruitment pipelines.
-          </p>
+          {view !== 'me' && (
+            <p className="mt-2 text-sm text-muted-foreground">
+              {VIEW_META[view].label} dashboard
+              {view === 'ceo' ? ' — your approvals and the company at a glance.' : ''}
+              {view === 'hr' ? ' — people, recruitment and leave at a glance.' : ''}
+              {view === 'admin' ? ' — the whole company at a glance.' : ''}
+              {view === 'cfo' ? ' — what Finance needs to act on.' : ''}
+              {view === 'operations' ? ' — complaints and office keys.' : ''}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <KeysDialog />
-          {canCreateAnnouncements(user?.role) && <CreateAnnouncementDialog />}
+          {canCreateAnnouncements(user) && <CreateAnnouncementDialog />}
+          {view === 'me' && user?.employeeLink && (
+            <>
+              <RegisterComplaintDialog />
+              <ApplyLeaveDialog />
+              <ClaimReimbursementDialog />
+            </>
+          )}
         </div>
       </div>
 
-      <div className="space-y-3">
-        <SectionLabel>Overview</SectionLabel>
-        <div className="grid gap-4 grid-cols-2 sm:gap-6 md:grid-cols-4">
-          <StatCard label="Total applicants" value={totalApplicants} icon={<Users className="size-4" />} />
-          <StatCard label="Upcoming meetings" value={upcomingMeetings} icon={<CalendarClock className="size-4" />} />
-          <StatCard label="Active employees" value={stats?.activeEmployees} icon={<UserCheck className="size-4" />} />
-          <StatCard label="Offboarded employees" value={stats?.offboardedEmployees} icon={<UserMinus className="size-4" />} />
-        </div>
-      </div>
+      {view === 'me' && (
+        <>
+          <OrgChartTeaser />
 
-      <AttendanceChangeRequestsCard />
+          {tasksOn && (
+            <div className="dashboard-card">
+              <PlanNextDayCard />
+            </div>
+          )}
 
-      <OrgChartTeaser />
+          {/* My registered complaints and My leave applications sit last,
+              directly above the calendar. No animation class on this wrapper —
+              each card inside already carries .dashboard-card. */}
+          <div className="space-y-3">
+            <SectionLabel>Your work</SectionLabel>
+            <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+              <MyOvertimeCard />
+              {tasksOn && <MyUpcomingTasksWidget />}
+              <MyUploadRequestsCard />
+              <MyReimbursementsCard />
+              <MyComplaintsCard />
+              <MyLeaveApplicationsCard />
+            </div>
+          </div>
+        </>
+      )}
 
-      <div className="dashboard-card">
-        <PlanNextDayCard />
-      </div>
+      {isOverview && (
+        <>
+          <div className="space-y-3">
+            <SectionLabel>Overview</SectionLabel>
+            <div className="grid gap-4 grid-cols-2 sm:gap-6 md:grid-cols-4">
+              <StatCard label="Total applicants" value={totalApplicants} icon={<Users className="size-4" />} />
+              <StatCard label="Upcoming meetings" value={upcomingMeetings} icon={<CalendarClock className="size-4" />} />
+              <StatCard label="Active employees" value={stats?.activeEmployees} icon={<UserCheck className="size-4" />} />
+              <StatCard label="Offboarded employees" value={stats?.offboardedEmployees} icon={<UserMinus className="size-4" />} />
+            </div>
+          </div>
 
-      <div className="grid items-stretch gap-6 lg:grid-cols-2">
-        <MyUpcomingTasksWidget />
-        <MyEventResponsibilitiesWidget />
-      </div>
+          {(view === 'ceo' || view === 'admin') && (
+            <>
+              <AttendanceChangeRequestsCard />
+              <div className="grid items-stretch gap-6 lg:grid-cols-2">
+                <CeoLeaveApprovalsCard />
+                <MyEventResponsibilitiesWidget />
+              </div>
+            </>
+          )}
+          {view === 'hr' && (
+            <div className="grid items-stretch gap-6 lg:grid-cols-2">
+              <MyEventResponsibilitiesWidget />
+            </div>
+          )}
+
+          <OrgChartTeaser />
+        </>
+      )}
+
+      {view === 'cfo' && <FinanceDashboard />}
+      {view === 'operations' && <OperationsDashboard />}
 
       {/* Calendar is last and small — a glance, not the focus of the page. */}
       <div className="space-y-3">

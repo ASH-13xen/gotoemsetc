@@ -1,7 +1,8 @@
 const { Router } = require('express');
 const ApiError = require('../utils/ApiError');
 const validate = require('../middlewares/validate.middleware');
-const { isAdminLike } = require('../utils/roles');
+const { can } = require('../utils/roles');
+const { ACCESS } = require('../config/access');
 const cmsAccess = require('../utils/cmsAccess');
 const companyEventRepository = require('../repositories/companyEvent.repository');
 const companyEventValidator = require('../validators/companyEvent.validator');
@@ -9,7 +10,7 @@ const companyEventController = require('../controllers/companyEvent.controller')
 
 const router = Router();
 
-// Company-wide events (the HR calendar) stay admin/HR-only, same as always.
+// Company-wide events (the HR calendar) — HRMS (admin, CEO, HR).
 // A client-scoped event (body.client on create, or the loaded event's
 // .client on delete) additionally allows Digital Admin/CMS-admin access —
 // Team Main et al. shouldn't need HR to log a client's birthday.
@@ -17,7 +18,7 @@ function requireCompanyEventWrite() {
   return async (req, res, next) => {
     try {
       if (!req.user) return next(ApiError.unauthorized());
-      if (isAdminLike(req.user)) return next();
+      if (can(req.user, ACCESS.HRMS)) return next();
 
       let clientId = req.body?.client || null;
       if (!clientId && req.params?.id) {

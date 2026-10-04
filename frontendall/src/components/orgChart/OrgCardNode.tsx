@@ -1,20 +1,9 @@
 import { memo } from 'react'
 import { Handle, Position, type NodeProps, type Node } from '@xyflow/react'
-import {
-  Briefcase,
-  ChevronDown,
-  Clapperboard,
-  Crown,
-  Megaphone,
-  Sparkles,
-  UserPlus,
-  Users,
-  Video,
-  Star,
-} from 'lucide-react'
+import { Briefcase, ChevronDown, Clapperboard, Crown, Megaphone, Sparkles, UserPlus, Users, Video, Star, KeyRound, ShieldCheck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { OrgNode } from '@/api/orgChart.api'
-import { TEAM_ROLE_LABEL } from '@/api/orgChart.api'
+import { TEAM_ROLE_LABEL, GRANT_INFO } from '@/api/orgChart.api'
 import { MAX_PEOPLE_ON_CARD, avatarGradient, fullName, initials, type Accent } from './orgTree'
 
 export interface OrgCardData extends Record<string, unknown> {
@@ -123,6 +112,11 @@ function OrgCardNodeInner({ data }: NodeProps<OrgCardNodeType>) {
             )}
           </div>
           <p className="truncate text-[11px] text-muted-foreground">{subtitle(org, childCount, teamName)}</p>
+          {org.grantsRole && (
+            <span className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-px text-[9.5px] font-bold text-primary">
+              <KeyRound className="size-2.5" /> {GRANT_INFO[org.grantsRole].label} access
+            </span>
+          )}
         </div>
         {canCollapse && (
           <button
@@ -169,6 +163,16 @@ function OrgCardNodeInner({ data }: NodeProps<OrgCardNodeType>) {
                 {team.people.length} {team.people.length === 1 ? 'person' : 'people'}
               </p>
             </div>
+          </div>
+        ) : isRoot ? (
+          <div className="flex h-9 items-center gap-2 rounded-lg bg-secondary/60 px-2.5 text-xs font-semibold text-muted-foreground">
+            <ShieldCheck className="size-3.5" />
+            Admin login only
+          </div>
+        ) : people.length === 0 && org.grantsRole ? (
+          <div className="flex h-9 items-center gap-2 rounded-lg border border-dashed border-rose-400/80 bg-rose-50/80 px-2.5 text-xs font-bold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
+            <UserPlus className="size-3.5" />
+            Needs someone
           </div>
         ) : people.length === 0 ? (
           <div className="flex h-9 items-center gap-2 rounded-lg border border-dashed border-amber-400/70 bg-amber-50/70 px-2.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">

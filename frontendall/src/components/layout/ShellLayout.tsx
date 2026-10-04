@@ -20,6 +20,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { roleLabel } from "@/lib/roles";
+import { can, featureOn } from "@/lib/access";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "./NotificationBell";
 import "./ShellLayout.css";
@@ -61,57 +62,29 @@ export function ShellLayout({
     setMobileOpen(false);
   }, [location.pathname]);
 
-  // Deliberately only admin + HR — the newer roles (ceo, digital admin,
-  // operations manager, team lead, cto/cfo/sales/technical/finance) have no permissions wired up yet,
-  // so Audit Log stays admin/HR-only until they do.
-  const isAdmin = user?.role === "admin" || user?.role === "hr";
-  // HR Work additionally lets ceo in, matching the backend's
-  // requireAttendanceApprovalAccess and the HR Work routes it gates.
-  const canAccessHrWork = isAdmin || user?.role === "ceo";
-  // Operations (Complaint Register, Office Keys reassignment) — admin/ceo/
-  // operations_manager only, matching the backend's requireOperationsAccess.
-  // Deliberately NOT isAdmin above: HR is excluded from this one on purpose.
-  const canAccessOperations =
-    user?.role === "admin" || user?.role === "ceo" || user?.role === "operations_manager";
-  // Finance — admin/ceo/cfo/finance, matching the backend's
-  // requireFinanceAccess, widened to operations_manager since that role
-  // still needs the remote for the Monthly Bills tab (see
-  // frontendfinance/src/lib/roles.ts#canEnterFinance).
-  const canAccessFinance =
-    isAdmin ||
-    user?.role === "ceo" ||
-    user?.role === "cfo" ||
-    user?.role === "finance" ||
-    user?.role === "operations_manager";
-  // Performance Flags history — same admin/hr/ceo audience the flag
-  // milestone notifications go to (backend's requireHrWorkAccess).
-  const canAccessPerformanceFlags = canAccessHrWork;
-
+  // Every link follows the person's live access (lib/access.ts) — their
+  // login plus the Organisation chart posts they hold.
   const links = [
     { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+    // Everyone: their own record; admin/CEO/HR: everyone's.
     { to: "/ems", label: "EMS", icon: Users },
     // Everyone plans their week here — meetings, events, blocked time.
     { to: "/calendar", label: "Weekly Calendar", icon: CalendarDays },
-    // Every employee needs Task Management and Client Management —
-    // role-dependent capability differences are handled inside each feature,
-    // not at the nav.
-    { to: "/followups", label: "Task Management", icon: CalendarClock },
-    { to: "/sales", label: "Client Management", icon: Briefcase },
-    ...(canAccessHrWork
-      ? [{ to: "/hr", label: "HR Work", icon: ClipboardList }]
+    // Hidden while switched off (backend constants.js FEATURES).
+    ...(featureOn(user, "TASK_MANAGEMENT")
+      ? [{ to: "/followups", label: "Task Management", icon: CalendarClock }]
       : []),
-    ...(canAccessOperations
-      ? [{ to: "/operations", label: "Operations", icon: Wrench }]
+    ...(featureOn(user, "CLIENT_MANAGEMENT")
+      ? [{ to: "/sales", label: "Client Management", icon: Briefcase }]
       : []),
-    ...(canAccessFinance
-      ? [{ to: "/finance", label: "Finance", icon: Wallet }]
-      : []),
-    ...(canAccessPerformanceFlags
+    ...(can(user, "hrms") ? [{ to: "/hr", label: "HR Work", icon: ClipboardList }] : []),
+    ...(can(user, "events") ? [{ to: "/events", label: "Events", icon: CalendarClock }] : []),
+    ...(can(user, "operations") ? [{ to: "/operations", label: "Operations", icon: Wrench }] : []),
+    ...(can(user, "finance") ? [{ to: "/finance", label: "Finance", icon: Wallet }] : []),
+    ...(can(user, "performance_flags")
       ? [{ to: "/performance-flags", label: "Performance Flags", icon: Flag }]
       : []),
-    ...(isAdmin
-      ? [{ to: "/audit-log", label: "Audit Log", icon: ShieldAlert }]
-      : []),
+    ...(can(user, "audit_log") ? [{ to: "/audit-log", label: "Audit Log", icon: ShieldAlert }] : []),
     // Everyone can view the chart; only admin can change it.
     { to: "/organisation", label: "Organisation", icon: Network },
   ];
@@ -223,10 +196,11 @@ export function ShellLayout({
           <div className="flex items-center justify-between gap-3">
             <div className={cn("flex flex-col min-w-0", collapsed && "md:hidden")}>
               <span className="text-sm font-bold text-foreground truncate">
-                {user?.username}
+                {user?.displayName ?? user?.username}
               </span>
-              <span className="text-xs font-medium text-muted-foreground mt-0.5">
-                {roleLabel(user?.role)}
+              {/* Their login role plus every post they hold, e.g. "Employee · HR". */}
+              <span className="text-xs font-medium text-muted-foreground mt-0.5 truncate">
+                {(user?.roles ?? [user?.role]).map((r) => roleLabel(r)).join(" · ")}
               </span>
             </div>
             <Button

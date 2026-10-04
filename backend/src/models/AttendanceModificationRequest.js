@@ -74,9 +74,13 @@ const attendanceModificationRequestSchema = new Schema(
     // untouched until the CEO approves (which applies it) or rejects.
     hrApprovedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     hrApprovedAt: { type: Date },
+    // The role each approver acted in ('hr', 'ceo'…) — "Approved by Juhika
+    // (HR)" is shown only to her and the people above that role.
+    hrApprovedAs: { type: String },
     pendingAttendanceUpdate: { type: Schema.Types.Mixed, default: null },
     resolvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     resolvedAt: { type: Date },
+    resolvedAs: { type: String },
     // True only when resolving this request actually applied an
     // AttendanceRecord change — a request resolved with no override has
     // nothing to revoke, and previousRecordSnapshot below is never captured
@@ -91,6 +95,7 @@ const attendanceModificationRequestSchema = new Schema(
     previousRecordSnapshot: { type: Schema.Types.Mixed, default: null },
     rejectionReason: { type: String, trim: true },
     revokedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    revokedAs: { type: String },
     revokedAt: { type: Date },
     // Flips true once the employee has acknowledged this request's outcome
     // on their dashboard (see AttendanceOutcomeModal in frontendall) — only
