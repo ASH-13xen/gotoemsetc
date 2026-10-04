@@ -187,7 +187,6 @@ export interface Employee {
   assetAccessAdded?: boolean
   updatedIn12345?: boolean
   probationCompleted?: boolean
-  probationCompletedAt?: string | null
   excludeFromPayroll?: boolean
 
   // Offboarding-only — meaningful once status is 'offboarded'.

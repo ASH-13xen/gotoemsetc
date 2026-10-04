@@ -189,10 +189,6 @@ async function updateEmployee(id, data, actor) {
     }
   }
   assertOffboardingHasLastDay(payload, existing);
-  // Ticking "probation completed" ends probation early from today; unticking
-  // it goes back to the automatic joining-date + 3 months.
-  if (payload.probationCompleted === true && !existing.probationCompleted) payload.probationCompletedAt = new Date();
-  if (payload.probationCompleted === false) payload.probationCompletedAt = null;
   const employee = await employeeRepository.updateById(id, payload);
   if (!employee) throw ApiError.notFound('Employee not found');
   await activityService.log(employee._id, 'EMPLOYEE_UPDATED', { fields: Object.keys(payload) });

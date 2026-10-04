@@ -15,7 +15,6 @@ const attendanceEditRequestSchema = new Schema(
       overtimeMinutes: { type: Number, min: 0 },
       isLate: { type: Boolean },
       earlyDeparture: { type: Boolean },
-      paidLeaveAwarded: { type: Boolean },
     },
     reason: { type: String, required: true, trim: true },
     // The day as it was when HR asked, so the approver can compare.

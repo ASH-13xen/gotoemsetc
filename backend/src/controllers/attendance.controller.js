@@ -6,11 +6,11 @@ const accessService = require('../services/access.service');
 const ATTRIBUTION = [{ by: 'markedBy', as: 'markedAs' }];
 
 const mark = asyncHandler(async (req, res) => {
-  const { date, status, overtimeMinutes, isLate, earlyDeparture, paidLeaveAwarded, notes } = req.body;
+  const { date, status, overtimeMinutes, isLate, earlyDeparture, notes } = req.body;
   const record = await attendanceService.markAttendance(
     req.params.id,
     date,
-    { status, overtimeMinutes, isLate, earlyDeparture, paidLeaveAwarded, notes },
+    { status, overtimeMinutes, isLate, earlyDeparture, notes },
     req.user
   );
   res.status(201).json({ record });

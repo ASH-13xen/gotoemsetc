@@ -90,7 +90,6 @@
         <tr><td>Compensation Off</td><td class="num">{compensationOff}</td><td class="num">{compensationOff}</td></tr>
         <tr><td>Incentives</td><td class="num">{incentives}</td><td class="num">{incentives}</td></tr>
         <tr><td>Travel Allowance</td><td class="num">{travelAllowance}</td><td class="num">{travelAllowance}</td></tr>
-        <tr><td>Paid Leave Compensation</td><td class="num">{paidLeaveCompensation}</td><td class="num">{paidLeaveCompensation}</td></tr>
         <tr><td>Other Earning</td><td class="num">{otherEarning1}</td><td class="num">{otherEarning1}</td></tr>
         <tr class="total"><td colspan="2">Gross Earnings</td><td class="num">{grossEarnings}</td></tr>
       </table>
@@ -134,7 +133,7 @@
 
     <div class="legend">
       <div class="legend-item"><span class="legend-swatch" style="background:#cceecc"></span>P = Full Day Present</div>
-      <div class="legend-item"><span class="legend-swatch" style="background:#c7e0ff"></span>O = Paid Leave (own) · O* = Paid Leave awarded by HR</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#c7e0ff"></span>O = Paid Off · O* = Absent converted to Paid Off automatically</div>
       <div class="legend-item"><span class="legend-swatch" style="background:#fff2b3"></span>H = Half Day</div>
       <div class="legend-item"><span class="legend-swatch" style="background:#ffd8a8"></span>L = Late</div>
       <div class="legend-item"><span class="legend-swatch" style="background:#ffc7c7"></span>SL = Short Leave</div>
@@ -147,8 +146,8 @@
     <div class="summary-box">
       <div><strong>Summary</strong></div>
       <div>Full Day Present (P): {countP}</div>
-      <div>Paid Leave (O): {countO} ({countOwnPaidLeave} own, {countAwardedPaidLeave} awarded by HR)</div>
-      <div>Paid Leave Compensation: {paidLeaveNote}</div>
+      <div>Paid Off (O): {countO}</div>
+      <div>This month's paid off: {paidLeaveNote}</div>
       <div>Half Day (H): {countH}</div>
       <div>Late (L): {countL}</div>
       <div>Short Leave (SL): {countSL}</div>

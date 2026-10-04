@@ -38,7 +38,7 @@ function todayUTCMidnight() {
 
 function describeChange(change) {
   const parts = [];
-  if (change.status) parts.push(change.status === 'O' ? `status O (${change.paidLeaveAwarded ? 'awarded' : 'own'} paid leave)` : `status ${change.status}`);
+  if (change.status) parts.push(change.status === 'O' ? 'status O (paid off)' : `status ${change.status}`);
   if (change.overtimeMinutes !== undefined && change.overtimeMinutes !== null) parts.push(`${change.overtimeMinutes} min overtime`);
   if (change.isLate !== undefined && change.isLate !== null) parts.push(change.isLate ? 'late' : 'not late');
   if (change.earlyDeparture !== undefined && change.earlyDeparture !== null) parts.push(change.earlyDeparture ? 'left early' : 'no early departure');
@@ -82,7 +82,6 @@ async function create(user, { employeeId, date: dateStr, reason, ...change }) {
           overtimeMinutes: current.overtimeMinutes ?? 0,
           isLate: Boolean(current.isLate),
           earlyDeparture: Boolean(current.earlyDeparture),
-          paidLeaveAwarded: Boolean(current.paidLeaveAwarded),
         }
       : null,
   });

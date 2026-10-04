@@ -237,12 +237,9 @@ const employeeSchema = new Schema(
     personalPhoneAdded: { type: Boolean, default: false },
     assetAccessAdded: { type: Boolean, default: false },
     updatedIn12345: { type: Boolean, default: false },
-    // Probation ends PROBATION_MONTHS after dateOfJoining on its own (see
-    // utils/probation.js). Ticking this ends it early — from
-    // probationCompletedAt, stamped when it's ticked. Boxes ticked before that
-    // date was recorded carry no date and change nothing.
+    // Ticked by HR when the employee's probation is over — the only thing
+    // that decides it (utils/probation.js). Unlocks the monthly paid off.
     probationCompleted: { type: Boolean, default: false },
-    probationCompletedAt: { type: Date },
     // Left out of salary slips and master salary sheets entirely (e.g.
     // founders, demo/test records) — see employee.repository.js
     // #listPayableForPeriod and salarySlip.service.js#generateSlip.

@@ -58,10 +58,12 @@ const attendanceRecordSchema = new Schema(
     // Half-Day-territory arrival never sets this. See
     // attendanceClassifier.service.js#applySlDayForEmployee.
     isSlDayBoost: { type: Boolean, default: false },
-    // Only meaningful on a status: 'O' (Paid Leave) day. False = the
-    // employee's own paid leave (one a month, after probation); true = an
-    // extra paid day HR awarded, which never counts against that allowance.
-    // Cleared whenever the day stops being 'O'.
+    // Set only when a salary slip turned this day from Absent into the
+    // month's paid off automatically (salarySlip.service.js#generateSlip) —
+    // the exact sentence shown on the calendar and the slip. Cleared by any
+    // later manual change to the day.
+    autoPaidOffNote: { type: String, default: null },
+    // Legacy (own vs awarded paid leave, no longer used).
     paidLeaveAwarded: { type: Boolean, default: false },
     // The person who last changed this day by hand, and the role they acted
     // in ('hr', 'ceo', 'admin'…). Shown only to them and the people above

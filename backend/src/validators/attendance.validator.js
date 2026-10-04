@@ -13,7 +13,6 @@ const mark = {
       overtimeMinutes: z.coerce.number().min(0).optional(),
       isLate: z.coerce.boolean().optional(),
       earlyDeparture: z.coerce.boolean().optional(),
-      paidLeaveAwarded: z.boolean().optional(),
       notes: z.string().optional(),
     })
     .refine(

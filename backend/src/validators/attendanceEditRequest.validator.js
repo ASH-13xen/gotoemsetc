@@ -12,7 +12,6 @@ const create = {
       overtimeMinutes: z.coerce.number().min(0).optional(),
       isLate: z.boolean().optional(),
       earlyDeparture: z.boolean().optional(),
-      paidLeaveAwarded: z.boolean().optional(),
       reason: z.string().trim().min(1, 'Give a reason for the change').max(1000),
     })
     .refine(

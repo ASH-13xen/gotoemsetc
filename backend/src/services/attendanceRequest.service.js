@@ -78,13 +78,13 @@ const PAID_LEAVE_INELIGIBLE_REASON = {
 // eligible.
 async function paidLeaveEligibility(employeeId, date) {
   const employee = await employeeRepository.findById(employeeId);
-  if (!employee || !isPastProbation(employee, date)) {
+  if (!employee || !isPastProbation(employee)) {
     return { eligible: false, reason: PAID_LEAVE_INELIGIBLE_REASON.PROBATION };
   }
 
   const { from, to } = monthBounds(date);
   const records = await attendanceRepository.listForEmployee(employeeId, { from, to });
-  if (records.some((r) => r.status === ATTENDANCE_STATUS.PAID_LEAVE && !r.paidLeaveAwarded)) {
+  if (records.some((r) => r.status === ATTENDANCE_STATUS.PAID_LEAVE)) {
     return { eligible: false, reason: PAID_LEAVE_INELIGIBLE_REASON.ALREADY_USED };
   }
 
@@ -373,8 +373,7 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actor) {
   // month, after probation. Extra paid days are awarded from the calendar.
   if (attendanceUpdate?.status === ATTENDANCE_STATUS.PAID_LEAVE) {
     const employee = await employeeRepository.findById(request.employee);
-    await attendanceService.assertOwnPaidLeaveAllowed(employee, enumerateDates(request.date, request.endDate || request.date));
-    attendanceUpdate = { ...attendanceUpdate, paidLeaveAwarded: false };
+    await attendanceService.assertPaidOffAllowed(employee, enumerateDates(request.date, request.endDate || request.date));
   }
 
   if (request.approvalStage !== ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO && request.requestedMultiDayLeave && !canGiveFinalApproval) {

@@ -94,8 +94,9 @@ export function GenerateSalarySlipDialog({
           <DialogDescription>
             Days worked, overtime, and attendance-based deductions are computed automatically from the start
             date through the end date below — any range works, it doesn't need to line up with a calendar
-            month. Everything else defaults to 0 if left blank. Paid Leave Compensation (one day's pay when no paid
-            leave of their own was taken) is added automatically on a whole-month slip from September 2026.
+            month. Everything else defaults to 0 if left blank. On a whole-month slip (September 2026 onwards, after
+            probation) the month's paid off is settled automatically: with no paid off taken, the first Absent becomes the
+            paid off; with no Absent either, one day's pay is added to Other Earning.
           </DialogDescription>
         </DialogHeader>
 

@@ -24,9 +24,9 @@ export interface AttendanceRecord {
   // False while the day is still provisional (real-time classification
   // could still revise it later today); true once finalized.
   isSettled: boolean
-  // Only on a Paid Leave (O) day: true = an extra paid day HR awarded,
-  // false = the employee's own paid leave (one a month, after probation).
-  paidLeaveAwarded?: boolean
+  // Only on a Paid Off (O) day a salary slip created by converting the
+  // month's first Absent — the sentence saying exactly what happened.
+  autoPaidOffNote?: string | null
   notes?: string
 }
 
@@ -35,7 +35,6 @@ export interface MarkAttendanceInput {
   overtimeMinutes?: number
   isLate?: boolean
   earlyDeparture?: boolean
-  paidLeaveAwarded?: boolean
   notes?: string
 }
 
@@ -111,7 +110,7 @@ export interface AttendanceEditRequest {
   date: string
   change: Omit<MarkAttendanceInput, 'notes'>
   reason: string
-  previous: { status: AttendanceStatus | null; overtimeMinutes: number; isLate: boolean; earlyDeparture: boolean; paidLeaveAwarded: boolean } | null
+  previous: { status: AttendanceStatus | null; overtimeMinutes: number; isLate: boolean; earlyDeparture: boolean } | null
   requestedBy: { _id: string; username: string; role: string }
   status: AttendanceEditRequestStatus
   decidedBy?: { _id: string; username: string; role: string }

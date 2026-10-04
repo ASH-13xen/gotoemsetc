@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { CalendarOff, ChevronLeft, ChevronRight, Clock3, Gift, Hourglass } from 'lucide-react'
+import { CalendarOff, ChevronLeft, ChevronRight, Clock3, Hourglass, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -106,8 +106,6 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
   const [pendingIsLate, setPendingIsLate] = useState(false)
   const [pendingEarlyDeparture, setPendingEarlyDeparture] = useState(false)
   const [pendingNotes, setPendingNotes] = useState('')
-  // Paid Leave only: an extra day HR is awarding, not the employee's own.
-  const [pendingAwarded, setPendingAwarded] = useState(false)
 
   const month = monthDate.getUTCMonth() + 1
   const year = monthDate.getUTCFullYear()
@@ -149,7 +147,6 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
       overtimeMinutes,
       isLate: pendingIsLate,
       earlyDeparture: pendingEarlyDeparture,
-      paidLeaveAwarded: status === 'O' ? pendingAwarded : undefined,
     }
     // Older than 2 days: HR can't change it directly — it goes to the CEO
     // or admin for approval instead.
@@ -170,7 +167,7 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
       { date: dateKey, ...change, notes: pendingNotes.trim() || undefined },
       {
         onSuccess: () => {
-          toast.success(status === 'O' && pendingAwarded ? 'Paid leave awarded' : 'Attendance saved')
+          toast.success('Attendance saved')
           setOpenDay(null)
         },
         onError: (err) => toast.error(apiMessage(err, 'Could not save attendance')),
@@ -289,7 +286,6 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                       if (futureLocked) return
                       setOpenDay(open ? dateKey : null)
                       setPendingStatus(isFuture && record?.status !== 'O' ? 'O' : (record?.status ?? NO_STATUS))
-                      setPendingAwarded(record?.paidLeaveAwarded ?? false)
                       setPendingOvertimeMinutes(record?.overtimeMinutes ? String(record.overtimeMinutes) : '')
                       setPendingIsLate(record?.isLate ?? false)
                       setPendingEarlyDeparture(record?.earlyDeparture ?? false)
@@ -317,13 +313,13 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                         {config && !compact && (
                           <span className="text-[9px] font-bold tracking-wide uppercase opacity-80">
                             {config.code}
-                            {record?.status === 'O' && record.paidLeaveAwarded ? '*' : ''}
+                            {record?.status === 'O' && record.autoPaidOffNote ? '*' : ''}
                           </span>
                         )}
-                        {record?.status === 'O' && record.paidLeaveAwarded && (
-                          <Gift
+                        {record?.status === 'O' && record.autoPaidOffNote && (
+                          <Sparkles
                             className={cn('absolute top-1 right-1 text-sky-600', compact ? 'size-2' : 'size-3')}
-                            aria-label="Paid leave awarded by HR"
+                            aria-label="Absent converted to paid off automatically"
                           />
                         )}
                         {pendingRequest && (
@@ -386,14 +382,14 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                         )}
                         {record?.modifiedByRequest && <p className="text-xs text-amber-600">Modified by HR</p>}
                         {record?.status === 'O' && (
-                          <p className="text-xs font-medium text-sky-700">
-                            {record.paidLeaveAwarded ? 'Paid leave awarded by HR (extra day)' : "The employee's own paid leave for this month"}
+                          <p className="rounded-lg bg-sky-500/10 p-2.5 text-xs font-medium text-sky-800 dark:text-sky-300">
+                            {record.autoPaidOffNote ?? "This month's paid off (one a month, after probation)."}
                           </p>
                         )}
                         {pendingRequest && (
                           <div className="grid gap-0.5 rounded-lg bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-300">
                             <p className="font-semibold">Change request waiting for the CEO/admin</p>
-                            <p>Asked: {pendingRequest.change.status ?? 'no status change'}{pendingRequest.change.status === 'O' ? (pendingRequest.change.paidLeaveAwarded ? ' (awarded)' : ' (own)') : ''} — “{pendingRequest.reason}”</p>
+                            <p>Asked: {pendingRequest.change.status ?? 'no status change'} — “{pendingRequest.reason}”</p>
                           </div>
                         )}
                         {record && !record.isSettled && (
@@ -419,7 +415,10 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                           </div>
                         )}
                         {canMark && isFuture && (
-                          <p className="text-xs text-muted-foreground">Upcoming day — only paid leave can be given ahead of time.</p>
+                          <p className="text-xs text-muted-foreground">Upcoming day — only a paid off can be given ahead of time.</p>
+                        )}
+                        {canMark && isSunday && (
+                          <p className="text-xs text-muted-foreground">Sundays don't take a status — record any time worked as overtime minutes.</p>
                         )}
                         {canMark && asRequest && !pendingRequest && (
                           <p className="rounded-lg bg-secondary/60 p-2.5 text-xs text-muted-foreground">
@@ -428,6 +427,7 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                         )}
                         {canMark && !(asRequest && pendingRequest) && (
                           <>
+                            {!isSunday && (
                             <Select
                               value={pendingStatus}
                               onValueChange={(value) => {
@@ -453,25 +453,6 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                                 ))}
                               </SelectContent>
                             </Select>
-                            {pendingStatus === 'O' && (
-                              <label
-                                htmlFor={`awarded-${dateKey}`}
-                                className="flex cursor-pointer select-none items-start gap-2 rounded-lg border border-sky-500/30 bg-sky-500/5 p-2.5 text-xs text-foreground"
-                              >
-                                <input
-                                  id={`awarded-${dateKey}`}
-                                  type="checkbox"
-                                  checked={pendingAwarded}
-                                  onChange={(e) => setPendingAwarded(e.target.checked)}
-                                  className="mt-0.5 size-4 cursor-pointer rounded border-border accent-sky-600"
-                                />
-                                <span>
-                                  <span className="font-semibold">Awarded by HR</span>
-                                  <span className="block text-[11px] text-muted-foreground">
-                                    An extra paid day — doesn't use the employee's one own paid leave this month.
-                                  </span>
-                                </span>
-                              </label>
                             )}
                             {!isFuture && (
                             <>

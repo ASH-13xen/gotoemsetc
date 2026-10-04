@@ -3,7 +3,7 @@ const { numberToIndianWords } = require('./mergeData.service');
 const attendanceRepository = require('../repositories/attendance.repository');
 const holidayRepository = require('../repositories/holiday.repository');
 const { ATTENDANCE_STATUS, PAID_LEAVE_COMPENSATION_FROM } = require('../config/constants');
-const { isPastProbation, probationEndDate } = require('../utils/probation');
+const { isPastProbation } = require('../utils/probation');
 const { dateKey, isOffDay } = require('../utils/attendanceDays');
 const { computeEffectiveUnitsBreakdown } = require('../utils/attendancePenalties');
 
@@ -81,44 +81,62 @@ function ddmmyyyy(date) {
   return `${String(date.getUTCDate()).padStart(2, '0')}/${String(date.getUTCMonth() + 1).padStart(2, '0')}/${date.getUTCFullYear()}`;
 }
 
-// Paid Leave Compensation — one day's pay when the employee didn't take
-// their own paid leave that month. Decided purely from attendance, and only
-// when ALL of these hold:
-//  * the slip is for one whole calendar month (1st to last day), from
-//    PAID_LEAVE_COMPENSATION_FROM onwards;
-//  * the employee was employed for that whole month;
-//  * probation was already over when the month started (utils/probation.js);
-//  * they worked at least one day that month (P, L, SL, H or W);
-//  * none of the month's O days is their own (paid leave HR awarded —
-//    paidLeaveAwarded — never counts).
+// The monthly paid off, settled at salary time. After probation every
+// employee has ONE paid off a month. On a whole-month slip (1st to last
+// day, from PAID_LEAVE_COMPENSATION_FROM onwards), for someone employed the
+// whole month with probation complete and at least one day worked
+// (P, L, SL, H or W):
+//  * the month already has an O day  → nothing more to do;
+//  * no O, but at least one Absent   → the FIRST Absent (status A, on a
+//    working day) becomes the paid off. It's switched to O here in memory,
+//    so every number below already counts it as paid; generateSlip then
+//    writes it to attendance with a line saying exactly what happened;
+//  * no O and no Absent              → one day's pay is added to Other
+//    Earning instead, since the paid off went unused.
 // Always returns why, so the slip can say so either way.
-function paidLeaveCompensationFor(employee, requestedStart, requestedEnd, employed, records) {
-  const takenDates = records.filter((r) => r.status === ATTENDANCE_STATUS.PAID_LEAVE && !r.paidLeaveAwarded).map((r) => r.date);
-  const awardedDates = records.filter((r) => r.status === ATTENDANCE_STATUS.PAID_LEAVE && r.paidLeaveAwarded).map((r) => r.date);
-  const result = (eligible, reason) => ({ eligible, reason, takenDates, awardedDates });
+function settlePaidOff(employee, requestedStart, requestedEnd, employed, records, holidayDateKeys) {
+  const usedDates = () => records.filter((r) => r.status === ATTENDANCE_STATUS.PAID_LEAVE).map((r) => r.date);
+  const result = (extra) => ({ eligible: false, convertedDate: null, takenDates: usedDates(), ...extra });
 
   const monthStart = new Date(Date.UTC(requestedStart.getUTCFullYear(), requestedStart.getUTCMonth(), 1));
   const monthEnd = new Date(Date.UTC(requestedStart.getUTCFullYear(), requestedStart.getUTCMonth() + 1, 0));
   if (requestedStart.getTime() !== monthStart.getTime() || requestedEnd.getTime() !== monthEnd.getTime()) {
-    return result(false, 'Only on a whole-month slip (1st to last day of the month)');
+    return result({ reason: 'Settled only on a whole-month slip (1st to last day of the month)' });
   }
   if (monthStart.getTime() < new Date(`${PAID_LEAVE_COMPENSATION_FROM}T00:00:00.000Z`).getTime()) {
-    return result(false, 'Applies from September 2026 slips onwards');
+    return result({ reason: 'Applies from September 2026 slips onwards' });
   }
   if (employed.startDate.getTime() !== monthStart.getTime() || employed.endDate.getTime() !== monthEnd.getTime()) {
-    return result(false, 'Not employed for the whole month');
+    return result({ reason: 'Not employed for the whole month' });
   }
-  if (!isPastProbation(employee, monthStart)) {
-    const end = probationEndDate(employee);
-    return result(false, end ? `On probation until ${ddmmyyyy(end)}` : 'On probation');
+  if (!isPastProbation(employee)) {
+    return result({ reason: 'Probation not completed — no paid off yet' });
   }
   if (!records.some((r) => WORKED_STATUSES.has(r.status))) {
-    return result(false, 'No day worked this month');
+    return result({ reason: 'No day worked this month' });
   }
-  if (takenDates.length > 0) {
-    return result(false, `Own paid leave taken on ${takenDates.map(ddmmyyyy).join(', ')}`);
+  const used = records.filter((r) => r.status === ATTENDANCE_STATUS.PAID_LEAVE);
+  if (used.length > 0) {
+    const auto = used.find((r) => r.autoPaidOffNote);
+    return result({
+      reason: auto
+        ? `Absent on ${ddmmyyyy(auto.date)} was converted to this month's paid off automatically`
+        : `Paid off used on ${used.map((r) => ddmmyyyy(r.date)).join(', ')}`,
+    });
   }
-  return result(true, 'No paid leave taken this month — 1 day paid');
+  const firstAbsent = records
+    .filter((r) => r.status === ATTENDANCE_STATUS.ABSENT && !isOffDay(r.date, holidayDateKeys))
+    .sort((a, b) => a.date.getTime() - b.date.getTime())[0];
+  if (firstAbsent) {
+    // In memory only — see generateSlip for the write to attendance.
+    firstAbsent.status = ATTENDANCE_STATUS.PAID_LEAVE;
+    firstAbsent.autoPaidOffNote = 'pending';
+    return result({
+      convertedDate: firstAbsent.date,
+      reason: `Absent on ${ddmmyyyy(firstAbsent.date)} was converted to this month's paid off automatically`,
+    });
+  }
+  return result({ eligible: true, reason: 'Paid off not used and no absent — 1 day added to Other Earning' });
 }
 
 // A working day with no attendance record, no status (e.g. a record that
@@ -160,6 +178,9 @@ async function computeAttendanceSummary(employee, requestedStart, requestedEnd) 
   const totalDaysInPeriod = Math.round((endDate.getTime() - startDate.getTime()) / MS_PER_DAY) + 1;
   const holidayDateKeys = new Set(holidays.map((h) => dateKey(h.date)));
   const recordByDate = new Map(allRecords.map((r) => [dateKey(r.date), r]));
+  // Must run before anything is counted — it may turn the first Absent into
+  // the month's paid off.
+  const paidLeave = settlePaidOff(employee, requestedStart, requestedEnd, { startDate, endDate }, records, holidayDateKeys);
 
   // Off days in a week are paid if at least one working day that week
   // (within employment) was paid. A week with no working days at all inside
@@ -235,8 +256,6 @@ async function computeAttendanceSummary(employee, requestedStart, requestedEnd) 
       if (record && !record.status) unmarkedWorkingDates.push(date);
     }
   }
-
-  const paidLeave = paidLeaveCompensationFor(employee, requestedStart, requestedEnd, { startDate, endDate }, records);
 
   const workingDaysInPeriod = totalDaysInPeriod - offDaysInPeriod;
   const unpaidOffDays = unpaidOffDateKeys.size;
@@ -351,7 +370,8 @@ function computeSalary(employee, summary, manualInputs) {
   // than a month) Earnings must scale down, or the employee gets paid a
   // full month's Basic for only part of it.
   const basicEarnings = dailyRate * summary.totalDaysInPeriod;
-  // One day's pay — see paidLeaveCompensationFor.
+  // One day's pay for an unused paid off — see settlePaidOff. Shown as part
+  // of Other Earning on the slip.
   const paidLeaveCompensation = summary.paidLeave?.eligible ? dailyRate : 0;
   const totalReimbursements = reimbursement1 + reimbursement2;
 

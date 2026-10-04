@@ -826,7 +826,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 name="probationCompleted"
                 render={({ field }) => (
                   <CheckboxRow
-                    label="End probation early? (otherwise it ends 3 months after joining)"
+                    label="Probation completed? (unlocks the one paid off a month)"
                     checked={field.value}
                     onChange={field.onChange}
                   />

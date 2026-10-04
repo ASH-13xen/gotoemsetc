@@ -8,6 +8,7 @@ const ApiError = require('../utils/ApiError');
 const env = require('../config/env');
 const employeeRepository = require('../repositories/employee.repository');
 const salarySlipRepository = require('../repositories/salarySlip.repository');
+const AttendanceRecord = require('../models/AttendanceRecord');
 const userRepository = require('../repositories/user.repository');
 const localFileStorage = require('../services/localFileStorage.service');
 const emailService = require('./email.service');
@@ -90,8 +91,8 @@ function buildAttendanceDays(summary) {
       statusText = 'A';
     } else if (record?.status) {
       bg = STATUS_BG[record.status] || bg;
-      // O* = a paid day HR awarded, not the employee's own paid leave.
-      statusText = record.status === ATTENDANCE_STATUS.PAID_LEAVE && record.paidLeaveAwarded ? 'O*' : record.status;
+      // O* = an Absent the slip converted to the month's paid off.
+      statusText = record.status === ATTENDANCE_STATUS.PAID_LEAVE && record.autoPaidOffNote ? 'O*' : record.status;
     } else if (isSunday || isHoliday) {
       bg = OFF_BG;
       statusText = isHoliday ? 'HOL' : '';
@@ -167,8 +168,8 @@ function buildMergeData(employee, summary, salary) {
     compensationOff: formatCurrency(salary.compensationOff),
     incentives: formatCurrency(salary.incentives),
     travelAllowance: formatCurrency(salary.travelAllowance),
-    otherEarning1: formatCurrency(salary.otherEarning1),
-    paidLeaveCompensation: formatCurrency(salary.paidLeaveCompensation),
+    // Manual Other Earning plus the one day's pay for an unused paid off.
+    otherEarning1: formatCurrency((salary.otherEarning1 || 0) + (salary.paidLeaveCompensation || 0)),
     grossEarnings: formatCurrency(salary.grossEarnings),
 
     incomeTaxDeduction: formatCurrency(salary.incomeTaxDeduction),
@@ -188,8 +189,6 @@ function buildMergeData(employee, summary, salary) {
 
     countP: String(summary.counts.P),
     countO: String(summary.counts.O),
-    countOwnPaidLeave: String(summary.paidLeave.takenDates.length),
-    countAwardedPaidLeave: String(summary.paidLeave.awardedDates.length),
     paidLeaveNote: summary.paidLeave.reason,
     countH: String(summary.counts.H),
     countL: String(summary.counts.L),
@@ -253,6 +252,23 @@ async function generateSlip(employeeId, input, createdBy, actor) {
   }
 
   const { summary, salary, pdfBuffer } = await renderSlip(employee, startDate, endDate, manualInputs);
+
+  // The slip counted the first Absent as this month's paid off (see
+  // salaryCalculation.service.js#settlePaidOff) — make attendance say so,
+  // with a line telling exactly what happened.
+  if (summary.paidLeave.convertedDate) {
+    const monthLabel = startDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    await AttendanceRecord.updateOne(
+      { employee: employeeId, date: summary.paidLeave.convertedDate },
+      {
+        $set: {
+          status: ATTENDANCE_STATUS.PAID_LEAVE,
+          isAutoMarked: false,
+          autoPaidOffNote: `Auto-converted from Absent to Paid Off by the ${monthLabel} salary slip on ${formatDateDDMMYYYY(new Date())} — the employee had not used this month's paid off.`,
+        },
+      }
+    );
+  }
 
   const relativePath = path.join(
     String(employeeId),
@@ -391,8 +407,8 @@ async function buildMasterSheet({ month, year }, { useGeneratedSlips = true } = 
     // Only the slip's "Other Deduction 3" field — a live-calculated row has
     // no manual deductions.
     const otherDeduction = slip ? slip.otherDeduction3 || 0 : 0;
-    const otherEarning = slip ? slip.otherEarning1 || 0 : 0;
-    const paidLeaveCompensation = slip ? slip.paidLeaveCompensation || 0 : salary.paidLeaveCompensation;
+    // Manual Other Earning plus the one day's pay for an unused paid off.
+    const otherEarning = slip ? (slip.otherEarning1 || 0) + (slip.paidLeaveCompensation || 0) : salary.paidLeaveCompensation;
     rows.push({
       employeeName: `${employee.firstName} ${employee.lastName || ''}`.trim(),
       designation: employee.designation || '',
@@ -400,7 +416,6 @@ async function buildMasterSheet({ month, year }, { useGeneratedSlips = true } = 
       totalDaysInPeriod: summary.totalDaysInPeriod,
       daysPayable: summary.daysWorked,
       overtimeMinutes: summary.totalOvertimeMinutes,
-      paidLeaveCompensation,
       otherEarning,
       otherDeduction,
       netPayable,
@@ -435,7 +450,6 @@ async function renderMasterSheet({ periodLabel, rows }) {
       totalDaysInPeriod: formatDays(row.totalDaysInPeriod),
       daysPayable: formatDays(row.daysPayable),
       overtimeMinutes: Math.round(row.overtimeMinutes || 0).toLocaleString('en-IN'),
-      paidLeaveCompensation: row.paidLeaveCompensation ? formatCurrency(row.paidLeaveCompensation) : '—',
       otherEarning: row.otherEarning ? formatCurrency(row.otherEarning) : '—',
       otherDeduction: row.otherDeduction ? formatCurrency(row.otherDeduction) : '—',
       netPayable: formatCurrency(row.netPayable),
@@ -443,7 +457,6 @@ async function renderMasterSheet({ periodLabel, rows }) {
     })),
     totalCurrentSalary: formatCurrency(sum('currentSalary')),
     totalOvertimeMinutes: Math.round(sum('overtimeMinutes')).toLocaleString('en-IN'),
-    totalPaidLeaveCompensation: formatCurrency(sum('paidLeaveCompensation')),
     totalOtherEarning: formatCurrency(sum('otherEarning')),
     totalOtherDeduction: formatCurrency(sum('otherDeduction')),
     totalNetPayable: formatCurrency(sum('netPayable')),

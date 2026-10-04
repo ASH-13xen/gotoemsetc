@@ -52,7 +52,6 @@
         <th class="num">Total Days in Period</th>
         <th class="num">Days Payable</th>
         <th class="num">Overtime (min)</th>
-        <th class="num">Paid Leave Comp. (₹)</th>
         <th class="num">Other Earning (₹)</th>
         <th class="num">Other Deduction (₹)</th>
         <th class="num">Net Payable (₹)</th>
@@ -68,7 +67,6 @@
         <td class="num">{totalDaysInPeriod}</td>
         <td class="num">{daysPayable}</td>
         <td class="num">{overtimeMinutes}</td>
-        <td class="num">{paidLeaveCompensation}</td>
         <td class="num">{otherEarning}</td>
         <td class="num">{otherDeduction}</td>
         <td class="num">{netPayable}<span class="note">{netNote}</span></td>
@@ -80,7 +78,6 @@
         <td></td>
         <td></td>
         <td class="num">{totalOvertimeMinutes}</td>
-        <td class="num">{totalPaidLeaveCompensation}</td>
         <td class="num">{totalOtherEarning}</td>
         <td class="num">{totalOtherDeduction}</td>
         <td class="num">{totalNetPayable}</td>
@@ -90,9 +87,8 @@
 
   <p class="footnote">
     Total Days in Period = days employed in the month. Days Payable = days paid for (present in any form, paid leave and
-    paid Sundays/holidays) minus half a day per half-day deduction. Paid Leave Comp. = one day's pay when no paid leave of
-    the employee's own was taken that month (whole-month slips, after probation). Other Earning = the slip's "Other Earning" field
-    only; Other Deduction = the slip's "Other Deduction 3" field only. Net payable is taken from the employee's salary slip for this month.
+    paid Sundays/holidays) minus half a day per half-day deduction. Other Earning = the slip's "Other Earning" field plus one
+    day's pay when the month's paid off went unused (no paid off and no absent; whole-month slips, after probation); Other Deduction = the slip's "Other Deduction 3" field only. Net payable is taken from the employee's salary slip for this month.
   </p>
 </body>
 </html>

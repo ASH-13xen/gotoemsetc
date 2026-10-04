@@ -10,7 +10,6 @@ export interface EditRequestChange {
   overtimeMinutes?: number
   isLate?: boolean
   earlyDeparture?: boolean
-  paidLeaveAwarded?: boolean
 }
 
 export interface AttendanceEditRequest {

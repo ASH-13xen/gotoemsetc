@@ -22,7 +22,7 @@ import {
 
 const STATUS_LABEL: Record<string, string> = {
   P: 'Present',
-  O: 'Paid Leave',
+  O: 'Paid Off',
   H: 'Half Day',
   L: 'Late',
   SL: 'Short Leave',
@@ -36,7 +36,7 @@ function describe(change: EditRequestChange | null, { isPrevious = false } = {})
   const parts: string[] = []
   if (change.status) {
     const label = STATUS_LABEL[change.status] ?? change.status
-    parts.push(change.status === 'O' ? `${label} (${change.paidLeaveAwarded ? 'awarded by HR' : 'own'})` : label)
+    parts.push(label)
   } else if (isPrevious) parts.push('No status')
   if (change.overtimeMinutes) parts.push(`${change.overtimeMinutes} min OT`)
   if (change.isLate) parts.push('late')
