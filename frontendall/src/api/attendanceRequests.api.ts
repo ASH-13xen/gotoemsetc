@@ -125,13 +125,13 @@ export async function createLeaveApplication(input: {
   return data
 }
 
-// Every attendance/leave request this employee has ever filed, any status —
-// the plain '/' list route auto-scopes to the caller's own requests unless
-// they hold admin/mark_attendance access (see
-// backend/src/controllers/attendanceRequest.controller.js#list), so no
-// employee id needs to be passed from here.
+// Every attendance/leave request this employee has ever filed, any status.
+// `mine` keeps it to their own even for someone with HR-level access, who
+// would otherwise get everyone's (see
+// backend/src/controllers/attendanceRequest.controller.js#list). The
+// employee is taken from the login on the server — no id is passed from here.
 export async function listMyAttendanceRequests(): Promise<{ requests: AttendanceModificationRequest[] }> {
-  const { data } = await apiClient.get('/attendance-requests')
+  const { data } = await apiClient.get('/attendance-requests', { params: { mine: true } })
   return data
 }
 

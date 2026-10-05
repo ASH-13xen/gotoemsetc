@@ -13,6 +13,8 @@ const create = {
 const list = {
   query: z.object({
     status: z.enum(Object.values(COMPLAINT_STATUS)).optional(),
+    // 'true' = only the caller's own, even when they could see everyone's.
+    mine: z.enum(['true', 'false']).optional(),
   }),
 };
 

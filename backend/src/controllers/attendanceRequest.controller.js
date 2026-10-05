@@ -26,8 +26,13 @@ const create = asyncHandler(async (req, res) => {
 // Admins, HR, and mark_attendance holders see every request (optionally
 // filtered by status); anyone else only ever sees their own, regardless of
 // what they pass — never trust the client for whose requests these are.
+// HR-level access sees everyone's; everyone else only their own. `mine=true`
+// asks for the caller's own even when they could see everyone's — the
+// dashboard's "My leave applications" card.
 const list = asyncHandler(async (req, res) => {
-  const canSeeAll = can(req.user, ACCESS.HRMS) || req.user.permissions.includes(PERMISSIONS.MARK_ATTENDANCE);
+  const mineOnly = req.query.mine === 'true';
+  if (mineOnly && !req.user.employeeLink) return res.json({ requests: [] });
+  const canSeeAll = !mineOnly && (can(req.user, ACCESS.HRMS) || req.user.permissions.includes(PERMISSIONS.MARK_ATTENDANCE));
   const employeeId = canSeeAll ? undefined : req.user.employeeLink;
   const requests = await attendanceRequestService.listRequests({ employeeId, status: req.query.status });
   res.json({ requests: await shape(req, requests) });

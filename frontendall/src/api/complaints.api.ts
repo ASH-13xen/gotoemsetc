@@ -53,12 +53,13 @@ export async function listMyComplaintsAwaitingReview(): Promise<{ complaints: Co
   return data
 }
 
-// Every complaint this employee has ever filed, any status — the plain '/'
-// list route auto-scopes to the caller's own complaints unless they hold
-// Operations access (see backend/src/controllers/complaint.controller.js#list),
-// so no employee id needs to be passed from here.
+// Every complaint this employee has ever filed, any status. `mine` keeps
+// it to their own even for someone with Operations access, who would
+// otherwise get the whole company's (see
+// backend/src/controllers/complaint.controller.js#list). The employee is
+// taken from the login on the server — no id is passed from here.
 export async function listMyComplaints(): Promise<{ complaints: Complaint[] }> {
-  const { data } = await apiClient.get('/complaints')
+  const { data } = await apiClient.get('/complaints', { params: { mine: true } })
   return data
 }
 

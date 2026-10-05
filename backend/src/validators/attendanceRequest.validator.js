@@ -65,6 +65,8 @@ const cmApprove = { params: idParam.params };
 const list = {
   query: z.object({
     status: z.enum(Object.values(ATTENDANCE_REQUEST_STATUS)).optional(),
+    // 'true' = only the caller's own, even when they could see everyone's.
+    mine: z.enum(['true', 'false']).optional(),
   }),
 };
 

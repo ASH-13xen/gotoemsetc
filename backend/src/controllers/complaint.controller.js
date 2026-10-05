@@ -22,9 +22,14 @@ const file = asyncHandler(async (req, res) => {
 // Operations (admin/ceo/operations_manager) see every complaint, optionally
 // filtered by status; anyone else only ever sees their own, regardless of
 // what they pass — never trust the client for whose complaints these are.
+// Operations sees every complaint; everyone else only their own. `mine=true`
+// asks for the caller's own even when they could see everyone's — the
+// dashboard's "My registered complaints" card, which would otherwise show a
+// CEO or operations manager the whole company's.
 const list = asyncHandler(async (req, res) => {
-  const canSeeAll =
-    can(req.user, ACCESS.OPERATIONS);
+  const mineOnly = req.query.mine === 'true';
+  if (mineOnly && !req.user.employeeLink) return res.json({ complaints: [] });
+  const canSeeAll = !mineOnly && can(req.user, ACCESS.OPERATIONS);
   const employeeId = canSeeAll ? undefined : req.user.employeeLink;
   const complaints = await complaintService.listComplaints({ employeeId, status: req.query.status });
   res.json({ complaints });
