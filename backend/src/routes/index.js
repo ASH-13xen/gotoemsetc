@@ -45,7 +45,6 @@ const monthlyBillRoutes = require('./monthlyBill.routes');
 const reimbursementRoutes = require('./reimbursement.routes');
 const invoiceRoutes = require('./invoice.routes');
 const announcementRoutes = require('./announcement.routes');
-const clientPortalRoutes = require('./clientPortal.routes');
 
 const router = Router();
 
@@ -57,11 +56,6 @@ router.use('/public', publicRoutes);
 // rate limiters, session-token check, and LLM spend caps live inside the
 // router / service, not in this file.
 router.use('/sales-chat', salesChatRoutes);
-// The separate client dashboard (clientdashboard/) — its own login/token
-// scheme (see clientPortalAuth.middleware.js), so it's mounted above the
-// global verifyToken below rather than under it; /me guards itself with
-// requireClientPortalAuth instead.
-router.use('/client-portal', clientPortalRoutes);
 // Non-sensitive static config (doc type labels, whether email is set up) —
 // PublicUploadPage needs this to render doc type names for unauthenticated
 // applicants, so it must stay open rather than behind verifyToken.

@@ -26,7 +26,6 @@ app.use(
       ...env.followupsFrontendUrls,
       ...env.allFrontendUrls,
       ...env.salesChatFrontendUrls,
-      ...env.clientDashboardFrontendUrls,
     ],
   })
 );
