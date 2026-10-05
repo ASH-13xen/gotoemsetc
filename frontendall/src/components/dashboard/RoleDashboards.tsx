@@ -7,6 +7,7 @@ import {
   ArrowRight,
   Building2,
   Crown,
+  Info,
   KeyRound,
   Landmark,
   ShieldCheck,
@@ -21,6 +22,7 @@ import { cn } from '@/lib/utils'
 import { hasRole } from '@/lib/access'
 import type { StoredUser } from '@/lib/authStorage'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { DashboardCard, DashboardCardEmpty } from '@/components/dashboard/DashboardCard'
 import { useKeys } from '@/hooks/useKeys'
 import { KEY_LABEL } from '@/api/keys.api'
@@ -128,7 +130,45 @@ export function CeoLeaveApprovalsCard() {
   const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })
 
   return (
-    <DashboardCard icon={<Crown className="size-4" />} title={`Leave waiting for the CEO${waiting.length ? ` · ${waiting.length}` : ''}`} viewAllHref="/hr" viewAllLabel="Open HR Work">
+    <DashboardCard
+      icon={<Crown className="size-4" />}
+      title={`Leave waiting for the CEO${waiting.length ? ` · ${waiting.length}` : ''}`}
+      viewAllHref="/hr"
+      viewAllLabel="Open HR Work"
+      headerRight={
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label="What this card shows"
+              className="mr-auto flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+            >
+              <Info className="size-4" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-80 text-xs leading-relaxed text-muted-foreground">
+            <p className="text-sm font-bold text-foreground">What this card shows</p>
+            <p className="mt-2">
+              Leave requests that are waiting for the <b className="text-foreground">final approval</b> — the last step, after HR has
+              already approved them.
+            </p>
+            <ul className="mt-2 list-disc space-y-1.5 pl-4">
+              <li>
+                Only <b className="text-foreground">Unpaid Leave</b> comes here. It goes Content Manager → HR → CEO. Every other type
+                (Short Leave, Late, Half Day, Work From Home, Paid Leave) ends with HR and never appears on this card.
+              </li>
+              <li>Each row shows the employee, their reason and the dates. Up to six are listed; the number in the title is the total.</li>
+              <li>
+                Nothing is decided from this card. Click a row or <b className="text-foreground">Open HR Work</b> to approve or reject
+                it there.
+              </li>
+              <li>The CEO or the admin can give this approval — whoever does it first settles it. Nobody approves their own leave.</li>
+              <li>“Nothing waiting for your final approval” means no Unpaid Leave is at this step right now.</li>
+            </ul>
+          </PopoverContent>
+        </Popover>
+      }
+    >
       {isLoading ? (
         <Skeleton className="h-12 w-full rounded-xl" />
       ) : waiting.length === 0 ? (

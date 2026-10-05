@@ -18,7 +18,6 @@ import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { DashboardCard, DashboardCardEmpty } from '@/components/dashboard/DashboardCard'
-import { useMyEventResponsibilities } from '@/hooks/useEvents'
 import { useMyUpcomingTasks } from '@/hooks/useEmployeeTasks'
 import { useAttendanceSummary } from '@/hooks/useAttendance'
 import { useMyUploadRequests } from '@/hooks/useUploadRequests'
@@ -372,63 +371,11 @@ function MyUpcomingTasksWidget() {
   )
 }
 
+// Events is hidden for now — the card keeps its place with a heading only.
 function MyEventResponsibilitiesWidget() {
-  const { data: responsibilities, isLoading } = useMyEventResponsibilities()
-  const list = responsibilities ?? []
-
   return (
-    <DashboardCard
-      icon={<PartyPopper className="size-4" />}
-      title="My event responsibilities"
-      viewAllHref="/events"
-      viewAllLabel="View all events"
-    >
-      {isLoading ? (
-        <div className="grid gap-2">
-          <Skeleton className="h-12 w-full rounded-xl" />
-          <Skeleton className="h-12 w-full rounded-xl" />
-        </div>
-      ) : list.length === 0 ? (
-        <DashboardCardEmpty icon={<PartyPopper className="size-4" />} message="Nothing pending — you're all caught up." />
-      ) : (
-        <div className="grid gap-2">
-          {list.slice(0, 6).map((r) => {
-            const event = typeof r.event === 'object' ? r.event : null
-            const isOverdue = r.dueDate && new Date(r.dueDate) < new Date()
-            return (
-              <Link
-                key={r._id}
-                to={event ? `/events/${event._id}` : '/events'}
-                className="flex items-center justify-between gap-3 rounded-xl bg-secondary/30 p-3 transition-colors hover:bg-secondary/60"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-foreground">{r.title}</p>
-                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                    {event?.title}
-                    {r.assignedTeam && (
-                      <span className="flex items-center gap-0.5">
-                        <Users className="size-3" />
-                        {r.assignedTeam.name}
-                      </span>
-                    )}
-                  </p>
-                </div>
-                {r.dueDate && (
-                  <span
-                    className={cn(
-                      'flex shrink-0 items-center gap-1 text-xs font-bold',
-                      isOverdue ? 'text-destructive' : 'text-primary'
-                    )}
-                  >
-                    <CalendarClock className="size-3" />
-                    {new Date(r.dueDate).toLocaleDateString()}
-                  </span>
-                )}
-              </Link>
-            )
-          })}
-        </div>
-      )}
+    <DashboardCard icon={<PartyPopper className="size-4" />} title="My event responsibilities">
+      <DashboardCardEmpty icon={<PartyPopper className="size-4" />} message="Coming soon" />
     </DashboardCard>
   )
 }

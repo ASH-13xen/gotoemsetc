@@ -99,6 +99,9 @@ export interface AttendanceModificationRequest {
   rejectionReason?: string
   resolvedAt?: string
   revokedAt?: string
+  // Set once the employee ticks a decided application off their dashboard
+  // card — it then shows only under "Show all leave applications".
+  dashboardAcknowledgedAt?: string | null
   createdAt: string
 }
 
@@ -155,6 +158,11 @@ export async function rejectAttendanceRequest(id: string, reason?: string): Prom
 
 export async function listMyUnseenAttendanceOutcomes(): Promise<{ requests: AttendanceModificationRequest[] }> {
   const { data } = await apiClient.get('/attendance-requests/mine/unseen')
+  return data
+}
+
+export async function acknowledgeLeaveApplicationOnDashboard(id: string): Promise<{ request: AttendanceModificationRequest }> {
+  const { data } = await apiClient.post(`/attendance-requests/${id}/dashboard-acknowledge`)
   return data
 }
 

@@ -95,4 +95,11 @@ router.post(
   attendanceRequestController.acknowledge
 );
 
+// Ticking a decided application off the dashboard card (it stays in the full list).
+router.post(
+  '/:id/dashboard-acknowledge',
+  validate(attendanceRequestValidator.acknowledge),
+  attendanceRequestController.acknowledgeOnDashboard
+);
+
 module.exports = router;

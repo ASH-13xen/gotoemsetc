@@ -102,6 +102,11 @@ const attendanceModificationRequestSchema = new Schema(
     // ever consulted for requests carrying a requestedStatus; free-text
     // requests are never surfaced there regardless of this flag.
     seenByEmployee: { type: Boolean, default: false },
+    // The employee ticking a decided request off their dashboard card — it
+    // stays in their full list. Separate from seenByEmployee above, which
+    // only says the outcome pop-up was closed. Cleared if the request is
+    // later revoked, so that outcome shows up again.
+    dashboardAcknowledgedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

@@ -67,6 +67,14 @@ const revoke = asyncHandler(async (req, res) => {
   res.json({ request });
 });
 
+const acknowledgeOnDashboard = asyncHandler(async (req, res) => {
+  if (!req.user.employeeLink) {
+    throw ApiError.badRequest('No employee record is linked to this account');
+  }
+  const request = await attendanceRequestService.acknowledgeOnDashboard(req.params.id, req.user.employeeLink);
+  res.json({ request });
+});
+
 const acknowledge = asyncHandler(async (req, res) => {
   if (!req.user.employeeLink) {
     throw ApiError.badRequest('No employee record is linked to this account');
@@ -108,6 +116,7 @@ module.exports = {
   reject,
   revoke,
   acknowledge,
+  acknowledgeOnDashboard,
   mineUnseen,
   paidLeaveEligibility,
   monthlyCounts,

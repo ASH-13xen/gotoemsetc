@@ -81,9 +81,13 @@ function reject(id, resolvedBy, rejectionReason, resolvedAs) {
 function revoke(id, revokedBy, revokedAs) {
   return AttendanceModificationRequest.findByIdAndUpdate(
     id,
-    { status: ATTENDANCE_REQUEST_STATUS.REVOKED, revokedBy, revokedAs, revokedAt: new Date() },
+    { status: ATTENDANCE_REQUEST_STATUS.REVOKED, revokedBy, revokedAs, revokedAt: new Date(), dashboardAcknowledgedAt: null },
     { new: true }
   );
+}
+
+function acknowledgeOnDashboard(id) {
+  return AttendanceModificationRequest.findByIdAndUpdate(id, { dashboardAcknowledgedAt: new Date() }, { new: true });
 }
 
 function markSeen(id) {
@@ -119,5 +123,6 @@ module.exports = {
   reject,
   revoke,
   markSeen,
+  acknowledgeOnDashboard,
   listUnseenForEmployee,
 };

@@ -350,7 +350,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   const canRequestDocs = hasPermission(user, 'request_documents')
   const canAddCredentials = hasPermission(user, 'add_credentials')
   const canViewSalary = hasPermission(user, 'view_salary_slip')
-  const { data: uploadedDocsData } = useUploadedDocuments(employeeId)
+  const { data: uploadedDocsData } = useUploadedDocuments(employeeId, { enabled: canRequestDocs })
   const photoDoc = uploadedDocsData?.uploadedDocuments.find((d) => d.docType === 'photo')
   const canEditDetails = hasPermission(user, 'edit_employee_details')
   const isOwnRecord = user?.employeeLink === employeeId
@@ -363,7 +363,10 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   const extraDetails = useFieldArray({ control, name: 'extraDetails' })
   // For the Manager picker below — active roster minus this employee
   // themself (can't be their own manager).
-  const { data: managerOptionsData } = useEmployees({ status: 'active', limit: 100 })
+  // Only for someone who can browse the directory (any granted permission) —
+  // an ordinary employee on their own page is refused the list (403) and has
+  // no Manager picker to fill anyway.
+  const { data: managerOptionsData } = useEmployees({ status: 'active', limit: 100 }, { enabled: canBackToPortal })
   const managerOptions = (managerOptionsData?.items ?? []).filter((e) => e._id !== employeeId)
 
   const permanentAddress = watch('permanentAddress')

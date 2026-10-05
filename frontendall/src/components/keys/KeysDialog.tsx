@@ -144,9 +144,9 @@ export function KeysDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="rounded-xl uppercase">
+        <Button variant="outline" className="rounded-xl">
           <Key className="size-4" />
-          Office Keys
+          Office keys
         </Button>
       </DialogTrigger>
       {/* Everything in Office Keys displays in uppercase — names, labels and

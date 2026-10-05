@@ -78,7 +78,6 @@ export function ShellLayout({
       ? [{ to: "/sales", label: "Client Management", icon: Briefcase }]
       : []),
     ...(can(user, "hrms") ? [{ to: "/hr", label: "HR Work", icon: ClipboardList }] : []),
-    ...(can(user, "events") ? [{ to: "/events", label: "Events", icon: CalendarClock }] : []),
     ...(can(user, "operations") ? [{ to: "/operations", label: "Operations", icon: Wrench }] : []),
     ...(can(user, "finance") ? [{ to: "/finance", label: "Finance", icon: Wallet }] : []),
     ...(can(user, "performance_flags")

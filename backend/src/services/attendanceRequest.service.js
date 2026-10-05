@@ -563,6 +563,19 @@ async function acknowledgeRequest(id, employeeId) {
   return attendanceRequestRepository.markSeen(id);
 }
 
+// Self-only, and only once it has been decided (approved, denied or
+// revoked) — takes it off the employee's dashboard card, nothing else.
+async function acknowledgeOnDashboard(id, employeeId) {
+  const request = await attendanceRequestRepository.findById(id);
+  if (!request) throw ApiError.notFound('Attendance modification request not found');
+  if (request.employee.toString() !== employeeId) throw ApiError.forbidden();
+  if (request.status === ATTENDANCE_REQUEST_STATUS.PENDING) {
+    throw ApiError.conflict('This application has not been decided yet');
+  }
+  if (request.dashboardAcknowledgedAt) return request;
+  return attendanceRequestRepository.acknowledgeOnDashboard(id);
+}
+
 async function listUnseenForEmployee(employeeId) {
   return attendanceRequestRepository.listUnseenForEmployee(employeeId);
 }
@@ -574,6 +587,7 @@ module.exports = {
   rejectRequest,
   revokeRequest,
   acknowledgeRequest,
+  acknowledgeOnDashboard,
   listUnseenForEmployee,
   checkPaidLeaveEligibility,
   getMonthlyCounts,

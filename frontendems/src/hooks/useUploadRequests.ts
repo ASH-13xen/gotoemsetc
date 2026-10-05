@@ -9,11 +9,13 @@ export function useUploadRequests(employeeId: string | undefined) {
   })
 }
 
-export function useUploadedDocuments(employeeId: string | undefined) {
+// `enabled: false` for a login without the request_documents permission —
+// the server refuses the list (403), so it isn't asked for.
+export function useUploadedDocuments(employeeId: string | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['uploadedDocuments', employeeId],
     queryFn: () => uploadRequestsApi.listUploadedDocuments(employeeId as string),
-    enabled: Boolean(employeeId),
+    enabled: Boolean(employeeId) && (options?.enabled ?? true),
   })
 }
 

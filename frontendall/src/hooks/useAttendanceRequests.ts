@@ -86,6 +86,15 @@ export function useMyMonthlyLeaveCounts(date: string) {
   })
 }
 
+// Ticks a decided application off the dashboard card.
+export function useAcknowledgeLeaveApplicationOnDashboard() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => attendanceRequestsApi.acknowledgeLeaveApplicationOnDashboard(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: MY_REQUESTS_KEY }),
+  })
+}
+
 export function useAcknowledgeAttendanceRequest() {
   const queryClient = useQueryClient()
   return useMutation({
