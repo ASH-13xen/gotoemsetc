@@ -31,10 +31,20 @@ router.post(
 );
 
 // Listing everyone's claims and marking paid is Finance (admin/ceo/cfo/finance).
+router.get(
+  '/:id/payment-proof',
+  validate({ params: reimbursementValidator.idParam }),
+  reimbursementController.downloadPaymentProof
+);
+router.post('/:id/acknowledge', validate(reimbursementValidator.acknowledge), reimbursementController.acknowledge);
+
 router.get('/', requireFinanceAccess(), validate(reimbursementValidator.list), reimbursementController.listAll);
+// multipart: the transaction details as fields plus the payment screenshot
+// as `proof`.
 router.post(
   '/:id/mark-paid',
   requireFinanceAccess(),
+  upload.single('proof'),
   validate(reimbursementValidator.markPaid),
   reimbursementController.markPaid
 );

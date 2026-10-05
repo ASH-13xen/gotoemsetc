@@ -136,22 +136,39 @@ async function reject(id, reason, actingUser) {
 // requireFinanceAccess-gated, only from 'approved' — normally happens as
 // part of the Saturday payment batch (see jobs/reimbursementPaymentReminder.job.js)
 // but nothing stops paying one off-cycle if it's genuinely ready.
-async function markPaid(id, transactionDetails, actingUser) {
+// A screenshot of the payment is required — it is what the claimant sees as
+// proof on their dashboard.
+async function markPaid(id, transactionDetails, actingUser, proofFile) {
   const existing = await reimbursementRepository.findById(id);
   if (!existing) throw ApiError.notFound('Reimbursement not found');
   assertNotOwnClaim(existing, actingUser);
   if (existing.status !== REIMBURSEMENT_STATUS.APPROVED) {
     throw ApiError.conflict('Only an approved reimbursement can be marked paid');
   }
+  if (!proofFile) throw ApiError.badRequest('Attach a screenshot of the payment to mark this paid');
 
   const updated = await reimbursementRepository.updateById(id, {
     status: REIMBURSEMENT_STATUS.PAID,
     paidAt: new Date(),
     paidBy: actingUser.id,
     transactionDetails,
+    paymentProofFile: { data: proofFile.buffer, contentType: proofFile.mimetype, filename: proofFile.originalname },
   });
   await notifyEmployee(updated, NOTIFICATION_TYPES.REIMBURSEMENT_PAID, 'Reimbursement paid', 'Your reimbursement claim has been paid.');
   return updated;
+}
+
+// Self-only, once Finance is done with it (paid or rejected).
+async function acknowledge(id, employeeId) {
+  const existing = await reimbursementRepository.findById(id);
+  if (!existing || String(existing.employee?._id ?? existing.employee) !== employeeId) {
+    throw ApiError.notFound('Reimbursement not found');
+  }
+  if (![REIMBURSEMENT_STATUS.PAID, REIMBURSEMENT_STATUS.REJECTED].includes(existing.status)) {
+    throw ApiError.conflict('Only a paid or rejected claim can be acknowledged');
+  }
+  if (existing.acknowledgedAt) return existing;
+  return reimbursementRepository.updateById(id, { acknowledgedAt: new Date() });
 }
 
 async function notifyEmployee(reimbursement, type, title, message) {
@@ -166,4 +183,4 @@ async function notifyEmployee(reimbursement, type, title, message) {
   });
 }
 
-module.exports = { fileReimbursement, attachReceipt, listMine, listAll, approve, reject, markPaid, assertClaimWindow };
+module.exports = { fileReimbursement, attachReceipt, listMine, listAll, approve, reject, markPaid, acknowledge, assertClaimWindow };

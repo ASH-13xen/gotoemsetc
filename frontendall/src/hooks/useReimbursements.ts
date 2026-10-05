@@ -16,6 +16,14 @@ export function useFileReimbursement() {
   })
 }
 
+export function useAcknowledgeReimbursement() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.acknowledgeReimbursement(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: KEY }),
+  })
+}
+
 export function useUploadReceipt() {
   const queryClient = useQueryClient()
   return useMutation({

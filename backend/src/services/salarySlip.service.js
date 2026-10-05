@@ -75,12 +75,7 @@ function buildAttendanceDays(summary) {
 
     let bg = '#ffffff';
     let statusText = '';
-    if ((isSunday || isHoliday) && summary.unpaidOffDateKeys.has(key)) {
-      // A Sunday/holiday lost under the whole-week rule (absent every
-      // working day that week) — see salaryCalculation.service.js.
-      bg = UNPAID_BG;
-      statusText = isHoliday ? 'HOL ✗' : 'OFF ✗';
-    } else if (record?.status === ATTENDANCE_STATUS.HOLIDAY) {
+    if (record?.status === ATTENDANCE_STATUS.HOLIDAY) {
       // Auto-marked on every employee the instant a day is marked a company
       // holiday (see attendanceClassifier.service.js#applyHolidayForEmployee)
       // — still reads as a plain off day here, same as before that existed.
@@ -197,7 +192,6 @@ function buildMergeData(employee, summary, salary) {
     totalOvertimeMinutes: String(summary.totalOvertimeMinutes),
     workingDaysInPeriod: String(summary.workingDaysInPeriod),
     offDaysInPeriod: String(summary.offDaysInPeriod),
-    unpaidOffDays: String(summary.unpaidOffDays),
     unpaidAbsentDays: String(summary.unpaidAbsentDays),
     halfDayUnitsDeducted: formatDays(summary.totalHalfDayUnits * 0.5),
 
@@ -312,7 +306,72 @@ function toDateStr(date) {
 // skipped). Clipping to each person's joining/leaving date happens inside
 // the calculation itself (salaryCalculation.service.js#clipToEmployment), so
 // a mid-month joiner or leaver is paid only for the days they were employed.
-async function generateBulkSlips({ month, year }, createdBy, actor) {
+// The amounts HR types in on a slip; everything else is calculated.
+const MANUAL_AMOUNT_FIELDS = [
+  'incomeTaxDeduction',
+  'professionTax',
+  'pf',
+  'otherDeduction3',
+  'compensationOff',
+  'incentives',
+  'travelAllowance',
+  'otherEarning1',
+  'reimbursement1',
+  'reimbursement2',
+];
+
+// Everyone a bulk run for this month would produce a slip for — active
+// employees plus anyone who left during or after the month — with anything
+// worth knowing before generating. `previous` carries the amounts typed in on
+// the month's latest existing slip, so regenerating doesn't silently drop them.
+async function listBulkCandidates({ month, year }, actor) {
+  const periodStart = new Date(Date.UTC(year, month - 1, 1));
+  const periodEnd = new Date(Date.UTC(year, month, 0));
+  if (periodEnd.getTime() > Date.now()) {
+    throw ApiError.badRequest('This month has not ended yet');
+  }
+  const [employees, slips] = await Promise.all([
+    employeeRepository.listPayableForPeriod(periodStart),
+    salarySlipRepository.listByStartDateMonth(periodStart, new Date(Date.UTC(year, month, 1))),
+  ]);
+  // Sorted newest first, so the first slip seen per employee is their latest.
+  const latestSlipByEmployee = new Map();
+  for (const slip of slips) {
+    const key = slip.employee?._id?.toString();
+    if (key && !latestSlipByEmployee.has(key)) latestSlipByEmployee.set(key, slip);
+  }
+  return employees
+    .map((employee) => {
+      const employment = salaryCalculation.clipToEmployment(employee, periodStart, periodEnd);
+      if (employment.startDate.getTime() > employment.endDate.getTime()) return null;
+      const notes = [];
+      if (employment.startDate.getTime() > periodStart.getTime()) notes.push(`Joined ${formatDateDDMMYYYY(employment.startDate)}`);
+      if (employment.endDate.getTime() < periodEnd.getTime()) notes.push(`Left ${formatDateDDMMYYYY(employment.endDate)}`);
+      if (!employee.monthlyPay && !employee.ctcAnnual) notes.push('No salary set');
+      const own = isSelf(actor, employee._id);
+      if (own) notes.push('Your own slip — someone else has to generate it');
+      const slip = latestSlipByEmployee.get(employee._id.toString());
+      const previous = {};
+      for (const field of MANUAL_AMOUNT_FIELDS) {
+        if (slip?.[field]) previous[field] = slip[field];
+      }
+      return {
+        _id: employee._id,
+        name: `${employee.firstName} ${employee.lastName || ''}`.trim(),
+        employeeCode: employee.employeeCode || '',
+        designation: employee.designation || '',
+        monthlyPay: employee.monthlyPay || (employee.ctcAnnual ? employee.ctcAnnual / 12 : 0) || 0,
+        skipped: own,
+        hasSlip: Boolean(slip),
+        previous,
+        notes,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function generateBulkSlips({ month, year, adjustments = {} }, createdBy, actor) {
   const periodStart = new Date(Date.UTC(year, month - 1, 1));
   const periodEnd = new Date(Date.UTC(year, month, 0));
   if (periodEnd.getTime() > Date.now()) {
@@ -340,7 +399,7 @@ async function generateBulkSlips({ month, year }, createdBy, actor) {
     try {
       const slip = await generateSlip(
         employee._id.toString(),
-        { startDate: toDateStr(periodStart), endDate: toDateStr(periodEnd) },
+        { startDate: toDateStr(periodStart), endDate: toDateStr(periodEnd), ...(adjustments[employee._id.toString()] || {}) },
         createdBy,
         actor
       );
@@ -471,7 +530,8 @@ async function renderMasterSheet({ periodLabel, rows }) {
 // response right away; files are queued into it asynchronously as each
 // slip's employee is looked up. A slip that's gone missing (deleted
 // employee, etc.) is skipped rather than failing the whole download.
-function buildBulkZip(slipIds) {
+// `month`/`year` together add that month's Master Salary Sheet to the zip.
+function buildBulkZip(slipIds, { month, year } = {}) {
   if (!Array.isArray(slipIds) || slipIds.length === 0) {
     throw ApiError.badRequest('No salary slips to zip');
   }
@@ -490,6 +550,10 @@ function buildBulkZip(slipIds) {
         const entryName = `${employeeCode}_${employeeName}_${toDateStr(slip.startDate)}_${toDateStr(slip.endDate)}.pdf`;
         const absolutePath = localFileStorage.absolutePathFor(slip.generatedFile.filePath, NAMESPACE);
         archive.file(absolutePath, { name: entryName });
+      }
+      if (month && year) {
+        const sheet = await buildMasterSheet({ month, year });
+        archive.append(sheet, { name: `Master Salary Sheet - ${year}-${String(month).padStart(2, '0')}.pdf` });
       }
       archive.finalize();
     } catch (err) {
@@ -651,6 +715,7 @@ module.exports = {
   buildMasterSheet,
   generateSlip,
   generateBulkSlips,
+  listBulkCandidates,
   buildBulkZip,
   listForEmployee,
   getFilePath,

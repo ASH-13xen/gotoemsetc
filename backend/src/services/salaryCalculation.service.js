@@ -48,11 +48,6 @@ function addDays(date, days) {
   return new Date(date.getTime() + days * MS_PER_DAY);
 }
 
-// Monday of the Monday–Sunday week `date` falls in.
-function weekMonday(date) {
-  return addDays(date, -((date.getUTCDay() + 6) % 7));
-}
-
 // The part of [startDate, endDate] the employee was actually employed for —
 // from their dateOfJoining and, once offboarded, up to their last day
 // (endDate on the Employee record). Days outside it are neither paid nor
@@ -152,51 +147,28 @@ function isUnpaidWorkingDay(record) {
 // clipToEmployment); summary.startDate/endDate are the clipped dates.
 //
 // Day counts: every working day (not Sunday/holiday) is either unpaid (see
-// isUnpaidWorkingDay) or paid. A Sunday or company holiday is paid unless
-// the employee was unpaid on every working day of that Monday–Sunday week
-// (the whole-week rule), so someone absent all week isn't paid for that
-// week's off days. totalWorkingDays = every paid day, Sundays/holidays
-// included; daysWorked = totalWorkingDays minus half a day per half-day
-// unit, and is exactly what Basic pay is computed from.
+// isUnpaidWorkingDay) or paid. A Sunday or company holiday inside the
+// (clipped) period is always paid, however the rest of that week went.
+// totalWorkingDays = every paid day, Sundays/holidays included; daysWorked =
+// totalWorkingDays minus half a day per half-day unit, and is exactly what
+// Basic pay is computed from.
 async function computeAttendanceSummary(employee, requestedStart, requestedEnd) {
   const { startDate, endDate } = clipToEmployment(employee, requestedStart, requestedEnd);
   if (startDate.getTime() > endDate.getTime()) {
     throw ApiError.badRequest('The employee was not employed during this period');
   }
 
-  // The whole-week rule can need attendance from just outside the pay
-  // period (a week that starts in the previous month), but never from
-  // outside the employment itself.
-  const employment = clipToEmployment(employee, weekMonday(startDate), addDays(weekMonday(endDate), 6));
-  const [allRecords, holidays] = await Promise.all([
-    attendanceRepository.listForEmployee(employee._id, { from: employment.startDate, to: employment.endDate }),
-    holidayRepository.list({ from: employment.startDate, to: employment.endDate }),
+  const [records, holidays] = await Promise.all([
+    attendanceRepository.listForEmployee(employee._id, { from: startDate, to: endDate }),
+    holidayRepository.list({ from: startDate, to: endDate }),
   ]);
-  const inPeriod = (date) => date.getTime() >= startDate.getTime() && date.getTime() <= endDate.getTime();
-  const records = allRecords.filter((r) => inPeriod(r.date));
 
   const totalDaysInPeriod = Math.round((endDate.getTime() - startDate.getTime()) / MS_PER_DAY) + 1;
   const holidayDateKeys = new Set(holidays.map((h) => dateKey(h.date)));
-  const recordByDate = new Map(allRecords.map((r) => [dateKey(r.date), r]));
+  const recordByDate = new Map(records.map((r) => [dateKey(r.date), r]));
   // Must run before anything is counted — it may turn the first Absent into
   // the month's paid off.
   const paidLeave = settlePaidOff(employee, requestedStart, requestedEnd, { startDate, endDate }, records, holidayDateKeys);
-
-  // Off days in a week are paid if at least one working day that week
-  // (within employment) was paid. A week with no working days at all inside
-  // employment has nothing to judge by, so its off days stay paid.
-  function isOffDayPaid(date) {
-    const monday = weekMonday(date);
-    let workingDays = 0;
-    for (let i = 0; i < 7; i += 1) {
-      const day = addDays(monday, i);
-      if (day < employment.startDate || day > employment.endDate) continue;
-      if (isOffDay(day, holidayDateKeys)) continue;
-      workingDays += 1;
-      if (!isUnpaidWorkingDay(recordByDate.get(dateKey(day)))) return true;
-    }
-    return workingDays === 0;
-  }
 
   const counts = { P: 0, O: 0, H: 0, L: 0, SL: 0, W: 0, A: 0, HL: 0 };
   let totalOvertimeMinutes = 0;
@@ -238,7 +210,6 @@ async function computeAttendanceSummary(employee, requestedStart, requestedEnd) 
 
   let offDaysInPeriod = 0;
   let unpaidAbsentDays = 0;
-  const unpaidOffDateKeys = new Set();
   // Working days carrying no status — almost always a day that needs
   // marking (e.g. only overtime was logged). Unpaid, and listed so HR can
   // fix the attendance before generating.
@@ -247,7 +218,6 @@ async function computeAttendanceSummary(employee, requestedStart, requestedEnd) 
     const date = addDays(startDate, i);
     if (isOffDay(date, holidayDateKeys)) {
       offDaysInPeriod += 1;
-      if (!isOffDayPaid(date)) unpaidOffDateKeys.add(dateKey(date));
       continue;
     }
     const record = recordByDate.get(dateKey(date));
@@ -258,7 +228,6 @@ async function computeAttendanceSummary(employee, requestedStart, requestedEnd) 
   }
 
   const workingDaysInPeriod = totalDaysInPeriod - offDaysInPeriod;
-  const unpaidOffDays = unpaidOffDateKeys.size;
 
   // At most 2 Lates and 2 Short-Leave units count in full; the overflow
   // demotes down to Half-Day units (see attendancePenalties.js) — computed
@@ -281,7 +250,7 @@ async function computeAttendanceSummary(employee, requestedStart, requestedEnd) 
   // Every paid day — present in any form (P, L, SL, H, W) or on Paid Leave,
   // plus paid Sundays/holidays. e.g. 10 days attended incl. 2 Half Days ->
   // totalWorkingDays 10, daysWorked 9.
-  const totalWorkingDays = totalDaysInPeriod - unpaidAbsentDays - unpaidOffDays;
+  const totalWorkingDays = totalDaysInPeriod - unpaidAbsentDays;
   const daysWorked = totalWorkingDays - totalHalfDayUnits * 0.5;
 
   return {
@@ -293,8 +262,6 @@ async function computeAttendanceSummary(employee, requestedStart, requestedEnd) 
     dailyRateDivisor: minDaysAcrossTouchedMonths(requestedStart, requestedEnd),
     workingDaysInPeriod,
     offDaysInPeriod,
-    unpaidOffDays,
-    unpaidOffDateKeys,
     unmarkedWorkingDates,
     counts,
     totalWorkingDays,
@@ -356,9 +323,8 @@ function computeSalary(employee, summary, manualInputs) {
   const otEarnings = otMinuteRate * summary.totalOvertimeMinutes;
 
   const halfDayDeductions = summary.totalHalfDayUnits * (dailyRate / 2);
-  // Unpaid working days plus Sundays/holidays lost under the whole-week rule
-  // (see computeAttendanceSummary).
-  const unpaidOffDeductions = (summary.unpaidAbsentDays + summary.unpaidOffDays) * dailyRate;
+  // Unpaid working days only — Sundays/holidays are always paid.
+  const unpaidOffDeductions = summary.unpaidAbsentDays * dailyRate;
 
   // Master = the employee's flat monthly reference rate, shown as-is.
   // Earnings = what was actually earned this specific period — prorated by

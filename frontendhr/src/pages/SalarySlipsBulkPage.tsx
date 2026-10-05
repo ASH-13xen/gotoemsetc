@@ -15,14 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { BulkSlipAdjustDialog } from '@/components/salary/BulkSlipAdjustDialog'
 import {
   Table,
   TableBody,
@@ -36,7 +29,7 @@ import {
   useDownloadMasterSalarySheet,
   useGenerateBulkSalarySlips,
 } from '@/hooks/useSalarySlips'
-import type { BulkSlipOutcome } from '@/api/salarySlips.api'
+import type { BulkSlipOutcome, ManualAmounts } from '@/api/salarySlips.api'
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -57,7 +50,7 @@ export default function SalarySlipsBulkPage() {
   const lastCompletedMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const [month, setMonth] = useState(lastCompletedMonth.getMonth() + 1)
   const [year, setYear] = useState(lastCompletedMonth.getFullYear())
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [adjustOpen, setAdjustOpen] = useState(false)
   const generate = useGenerateBulkSalarySlips()
   const downloadZip = useDownloadBulkSalarySlipZip()
   const masterSheet = useDownloadMasterSalarySheet()
@@ -76,30 +69,35 @@ export default function SalarySlipsBulkPage() {
     URL.revokeObjectURL(url)
   }
 
-  const onConfirm = () => {
+  // Generates every slip with the amounts entered in the dialog, then pulls
+  // one zip holding all the slips plus the month's master salary sheet.
+  const onGenerate = (adjustments: Record<string, ManualAmounts>) => {
     generate.mutate(
-      { month, year },
+      { month, year, adjustments },
       {
         onSuccess: (data) => {
-          setConfirmOpen(false)
           const generatedSlips = data.results.filter((r) => r.outcome === 'generated' && r.slipId)
           toast.success(`Generated ${generatedSlips.length} of ${data.results.length} salary slips`)
 
-          if (generatedSlips.length === 0) return
+          if (generatedSlips.length === 0) {
+            setAdjustOpen(false)
+            return
+          }
           const filename = `salary-slips-${MONTHS[month - 1]}-${year}.zip`
           downloadZip.mutate(
-            { slipIds: generatedSlips.map((r) => r.slipId as string), filename },
+            { slipIds: generatedSlips.map((r) => r.slipId as string), filename, month, year },
             {
               onSuccess: (blob) => {
                 saveBlobAs(blob, filename)
-                toast.success('Salary slips downloaded as a zip')
+                toast.success('Salary slips and the master sheet downloaded as a zip')
               },
               onError: () => toast.error('Slips were generated, but the zip download failed'),
+              onSettled: () => setAdjustOpen(false),
             }
           )
         },
         onError: (err) => {
-          setConfirmOpen(false)
+          setAdjustOpen(false)
           const message =
             (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
             'Could not generate salary slips'
@@ -127,7 +125,7 @@ export default function SalarySlipsBulkPage() {
       <PageHeader
         eyebrow="HRMS"
         title="Generate salary slips"
-        description="Generate every active employee's salary slip for one calendar month in a single action. An employee who joined mid-month gets their slip clipped to start from their actual join date."
+        description="Generate the month's salary slip for everyone — active employees and anyone who left during the month — in one action. You're asked first whether anything needs adding or changing for anyone, then you get one zip with every slip and the master salary sheet."
       />
 
       <Card className="p-6">
@@ -156,7 +154,7 @@ export default function SalarySlipsBulkPage() {
               className="w-28"
             />
           </div>
-          <Button onClick={() => setConfirmOpen(true)} disabled={generate.isPending}>
+          <Button onClick={() => setAdjustOpen(true)} disabled={generate.isPending || downloadZip.isPending}>
             {generate.isPending ? <Loader2 className="size-4 animate-spin" /> : <PlayCircle className="size-4" />}
             Generate for all employees
           </Button>
@@ -167,27 +165,15 @@ export default function SalarySlipsBulkPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Generate salary slips for {MONTHS[month - 1]} {year}?</DialogTitle>
-            <DialogDescription>
-              This creates a new salary slip (with its own PDF) for every active employee for this period. Employees
-              who joined during this month will have their slip start from their join date. This does not overwrite
-              or remove any existing slip.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={generate.isPending}>
-              Cancel
-            </Button>
-            <Button onClick={onConfirm} disabled={generate.isPending}>
-              {generate.isPending && <Loader2 className="size-4 animate-spin" />}
-              Confirm & generate
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <BulkSlipAdjustDialog
+        open={adjustOpen}
+        onOpenChange={setAdjustOpen}
+        month={month}
+        year={year}
+        periodLabel={`${MONTHS[month - 1]} ${year}`}
+        busy={generate.isPending || downloadZip.isPending}
+        onGenerate={onGenerate}
+      />
 
       {generate.data && (
         <Card className="p-6">

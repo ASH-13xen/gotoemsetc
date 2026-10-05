@@ -10,7 +10,13 @@ import { RejectReimbursementDialog } from '@/components/reimbursements/RejectRei
 import { useAuth } from '@/hooks/useAuth'
 import { canApproveReimbursements } from '@/lib/roles'
 import { useApproveReimbursement, useMarkReimbursementPaid, useReimbursements } from '@/hooks/useReimbursements'
-import { downloadReceiptBlob, CATEGORY_LABEL, type Reimbursement, type ReimbursementStatus } from '@/api/reimbursements.api'
+import {
+  downloadPaymentProofBlob,
+  downloadReceiptBlob,
+  CATEGORY_LABEL,
+  type Reimbursement,
+  type ReimbursementStatus,
+} from '@/api/reimbursements.api'
 
 const STATUS_FILTERS: Array<{ value: ReimbursementStatus | 'all'; label: string }> = [
   { value: 'pending', label: 'Pending' },
@@ -32,6 +38,16 @@ async function viewReceipt(id: string) {
   const url = URL.createObjectURL(blob)
   window.open(url, '_blank')
   setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+async function viewPaymentProof(id: string) {
+  try {
+    const url = URL.createObjectURL(await downloadPaymentProofBlob(id))
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch {
+    toast.error('Could not open the payment screenshot')
+  }
 }
 
 function ReimbursementRow({ reimbursement }: { reimbursement: Reimbursement }) {
@@ -76,6 +92,11 @@ function ReimbursementRow({ reimbursement }: { reimbursement: Reimbursement }) {
             View receipt
           </Button>
         )}
+        {reimbursement.paymentProofFile?.filename && (
+          <Button size="sm" variant="outline" onClick={() => viewPaymentProof(reimbursement._id)}>
+            View payment proof
+          </Button>
+        )}
         {reimbursement.status === 'pending' && canApproveReimbursements(user) && (
           <>
             <Button
@@ -97,13 +118,18 @@ function ReimbursementRow({ reimbursement }: { reimbursement: Reimbursement }) {
           <MarkPaidDialog
             trigger={<Button size="sm">Mark paid</Button>}
             title={`Mark ${employeeName}'s reimbursement as paid`}
+            description="Attach the payment screenshot — the employee will see it as proof of payment."
             isPending={markPaid.isPending}
-            onSubmit={(input) =>
+            requireProof
+            onSubmit={(input, proof) =>
               markPaid.mutateAsync(
-                { id: reimbursement._id, input },
+                { id: reimbursement._id, input, proof: proof as File },
                 {
                   onSuccess: () => toast.success('Reimbursement marked paid'),
-                  onError: () => toast.error('Could not mark reimbursement paid'),
+                  onError: (err) =>
+                    toast.error(
+                      (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Could not mark reimbursement paid'
+                    ),
                 }
               )
             }

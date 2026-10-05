@@ -85,4 +85,21 @@ async function submitFeedback(id, employeeId, { speedRating, qualityRating, comm
   return complaintRepository.submitFeedback(id, { speedRating, qualityRating, comments });
 }
 
-module.exports = { fileComplaint, listComplaints, markCompleted, submitFeedback };
+// Self-only, and only once it has been rated — acknowledging is the last
+// step, never a way around the review.
+async function acknowledge(id, employeeId) {
+  const complaint = await complaintRepository.findById(id);
+  if (!complaint) throw ApiError.notFound('Complaint not found');
+  if (complaint.employee.toString() !== employeeId) throw ApiError.forbidden();
+  if (complaint.status !== COMPLAINT_STATUS.REVIEWED) {
+    throw ApiError.conflict(
+      complaint.status === COMPLAINT_STATUS.COMPLETED
+        ? 'Rate how this complaint was handled first — then you can acknowledge it'
+        : 'This complaint has not been resolved yet'
+    );
+  }
+  if (complaint.acknowledgedAt) return complaint;
+  return complaintRepository.acknowledge(id);
+}
+
+module.exports = { fileComplaint, listComplaints, markCompleted, submitFeedback, acknowledge };

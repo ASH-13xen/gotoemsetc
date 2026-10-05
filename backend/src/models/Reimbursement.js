@@ -45,6 +45,13 @@ const reimbursementSchema = new Schema(
     paidAt: Date,
     paidBy: { type: Schema.Types.ObjectId, ref: 'User' },
     transactionDetails: transactionDetailsSchema,
+    // Screenshot of the payment — required to mark a claim paid; the
+    // claimant can open it.
+    paymentProofFile: receiptFileSchema,
+
+    // The claimant ticking off a paid/rejected claim — only takes it off
+    // their dashboard card; it stays in their full list.
+    acknowledgedAt: Date,
   },
   { timestamps: true }
 );

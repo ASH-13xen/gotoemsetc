@@ -121,6 +121,8 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
   const deleteHoliday = useDeleteHoliday()
 
   const recordByDate = new Map((data?.records ?? []).map((r) => [r.date.slice(0, 10), r]))
+  // Overtime being decided (or turned down) — not on the records until HR approves.
+  const overtimeByDate = new Map((data?.overtimeRequests ?? []).map((r) => [r.date.slice(0, 10), r]))
   const holidayByDate = new Map((holidaysData?.holidays ?? []).map((h) => [h.date.slice(0, 10), h]))
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate()
   const firstWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay()
@@ -272,6 +274,10 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                 // paid leave ahead of time; nothing else is markable there.
                 const futureLocked = isFuture && !canMark
                 const pendingRequest = pendingRequestByDate.get(dateKey)
+                const overtime = overtimeByDate.get(dateKey)
+                const overtimeAsked = overtime ? (overtime.cmMinutes ?? overtime.appliedMinutes ?? overtime.biometricMinutes) : 0
+                // Scanned, above the 60-minute limit, and not yet sent for approval (that happens once the day is closed).
+                const overtimeHeld = !overtime && !record?.overtimeMinutes && (record?.biometricOvertimeMinutes ?? 0) > 60
                 const asRequest = isHr && daysAgo(dateKey) > HR_EDIT_CUTOFF_DAYS
                 const dayNum = Number(dateKey.slice(8, 10))
                 const isSunday = new Date(dateKey).getUTCDay() === 0
@@ -331,6 +337,12 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                         {record?.overtimeMinutes && !compact ? (
                           <span className="text-[9px] font-medium opacity-70">+{record.overtimeMinutes}min</span>
                         ) : null}
+                        {!compact && overtime?.status === 'pending' && (
+                          <span className="text-[9px] font-semibold text-amber-700">OT {overtimeAsked}m pending</span>
+                        )}
+                        {!compact && overtimeHeld && (
+                          <span className="text-[9px] font-semibold text-amber-700">OT {record?.biometricOvertimeMinutes}m held</span>
+                        )}
                         {record?.isLate && (
                           <span
                             className={cn(
@@ -391,6 +403,38 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
                             <p className="font-semibold">Change request waiting for the CEO/admin</p>
                             <p>Asked: {pendingRequest.change.status ?? 'no status change'} — “{pendingRequest.reason}”</p>
                           </div>
+                        )}
+                        {overtime?.status === 'pending' && (
+                          <div className="grid gap-0.5 rounded-lg bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-300">
+                            <p className="font-semibold">
+                              Overtime waiting for {overtime.stage === 'hr' ? 'HR' : 'the content manager'} — {overtimeAsked} min
+                            </p>
+                            <p>
+                              {[
+                                overtime.biometricMinutes ? `Biometric ${overtime.biometricMinutes} min` : null,
+                                overtime.appliedMinutes !== null ? `applied for ${overtime.appliedMinutes} min` : null,
+                                overtime.cmMinutes !== null ? `content manager says ${overtime.cmMinutes} min` : null,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                              . Not counted until HR approves it.
+                            </p>
+                          </div>
+                        )}
+                        {overtime?.status === 'approved' && (
+                          <p className="text-xs font-medium text-emerald-700">Overtime approved by HR: {overtime.approvedMinutes} min</p>
+                        )}
+                        {overtime?.status === 'rejected' && (
+                          <p className="text-xs text-red-600">
+                            Overtime not approved by {overtime.rejectedStage === 'hr' ? 'HR' : 'the content manager'}
+                            {overtime.rejectionReason ? ` — ${overtime.rejectionReason}` : ''}
+                          </p>
+                        )}
+                        {overtimeHeld && (
+                          <p className="rounded-lg bg-amber-500/10 p-2.5 text-xs text-amber-800 dark:text-amber-300">
+                            Biometric overtime of {record?.biometricOvertimeMinutes} min — above 60 minutes, so it is sent for approval once the
+                            day is closed and counts only after HR approves it.
+                          </p>
                         )}
                         {record && !record.isSettled && (
                           <p className="text-xs text-yellow-600">Pending — may still change today</p>

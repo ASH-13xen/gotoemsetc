@@ -1,4 +1,7 @@
 const AttendanceRecord = require('../models/AttendanceRecord');
+const OvertimeRequest = require('../models/OvertimeRequest');
+const { countedOvertime } = require('../utils/overtimeApproval');
+const { OVERTIME_REQUEST_STATUS } = require('../config/constants');
 
 // A plain-object update only $sets keys that are actually present — passing
 // `status`/`overtimeMinutes` as `undefined` when the caller didn't provide them
@@ -12,7 +15,11 @@ const AttendanceRecord = require('../models/AttendanceRecord');
 // provisional writes is making a final decision (a manual admin mark, or a
 // request-resolve) the instant it's saved. The classifier explicitly passes
 // false while a day could still be revised by a later scan the same day.
-function upsertForDate(
+// The classifier's overtime (isAutoMarked) is what the scans worked out: it
+// is kept as biometricOvertimeMinutes, and only the part that counts — see
+// utils/overtimeApproval.js — goes into overtimeMinutes. A person's own
+// write is taken as given.
+async function upsertForDate(
   employeeId,
   date,
   { status, overtimeMinutes, notes, isLate, earlyDeparture, isHalfDayBoost, isSlDayBoost, markedBy, markedAs },
@@ -33,6 +40,15 @@ function upsertForDate(
     isHalfDayBoost,
     isSlDayBoost,
   };
+  if (isAutoMarked && overtimeMinutes !== undefined) {
+    const request = await OvertimeRequest.findOne({ employee: employeeId, date });
+    update.biometricOvertimeMinutes = overtimeMinutes;
+    update.overtimeMinutes = countedOvertime(date, overtimeMinutes, request);
+    // A request still being decided always shows the latest scan figure.
+    if (request && request.status === OVERTIME_REQUEST_STATUS.PENDING && request.biometricMinutes !== overtimeMinutes) {
+      await OvertimeRequest.updateOne({ _id: request._id }, { biometricMinutes: overtimeMinutes });
+    }
+  }
   if (modifiedByRequest !== undefined) update.modifiedByRequest = modifiedByRequest;
   // A person's manual change records who; the classifier's own writes clear it.
   update.markedBy = markedBy || null;

@@ -41,6 +41,8 @@ export interface Reimbursement {
   status: ReimbursementStatus
   rejectionReason?: string
   receiptFile?: { filename?: string }
+  // Finance's screenshot of the payment, shown to the claimant.
+  paymentProofFile?: { filename?: string }
   createdAt: string
 }
 
@@ -59,11 +61,26 @@ export async function rejectReimbursement(id: string, reason: string): Promise<{
   return data
 }
 
+// Sent as multipart: the transaction details as fields plus the payment
+// screenshot as `proof` (required by the backend).
 export async function markReimbursementPaid(
   id: string,
-  input: TransactionDetails
+  input: TransactionDetails,
+  proof: File
 ): Promise<{ reimbursement: Reimbursement }> {
-  const { data } = await apiClient.post(`/reimbursements/${id}/mark-paid`, input)
+  const formData = new FormData()
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== undefined && value !== null && value !== '') formData.append(key, String(value))
+  }
+  formData.append('proof', proof)
+  const { data } = await apiClient.post(`/reimbursements/${id}/mark-paid`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
+}
+
+export async function downloadPaymentProofBlob(id: string): Promise<Blob> {
+  const { data } = await apiClient.get(`/reimbursements/${id}/payment-proof`, { responseType: 'blob' })
   return data
 }
 

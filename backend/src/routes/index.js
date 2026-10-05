@@ -23,6 +23,7 @@ const auditLogRoutes = require('./auditLog.routes');
 const orgChartRoutes = require('./orgChart.routes');
 const weeklyCalendarRoutes = require('./weeklyCalendar.routes');
 const attendanceEditRequestRoutes = require('./attendanceEditRequest.routes');
+const overtimeRequestRoutes = require('./overtimeRequest.routes');
 const notificationRoutes = require('./notification.routes');
 const eventRoutes = require('./event.routes');
 const devicePunchRoutes = require('./devicePunch.routes');
@@ -136,6 +137,7 @@ router.use('/audit-log', requireAccess(ACCESS.AUDIT_LOG), auditLogRoutes);
 router.use('/org-chart', orgChartRoutes);
 router.use('/weekly-calendar', weeklyCalendarRoutes);
 router.use('/attendance-edit-requests', attendanceEditRequestRoutes);
+router.use('/overtime-requests', overtimeRequestRoutes);
 // Announcements — gated per-route inside announcement.routes.js (reading/
 // acknowledging your own is open to everyone; creating and the full
 // management list are every non-worker role).

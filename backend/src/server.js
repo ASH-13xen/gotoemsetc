@@ -14,6 +14,7 @@ const reimbursementPaymentReminderJob = require('./jobs/reimbursementPaymentRemi
 const invoiceGenerationJob = require('./jobs/invoiceGeneration.job');
 const { FEATURES } = require('./config/constants');
 const weeklyCalendarJob = require('./jobs/weeklyCalendar.job');
+const overtimeRequestJob = require('./jobs/overtimeRequest.job');
 
 async function main() {
   await connectDb();
@@ -29,6 +30,7 @@ async function main() {
   reimbursementPaymentReminderJob.start();
   invoiceGenerationJob.start();
   weeklyCalendarJob.start();
+  overtimeRequestJob.start();
 
   // Still built on the raw HTTP server rather than app.listen: the client
   // chat socket that needed it is gone, but the Client Management System's

@@ -2,12 +2,30 @@ import { apiClient } from './client'
 
 export type AttendanceStatus = 'P' | 'O' | 'H' | 'L' | 'SL' | 'W' | 'A' | 'HL'
 
+// A day's overtime that has to be approved before it counts (content
+// manager, then HR) — see backend overtimeRequest.service.js.
+export interface OvertimeDaySummary {
+  _id: string
+  date: string
+  status: 'pending' | 'approved' | 'rejected'
+  stage: 'content_manager' | 'hr'
+  biometricMinutes: number
+  appliedMinutes: number | null
+  cmMinutes: number | null
+  approvedMinutes: number | null
+  rejectedStage?: 'content_manager' | 'hr' | null
+  rejectionReason?: string
+}
+
 export interface AttendanceRecord {
   _id: string
   employee: string
   date: string
   status?: AttendanceStatus
+  // Overtime that counts. What the scans worked out is biometricOvertimeMinutes
+  // — more than 60 minutes of it only counts once HR approves it.
   overtimeMinutes: number
+  biometricOvertimeMinutes?: number
   isBackdated: boolean
   // True when the daily biometric classifier wrote this record rather than
   // an admin — an admin save always flips this back to false.
@@ -50,7 +68,7 @@ export async function listAttendance(
   employeeId: string,
   month: number,
   year: number
-): Promise<{ records: AttendanceRecord[] }> {
+): Promise<{ records: AttendanceRecord[]; overtimeRequests?: OvertimeDaySummary[] }> {
   const { data } = await apiClient.get(`/employees/${employeeId}/attendance`, {
     params: { month, year },
   })

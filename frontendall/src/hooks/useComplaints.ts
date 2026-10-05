@@ -29,6 +29,14 @@ export function useMyComplaints() {
   })
 }
 
+export function useAcknowledgeComplaint() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => complaintsApi.acknowledgeComplaint(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: MY_COMPLAINTS_KEY }),
+  })
+}
+
 export function useSubmitComplaintReview() {
   const queryClient = useQueryClient()
   return useMutation({

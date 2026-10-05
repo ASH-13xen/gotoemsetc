@@ -33,6 +33,10 @@ export interface Complaint {
   status: ComplaintStatus
   createdAt: string
   completedAt?: string
+  reviewedAt?: string
+  feedback?: { speedRating: number; qualityRating: number; comments?: string }
+  // Set once the filer ticks it off — it then leaves their dashboard card.
+  acknowledgedAt?: string
 }
 
 // Employee identity is derived server-side from the logged-in account
@@ -55,6 +59,12 @@ export async function listMyComplaintsAwaitingReview(): Promise<{ complaints: Co
 // so no employee id needs to be passed from here.
 export async function listMyComplaints(): Promise<{ complaints: Complaint[] }> {
   const { data } = await apiClient.get('/complaints')
+  return data
+}
+
+// Only once it has been rated (status 'reviewed') — see complaint.service.js#acknowledge.
+export async function acknowledgeComplaint(id: string): Promise<{ complaint: Complaint }> {
+  const { data } = await apiClient.post(`/complaints/${id}/acknowledge`)
   return data
 }
 

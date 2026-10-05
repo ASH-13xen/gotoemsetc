@@ -33,6 +33,9 @@ const complaintSchema = new Schema(
     completedAt: { type: Date },
     reviewedAt: { type: Date },
     feedback: { type: feedbackSchema },
+    // The filer ticking it off after rating it — only takes it off their
+    // dashboard card; it stays in their full list.
+    acknowledgedAt: { type: Date },
   },
   { timestamps: true }
 );

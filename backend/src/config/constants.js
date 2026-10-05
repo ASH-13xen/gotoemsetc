@@ -154,6 +154,10 @@ module.exports = {
     // HR asked to change attendance older than 2 days — goes to the CEO and
     // admin for approval. See attendanceEditRequest.service.js.
     ATTENDANCE_EDIT_REQUESTED: 'attendance_edit_requested',
+    OVERTIME_PENDING_CM_REVIEW: 'overtime_pending_cm_review',
+    OVERTIME_PENDING_HR_REVIEW: 'overtime_pending_hr_review',
+    OVERTIME_APPROVED: 'overtime_approved',
+    OVERTIME_REJECTED: 'overtime_rejected',
     ATTENDANCE_EDIT_REQUEST_DECIDED: 'attendance_edit_request_decided',
     // Client birthday/anniversary or brand anniversary — manually entered
     // (see CompanyEvent) rather than derived from an Employee record, unlike
@@ -708,4 +712,16 @@ module.exports = {
     CLIENT_MANAGEMENT: false,
   },
   PAID_LEAVE_COMPENSATION_FROM: '2026-09-01',
+
+  // ---------------------------------------------------------------------
+  // Overtime approval (overtimeRequest.service.js). From this date a day's
+  // biometric overtime above the threshold, and any overtime an employee
+  // applies for, counts only once HR approves it (content manager first,
+  // where the team has one). Up to the threshold it counts as it always
+  // did. Earlier days are left exactly as they were recorded.
+  // ---------------------------------------------------------------------
+  OVERTIME_APPROVAL_FROM: '2026-10-05',
+  OVERTIME_REVIEW_THRESHOLD_MINUTES: 60,
+  OVERTIME_REQUEST_STATUS: { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected' },
+  OVERTIME_REQUEST_STAGE: { CONTENT_MANAGER: 'content_manager', HR: 'hr' },
 };

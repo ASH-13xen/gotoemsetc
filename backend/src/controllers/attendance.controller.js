@@ -1,5 +1,6 @@
 const asyncHandler = require('../utils/asyncHandler');
 const attendanceService = require('../services/attendance.service');
+const overtimeRequestService = require('../services/overtimeRequest.service');
 const accessService = require('../services/access.service');
 
 // Who changed a day by hand — only for them and the people above them.
@@ -17,8 +18,13 @@ const mark = asyncHandler(async (req, res) => {
 });
 
 const listForEmployee = asyncHandler(async (req, res) => {
-  const records = await attendanceService.listForEmployee(req.params.id, req.query);
-  res.json({ records: await accessService.shapeAttribution(req.user, records, ATTRIBUTION) });
+  const [records, overtimeRequests] = await Promise.all([
+    attendanceService.listForEmployee(req.params.id, req.query),
+    // Overtime still being decided (or turned down) for the month — the
+    // calendar shows it on the day, since none of it is on the records yet.
+    overtimeRequestService.listDaySummaries(req.params.id, req.query),
+  ]);
+  res.json({ records: await accessService.shapeAttribution(req.user, records, ATTRIBUTION), overtimeRequests });
 });
 
 const getSummary = asyncHandler(async (req, res) => {

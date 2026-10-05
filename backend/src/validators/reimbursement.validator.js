@@ -35,4 +35,6 @@ const markPaid = {
   }),
 };
 
-module.exports = { file, list, reject, markPaid, idParam };
+const acknowledge = { params: idParam };
+
+module.exports = { file, list, reject, markPaid, acknowledge, idParam };

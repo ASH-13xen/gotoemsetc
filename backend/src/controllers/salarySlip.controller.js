@@ -1,6 +1,7 @@
 const asyncHandler = require('../utils/asyncHandler');
 const accessService = require('../services/access.service');
 const salarySlipService = require('../services/salarySlip.service');
+const overtimeRequestService = require('../services/overtimeRequest.service');
 const localFileStorage = require('../services/localFileStorage.service');
 const logger = require('../utils/logger');
 
@@ -41,6 +42,16 @@ const downloadOwnFile = asyncHandler(async (req, res) => {
 // HR Work bulk tool (frontendhr) — see salarySlip.service.js#generateBulkSlips
 // for the date-of-joining clipping logic. Returns a per-employee outcome
 // summary rather than raw slip payloads, since this can be a lot of PDFs.
+const bulkPreview = asyncHandler(async (req, res) => {
+  const period = { month: Number(req.query.month), year: Number(req.query.year) };
+  const [employees, pendingOvertime] = await Promise.all([
+    salarySlipService.listBulkCandidates(period, req.user),
+    overtimeRequestService.countPendingForMonth(period),
+  ]);
+  // Unapproved overtime isn't paid — worth knowing before generating.
+  res.json({ employees, pendingOvertime });
+});
+
 const generateBulk = asyncHandler(async (req, res) => {
   const results = await salarySlipService.generateBulkSlips(req.body, req.user.id, req.user);
   res.status(201).json({ results });
@@ -61,7 +72,7 @@ const downloadMasterSheet = asyncHandler(async (req, res) => {
 // slips (normally every 'generated' row from the response above) into one
 // zip download, streamed straight through rather than buffered in memory.
 const downloadBulkZip = asyncHandler(async (req, res) => {
-  const archive = salarySlipService.buildBulkZip(req.body.slipIds);
+  const archive = salarySlipService.buildBulkZip(req.body.slipIds, { month: req.body.month, year: req.body.year });
   res.attachment(req.body.filename || `salary-slips-${Date.now()}.zip`);
   archive.on('error', (err) => {
     logger.error({ err }, 'Failed to build bulk salary-slip zip');
@@ -93,6 +104,7 @@ module.exports = {
   downloadMasterSheet,
   listRecentMonths,
   downloadOwnFile,
+  bulkPreview,
   generateBulk,
   downloadBulkZip,
   listForFinance,

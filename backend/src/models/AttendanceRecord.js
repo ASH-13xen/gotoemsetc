@@ -17,6 +17,10 @@ const attendanceRecordSchema = new Schema(
     // Exact minutes (no rounding) earned outside the 15-minute buffer around
     // this employee's own shift start/end — see attendanceClassifier.service.js.
     overtimeMinutes: { type: Number, default: 0, min: 0 },
+    // What the scans worked out for the day, before any approval — from
+    // OVERTIME_APPROVAL_FROM, overtimeMinutes above only carries it once it
+    // counts (see utils/overtimeApproval.js#countedOvertime).
+    biometricOvertimeMinutes: { type: Number, default: 0, min: 0 },
     // True when this record was written on a day after `date` already passed —
     // a data-entry/audit flag, not a statement about the employee's punctuality.
     isBackdated: { type: Boolean, default: false },

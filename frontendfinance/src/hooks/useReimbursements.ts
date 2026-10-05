@@ -28,7 +28,8 @@ export function useRejectReimbursement() {
 export function useMarkReimbursementPaid() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: TransactionDetails }) => api.markReimbursementPaid(id, input),
+    mutationFn: ({ id, input, proof }: { id: string; input: TransactionDetails; proof: File }) =>
+      api.markReimbursementPaid(id, input, proof),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: KEY }),
   })
 }

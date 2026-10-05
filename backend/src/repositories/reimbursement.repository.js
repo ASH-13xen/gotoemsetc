@@ -3,7 +3,7 @@ const Reimbursement = require('../models/Reimbursement');
 const EMPLOYEE_FIELDS = 'firstName lastName employeeCode personalEmail';
 // receiptFile.data excluded by default — same convention as
 // GeneratedDocument's WITHOUT_FILE_DATA, only loaded for the actual download.
-const WITHOUT_FILE_DATA = '-receiptFile.data';
+const WITHOUT_FILE_DATA = '-receiptFile.data -paymentProofFile.data';
 
 const POPULATE = [
   { path: 'employee', select: EMPLOYEE_FIELDS },

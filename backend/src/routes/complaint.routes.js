@@ -21,5 +21,6 @@ router.post(
   complaintController.complete
 );
 router.post('/:id/review', validate(complaintValidator.review), complaintController.review);
+router.post('/:id/acknowledge', validate(complaintValidator.complete), complaintController.acknowledge);
 
 module.exports = router;

@@ -59,4 +59,12 @@ const review = asyncHandler(async (req, res) => {
   res.json({ complaint });
 });
 
-module.exports = { file, list, mineAwaitingReview, complete, review };
+const acknowledge = asyncHandler(async (req, res) => {
+  if (!req.user.employeeLink) {
+    throw ApiError.badRequest('No employee record is linked to this account');
+  }
+  const complaint = await complaintService.acknowledge(req.params.id, req.user.employeeLink);
+  res.json({ complaint });
+});
+
+module.exports = { file, list, mineAwaitingReview, complete, review, acknowledge };

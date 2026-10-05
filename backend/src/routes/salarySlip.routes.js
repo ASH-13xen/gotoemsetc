@@ -30,6 +30,15 @@ router.get(
   salarySlipController.downloadFile
 );
 
+// Who would get a slip for this month — shown before bulk generation so HR
+// can enter amounts for anyone first.
+router.get(
+  '/bulk-preview',
+  requireHrWorkAccess(),
+  validate(salarySlipValidator.bulkPreview),
+  salarySlipController.bulkPreview
+);
+
 router.post(
   '/generate-bulk',
   requireHrWorkAccess(),

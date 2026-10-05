@@ -45,4 +45,8 @@ function submitFeedback(id, feedback) {
   );
 }
 
-module.exports = { create, list, findById, markCompleted, submitFeedback };
+function acknowledge(id) {
+  return Complaint.findByIdAndUpdate(id, { acknowledgedAt: new Date() }, { new: true });
+}
+
+module.exports = { create, list, findById, markCompleted, submitFeedback, acknowledge };

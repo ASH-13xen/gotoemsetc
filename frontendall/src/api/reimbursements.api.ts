@@ -47,6 +47,12 @@ export interface Reimbursement {
   amount: number
   status: ReimbursementStatus
   rejectionReason?: string
+  paidAt?: string
+  transactionDetails?: { mode?: string; referenceNumber?: string; paidOn?: string; note?: string }
+  // Finance's screenshot of the payment (the file itself is fetched separately).
+  paymentProofFile?: { filename?: string; contentType?: string }
+  // Set once the claimant ticks off a paid/rejected claim — it then leaves their dashboard card.
+  acknowledgedAt?: string
   createdAt: string
 }
 
@@ -74,6 +80,16 @@ export async function uploadReceipt(id: string, file: File): Promise<{ reimburse
   const { data } = await apiClient.post(`/reimbursements/${id}/receipt`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
+  return data
+}
+
+export async function acknowledgeReimbursement(id: string): Promise<{ reimbursement: Reimbursement }> {
+  const { data } = await apiClient.post(`/reimbursements/${id}/acknowledge`)
+  return data
+}
+
+export async function fetchPaymentProof(id: string): Promise<Blob> {
+  const { data } = await apiClient.get(`/reimbursements/${id}/payment-proof`, { responseType: 'blob' })
   return data
 }
 

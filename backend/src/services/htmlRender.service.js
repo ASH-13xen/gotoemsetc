@@ -87,6 +87,13 @@ function fillTemplate(html, data) {
 // bundling a second, heavier Chromium download.
 let browserPromise = null;
 async function getBrowser() {
+  // The browser can die underneath a server that keeps running (crash, or
+  // its process being killed) — a dead one would fail every render from
+  // then on, so it's dropped and launched afresh.
+  if (browserPromise) {
+    const existing = await browserPromise.catch(() => null);
+    if (!existing?.connected) browserPromise = null;
+  }
   if (!browserPromise) {
     const localExecutablePath = findLocalExecutablePath();
     browserPromise = localExecutablePath

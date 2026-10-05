@@ -36,6 +36,10 @@ import { MyReimbursementsCard } from '@/components/reimbursements/MyReimbursemen
 import { KeysDialog } from '@/components/keys/KeysDialog'
 import { OrgChartTeaser } from '@/components/orgChart/OrgChartTeaser'
 import { AttendanceChangeRequestsCard } from '@/components/attendance/AttendanceChangeRequestsCard'
+import { OvertimeApprovalsCard } from '@/components/attendance/OvertimeApprovalsCard'
+import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useMyOvertimeRequests } from '@/hooks/useOvertimeRequests'
 import { CreateAnnouncementDialog, canCreateAnnouncements } from '@/components/announcements/CreateAnnouncementDialog'
 import { PendingAnnouncementsModal } from '@/components/announcements/PendingAnnouncementsModal'
 import { PlanNextDayCard } from '@/components/tasks/PlanNextDayCard'
@@ -221,6 +225,10 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+
+      {/* Overtime waiting on this person — a content manager's team queue, HR's
+          final approvals. Shown whichever view is open; nothing when empty. */}
+      <OvertimeApprovalsCard />
 
       {view === 'me' && (
         <>
@@ -451,9 +459,16 @@ function MyOvertimeCard() {
   const employeeId = user?.employeeLink ?? undefined
   const { data } = useAttendanceSummary(employeeId, currentMonthRange())
   const [unit, setUnit] = useState<'minutes' | 'hours'>('minutes')
+  // Overtime only counts once HR approves it — what is still on its way is
+  // listed under the total.
+  const now = new Date()
+  const { data: otRequests = [] } = useMyOvertimeRequests(employeeId, { month: now.getMonth() + 1, year: now.getFullYear() })
   if (!employeeId) return null
 
   const totalMinutes = data?.summary.totalOvertimeMinutes
+  const waiting = otRequests.filter((r) => r.status === 'pending')
+  const waitingMinutes = waiting.reduce((sum, r) => sum + (r.cmMinutes ?? r.appliedMinutes ?? r.biometricMinutes ?? 0), 0)
+  const turnedDown = otRequests.filter((r) => r.status === 'rejected')
 
   return (
     <DashboardCard
@@ -493,8 +508,32 @@ function MyOvertimeCard() {
           </p>
         )}
         <p className="mt-3 text-xs font-semibold text-muted-foreground">
-          {unit === 'minutes' ? 'Minutes' : 'Hours'} earned so far this month
+          {unit === 'minutes' ? 'Minutes' : 'Hours'} approved so far this month
         </p>
+        {waiting.length > 0 && (
+          <div className="mt-3 rounded-xl bg-amber-500/10 p-2.5">
+            <p className="text-xs font-bold text-amber-700">
+              {unit === 'minutes' ? `${waitingMinutes} min` : formatOvertimeHoursMinutes(waitingMinutes)} waiting for approval
+            </p>
+            <div className="mt-1 grid max-h-20 gap-0.5 overflow-y-auto text-[11px] text-amber-800/80">
+              {waiting.map((r) => (
+                <span key={r._id}>
+                  {new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })} ·{' '}
+                  {r.cmMinutes ?? r.appliedMinutes ?? r.biometricMinutes} min · with {r.stage === 'hr' ? 'HR' : 'your content manager'}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {turnedDown.length > 0 && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Not approved:{' '}
+            {turnedDown
+              .map((r) => `${new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}${r.rejectionReason ? ` (${r.rejectionReason})` : ''}`)
+              .join(', ')}
+          </p>
+        )}
+        <p className="mt-2 text-[11px] text-muted-foreground/80">Overtime above 60 minutes in a day counts once HR approves it.</p>
       </div>
     </DashboardCard>
   )
@@ -504,26 +543,81 @@ function humanizeDocType(key: string): string {
   return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+function uploadRequestState(req: { status: string; expiresAt: string }) {
+  const stillOpen = req.status === 'pending' || req.status === 'partially_fulfilled'
+  if (stillOpen && new Date(req.expiresAt).getTime() <= Date.now()) return 'expired'
+  return req.status
+}
+
+const UPLOAD_STATE_LABEL: Record<string, string> = {
+  pending: 'Pending',
+  partially_fulfilled: 'Partly uploaded',
+  fulfilled: 'Uploaded',
+  expired: 'Link expired',
+  revoked: 'Cancelled',
+}
+
 // Read-only visibility into documents HR is still waiting on — fulfilled
-// through the existing public upload-link flow, not from here.
+// through the existing public upload-link flow, not from here. A request
+// drops off the card the moment it's uploaded or its link expires; the full
+// history stays under "See all".
 function MyUploadRequestsCard() {
   const { user } = useAuth()
   const employeeId = user?.employeeLink ?? undefined
   const { data, isLoading } = useMyUploadRequests(employeeId)
-  const requests = (data?.uploadRequests ?? []).filter(
-    (r) => r.status === 'pending' || r.status === 'partially_fulfilled'
-  )
+  const [allOpen, setAllOpen] = useState(false)
+  const all = data?.uploadRequests ?? []
+  const requests = all.filter((r) => ['pending', 'partially_fulfilled'].includes(uploadRequestState(r)))
 
   if (!employeeId) return null
 
   return (
-    <DashboardCard icon={<Inbox className="size-4" />} title="Pending document requests">
+    <DashboardCard
+      icon={<Inbox className="size-4" />}
+      title="Pending document requests"
+      headerRight={
+        all.length > 0 ? (
+          <button type="button" onClick={() => setAllOpen(true)} className="shrink-0 text-xs font-semibold text-primary hover:underline">
+            See all →
+          </button>
+        ) : undefined
+      }
+    >
+      <Dialog open={allOpen} onOpenChange={setAllOpen}>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>All document requests</DialogTitle>
+            <DialogDescription>Every document HR has asked you for, newest first.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            {[...all]
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+              .map((req) => {
+                const state = uploadRequestState(req)
+                return (
+                  <div key={req._id} className="flex items-start justify-between gap-3 rounded-xl bg-secondary/30 p-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground">{req.requestedDocTypes.map(humanizeDocType).join(', ')}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Asked {new Date(req.createdAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })} · link{' '}
+                        {state === 'expired' ? 'expired' : 'valid till'} {new Date(req.expiresAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}
+                      </p>
+                    </div>
+                    <Badge variant={state === 'fulfilled' ? 'success' : state === 'expired' || state === 'revoked' ? 'secondary' : 'warning'}>
+                      {UPLOAD_STATE_LABEL[state] ?? state}
+                    </Badge>
+                  </div>
+                )
+              })}
+          </div>
+        </DialogContent>
+      </Dialog>
       {isLoading ? (
         <Skeleton className="h-12 w-full rounded-xl" />
       ) : requests.length === 0 ? (
         <DashboardCardEmpty icon={<Inbox className="size-4" />} message="Nothing pending — you're all caught up." />
       ) : (
-        <div className="grid gap-2">
+        <div className="grid max-h-72 gap-2 overflow-y-auto pr-0.5">
           {requests.map((req) => (
             <div key={req._id} className="rounded-xl bg-secondary/30 p-3">
               <p className="text-sm font-semibold text-foreground">

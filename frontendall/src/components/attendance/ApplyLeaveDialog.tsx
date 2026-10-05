@@ -35,6 +35,7 @@ import {
   type HalfDayPeriod,
   type LeaveApplicationStatus,
 } from '@/api/attendanceRequests.api'
+import { useApplyForOvertime } from '@/hooks/useOvertimeRequests'
 import { MonthlyLeaveCountsNote } from './MonthlyLeaveCountsNote'
 
 function todayValue() {
@@ -57,7 +58,11 @@ const PAID_LEAVE: LeaveApplicationStatus = 'O'
 // specific requestedStatus, unlike Work From Home ('W'). HR picks the
 // actual per-day status, then it goes to the CEO for final approval.
 const MULTIPLE_DAYS = 'MULTIPLE_DAYS' as const
-type ApplyType = LeaveApplicationStatus | typeof MULTIPLE_DAYS
+// Overtime isn't leave, but it is applied for from the same place — it
+// goes to the content manager, then HR (overtimeRequest.service.js), and
+// only counts once HR approves it.
+const OVERTIME = 'OVERTIME' as const
+type ApplyType = LeaveApplicationStatus | typeof MULTIPLE_DAYS | typeof OVERTIME
 // Every type except Paid Leave, which is only offered when eligible.
 const ALWAYS_OFFERED: LeaveApplicationStatus[] = ['SL', 'L', 'H', 'W']
 // The types whose month-to-date count is shown while applying.
@@ -72,7 +77,9 @@ export function ApplyLeaveDialog() {
   // Which half — used by both Half Day and Short Leave.
   const [halfDayPeriod, setHalfDayPeriod] = useState<HalfDayPeriod | undefined>()
   const [reason, setReason] = useState('')
+  const [overtimeMinutes, setOvertimeMinutes] = useState('')
   const createLeaveApplication = useCreateLeaveApplication()
+  const applyForOvertime = useApplyForOvertime()
   // Re-checked against whichever start date is currently picked. Paid Leave
   // is only offered once HR has marked probation completed AND this
   // month's one paid leave hasn't been used or applied for — otherwise the
@@ -86,6 +93,7 @@ export function ApplyLeaveDialog() {
   const needsPeriod = isHalfDay || isShortLeave
   const isPaidLeave = applyType === PAID_LEAVE
   const isMultipleDays = applyType === MULTIPLE_DAYS
+  const isOvertime = applyType === OVERTIME
   // Only Work From Home and Unpaid Leave span more than one date — every
   // other type is a single date.
   const isRange = applyType === 'W' || isMultipleDays
@@ -109,11 +117,39 @@ export function ApplyLeaveDialog() {
     setApplyType(value)
     setHalfDayPeriod(undefined)
     if (value !== 'W' && value !== MULTIPLE_DAYS) setEndDate(date)
+    // Overtime is for a day that has happened — never ahead of time.
+    if (value === OVERTIME && date > todayValue()) {
+      setDate(todayValue())
+      setEndDate(todayValue())
+    }
   }
 
   const onSubmit = () => {
     if (!reason.trim()) {
       toast.error('Please add a short reason')
+      return
+    }
+    if (isOvertime) {
+      const minutes = Number(overtimeMinutes)
+      if (!Number.isInteger(minutes) || minutes < 1) {
+        toast.error('Enter the overtime in whole minutes')
+        return
+      }
+      applyForOvertime.mutate(
+        { date, minutes, reason: reason.trim() },
+        {
+          onSuccess: () => {
+            toast.success('Overtime sent for approval')
+            setOpen(false)
+            setReason('')
+            setOvertimeMinutes('')
+          },
+          onError: (err) =>
+            toast.error(
+              (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Could not send your overtime for approval'
+            ),
+        }
+      )
       return
     }
     if (needsPeriod && !halfDayPeriod) {
@@ -166,12 +202,12 @@ export function ApplyLeaveDialog() {
             className="inline-flex h-10 items-center gap-2 px-4 text-sm font-medium text-foreground transition-colors duration-150 hover:bg-secondary/60"
           >
             <CalendarPlus className="size-4" />
-            Apply for leave
+            Apply for leave / overtime
           </button>
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Apply for leave</DialogTitle>
+            <DialogTitle>Apply for leave or overtime</DialogTitle>
             <DialogDescription>
               Pick a type and date — HR will review and you'll see the outcome on your dashboard.
             </DialogDescription>
@@ -190,6 +226,7 @@ export function ApplyLeaveDialog() {
                     </SelectItem>
                   ))}
                   <SelectItem value={MULTIPLE_DAYS}>{UNPAID_LEAVE_LABEL}</SelectItem>
+                  <SelectItem value={OVERTIME}>Overtime</SelectItem>
                   {paidLeaveEligible && (
                     <SelectItem value={PAID_LEAVE}>{LEAVE_APPLICATION_STATUS_LABEL[PAID_LEAVE]} (1 per month)</SelectItem>
                   )}
@@ -202,6 +239,28 @@ export function ApplyLeaveDialog() {
                 For one or more days off without pay. Approved by your Content Manager (if you have one), then HR,
                 then the CEO.
               </p>
+            )}
+
+            {isOvertime && (
+              <>
+                <p className="rounded-lg bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
+                  For extra time you worked today or in the last 2 days. It goes to your Content Manager (if you have
+                  one), then HR — it is added to your overtime only once HR approves it.
+                </p>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="overtimeMinutes">Overtime worked (minutes)</Label>
+                  <Input
+                    id="overtimeMinutes"
+                    type="number"
+                    min={1}
+                    step={1}
+                    inputMode="numeric"
+                    placeholder="e.g. 90"
+                    value={overtimeMinutes}
+                    onChange={(e) => setOvertimeMinutes(e.target.value)}
+                  />
+                </div>
+              </>
             )}
 
             {needsPeriod && (
@@ -265,6 +324,7 @@ export function ApplyLeaveDialog() {
                   id="leaveDate"
                   type="date"
                   min={minDateValue()}
+                  max={isOvertime ? todayValue() : undefined}
                   value={date}
                   onChange={(e) => onDateChange(e.target.value)}
                 />
@@ -277,14 +337,14 @@ export function ApplyLeaveDialog() {
                 id="leaveReason"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="Why do you need this?"
+                placeholder={isOvertime ? 'What was the overtime for?' : 'Why do you need this?'}
               />
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={onSubmit} disabled={createLeaveApplication.isPending}>
-              {createLeaveApplication.isPending && <Loader2 className="size-4 animate-spin" />}
-              Send application
+            <Button onClick={onSubmit} disabled={createLeaveApplication.isPending || applyForOvertime.isPending}>
+              {(createLeaveApplication.isPending || applyForOvertime.isPending) && <Loader2 className="size-4 animate-spin" />}
+              {isOvertime ? 'Send for approval' : 'Send application'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -344,6 +404,14 @@ export function ApplyLeaveDialog() {
               <p className="text-muted-foreground">
                 Single day only, one per calendar month, and only after your probation period is completed. It
                 appears in the list only when you can use it.
+              </p>
+            </div>
+            <div className="grid gap-1">
+              <p className="font-semibold text-foreground">Overtime</p>
+              <p className="text-muted-foreground">
+                For extra time worked today or in the last 2 days. Reviewed by your Content Manager (if you have one),
+                then HR — it counts only once HR approves it. Biometric overtime of more than 60 minutes in a day is
+                sent for the same approval automatically the next day; up to 60 minutes counts by itself.
               </p>
             </div>
             <div className="grid gap-1 border-t border-border pt-3">
