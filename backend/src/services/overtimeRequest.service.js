@@ -4,12 +4,11 @@ const OvertimeRequest = require('../models/OvertimeRequest');
 const AttendanceRecord = require('../models/AttendanceRecord');
 const employeeRepository = require('../repositories/employee.repository');
 const userRepository = require('../repositories/user.repository');
-const workTeamRepository = require('../repositories/workTeam.repository');
 const attendanceService = require('./attendance.service');
 const notificationService = require('./notification.service');
 const notifyRecipients = require('./notifyRecipients.service');
 const accessService = require('./access.service');
-const teamRoles = require('../utils/teamRoles');
+const orgTeams = require('./orgTeams.service');
 const { istDateKey } = require('../utils/istDate');
 const { needsOvertimeApproval, isAboveReviewThreshold } = require('../utils/overtimeApproval');
 const { can, isSelf } = require('../utils/roles');
@@ -19,7 +18,6 @@ const {
   OVERTIME_REQUEST_STAGE,
   OVERTIME_APPROVAL_FROM,
   OVERTIME_REVIEW_THRESHOLD_MINUTES,
-  TEAM_MEMBER_ROLE,
   NOTIFICATION_TYPES,
   PERMISSIONS,
   EMPLOYEE_STATUS,
@@ -61,21 +59,16 @@ const canDecideAsHr = (user) => can(user, ACCESS.HRMS) || (user.permissions || [
 // else what was applied for, else what the scans worked out.
 const suggestedMinutes = (request) => request.cmMinutes ?? request.appliedMinutes ?? request.biometricMinutes ?? 0;
 
-// Content manager first — unless the employee is on no team, is a content
-// manager themself, or none of their teams has one (so nothing is ever
-// unroutable). On several teams, a content manager of any of them will do.
+// Content manager first — unless the employee is on no team in the
+// Organisation chart, is a content manager themself, or none of their teams
+// has one (so nothing is ever unroutable). On several teams, a content
+// manager of any of them will do. See orgTeams.service.js.
 async function resolveStage(employeeId) {
-  const teams = await workTeamRepository.listForMember(employeeId);
-  if (teams.some((t) => teamRoles.hasRole(t, employeeId, TEAM_MEMBER_ROLE.CONTENT_MANAGER))) return { stage: HR, cmIds: [] };
-  const cmIds = [...new Set(teams.flatMap((t) => teamRoles.membersWithRole(t, TEAM_MEMBER_ROLE.CONTENT_MANAGER)))];
+  const cmIds = await orgTeams.contentManagersFor(employeeId);
   return cmIds.length ? { stage: CONTENT_MANAGER, cmIds } : { stage: HR, cmIds: [] };
 }
 
-async function isContentManagerOf(applicantEmployeeId, cmEmployeeId) {
-  if (!cmEmployeeId) return false;
-  const teams = await workTeamRepository.listForMember(applicantEmployeeId);
-  return teams.some((t) => teamRoles.hasRole(t, cmEmployeeId, TEAM_MEMBER_ROLE.CONTENT_MANAGER));
-}
+const isContentManagerOf = (applicantEmployeeId, cmEmployeeId) => orgTeams.isContentManagerOf(applicantEmployeeId, cmEmployeeId);
 
 function describe(request) {
   const parts = [];
@@ -321,12 +314,9 @@ async function listForApprover(user) {
   const sort = { date: 1, createdAt: 1 };
 
   if (user.employeeLink) {
-    const teams = await workTeamRepository.listWhereEmployeeIsContentManager(user.employeeLink);
-    if (teams.length) {
+    const { isContentManager, employeeIds } = await orgTeams.reviewedBy(user.employeeLink);
+    if (isContentManager) {
       out.isContentManager = true;
-      const employeeIds = [...new Set(teams.flatMap((t) => [t.leader, ...t.members].map((id) => id.toString())))].filter(
-        (id) => id !== String(user.employeeLink)
-      );
       out.contentManager = await OvertimeRequest.find({ status: PENDING, stage: CONTENT_MANAGER, employee: { $in: employeeIds } })
         .sort(sort)
         .populate(POPULATE_REVIEW);

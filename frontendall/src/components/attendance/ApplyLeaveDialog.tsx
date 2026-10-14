@@ -417,7 +417,7 @@ export function ApplyLeaveDialog() {
             <div className="grid gap-1 border-t border-border pt-3">
               <p className="font-semibold text-foreground">What happens after you apply</p>
               <p className="text-muted-foreground">
-                If you're on a team with a tagged Content Manager, they review it first; otherwise (or once they
+                If you're in a team in the Organisation chart that has a Content Manager, they review it first; otherwise (or once they
                 approve) it goes to HR for the final decision. Unpaid Leave also needs the CEO's approval after HR. You can backdate up to 2 days, or apply for any
                 future date. You'll get a notification on your dashboard once it's approved, rejected, or later
                 revoked.

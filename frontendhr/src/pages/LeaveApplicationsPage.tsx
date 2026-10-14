@@ -147,13 +147,13 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
   }
 
   return (
-    <div className="grid gap-3 rounded-lg border border-border bg-card p-4">
+    <div className="grid min-w-0 gap-3 rounded-lg border border-border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="font-medium text-foreground">{employeeName}</p>
           <p className="text-xs text-muted-foreground">{formatDateRange(request)}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {appliedLabel && <Badge variant="outline">Applied: {appliedLabel}</Badge>}
           {request.requestedHalfDayPeriod && (
             <Badge variant="outline">{HALF_DAY_PERIOD_LABEL[request.requestedHalfDayPeriod]}</Badge>
@@ -339,6 +339,48 @@ const STATUS_FILTERS: { key: AttendanceModificationRequest['status'] | 'all'; la
   { key: 'all', label: 'All' },
 ]
 
+// One side of the page: a heading with its count, then the requests (or an
+// empty note).
+function RequestColumn({
+  title,
+  hint,
+  requests,
+  isLoading,
+}: {
+  title: string
+  hint: string
+  requests: AttendanceModificationRequest[]
+  isLoading: boolean
+}) {
+  return (
+    <Card className="min-w-0 p-5">
+      <CardContent className="grid gap-4 p-0">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-semibold text-foreground">{title}</h2>
+            {!isLoading && <Badge variant="outline">{requests.length}</Badge>}
+          </div>
+          <p className="text-xs text-muted-foreground">{hint}</p>
+        </div>
+        {isLoading ? (
+          <Skeleton className="h-16 w-full bg-secondary/40 rounded-xl" />
+        ) : requests.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-12 text-center">
+            <Inbox className="size-8 text-muted-foreground/40" />
+            <p className="text-sm text-muted-foreground">No requests here.</p>
+          </div>
+        ) : (
+          <div className="grid max-h-168 min-w-0 grid-cols-1 gap-2 overflow-y-auto pr-1">
+            {requests.map((request) => (
+              <RequestRow key={request._id} request={request} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function LeaveApplicationsPage() {
   // Defaults to Pending — the queue HR actually needs to act on — rather
   // than dumping every request ever filed (approved/rejected/revoked included)
@@ -346,9 +388,14 @@ export default function LeaveApplicationsPage() {
   const [filter, setFilter] = useState<AttendanceModificationRequest['status'] | 'all'>('pending')
   const { data, isLoading } = useAttendanceRequests(filter === 'all' ? undefined : filter)
   const requests = data?.requests ?? []
+  // A leave application is one that asked for something specific (a leave
+  // type, short leave or unpaid days); anything else is a free-text request
+  // to correct attendance.
+  const leaves = requests.filter((r) => leaveApplicationLabel(r) !== '')
+  const modifications = requests.filter((r) => leaveApplicationLabel(r) === '')
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-8 py-8">
+    <div className="mx-auto flex max-w-7xl flex-col gap-8 py-8">
       <PageHeader
         eyebrow="HRMS"
         title="Leave/Modification Requests"
@@ -369,24 +416,20 @@ export default function LeaveApplicationsPage() {
         ))}
       </div>
 
-      <Card className="p-6">
-        <CardContent className="p-0">
-          {isLoading ? (
-            <Skeleton className="h-16 w-full bg-secondary/40 rounded-xl" />
-          ) : requests.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 py-16 text-center">
-              <Inbox className="size-8 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">No requests here.</p>
-            </div>
-          ) : (
-            <div className="grid max-h-168 gap-2 overflow-y-auto pr-1">
-              {requests.map((request) => (
-                <RequestRow key={request._id} request={request} />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <div className="grid items-start gap-6 lg:grid-cols-2">
+        <RequestColumn
+          title="Leave applications"
+          hint="Paid leave, half day, short leave, late, work from home and unpaid leave applied for from the dashboard."
+          requests={leaves}
+          isLoading={isLoading}
+        />
+        <RequestColumn
+          title="Modification requests"
+          hint="Free-text requests to correct a day's attendance."
+          requests={modifications}
+          isLoading={isLoading}
+        />
+      </div>
     </div>
   )
 }

@@ -3,16 +3,14 @@ const attendanceRequestRepository = require('../repositories/attendanceRequest.r
 const attendanceRepository = require('../repositories/attendance.repository');
 const employeeRepository = require('../repositories/employee.repository');
 const userRepository = require('../repositories/user.repository');
-const workTeamRepository = require('../repositories/workTeam.repository');
 const notificationService = require('./notification.service');
 const notifyRecipients = require('./notifyRecipients.service');
 const attendanceService = require('./attendance.service');
-const teamRoles = require('../utils/teamRoles');
+const orgTeams = require('./orgTeams.service');
 const {
   ATTENDANCE_REQUEST_STATUS,
   ATTENDANCE_REQUEST_APPROVAL_STAGE,
   ATTENDANCE_STATUS,
-  TEAM_MEMBER_ROLE,
   NOTIFICATION_TYPES,
   USER_ROLES,
 } = require('../config/constants');
@@ -186,23 +184,17 @@ async function withMonthlyCounts(requests) {
 
 // Which tier must review a structured leave application first — the
 // free-text flow (frontendems) never calls this at all, and always stays
-// at the model's 'hr' default. Content Manager review is skipped straight
-// to HR when: the employee belongs to no team; the employee is themself a
-// Content Manager on one of their teams (self-review makes no sense); or
-// none of their teams has anyone tagged Content Manager at all (so a
-// request is never permanently unroutable). Per product decision, an
-// employee on multiple teams can be approved by a Content Manager from
-// ANY of them — the union of every team's tagged CMs.
+// at the model's 'hr' default. The teams are the Organisation chart's team
+// boxes (orgTeams.service.js). Content Manager review is skipped straight
+// to HR when: the employee holds no box in any team; the employee is
+// themself a Content Manager (self-review makes no sense); or none of their
+// teams has a Content Manager (so a request is never permanently
+// unroutable). An employee on several teams can be approved by a Content
+// Manager from ANY of them.
 async function resolveApprovalStage(employeeId, isLeaveApplication) {
   if (!isLeaveApplication) return { stage: ATTENDANCE_REQUEST_APPROVAL_STAGE.HR, cmIds: [] };
 
-  const teams = await workTeamRepository.listForMember(employeeId);
-  if (teams.length === 0) return { stage: ATTENDANCE_REQUEST_APPROVAL_STAGE.HR, cmIds: [] };
-
-  const isCmThemself = teams.some((t) => teamRoles.hasRole(t, employeeId, TEAM_MEMBER_ROLE.CONTENT_MANAGER));
-  if (isCmThemself) return { stage: ATTENDANCE_REQUEST_APPROVAL_STAGE.HR, cmIds: [] };
-
-  const cmIds = [...new Set(teams.flatMap((t) => teamRoles.membersWithRole(t, TEAM_MEMBER_ROLE.CONTENT_MANAGER)))];
+  const cmIds = await orgTeams.contentManagersFor(employeeId);
   if (cmIds.length === 0) return { stage: ATTENDANCE_REQUEST_APPROVAL_STAGE.HR, cmIds: [] };
 
   return { stage: ATTENDANCE_REQUEST_APPROVAL_STAGE.CONTENT_MANAGER, cmIds };
@@ -439,14 +431,11 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actor) {
 }
 
 // Is `cmEmployeeId` an eligible Content Manager for `applicantEmployeeId`'s
-// leave application — i.e. tagged content_manager on any team the applicant
-// belongs to? Backs both the route-level access check on cm-approve/reject
-// and (indirectly, via listPendingForContentManager) the CM's dashboard
-// queue.
-async function isEligibleContentManagerFor(applicantEmployeeId, cmEmployeeId) {
-  if (!cmEmployeeId) return false;
-  const teams = await workTeamRepository.listForMember(applicantEmployeeId);
-  return teams.some((t) => teamRoles.hasRole(t, cmEmployeeId, TEAM_MEMBER_ROLE.CONTENT_MANAGER));
+// leave application — i.e. in a Content Manager box of a team the applicant
+// is on in the Organisation chart? Backs the route-level access check on
+// cm-approve/reject.
+function isEligibleContentManagerFor(applicantEmployeeId, cmEmployeeId) {
+  return orgTeams.isContentManagerOf(applicantEmployeeId, cmEmployeeId);
 }
 
 // Advances a request out of the Content Manager stage — the request stays
@@ -485,13 +474,12 @@ async function approveAtContentManagerStage(id, actingUserId, actor) {
 }
 
 // Every request currently sitting at the Content Manager stage for any
-// employee on a team this person is tagged content_manager on — the CM's
-// dashboard "pending my review" queue. Returns [] for anyone not tagged
-// content_manager anywhere, rather than erroring.
+// employee on a team this person is Content Manager of in the Organisation
+// chart — the CM's dashboard "pending my review" queue. Returns [] for
+// anyone holding no Content Manager box, rather than erroring.
 async function listPendingForContentManager(cmEmployeeId) {
-  const teams = await workTeamRepository.listWhereEmployeeIsContentManager(cmEmployeeId);
-  if (teams.length === 0) return [];
-  const employeeIds = [...new Set(teams.flatMap((t) => [t.leader, ...t.members].map((id) => id.toString())))];
+  const { employeeIds } = await orgTeams.reviewedBy(cmEmployeeId);
+  if (employeeIds.length === 0) return [];
   const requests = await attendanceRequestRepository.list({
     status: ATTENDANCE_REQUEST_STATUS.PENDING,
     approvalStage: ATTENDANCE_REQUEST_APPROVAL_STAGE.CONTENT_MANAGER,
