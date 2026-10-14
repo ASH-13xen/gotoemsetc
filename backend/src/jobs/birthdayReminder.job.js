@@ -12,7 +12,6 @@ const COMPANY_EVENT_LABEL = {
   [COMPANY_EVENT_TYPE.CLIENT_ANNIVERSARY]: 'anniversary',
   [COMPANY_EVENT_TYPE.BRAND_ANNIVERSARY]: 'anniversary',
   [COMPANY_EVENT_TYPE.IMPORTANT]: 'reminder',
-  [COMPANY_EVENT_TYPE.FESTIVE]: 'reminder',
 };
 
 function isMonthDay(date, month, day) {
@@ -106,7 +105,11 @@ async function sendDueCompanyEventNotifications() {
   for (const event of events) {
     const date = new Date(event.date);
     const label = COMPANY_EVENT_LABEL[event.type] || 'event';
-    const isImportant = event.type === COMPANY_EVENT_TYPE.IMPORTANT || event.type === COMPANY_EVENT_TYPE.FESTIVE;
+    // Festive days are only calendar markers — there are a lot of them (every
+    // observance day too), so they never notify; the calendar and its
+    // "Upcoming" strip show them.
+    if (event.type === COMPANY_EVENT_TYPE.FESTIVE) continue;
+    const isImportant = event.type === COMPANY_EVENT_TYPE.IMPORTANT;
     if (isImportant && date.getFullYear() !== today.getFullYear()) continue;
 
     const title = label === 'birthday' ? 'Birthday' : label === 'anniversary' ? 'Anniversary' : 'Reminder';

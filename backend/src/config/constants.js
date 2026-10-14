@@ -201,6 +201,13 @@ module.exports = {
     SALARY_BATCH_APPROVED: 'salary_batch_approved',
     SALARY_BATCH_SENT_BACK: 'salary_batch_sent_back',
     FNF_SETTLEMENT_PAID: 'fnf_settlement_paid',
+    // Shown as an alert on the CEO's (and admin's) dashboard until dismissed.
+    EMPLOYEE_ONBOARDED: 'employee_onboarded',
+    EMPLOYEE_OFFBOARDED: 'employee_offboarded',
+    FNF_PENDING_HR: 'fnf_pending_hr',
+    FNF_PENDING_CEO: 'fnf_pending_ceo',
+    FNF_APPROVED: 'fnf_approved',
+    FNF_SENT_BACK: 'fnf_sent_back',
     INVOICE_PENDING_APPROVAL: 'invoice_pending_approval',
     INVOICE_APPROVED: 'invoice_approved',
     INVOICE_SENT: 'invoice_sent',
@@ -740,6 +747,10 @@ module.exports = {
   SALARY_BATCH_STATUS: { PENDING: 'pending', APPROVED: 'approved', SENT_BACK: 'sent_back', SUPERSEDED: 'superseded' },
   // bulk = the whole month from HR Work; single = one slip from an employee's page.
   SALARY_BATCH_KIND: { BULK: 'bulk', SINGLE: 'single' },
+  // Full & final settlement (fnfSettlement.service.js): HR confirms the last
+  // working day -> the CEO/admin approves it with the final salary slip ->
+  // Finance pays it with a receipt.
+  FNF_STAGE: { HR: 'hr', CEO: 'ceo', FINANCE: 'finance' },
   OVERTIME_REQUEST_STATUS: { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected' },
   OVERTIME_REQUEST_STAGE: { CONTENT_MANAGER: 'content_manager', HR: 'hr' },
 };

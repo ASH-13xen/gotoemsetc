@@ -10,6 +10,7 @@ const env = require('../config/env');
 const employeeRepository = require('../repositories/employee.repository');
 const salarySlipRepository = require('../repositories/salarySlip.repository');
 const AttendanceRecord = require('../models/AttendanceRecord');
+const SalarySlip = require('../models/SalarySlip');
 const userRepository = require('../repositories/user.repository');
 const localFileStorage = require('../services/localFileStorage.service');
 const emailService = require('./email.service');
@@ -337,9 +338,10 @@ async function listBulkCandidates({ month, year }, actor) {
   if (periodEnd.getTime() > Date.now()) {
     throw ApiError.badRequest('This month has not ended yet');
   }
-  const [employees, slips] = await Promise.all([
+  const [employees, slips, fnfCovered] = await Promise.all([
     employeeRepository.listPayableForPeriod(periodStart),
     salarySlipRepository.listByStartDateMonth(periodStart, new Date(Date.UTC(year, month, 1))),
+    fnfCoveredEmployees(periodStart, periodEnd),
   ]);
   // Sorted newest first, so the first slip seen per employee is their latest.
   const latestSlipByEmployee = new Map();
@@ -357,6 +359,8 @@ async function listBulkCandidates({ month, year }, actor) {
       if (!employee.monthlyPay && !employee.ctcAnnual) notes.push('No salary set');
       const own = isSelf(actor, employee._id);
       if (own) notes.push('Your own slip — someone else has to generate it');
+      const viaFnf = fnfCovered.has(employee._id.toString());
+      if (viaFnf) notes.push('Paid through their full & final settlement');
       const slip = latestSlipByEmployee.get(employee._id.toString());
       const previous = {};
       for (const field of MANUAL_AMOUNT_FIELDS) {
@@ -368,7 +372,7 @@ async function listBulkCandidates({ month, year }, actor) {
         employeeCode: employee.employeeCode || '',
         designation: employee.designation || '',
         monthlyPay: employee.monthlyPay || (employee.ctcAnnual ? employee.ctcAnnual / 12 : 0) || 0,
-        skipped: own,
+        skipped: own || viaFnf,
         hasSlip: Boolean(slip),
         previous,
         notes,
@@ -376,6 +380,17 @@ async function listBulkCandidates({ month, year }, actor) {
     })
     .filter(Boolean)
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Employees whose slip for this month was made as part of a full & final
+// settlement — they are not paid again with the month's slips.
+async function fnfCoveredEmployees(periodStart, periodEnd) {
+  const slips = await SalarySlip.find({
+    fnfSettlement: { $ne: null },
+    startDate: { $gte: periodStart, $lte: periodEnd },
+    approvalStatus: { $nin: [SALARY_SLIP_APPROVAL.REJECTED, SALARY_SLIP_APPROVAL.SUPERSEDED] },
+  }).select('employee');
+  return new Set(slips.map((s) => String(s.employee)));
 }
 
 async function generateBulkSlips({ month, year, adjustments = {} }, createdBy, actor) {
@@ -386,6 +401,7 @@ async function generateBulkSlips({ month, year, adjustments = {} }, createdBy, a
   }
 
   const employees = await employeeRepository.listPayableForPeriod(periodStart);
+  const fnfCovered = await fnfCoveredEmployees(periodStart, periodEnd);
   const results = [];
 
   for (const employee of employees) {
@@ -400,6 +416,12 @@ async function generateBulkSlips({ month, year, adjustments = {} }, createdBy, a
 
     if (isSelf(actor, employee._id)) {
       results.push({ ...row, outcome: 'skipped', message: 'Your own slip — someone else has to generate it' });
+      continue;
+    }
+
+    // Their final month is paid through their full & final settlement.
+    if (fnfCovered.has(employee._id.toString())) {
+      results.push({ ...row, outcome: 'skipped', message: 'Covered by their full & final settlement' });
       continue;
     }
 
@@ -470,6 +492,7 @@ async function buildMasterSheet({ month, year }, { useGeneratedSlips = true, app
     if (!salary.basicMaster) netNote = 'No salary set';
     else if (useGeneratedSlips && !slip) netNote = 'Slip not generated';
     if (employee.status === EMPLOYEE_STATUS.OFFBOARDED) netNote = [netNote, 'Left on ' + formatDateDDMMYYYY(employment.endDate)].filter(Boolean).join(' · ');
+    if (slip?.fnfSettlement) netNote = [netNote, 'Paid in the full & final settlement'].filter(Boolean).join(' · ');
     if (summary.unmarkedWorkingDates.length > 0) {
       netNote = [netNote, `${summary.unmarkedWorkingDates.length} unmarked day(s)`].filter(Boolean).join(' · ');
     }
@@ -669,8 +692,9 @@ async function listDueForFinance(year, month) {
 
   const latestByEmployee = new Map();
   for (const slip of slips) {
-    // Finance only ever sees what the CEO/admin has approved.
-    if (!isApproved(slip)) continue;
+    // Finance only ever sees what the CEO/admin has approved — and a final
+    // slip is paid with its full & final settlement (Finance → FnF), not here.
+    if (!isApproved(slip) || slip.fnfSettlement) continue;
     const employeeId = slip.employee?._id?.toString();
     if (!employeeId) continue;
     const existing = latestByEmployee.get(employeeId);

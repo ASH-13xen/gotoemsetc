@@ -1,5 +1,7 @@
 const asyncHandler = require('../utils/asyncHandler');
 const notificationService = require('../services/notification.service');
+const notificationRepository = require('../repositories/notification.repository');
+const { NOTIFICATION_TYPES } = require('../config/constants');
 
 const list = asyncHandler(async (req, res) => {
   const notifications = await notificationService.listForUser(req.user.id, req.query);
@@ -21,4 +23,13 @@ const markAllRead = asyncHandler(async (req, res) => {
   res.status(204).send();
 });
 
-module.exports = { list, unreadCount, markRead, markAllRead };
+// The dashboard alerts: who joined or left, until dismissed.
+const alerts = asyncHandler(async (req, res) => {
+  const notifications = await notificationRepository.listUnreadByTypes(req.user.id, [
+    NOTIFICATION_TYPES.EMPLOYEE_ONBOARDED,
+    NOTIFICATION_TYPES.EMPLOYEE_OFFBOARDED,
+  ]);
+  res.json({ notifications });
+});
+
+module.exports = { list, unreadCount, markRead, markAllRead, alerts };

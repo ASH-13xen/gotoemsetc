@@ -364,7 +364,6 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
                                     <Icon className="size-3" />
                                     {e.name}
                                     {e.type !== 'important' && ` — ${label}`}
-                                    {e.type === 'festive' && ' (not a holiday by itself)'}
                                     {e.type === 'important' && e.notes && ` — ${e.notes}`}
                                   </p>
                                   {canManage && (

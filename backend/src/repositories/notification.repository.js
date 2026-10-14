@@ -25,6 +25,13 @@ function listUnreadByType(recipientId, type) {
     .sort({ createdAt: 1 });
 }
 
+// Unread notifications of any of these types — the dashboard alerts.
+function listUnreadByTypes(recipientId, types) {
+  return Notification.find({ recipient: recipientId, isRead: false, type: { $in: types } })
+    .sort({ createdAt: -1 })
+    .populate('employee', 'firstName lastName employeeCode designation dateOfJoining endDate');
+}
+
 function markRead(id, recipientId) {
   return Notification.findOneAndUpdate(
     { _id: id, recipient: recipientId },
@@ -37,4 +44,4 @@ function markAllRead(recipientId) {
   return Notification.updateMany({ recipient: recipientId, isRead: false }, { isRead: true });
 }
 
-module.exports = { createMany, listForRecipient, unreadCount, listUnreadByType, markRead, markAllRead };
+module.exports = { createMany, listForRecipient, unreadCount, listUnreadByType, markRead, markAllRead, listUnreadByTypes };

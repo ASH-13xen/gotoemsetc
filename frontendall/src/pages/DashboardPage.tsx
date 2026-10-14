@@ -37,6 +37,8 @@ import { OrgChartTeaser } from '@/components/orgChart/OrgChartTeaser'
 import { AttendanceChangeRequestsCard } from '@/components/attendance/AttendanceChangeRequestsCard'
 import { OvertimeApprovalsCard } from '@/components/attendance/OvertimeApprovalsCard'
 import { SalaryApprovalCard } from '@/components/finance/SalaryApprovalCard'
+import { PeopleChangeAlerts } from '@/components/dashboard/PeopleChangeAlerts'
+import { FnfCards } from '@/components/finance/FnfCards'
 import { SalaryPaidModal } from '@/components/finance/SalaryPaidModal'
 import { ReimbursementApprovalsCard } from '@/components/reimbursements/ReimbursementApprovalsCard'
 import { Badge } from '@/components/ui/badge'
@@ -231,9 +233,13 @@ export default function DashboardPage() {
 
       {/* Overtime waiting on this person — a content manager's team queue, HR's
           final approvals. Shown whichever view is open; nothing when empty. */}
+      {/* Who joined or left — the CEO and admin only (nobody else is sent these). */}
+      <PeopleChangeAlerts />
+
       <OvertimeApprovalsCard />
       {/* The CEO's/admin's final say on money going out — nothing when empty. */}
       <SalaryApprovalCard />
+      <FnfCards />
       <ReimbursementApprovalsCard />
 
       {view === 'me' && (

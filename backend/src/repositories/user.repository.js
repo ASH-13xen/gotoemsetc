@@ -97,6 +97,11 @@ function findFinanceUsers() {
 // admin isn't part of the reminder audience at all.
 // Who gives the final approval on money going out — salary batches and
 // reimbursement claims (config/access.js PAYOUT_APPROVAL): admin and the CEO.
+// The CEO and admin — told on their dashboard whenever someone joins or leaves.
+function findCeosAndAdmins() {
+  return withRoles(USER_ROLES.ADMIN, USER_ROLES.CEO);
+}
+
 function findPayoutApprovers() {
   return withRoles(USER_ROLES.ADMIN, USER_ROLES.CEO);
 }
@@ -133,6 +138,7 @@ module.exports = {
   findFinanceUsers,
   findFinanceTeam,
   findPayoutApprovers,
+  findCeosAndAdmins,
   findInvoiceApprovers,
   findCeos,
 };

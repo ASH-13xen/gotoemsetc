@@ -41,7 +41,7 @@ const directory = asyncHandler(async (req, res) => {
 });
 
 const create = asyncHandler(async (req, res) => {
-  const employee = await employeeService.createEmployee(req.body);
+  const employee = await employeeService.createEmployee(req.body, req.user);
   req.auditContext = {
     action: 'employee.create',
     resourceType: 'Employee',

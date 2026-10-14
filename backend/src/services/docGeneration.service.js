@@ -85,7 +85,8 @@ async function generateForEmployee(employeeId, templateIds, overrides = {}) {
         await require('./fnfSettlement.service').createFromGeneratedDocument(
           document,
           employee._id,
-          overrides.severanceAmount
+          overrides.severanceAmount,
+          overrides.separationDate
         );
       }
       results.push({ templateId, templateKey: template.key, status: 'completed', document });

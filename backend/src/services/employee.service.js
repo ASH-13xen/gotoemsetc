@@ -148,7 +148,25 @@ function assertOffboardingHasLastDay(data, existing) {
   if (!lastDay) throw ApiError.badRequest('A last working day is required to off-board an employee');
 }
 
-async function createEmployee(data) {
+// Tells the CEO and admin (as a dashboard alert) that someone joined or left.
+async function alertLeadership(employee, kind, actor) {
+  const users = await userRepository.findCeosAndAdmins();
+  const recipients = users.map((u) => u._id).filter((id) => String(id) !== String(actor?.id));
+  if (!recipients.length) return;
+  const name = `${employee.firstName} ${employee.lastName || ''}`.trim();
+  const day = (d) => (d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : null);
+  const onboarded = kind === 'onboarded';
+  await notificationService.createForUsers(recipients, {
+    type: onboarded ? NOTIFICATION_TYPES.EMPLOYEE_ONBOARDED : NOTIFICATION_TYPES.EMPLOYEE_OFFBOARDED,
+    title: onboarded ? `New joiner: ${name}` : `${name} has left`,
+    message: onboarded
+      ? `${name}${employee.designation ? ` joined as ${employee.designation}` : ' joined'}${employee.dateOfJoining ? ` on ${day(employee.dateOfJoining)}` : ''}.`
+      : `${name}${employee.designation ? ` (${employee.designation})` : ''} was offboarded${employee.endDate ? ` — last working day ${day(employee.endDate)}` : ''}.`,
+    employee: employee._id,
+  });
+}
+
+async function createEmployee(data, actor) {
   assertOffboardingHasLastDay(data, null);
   // Plain incrementing number, starting at 1001 — see
   // scripts/seedEmployeeCounter.js, which seeds the counter to 1000 so the
@@ -160,6 +178,7 @@ async function createEmployee(data) {
   const extraDetails = data.extraDetails?.length ? data.extraDetails : DEFAULT_EXTRA_DETAILS;
   const employee = await employeeRepository.create({ ...data, employeeCode, extraDetails });
   await activityService.log(employee._id, 'EMPLOYEE_CREATED', { employeeCode });
+  if (employee.status === EMPLOYEE_STATUS.ACTIVE) await alertLeadership(employee, 'onboarded', actor);
   return employee;
 }
 
@@ -220,6 +239,11 @@ async function updateEmployee(id, data, actor) {
   const employee = await employeeRepository.updateById(id, payload);
   if (!employee) throw ApiError.notFound('Employee not found');
   await activityService.log(employee._id, 'EMPLOYEE_UPDATED', { fields: Object.keys(payload) });
+  // Someone joining (becoming active) or leaving shows on the CEO's dashboard.
+  if (employee.status !== existing.status) {
+    if (employee.status === EMPLOYEE_STATUS.ACTIVE && existing.status !== EMPLOYEE_STATUS.OFFBOARDED) await alertLeadership(employee, 'onboarded', actor);
+    if (employee.status === EMPLOYEE_STATUS.OFFBOARDED) await alertLeadership(employee, 'offboarded', actor);
+  }
   // An off-boarded employee can no longer sign in to the EMS.
   if (employee.status === EMPLOYEE_STATUS.OFFBOARDED) {
     await userRepository.deactivateForEmployee(employee._id);

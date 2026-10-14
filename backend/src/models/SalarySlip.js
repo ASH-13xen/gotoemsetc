@@ -63,6 +63,9 @@ const salarySlipSchema = new Schema(
     // from before this existed — those count as approved.
     approvalStatus: { type: String, enum: [...Object.values(SALARY_SLIP_APPROVAL), null], default: null },
     batch: { type: Schema.Types.ObjectId, ref: 'SalaryBatch' },
+    // A final slip made for a full & final settlement — approved and paid
+    // with the settlement, not with the month's slips.
+    fnfSettlement: { type: Schema.Types.ObjectId, ref: 'FnfSettlement' },
     approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     approvedAs: String,
     approvedAt: Date,

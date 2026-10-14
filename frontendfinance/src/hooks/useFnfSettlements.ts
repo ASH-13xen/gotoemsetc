@@ -11,7 +11,7 @@ export function useFnfSettlements() {
 export function useMarkFnfPaid() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: TransactionDetails }) => api.markFnfPaid(id, input),
+    mutationFn: ({ id, input, receipt }: { id: string; input: TransactionDetails; receipt: File }) => api.markFnfPaid(id, input, receipt),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: KEY }),
   })
 }
