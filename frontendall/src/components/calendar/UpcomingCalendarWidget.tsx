@@ -1,7 +1,7 @@
-import { Cake, CalendarDays, CalendarOff, PartyPopper, Star } from 'lucide-react'
+import { Cake, CalendarDays, CalendarOff, Heart, PartyPopper, Sparkles, Star } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { useBirthdays } from '@/hooks/useBirthdays'
+import { useAnniversaries, useBirthdays } from '@/hooks/useBirthdays'
 import { useCompanyEvents } from '@/hooks/useCompanyEvents'
 import { useHolidays } from '@/hooks/useHolidays'
 import type { CompanyEvent, CompanyEventType } from '@/api/companyEvents.api'
@@ -14,7 +14,7 @@ function addDaysUTC(date: Date, days: number) {
 // company event type recurs yearly on month/day only — same convention as
 // employee birthdays. See companyEvent.service.js#listForMonth.
 function isEventOnDate(event: CompanyEvent, dateKey: string) {
-  if (event.type === 'important') return event.date.slice(0, 10) === dateKey
+  if (event.type === 'important' || event.type === 'festive') return event.date.slice(0, 10) === dateKey
   return new Date(event.date).getUTCDate() === Number(dateKey.slice(8, 10))
 }
 
@@ -28,6 +28,8 @@ function eventVisual(type: CompanyEventType) {
       return { Icon: PartyPopper, color: 'text-emerald-500', label: 'brand anniversary' }
     case 'important':
       return { Icon: Star, color: 'text-red-500', label: 'important' }
+    case 'festive':
+      return { Icon: Sparkles, color: 'text-orange-500', label: 'festive day' }
   }
 }
 
@@ -45,6 +47,7 @@ export function UpcomingCalendarWidget({ compact = false }: { compact?: boolean 
   const { data: holidaysData } = useHolidays(month, year)
   const { data: eventsData } = useCompanyEvents(month, year)
   const { data: birthdaysData } = useBirthdays()
+  const { data: anniversariesData } = useAnniversaries()
 
   const nextMonthDate = new Date(Date.UTC(year, month, 1))
   const needsNextMonth = month !== nextMonthDate.getUTCMonth() + 1 || year !== nextMonthDate.getUTCFullYear()
@@ -68,11 +71,15 @@ export function UpcomingCalendarWidget({ compact = false }: { compact?: boolean 
       return dob.getUTCMonth() === d.getUTCMonth() && dob.getUTCDate() === d.getUTCDate()
     })
     const dayEvents = (events ?? []).filter((e) => isEventOnDate(e, dateKey))
-    return { dateKey, date: d, holiday, birthdays: dayBirthdays, events: dayEvents }
+    const dayAnniversaries = (anniversariesData?.employees ?? []).filter((e) => {
+      const date = new Date(e.anniversaryDate)
+      return date.getUTCMonth() === d.getUTCMonth() && date.getUTCDate() === d.getUTCDate()
+    })
+    return { dateKey, date: d, holiday, birthdays: dayBirthdays, anniversaries: dayAnniversaries, events: dayEvents }
   })
 
   const rowsWithSomething = upcomingRows.filter(
-    (row) => row.holiday || row.birthdays.length > 0 || row.events.length > 0
+    (row) => row.holiday || row.birthdays.length > 0 || row.anniversaries.length > 0 || row.events.length > 0
   )
   if (rowsWithSomething.length === 0) return null
 
@@ -103,6 +110,11 @@ export function UpcomingCalendarWidget({ compact = false }: { compact?: boolean 
               {row.birthdays.map((b) => (
                 <p key={b._id} className="flex items-center gap-1.5 text-xs font-semibold text-yellow-500">
                   <Cake className="size-3" /> {b.firstName} {b.lastName}
+                </p>
+              ))}
+              {row.anniversaries.map((a) => (
+                <p key={a._id} className="flex items-center gap-1.5 text-xs font-semibold text-pink-500">
+                  <Heart className="size-3" /> {a.firstName} {a.lastName} — anniversary
                 </p>
               ))}
               {row.events.map((e) => {

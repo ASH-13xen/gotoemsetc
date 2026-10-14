@@ -8,12 +8,23 @@ const file = {
     category: z.enum(Object.values(REIMBURSEMENT_CATEGORY)),
     travelMode: z.enum(Object.values(REIMBURSEMENT_TRAVEL_MODE)).optional(),
     client: z.string().min(1).optional(),
-    clientBrandName: z.string().min(1).optional(),
+    clientBrandName: z.string().trim().max(200).optional(),
     expenseDate: z.string().min(1),
-    startAt: z.string().optional(),
-    endAt: z.string().optional(),
     description: z.string().min(1),
-    peopleInvolved: z.array(z.string().min(1)).optional(),
+    // Sent as multipart (the receipt rides along), where a list arrives as
+    // one value, several, or a JSON string.
+    peopleInvolved: z.preprocess((v) => {
+      if (v === undefined || v === null || v === '') return undefined;
+      if (Array.isArray(v)) return v;
+      if (typeof v === 'string' && v.trim().startsWith('[')) {
+        try {
+          return JSON.parse(v);
+        } catch {
+          return v;
+        }
+      }
+      return [v];
+    }, z.array(z.string().min(1)).optional()),
     amount: z.coerce.number().positive(),
   }),
 };

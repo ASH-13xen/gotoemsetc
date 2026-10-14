@@ -45,6 +45,30 @@ export function useUpdateEmployee(id: string) {
   })
 }
 
+// Both store a letter in the employee's documents as part of the change.
+export function useCompleteProbation(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (letter: File) => employeesApi.completeProbation(id, letter),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY })
+      queryClient.invalidateQueries({ queryKey: ['uploadedDocuments', id] })
+    },
+  })
+}
+
+export function useChangeSalary(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ letter, ...input }: { monthlyPay?: number; ctcAnnual?: number; effectiveFrom: string; letter: File }) =>
+      employeesApi.changeSalary(id, input, letter),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY })
+      queryClient.invalidateQueries({ queryKey: ['uploadedDocuments', id] })
+    },
+  })
+}
+
 export function useDeleteEmployee() {
   const queryClient = useQueryClient()
   return useMutation({

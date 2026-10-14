@@ -149,6 +149,9 @@ export interface Employee {
   permanentAddress?: Address
   localAddress?: Address
   dob?: string
+  // Married shows an anniversary date, which appears on the company calendar.
+  maritalStatus?: 'single' | 'married' | null
+  anniversaryDate?: string | null
   bloodGroup?: string
   gender?: string
   fatherName?: string
@@ -188,6 +191,9 @@ export interface Employee {
   updatedIn12345?: boolean
   probationCompleted?: boolean
   excludeFromPayroll?: boolean
+  // Every salary change after the first — each has a promotion letter and a
+  // month it counts from (slips for earlier months keep the old amount).
+  salaryHistory?: SalaryChange[]
 
   // Offboarding-only — meaningful once status is 'offboarded'.
   endDate?: string
@@ -231,6 +237,15 @@ export interface ListEmployeesResponse {
   limit: number
 }
 
+export interface SalaryChange {
+  previousMonthlyPay?: number | null
+  previousCtcAnnual?: number | null
+  monthlyPay?: number | null
+  ctcAnnual?: number | null
+  effectiveFrom: string
+  changedAt?: string
+}
+
 export type CreateEmployeeInput = Partial<Employee> &
   Pick<Employee, 'firstName' | 'designation'>
 
@@ -256,6 +271,35 @@ export async function updateEmployee(
   input: UpdateEmployeeInput
 ): Promise<{ employee: Employee }> {
   const { data } = await apiClient.patch(`/employees/${id}`, input)
+  return data
+}
+
+// Probation can only be marked completed with a letter attached; it is kept
+// in the employee's documents.
+export async function completeProbation(id: string, letter: File): Promise<{ employee: Employee }> {
+  const formData = new FormData()
+  formData.append('letter', letter)
+  const { data } = await apiClient.post(`/employees/${id}/complete-probation`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return data
+}
+
+// A salary that is already set only changes with a promotion letter, from a
+// chosen month ('YYYY-MM') on.
+export async function changeSalary(
+  id: string,
+  input: { monthlyPay?: number; ctcAnnual?: number; effectiveFrom: string },
+  letter: File
+): Promise<{ employee: Employee }> {
+  const formData = new FormData()
+  if (input.monthlyPay !== undefined) formData.append('monthlyPay', String(input.monthlyPay))
+  if (input.ctcAnnual !== undefined) formData.append('ctcAnnual', String(input.ctcAnnual))
+  formData.append('effectiveFrom', input.effectiveFrom)
+  formData.append('letter', letter)
+  const { data } = await apiClient.post(`/employees/${id}/salary-change`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
   return data
 }
 

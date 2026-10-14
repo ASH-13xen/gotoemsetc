@@ -9,6 +9,7 @@ export type AccessKey =
   | 'hrms'
   | 'attendance_no_time_limit'
   | 'attendance_final_approval'
+  | 'payout_approval'
   | 'operations'
   | 'office_keys_edit'
   | 'finance'

@@ -189,6 +189,8 @@ const mutableFields = {
   updatedIn12345: z.boolean().optional(),
   probationCompleted: z.boolean().optional(),
   excludeFromPayroll: z.boolean().optional(),
+  maritalStatus: z.enum(['single', 'married']).nullable().optional(),
+  anniversaryDate: z.coerce.date().nullable().optional(),
 
   // Offboarding-only — meaningful once status is 'offboarded'.
   endDate: z.coerce.date().optional(),
@@ -265,6 +267,20 @@ const update = {
 
 const getOrDelete = { ...idParam };
 
+// multipart, with the letter as `letter` — see employee.service.js.
+const completeProbation = { ...idParam };
+const changeSalary = {
+  ...idParam,
+  body: z
+    .object({
+      monthlyPay: z.coerce.number().min(0).optional(),
+      ctcAnnual: z.coerce.number().min(0).optional(),
+      // The month the new salary starts counting from.
+      effectiveFrom: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Choose the month the new salary starts from'),
+    })
+    .refine((d) => d.monthlyPay !== undefined || d.ctcAnnual !== undefined, { message: 'Enter the new salary' }),
+};
+
 const list = {
   query: z.object({
     search: z.string().optional(),
@@ -287,4 +303,4 @@ const removeFlag = {
   params: z.object({ id: z.string().min(1), flagId: z.string().min(1) }),
 };
 
-module.exports = { create, update, getOrDelete, list, addFlag, removeFlag };
+module.exports = { create, update, getOrDelete, list, addFlag, removeFlag, completeProbation, changeSalary };

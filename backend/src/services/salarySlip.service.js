@@ -5,6 +5,7 @@ const path = require('node:path');
 // every other call below (.file/.finalize/.pipe/.on('error')) is unchanged.
 const { ZipArchive } = require('archiver');
 const ApiError = require('../utils/ApiError');
+const logger = require('../utils/logger');
 const env = require('../config/env');
 const employeeRepository = require('../repositories/employee.repository');
 const salarySlipRepository = require('../repositories/salarySlip.repository');
@@ -17,13 +18,17 @@ const salaryCalculation = require('./salaryCalculation.service');
 const { fillTemplate, renderPdfFromHtml } = require('./htmlRender.service');
 const { dateKey } = require('../utils/attendanceDays');
 const { istMonthRange } = require('../utils/istDate');
-const { ATTENDANCE_STATUS, NOTIFICATION_TYPES, EMPLOYEE_STATUS } = require('../config/constants');
+const { ATTENDANCE_STATUS, NOTIFICATION_TYPES, EMPLOYEE_STATUS, SALARY_SLIP_APPROVAL } = require('../config/constants');
+const { companyEmailOf } = require('../utils/companyEmail');
 const { LATE_CAP, SL_CAP } = require('../utils/attendancePenalties');
-const { isSelf } = require('../utils/roles');
+const { isSelf, can } = require('../utils/roles');
 const { ACCESS, GRANTS } = require('../config/access');
 const accessService = require('./access.service');
 
 const NAMESPACE = 'salary-slips';
+// A slip counts once the CEO/admin has approved it — or if it predates
+// approvals altogether (no approvalStatus). See salaryBatch.service.js.
+const isApproved = (slip) => !slip.approvalStatus || slip.approvalStatus === SALARY_SLIP_APPROVAL.APPROVED;
 const TEMPLATE_FILE = 'salary-slip.html';
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -292,6 +297,8 @@ async function generateSlip(employeeId, input, createdBy, actor) {
     generatedFile: { filePath },
     createdBy,
     createdAs: actor ? accessService.actingRole(actor, GRANTS[ACCESS.EMS_ALL]) : undefined,
+    // Nothing goes to the employee or to Finance until the CEO/admin approves.
+    approvalStatus: SALARY_SLIP_APPROVAL.PENDING,
   });
 }
 
@@ -423,7 +430,9 @@ const MASTER_SHEET_TEMPLATE_FILE = 'master-salary-sheet.html';
 // always computed fresh, clipped to each person's employment dates.
 // `useGeneratedSlips: false` ignores saved slips and calculates every row
 // live (used for previews before slips are regenerated).
-async function buildMasterSheet({ month, year }, { useGeneratedSlips = true } = {}) {
+// `approvedOnly: true` is Finance's version: just the approved slips, one
+// row per employee who has one — nobody is calculated live.
+async function buildMasterSheet({ month, year }, { useGeneratedSlips = true, approvedOnly = false } = {}) {
   const periodStart = new Date(Date.UTC(year, month - 1, 1));
   const periodEnd = new Date(Date.UTC(year, month, 0));
   if (periodEnd.getTime() > Date.now()) {
@@ -437,6 +446,7 @@ async function buildMasterSheet({ month, year }, { useGeneratedSlips = true } = 
   // Sorted newest first, so the first slip seen per employee is their latest.
   const latestSlipByEmployee = new Map();
   for (const slip of slips) {
+    if (approvedOnly && !isApproved(slip)) continue;
     const key = slip.employee?._id?.toString();
     if (key && !latestSlipByEmployee.has(key)) latestSlipByEmployee.set(key, slip);
   }
@@ -452,6 +462,7 @@ async function buildMasterSheet({ month, year }, { useGeneratedSlips = true } = 
     // eslint-disable-next-line no-await-in-loop
     const summary = await salaryCalculation.computeAttendanceSummary(employee, periodStart, periodEnd);
     const slip = useGeneratedSlips ? latestSlipByEmployee.get(employee._id.toString()) : null;
+    if (approvedOnly && !slip) continue;
     const salary = salaryCalculation.computeSalary(employee, summary, {});
     const netPayable = slip ? slip.netPayable || 0 : salary.netPayable;
 
@@ -564,13 +575,23 @@ function buildBulkZip(slipIds, { month, year } = {}) {
   return archive;
 }
 
-async function listForEmployee(employeeId) {
-  return salarySlipRepository.listByEmployee(employeeId);
+// Someone looking at their own slips sees only the approved ones; HR, the
+// CEO and admin see everything, with where each stands.
+async function listForEmployee(employeeId, viewer) {
+  const slips = await salarySlipRepository.listByEmployee(employeeId);
+  return isSelf(viewer, employeeId) ? slips.filter(isApproved) : slips;
 }
 
 async function getFilePath(id) {
   const slip = await salarySlipRepository.findById(id);
   if (!slip) throw ApiError.notFound('Salary slip not found');
+  return { filePath: slip.generatedFile.filePath, namespace: NAMESPACE };
+}
+
+// Finance only ever opens slips the CEO/admin has approved.
+async function getApprovedFilePath(id) {
+  const slip = await salarySlipRepository.findById(id);
+  if (!slip || !isApproved(slip)) throw ApiError.notFound('Salary slip not found');
   return { filePath: slip.generatedFile.filePath, namespace: NAMESPACE };
 }
 
@@ -586,7 +607,7 @@ async function listRecentMonthsForEmployee(employeeId) {
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) throw ApiError.notFound('Employee not found');
 
-  const allSlips = await salarySlipRepository.listByEmployee(employeeId);
+  const allSlips = (await salarySlipRepository.listByEmployee(employeeId)).filter(isApproved);
   const joinDate = employee.dateOfJoining ? new Date(employee.dateOfJoining) : null;
   const now = new Date();
 
@@ -620,9 +641,9 @@ async function listRecentMonthsForEmployee(employeeId) {
 // be self-or-permission gated from the URL alone — still double-checks the
 // looked-up slip actually belongs to :employeeId, since :slipId on its own
 // doesn't prove that.
-async function getOwnFilePath(employeeId, slipId) {
+async function getOwnFilePath(employeeId, slipId, viewer) {
   const slip = await salarySlipRepository.findById(slipId);
-  if (!slip || slip.employee.toString() !== employeeId) {
+  if (!slip || slip.employee.toString() !== employeeId || (isSelf(viewer, employeeId) && !isApproved(slip))) {
     throw ApiError.notFound('Salary slip not found');
   }
   return { filePath: slip.generatedFile.filePath, namespace: NAMESPACE };
@@ -648,6 +669,8 @@ async function listDueForFinance(year, month) {
 
   const latestByEmployee = new Map();
   for (const slip of slips) {
+    // Finance only ever sees what the CEO/admin has approved.
+    if (!isApproved(slip)) continue;
     const employeeId = slip.employee?._id?.toString();
     if (!employeeId) continue;
     const existing = latestByEmployee.get(employeeId);
@@ -675,25 +698,33 @@ ${transactionDetails.note ? `<p>${transactionDetails.note}</p>` : ''}
 <p>Thanks,<br/>Finance</p>`;
 }
 
-// requireFinanceAccess-gated. Marks the slip paid, emails the employee's
-// personal address (not the company one — this is a personal-finance event,
-// not a work notification), and in-app-notifies their User account.
-async function markSalaryPaid(id, transactionDetails, actingUser) {
+// requireFinanceAccess-gated. Marks the slip paid with Finance's receipt
+// (required), mails the receipt to the employee's company mail id, notifies
+// them in the app and raises the "salary paid" notice on their dashboard.
+async function markSalaryPaid(id, transactionDetails, actingUser, receipt) {
   const existing = await salarySlipRepository.findById(id);
   if (!existing) throw ApiError.notFound('Salary slip not found');
+  if (!isApproved(existing)) throw ApiError.conflict('This salary slip has not been approved by the CEO yet');
   if (existing.paymentStatus === 'paid') throw ApiError.conflict('This salary slip is already marked paid');
+  if (!receipt) throw ApiError.badRequest('Attach the payment receipt to mark this salary paid');
 
-  const slip = await salarySlipRepository.markPaid(id, { paidBy: actingUser.id, transactionDetails });
+  const slip = await salarySlipRepository.markPaid(id, {
+    paidBy: actingUser.id,
+    transactionDetails,
+    paymentReceiptFile: { data: receipt.buffer, contentType: receipt.mimetype, filename: receipt.originalname },
+  });
 
-  if (slip.employee?.personalEmail) {
+  const to = companyEmailOf(await employeeRepository.findById(String(slip.employee._id)));
+  if (to) {
     await emailService
       .sendEmail({
-        to: slip.employee.personalEmail,
+        to,
         subject: 'Your salary has been paid',
         html: salaryPaidEmailHtml(slip, transactionDetails),
         from: financeFrom(),
+        attachments: [{ filename: receipt.originalname || 'payment-receipt', content: receipt.buffer }],
       })
-      .catch(() => {});
+      .catch((err) => logger.error({ err, slip: slip._id }, 'Could not mail the salary payment receipt'));
   }
 
   const employeeUser = await userRepository.findByEmployeeId(slip.employee._id);
@@ -709,7 +740,33 @@ async function markSalaryPaid(id, transactionDetails, actingUser) {
   return slip;
 }
 
+// The "salary paid" notice on the employee's dashboard: paid slips whose
+// notice they haven't closed yet.
+async function listPaidUnseen(employeeId) {
+  return salarySlipRepository.listPaidUnseen(employeeId);
+}
+
+async function markPaidSeen(id, employeeId) {
+  const slip = await salarySlipRepository.findById(id);
+  if (!slip || slip.employee.toString() !== employeeId) throw ApiError.notFound('Salary slip not found');
+  return salarySlipRepository.markPaidSeen(id);
+}
+
+// Finance's payment receipt — for the employee it was paid to, and Finance.
+async function getPaymentReceipt(id, viewer) {
+  const slip = await salarySlipRepository.findByIdWithReceipt(id);
+  if (!slip) throw ApiError.notFound('Salary slip not found');
+  if (!isSelf(viewer, slip.employee) && !can(viewer, ACCESS.FINANCE)) throw ApiError.forbidden();
+  if (!slip.paymentReceiptFile?.data) throw ApiError.notFound('No payment receipt on file');
+  return slip.paymentReceiptFile;
+}
+
 module.exports = {
+  isApproved,
+  getApprovedFilePath,
+  listPaidUnseen,
+  markPaidSeen,
+  getPaymentReceipt,
   renderMasterSheet,
   renderSlip,
   buildMasterSheet,

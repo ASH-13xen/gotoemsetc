@@ -181,6 +181,10 @@ const employeeSchema = new Schema(
     permanentAddress: addressSchema,
     localAddress: addressSchema,
     dob: Date,
+    // Married shows an anniversary date, which appears on the company
+    // calendar every year alongside birthdays.
+    maritalStatus: { type: String, enum: ['single', 'married', null], default: null },
+    anniversaryDate: { type: Date, default: null },
     bloodGroup: { type: String, trim: true },
     gender: String,
     fatherName: String,
@@ -240,6 +244,23 @@ const employeeSchema = new Schema(
     // Ticked by HR when the employee's probation is over — the only thing
     // that decides it (utils/probation.js). Unlocks the monthly paid off.
     probationCompleted: { type: Boolean, default: false },
+    // Every salary change after the first — each needs a promotion letter
+    // (kept in the employee's documents) and takes effect from a month, so
+    // slips for earlier months keep the amount that applied then. See
+    // employee.service.js#changeSalary and salaryCalculation.service.js#salaryForPeriod.
+    salaryHistory: [
+      {
+        _id: false,
+        previousMonthlyPay: Number,
+        previousCtcAnnual: Number,
+        monthlyPay: Number,
+        ctcAnnual: Number,
+        effectiveFrom: { type: Date, required: true }, // first day of the month, UTC
+        letter: { type: Schema.Types.ObjectId, ref: 'UploadedDocument' },
+        changedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+        changedAt: { type: Date, default: Date.now },
+      },
+    ],
     // Left out of salary slips and master salary sheets entirely (e.g.
     // founders, demo/test records) — see employee.repository.js
     // #listPayableForPeriod and salarySlip.service.js#generateSlip.

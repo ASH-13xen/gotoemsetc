@@ -141,7 +141,9 @@ export default function AttendanceOverviewPage() {
           scrolls horizontally as one unit (min-w-227.5 keeps every day
           column at a legible ~130px) rather than squeezing each day down to
           an unreadable sliver. */}
-      <div className="overflow-x-auto">
+      {/* The calendar scrolls inside its own frame so the weekday names can
+          stay pinned at the top while the weeks scroll under them. */}
+      <div className="max-h-[calc(100vh-6rem)] overflow-auto rounded-xl">
         {isLoading ? (
           <div className="grid min-w-227.5 grid-cols-7 gap-2">
             {Array.from({ length: 35 }).map((_, i) => (
@@ -151,7 +153,10 @@ export default function AttendanceOverviewPage() {
         ) : (
           <div className="grid min-w-227.5 grid-cols-7 gap-2">
             {WEEKDAYS.map((w) => (
-              <div key={w} className="px-1 text-center text-xs font-bold uppercase tracking-widest text-muted-foreground">
+              <div
+                key={w}
+                className="sticky top-0 z-10 bg-background px-1 py-2 text-center text-xs font-bold uppercase tracking-widest text-muted-foreground"
+              >
                 {w}
               </div>
             ))}

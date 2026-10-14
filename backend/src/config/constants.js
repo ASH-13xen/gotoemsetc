@@ -197,6 +197,9 @@ module.exports = {
     // Finance section. See fnfSettlement/invoice/monthlyBill/reimbursement
     // services and jobs/monthlyBillCycle.job.js, jobs/reimbursementPaymentReminder.job.js.
     SALARY_SLIP_PAID: 'salary_slip_paid',
+    SALARY_BATCH_PENDING: 'salary_batch_pending',
+    SALARY_BATCH_APPROVED: 'salary_batch_approved',
+    SALARY_BATCH_SENT_BACK: 'salary_batch_sent_back',
     FNF_SETTLEMENT_PAID: 'fnf_settlement_paid',
     INVOICE_PENDING_APPROVAL: 'invoice_pending_approval',
     INVOICE_APPROVED: 'invoice_approved',
@@ -204,6 +207,7 @@ module.exports = {
     INVOICE_PAID: 'invoice_paid',
     MONTHLY_BILL_DUE_REMINDER: 'monthly_bill_due_reminder',
     REIMBURSEMENT_CLAIMED: 'reimbursement_claimed',
+    REIMBURSEMENT_AWAITING_CEO: 'reimbursement_awaiting_ceo',
     REIMBURSEMENT_APPROVED: 'reimbursement_approved',
     REIMBURSEMENT_REJECTED: 'reimbursement_rejected',
     REIMBURSEMENT_PAYMENT_REMINDER: 'reimbursement_payment_reminder',
@@ -406,6 +410,10 @@ module.exports = {
     CLIENT_ANNIVERSARY: 'client_anniversary',
     BRAND_ANNIVERSARY: 'brand_anniversary',
     IMPORTANT: 'important',
+    // A festive day — a marker on one specific date (festivals move every
+    // year, so it does not recur). Nothing to do with holidays: it changes
+    // no attendance and no pay. HR, the CEO and admin mark them.
+    FESTIVE: 'festive',
   },
 
   // Task Management. Client-type tasks are driven by the Client Management
@@ -622,7 +630,10 @@ module.exports = {
     MISCELLANEOUS: 'miscellaneous',
   },
   REIMBURSEMENT_TRAVEL_MODE: { CAB: 'cab', BIKE_PETROL: 'bike_petrol' },
-  REIMBURSEMENT_STATUS: { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected', PAID: 'paid' },
+  // pending -> Finance approves -> awaiting_ceo -> the CEO/admin approves ->
+  // approved (payable on the Monday after the expense's Monday–Sunday week)
+  // -> paid. Either step can reject.
+  REIMBURSEMENT_STATUS: { PENDING: 'pending', AWAITING_CEO: 'awaiting_ceo', APPROVED: 'approved', REJECTED: 'rejected', PAID: 'paid' },
 
   // ---------------------------------------------------------------------
   // Sales chatbot — public landing page (folder: /sales), routes:
@@ -722,6 +733,13 @@ module.exports = {
   // ---------------------------------------------------------------------
   OVERTIME_APPROVAL_FROM: '2026-10-05',
   OVERTIME_REVIEW_THRESHOLD_MINUTES: 60,
+  // Salary slips wait for the CEO/admin before they are mailed or reach
+  // Finance (salaryBatch.service.js). A slip with no approvalStatus at all
+  // predates this and counts as approved.
+  SALARY_SLIP_APPROVAL: { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected', SUPERSEDED: 'superseded' },
+  SALARY_BATCH_STATUS: { PENDING: 'pending', APPROVED: 'approved', SENT_BACK: 'sent_back', SUPERSEDED: 'superseded' },
+  // bulk = the whole month from HR Work; single = one slip from an employee's page.
+  SALARY_BATCH_KIND: { BULK: 'bulk', SINGLE: 'single' },
   OVERTIME_REQUEST_STATUS: { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected' },
   OVERTIME_REQUEST_STAGE: { CONTENT_MANAGER: 'content_manager', HR: 'hr' },
 };

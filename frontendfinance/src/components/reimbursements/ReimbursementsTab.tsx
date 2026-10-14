@@ -20,7 +20,8 @@ import {
 
 const STATUS_FILTERS: Array<{ value: ReimbursementStatus | 'all'; label: string }> = [
   { value: 'pending', label: 'Pending' },
-  { value: 'approved', label: 'Approved' },
+  { value: 'awaiting_ceo', label: 'With the CEO' },
+  { value: 'approved', label: 'Approved — to pay' },
   { value: 'paid', label: 'Paid' },
   { value: 'rejected', label: 'Rejected' },
   { value: 'all', label: 'All' },
@@ -28,7 +29,8 @@ const STATUS_FILTERS: Array<{ value: ReimbursementStatus | 'all'; label: string 
 
 function StatusBadge({ status }: { status: ReimbursementStatus }) {
   if (status === 'paid') return <Badge variant="success">Paid</Badge>
-  if (status === 'approved') return <Badge variant="secondary">Approved</Badge>
+  if (status === 'approved') return <Badge variant="secondary">Approved — to pay</Badge>
+  if (status === 'awaiting_ceo') return <Badge variant="warning">Waiting for the CEO</Badge>
   if (status === 'rejected') return <Badge variant="destructive">Rejected</Badge>
   return <Badge variant="warning">Pending</Badge>
 }
@@ -55,11 +57,13 @@ function ReimbursementRow({ reimbursement }: { reimbursement: Reimbursement }) {
   const approve = useApproveReimbursement()
   const markPaid = useMarkReimbursementPaid()
   const employeeName = `${reimbursement.employee.firstName} ${reimbursement.employee.lastName || ''}`.trim()
-  const subtitle = reimbursement.category === 'client_work'
-    ? reimbursement.client?.name || reimbursement.clientBrandName
-    : reimbursement.travelMode
-      ? reimbursement.travelMode === 'cab' ? 'Ola/Rapido/Uber' : 'Bike/Petrol'
-      : undefined
+  const clientName = reimbursement.client?.name || reimbursement.clientBrandName
+  const subtitle = [
+    reimbursement.travelMode ? (reimbursement.travelMode === 'cab' ? 'Ola/Rapido/Uber' : 'Bike/Petrol') : null,
+    clientName ? `Client: ${clientName}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ') || undefined
 
   return (
     <Card className="space-y-2 p-4">
@@ -104,7 +108,7 @@ function ReimbursementRow({ reimbursement }: { reimbursement: Reimbursement }) {
               disabled={approve.isPending}
               onClick={() =>
                 approve.mutate(reimbursement._id, {
-                  onSuccess: () => toast.success('Claim approved'),
+                  onSuccess: () => toast.success('Approved — sent to the CEO for the final approval'),
                   onError: () => toast.error('Could not approve claim'),
                 })
               }

@@ -1,6 +1,8 @@
 import { apiClient } from './client'
 
-export type CompanyEventType = 'client_birthday' | 'client_anniversary' | 'brand_anniversary' | 'important'
+// 'festive' is a festive day: a marker on one date, nothing to do with
+// holidays (no effect on attendance or pay). Like 'important' it does not recur.
+export type CompanyEventType = 'client_birthday' | 'client_anniversary' | 'brand_anniversary' | 'important' | 'festive'
 
 export interface CompanyEvent {
   _id: string

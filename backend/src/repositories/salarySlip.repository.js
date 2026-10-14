@@ -22,12 +22,25 @@ function listByStartDateMonth(monthStart, monthEnd) {
     .sort({ createdAt: -1 });
 }
 
-function markPaid(id, { paidBy, transactionDetails }) {
+function markPaid(id, { paidBy, transactionDetails, paymentReceiptFile }) {
   return SalarySlip.findByIdAndUpdate(
     id,
-    { paymentStatus: 'paid', paidAt: new Date(), paidBy, transactionDetails },
+    { paymentStatus: 'paid', paidAt: new Date(), paidBy, transactionDetails, paymentReceiptFile, paidSeenByEmployee: false },
     { new: true }
   ).populate('employee', 'firstName lastName employeeCode personalEmail');
 }
 
-module.exports = { create, listByEmployee, findById, listByStartDateMonth, markPaid };
+// Paid slips the employee hasn't closed the notice for yet.
+function listPaidUnseen(employeeId) {
+  return SalarySlip.find({ employee: employeeId, paymentStatus: 'paid', paidSeenByEmployee: false, 'paymentReceiptFile.filename': { $exists: true } }).sort({ paidAt: -1 });
+}
+
+function markPaidSeen(id) {
+  return SalarySlip.findByIdAndUpdate(id, { paidSeenByEmployee: true }, { new: true });
+}
+
+function findByIdWithReceipt(id) {
+  return SalarySlip.findById(id).select('+paymentReceiptFile.data');
+}
+
+module.exports = { create, listByEmployee, findById, listByStartDateMonth, markPaid, listPaidUnseen, markPaidSeen, findByIdWithReceipt };

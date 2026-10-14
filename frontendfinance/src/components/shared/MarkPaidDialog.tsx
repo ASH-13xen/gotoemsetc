@@ -29,6 +29,8 @@ export function MarkPaidDialog({
   onSubmit,
   isPending,
   requireProof = false,
+  proofLabel = 'Payment screenshot',
+  proofHint = 'Required — the employee sees this as proof of payment on their dashboard. Image or PDF, up to 10 MB.',
 }: {
   trigger: ReactNode
   title: string
@@ -36,6 +38,8 @@ export function MarkPaidDialog({
   onSubmit: (details: TransactionDetailsInput, proof?: File) => Promise<unknown> | void
   isPending?: boolean
   requireProof?: boolean
+  proofLabel?: string
+  proofHint?: string
 }) {
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState('Bank Transfer')
@@ -46,7 +50,7 @@ export function MarkPaidDialog({
 
   async function handleSubmit() {
     if (requireProof && !proof) {
-      toast.error('Attach a screenshot of the payment first')
+      toast.error(`Attach the ${proofLabel.toLowerCase()} first`)
       return
     }
     try {
@@ -100,16 +104,14 @@ export function MarkPaidDialog({
           </div>
           {requireProof && (
             <div className="flex flex-col gap-2">
-              <Label htmlFor="paymentProof">Payment screenshot</Label>
+              <Label htmlFor="paymentProof">{proofLabel}</Label>
               <Input
                 id="paymentProof"
                 type="file"
                 accept="image/png,image/jpeg,image/webp,application/pdf"
                 onChange={(e) => setProof(e.target.files?.[0])}
               />
-              <p className="text-xs text-muted-foreground">
-                Required — the employee sees this as proof of payment on their dashboard. Image or PDF, up to 10 MB.
-              </p>
+              <p className="text-xs text-muted-foreground">{proofHint}</p>
             </div>
           )}
           <div className="flex flex-col gap-2">

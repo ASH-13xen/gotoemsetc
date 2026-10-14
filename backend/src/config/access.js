@@ -30,6 +30,9 @@ const ACCESS = {
   OPERATIONS: 'operations',
   // Reassign office keys (everyone else can only view them).
   OFFICE_KEYS_EDIT: 'office_keys_edit',
+  // Final say on money going out — approving the month's salary slips before
+  // they are mailed and reach Finance, and reimbursement claims after Finance.
+  PAYOUT_APPROVAL: 'payout_approval',
   // Finance tab — salary payouts, F&F, invoices, monthly bills, reimbursements.
   FINANCE: 'finance',
   // Approving inside Finance — invoices, plan prices, bill templates.
@@ -53,6 +56,7 @@ const GRANTS = {
   [ACCESS.HRMS]: [R.ADMIN, R.CEO, R.HR],
   [ACCESS.ATTENDANCE_NO_TIME_LIMIT]: [R.ADMIN, R.CEO],
   [ACCESS.ATTENDANCE_FINAL_APPROVAL]: [R.ADMIN, R.CEO],
+  [ACCESS.PAYOUT_APPROVAL]: [R.ADMIN, R.CEO],
   [ACCESS.OPERATIONS]: [R.ADMIN, R.CEO, R.OPERATIONS_MANAGER],
   [ACCESS.OFFICE_KEYS_EDIT]: [R.ADMIN, R.CEO, R.OPERATIONS_MANAGER],
   [ACCESS.FINANCE]: [R.ADMIN, R.CFO, R.FINANCE],

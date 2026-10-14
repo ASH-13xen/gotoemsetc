@@ -11,5 +11,9 @@ module.exports = [
   { key: 'previous_relieving_letter', label: 'Previous Relieving Letter' },
   { key: 'previous_experience_letter', label: 'Previous Experience Letter' },
   { key: 'previous_salary_slips', label: 'Previous 3 Months Salary Slip' },
+  // Attached by HR/the CEO/admin as part of an action (completing probation,
+  // changing a salary) — never something an employee is asked to upload.
+  { key: 'probation_letter', label: 'Probation Completion Letter', internal: true },
+  { key: 'promotion_letter', label: 'Promotion Letter', internal: true },
   { key: 'other', label: 'Other' },
 ];

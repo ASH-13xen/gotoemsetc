@@ -30,7 +30,9 @@ export const TRAVEL_MODE_LABEL: Record<TravelMode, string> = {
   bike_petrol: 'Bike / Petrol',
 }
 
-export type ReimbursementStatus = 'pending' | 'approved' | 'rejected' | 'paid'
+// pending -> Finance approves -> awaiting_ceo -> the CEO/admin approves ->
+// approved (paid on the Monday after the expense's Monday–Sunday week) -> paid.
+export type ReimbursementStatus = 'pending' | 'awaiting_ceo' | 'approved' | 'rejected' | 'paid'
 
 export interface Reimbursement {
   _id: string
@@ -62,15 +64,48 @@ export interface FileReimbursementInput {
   client?: string
   clientBrandName?: string
   expenseDate: string
-  startAt?: string
-  endAt?: string
   description: string
   peopleInvolved?: string[]
   amount: number
 }
 
-export async function fileReimbursement(input: FileReimbursementInput): Promise<{ reimbursement: Reimbursement }> {
-  const { data } = await apiClient.post('/reimbursements', input)
+// Sent as multipart: the claim's fields plus its receipt (required).
+export async function fileReimbursement(input: FileReimbursementInput, receipt: File): Promise<{ reimbursement: Reimbursement }> {
+  const formData = new FormData()
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined || value === null || value === '') continue
+    if (Array.isArray(value)) formData.append(key, JSON.stringify(value))
+    else formData.append(key, String(value))
+  }
+  formData.append('receipt', receipt)
+  const { data } = await apiClient.post('/reimbursements', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+  return data
+}
+
+// The CEO's/admin's final approval, after Finance's.
+export interface ReimbursementForApproval extends Reimbursement {
+  // Their own claim — someone else has to decide it.
+  isOwn: boolean
+  receiptFile?: { filename?: string }
+}
+
+export async function listReimbursementsAwaitingCeo(): Promise<ReimbursementForApproval[]> {
+  const { data } = await apiClient.get<{ reimbursements: ReimbursementForApproval[] }>('/reimbursements/awaiting-ceo')
+  return data.reimbursements
+}
+
+export async function ceoApproveReimbursement(id: string) {
+  const { data } = await apiClient.post<{ reimbursement: Reimbursement }>(`/reimbursements/${id}/ceo-approve`)
+  return data.reimbursement
+}
+
+export async function ceoRejectReimbursement(id: string, reason: string) {
+  const { data } = await apiClient.post<{ reimbursement: Reimbursement }>(`/reimbursements/${id}/ceo-reject`, { reason })
+  return data.reimbursement
+}
+
+export async function fetchReimbursementReceipt(id: string): Promise<Blob> {
+  const { data } = await apiClient.get(`/reimbursements/${id}/receipt`, { responseType: 'blob' })
   return data
 }
 

@@ -21,7 +21,8 @@ async function listForMonth(month, year) {
   return companyWide.filter((e) => {
     const d = new Date(e.date);
     if (d.getUTCMonth() + 1 !== month) return false;
-    if (e.type === COMPANY_EVENT_TYPE.IMPORTANT) {
+    // One-off markers — an important date or a festive day — belong to their own year.
+    if (e.type === COMPANY_EVENT_TYPE.IMPORTANT || e.type === COMPANY_EVENT_TYPE.FESTIVE) {
       return !year || d.getUTCFullYear() === year;
     }
     return true;

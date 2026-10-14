@@ -8,3 +8,11 @@ export function useBirthdays() {
     staleTime: 5 * 60_000,
   })
 }
+
+export function useAnniversaries() {
+  return useQuery({
+    queryKey: ['anniversaries'],
+    queryFn: () => birthdaysApi.getAnniversaries(),
+    staleTime: 5 * 60_000,
+  })
+}

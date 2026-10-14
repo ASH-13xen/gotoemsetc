@@ -35,6 +35,8 @@ router.post('/', requirePermission(PERMISSIONS.ADD_EMPLOYEE), validate(employeeV
 // Left open to any authenticated user, unlike everything else here — the
 // birthdays widget is meant to stay visible platform-wide.
 router.get('/birthdays', employeeController.birthdays);
+// Wedding anniversaries — on the calendar for everyone, like birthdays.
+router.get('/anniversaries', employeeController.anniversaries);
 // Same carve-out — Task Management needs every employee (not just those
 // granted directory-access permissions) to browse a lightweight colleague
 // list for task/subtask assignment. Deliberately minimal fields, see
@@ -49,6 +51,22 @@ router.patch(
   requirePermission(PERMISSIONS.EDIT_EMPLOYEE_DETAILS),
   validate(employeeValidator.update),
   employeeController.update
+);
+// Both need a letter attached (multipart field `letter`), kept in the
+// employee's documents — HR, the CEO and admin only.
+router.post(
+  '/:id/complete-probation',
+  requireAccess(ACCESS.EMS_ALL),
+  upload.single('letter'),
+  validate(employeeValidator.completeProbation),
+  employeeController.completeProbation
+);
+router.post(
+  '/:id/salary-change',
+  requireAccess(ACCESS.EMS_ALL),
+  upload.single('letter'),
+  validate(employeeValidator.changeSalary),
+  employeeController.changeSalary
 );
 // Deletion — EMS-for-everyone (admin, CEO, HR); not a grantable permission.
 router.delete('/:id', requireAccess(ACCESS.EMS_ALL), validate(employeeValidator.getOrDelete), employeeController.remove);

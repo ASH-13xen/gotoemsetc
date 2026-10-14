@@ -6,7 +6,8 @@ const reimbursementService = require('../services/reimbursement.service');
 const reimbursementRepository = require('../repositories/reimbursement.repository');
 
 const file = asyncHandler(async (req, res) => {
-  const reimbursement = await reimbursementService.fileReimbursement(req.user.employeeLink, req.body);
+  if (!req.user.employeeLink) throw ApiError.badRequest('No employee record is linked to this account');
+  const reimbursement = await reimbursementService.fileReimbursement(req.user.employeeLink, req.body, req.file);
   req.auditContext = {
     action: 'reimbursement.file',
     resourceType: 'Reimbursement',
@@ -28,7 +29,8 @@ const downloadReceipt = asyncHandler(async (req, res) => {
   const reimbursement = await reimbursementRepository.findByIdWithFile(req.params.id);
   if (!reimbursement) throw ApiError.notFound('Reimbursement not found');
   const isOwner = req.user.employeeLink && req.user.employeeLink === reimbursement.employee.toString();
-  if (!isOwner && !can(req.user, ACCESS.FINANCE)) throw ApiError.forbidden();
+  // The claimant, Finance, and the CEO/admin who gives the final approval.
+  if (!isOwner && !can(req.user, ACCESS.FINANCE) && !can(req.user, ACCESS.PAYOUT_APPROVAL)) throw ApiError.forbidden();
   if (!reimbursement.receiptFile?.data) throw ApiError.notFound('No receipt on file');
   res.set('Content-Type', reimbursement.receiptFile.contentType);
   res.set('Content-Disposition', `attachment; filename="${reimbursement.receiptFile.filename}"`);
@@ -48,6 +50,22 @@ const listAll = asyncHandler(async (req, res) => {
 const approve = asyncHandler(async (req, res) => {
   const reimbursement = await reimbursementService.approve(req.params.id, req.user);
   req.auditContext = { action: 'reimbursement.approve', resourceType: 'Reimbursement', resourceId: reimbursement._id };
+  res.json({ reimbursement });
+});
+
+const listAwaitingCeo = asyncHandler(async (req, res) => {
+  res.json({ reimbursements: await reimbursementService.listAwaitingCeo(req.user) });
+});
+
+const ceoApprove = asyncHandler(async (req, res) => {
+  const reimbursement = await reimbursementService.ceoApprove(req.params.id, req.user);
+  req.auditContext = { action: 'reimbursement.ceoApprove', resourceType: 'Reimbursement', resourceId: reimbursement._id };
+  res.json({ reimbursement });
+});
+
+const ceoReject = asyncHandler(async (req, res) => {
+  const reimbursement = await reimbursementService.ceoReject(req.params.id, req.body.reason, req.user);
+  req.auditContext = { action: 'reimbursement.ceoReject', resourceType: 'Reimbursement', resourceId: reimbursement._id };
   res.json({ reimbursement });
 });
 
@@ -82,4 +100,18 @@ const markPaid = asyncHandler(async (req, res) => {
   res.json({ reimbursement });
 });
 
-module.exports = { file, uploadReceipt, downloadReceipt, downloadPaymentProof, listMine, listAll, approve, reject, markPaid, acknowledge };
+module.exports = {
+  file,
+  uploadReceipt,
+  downloadReceipt,
+  downloadPaymentProof,
+  listMine,
+  listAll,
+  listAwaitingCeo,
+  approve,
+  ceoApprove,
+  ceoReject,
+  reject,
+  markPaid,
+  acknowledge,
+};

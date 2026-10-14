@@ -296,6 +296,29 @@ function round2(value) {
   return Math.round((Number(value) || 0) * 100) / 100;
 }
 
+// The salary that applied at `periodStart`. A salary change takes effect
+// from a month (Employee.salaryHistory), so a slip for an earlier month —
+// even one generated later — keeps the amount from before the change.
+function salaryForPeriod(employee, periodStart) {
+  const current = { monthlyPay: employee.monthlyPay, ctcAnnual: employee.ctcAnnual };
+  const history = [...(employee.salaryHistory || [])]
+    .filter((h) => h && h.effectiveFrom)
+    .sort((a, b) => new Date(a.effectiveFrom) - new Date(b.effectiveFrom));
+  if (history.length === 0 || !periodStart) return current;
+  const at = new Date(periodStart).getTime();
+  // The period's own month counts as "from": compare month to month.
+  const monthOf = (d) => Date.UTC(new Date(d).getUTCFullYear(), new Date(d).getUTCMonth(), 1);
+  let inEffect = null;
+  for (const change of history) {
+    if (monthOf(change.effectiveFrom) <= monthOf(at)) inEffect = change;
+  }
+  // Before the first change: what the salary was before it.
+  if (!inEffect) return { monthlyPay: history[0].previousMonthlyPay, ctcAnnual: history[0].previousCtcAnnual };
+  // The latest change is what the record holds now.
+  if (inEffect === history[history.length - 1]) return current;
+  return { monthlyPay: inEffect.monthlyPay, ctcAnnual: inEffect.ctcAnnual };
+}
+
 function computeSalary(employee, summary, manualInputs) {
   const {
     incomeTaxDeduction = 0,
@@ -310,7 +333,8 @@ function computeSalary(employee, summary, manualInputs) {
     reimbursement2 = 0,
   } = manualInputs;
 
-  const basicMaster = employee.monthlyPay || (employee.ctcAnnual ? employee.ctcAnnual / 12 : 0) || 0;
+  const pay = salaryForPeriod(employee, summary.startDate);
+  const basicMaster = pay.monthlyPay || (pay.ctcAnnual ? pay.ctcAnnual / 12 : 0) || 0;
   // See minDaysAcrossTouchedMonths — the smallest calendar month touched by
   // the period, not the period's own length.
   const dailyRate = summary.dailyRateDivisor > 0 ? basicMaster / summary.dailyRateDivisor : 0;
@@ -391,4 +415,6 @@ function computeSalary(employee, summary, manualInputs) {
   };
 }
 
-module.exports = { computeAttendanceSummary, computeSalary, clipToEmployment, ATTENDANCE_STATUS };
+module.exports = { computeAttendanceSummary, computeSalary, clipToEmployment, ATTENDANCE_STATUS,
+  salaryForPeriod,
+};

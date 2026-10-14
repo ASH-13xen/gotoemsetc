@@ -56,6 +56,10 @@ function countByStatus(status) {
 // every active employee with a recorded date of birth once a day. Excludes
 // offboarded (and draft) employees on purpose — no birthday pings for
 // someone who no longer works here.
+function listAllWithAnniversary() {
+  return Employee.find({ isDeleted: false, status: EMPLOYEE_STATUS.ACTIVE, maritalStatus: 'married', anniversaryDate: { $ne: null } });
+}
+
 function listAllWithDob() {
   return Employee.find({ isDeleted: false, status: EMPLOYEE_STATUS.ACTIVE, dob: { $ne: null } });
 }
@@ -136,6 +140,7 @@ module.exports = {
   count,
   countByStatus,
   listAllWithDob,
+  listAllWithAnniversary,
   listActive,
   listPayableForPeriod,
   listAllForFlagHistory,

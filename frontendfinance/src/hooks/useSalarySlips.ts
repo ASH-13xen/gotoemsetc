@@ -11,7 +11,7 @@ export function useFinanceSlips(year: number, month: number) {
 export function useMarkSalaryPaid() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: TransactionDetails }) => api.markSalaryPaid(id, input),
+    mutationFn: ({ id, input, receipt }: { id: string; input: TransactionDetails; receipt: File }) => api.markSalaryPaid(id, input, receipt),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: KEY }),
   })
 }

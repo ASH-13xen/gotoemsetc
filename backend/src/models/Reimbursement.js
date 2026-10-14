@@ -38,9 +38,15 @@ const reimbursementSchema = new Schema(
     receiptFile: receiptFileSchema,
 
     status: { type: String, enum: Object.values(REIMBURSEMENT_STATUS), default: REIMBURSEMENT_STATUS.PENDING },
+    // Finance's step (approvedBy/approvedAt), then the CEO's or admin's.
     approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     approvedAt: Date,
+    ceoApprovedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    ceoApprovedAs: String,
+    ceoApprovedAt: Date,
     rejectionReason: String,
+    // Which step turned it down: 'finance' or 'ceo'.
+    rejectedStage: { type: String, default: null },
 
     paidAt: Date,
     paidBy: { type: Schema.Types.ObjectId, ref: 'User' },

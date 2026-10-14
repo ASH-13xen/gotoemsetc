@@ -77,6 +77,9 @@ const env = {
     fromEmail: process.env.RESEND_FROM_EMAIL || '',
   },
   hrNotificationEmail: process.env.HR_NOTIFICATION_EMAIL || '',
+  // Where the master salary sheet goes once the CEO/admin approves the
+  // month's slips — Finance only, never an employee.
+  financeSalaryEmail: process.env.FINANCE_SALARY_EMAIL || 'gotofinance01@gmail.com',
   // Broadcast copy for a routed sales lead, alongside the in-app
   // notification to admins/CEOs — see services/salesChat/notify.js. Point
   // this at a shared sales inbox; optional, same pattern as the line above.

@@ -41,7 +41,15 @@ import { cn } from '@/lib/utils'
 import { extractApiErrorMessage } from '@/lib/errors'
 import { hasAnyPermission, hasPermission, isAdminLike } from '@/lib/permissions'
 import { can } from '@/lib/access'
-import { useDeleteEmployee, useEmployee, useEmployees, useUpdateEmployee } from '@/hooks/useEmployees'
+import {
+  useChangeSalary,
+  useCompleteProbation,
+  useDeleteEmployee,
+  useEmployee,
+  useEmployees,
+  useUpdateEmployee,
+} from '@/hooks/useEmployees'
+import { LetterDialog } from '@/components/employees/LetterDialog'
 import { useUploadedDocuments } from '@/hooks/useUploadRequests'
 import {
   BLOOD_GROUPS,
@@ -120,6 +128,8 @@ export type FormValues = {
   permanentAddress: AddressForm
   localAddress: AddressForm
   dob: string
+  maritalStatus: '' | 'single' | 'married'
+  anniversaryDate: string
   bloodGroup: string
   designation: string
   department: string
@@ -241,6 +251,8 @@ function toFormValues(employee: Employee): FormValues {
     permanentAddress: toAddressForm(employee.permanentAddress),
     localAddress: toAddressForm(employee.localAddress),
     dob: toDateInputValue(employee.dob),
+    maritalStatus: employee.maritalStatus ?? '',
+    anniversaryDate: toDateInputValue(employee.anniversaryDate ?? undefined),
     bloodGroup: employee.bloodGroup ?? '',
     designation: employee.designation ?? '',
     department: employee.department ?? '',
@@ -356,6 +368,14 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   const isOwnRecord = user?.employeeLink === employeeId
   const updateEmployee = useUpdateEmployee(employeeId)
   const deleteEmployee = useDeleteEmployee()
+  const completeProbation = useCompleteProbation(employeeId)
+  const changeSalary = useChangeSalary(employeeId)
+  // Probation is only completed with a letter attached (its own dialog).
+  const [probationOpen, setProbationOpen] = useState(false)
+  // A salary that is already set only changes with a promotion letter — the
+  // save waits here until the letter and the starting month are given.
+  const [salaryChange, setSalaryChange] = useState<{ values: FormValues; monthlyPay?: number; ctcAnnual?: number } | null>(null)
+  const [effectiveFrom, setEffectiveFrom] = useState(() => new Date().toISOString().slice(0, 7))
 
   const { register, handleSubmit, control, watch, setValue } = useForm<FormValues>({
     defaultValues: toFormValues(employee),
@@ -402,7 +422,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
     }
   }
 
-  const onSubmit = (values: FormValues) => {
+  const saveDetails = (values: FormValues) => {
     updateEmployee.mutate(
       {
         ...values,
@@ -411,6 +431,8 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         monthlyPay: values.monthlyPay ? Number(values.monthlyPay) : undefined,
         payDate: values.payDate ? Number(values.payDate) : undefined,
         dob: values.dob || undefined,
+        maritalStatus: values.maritalStatus || null,
+        anniversaryDate: values.maritalStatus === 'married' && values.anniversaryDate ? values.anniversaryDate : null,
         dateOfJoining: values.dateOfJoining || undefined,
         dateOfHiring: values.dateOfHiring || undefined,
         endDate: values.endDate || undefined,
@@ -424,6 +446,48 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not save changes')),
       }
     )
+  }
+
+  // The first salary saves directly; changing one that is already set goes
+  // through the promotion-letter dialog first, then the rest of the form saves.
+  const onSubmit = (values: FormValues) => {
+    const hadSalary = Boolean(employee.monthlyPay || employee.ctcAnnual)
+    const nextMonthly = values.monthlyPay ? Number(values.monthlyPay) : undefined
+    const nextCtc = values.ctcAnnual ? Number(values.ctcAnnual) : undefined
+    const monthlyChanged = nextMonthly !== undefined && nextMonthly !== (employee.monthlyPay ?? undefined)
+    const ctcChanged = nextCtc !== undefined && nextCtc !== (employee.ctcAnnual ?? undefined)
+    if (hadSalary && (monthlyChanged || ctcChanged)) {
+      setSalaryChange({ values, monthlyPay: monthlyChanged ? nextMonthly : undefined, ctcAnnual: ctcChanged ? nextCtc : undefined })
+      return
+    }
+    saveDetails(values)
+  }
+
+  const onConfirmSalaryChange = (letter: File) => {
+    if (!salaryChange) return
+    changeSalary.mutate(
+      { monthlyPay: salaryChange.monthlyPay, ctcAnnual: salaryChange.ctcAnnual, effectiveFrom, letter },
+      {
+        onSuccess: () => {
+          toast.success('Salary changed — the promotion letter is saved in documents')
+          const { values } = salaryChange
+          setSalaryChange(null)
+          saveDetails(values)
+        },
+        onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not change the salary')),
+      }
+    )
+  }
+
+  const onConfirmProbation = (letter: File) => {
+    completeProbation.mutate(letter, {
+      onSuccess: () => {
+        setValue('probationCompleted', true)
+        setProbationOpen(false)
+        toast.success('Probation completed — the letter is saved in documents')
+      },
+      onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not complete probation')),
+    })
   }
 
   const onDelete = () => {
@@ -440,6 +504,36 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-8 py-8">
       {isOwnRecord && <PendingWarningsModal employeeId={employeeId} />}
+
+      <LetterDialog
+        open={probationOpen}
+        onOpenChange={setProbationOpen}
+        title="Complete probation"
+        description={`Attach the letter confirming ${employee.firstName}'s probation is over. Probation is only marked completed with it.`}
+        confirmLabel="Attach & complete probation"
+        isPending={completeProbation.isPending}
+        onConfirm={onConfirmProbation}
+      />
+      <LetterDialog
+        open={Boolean(salaryChange)}
+        onOpenChange={(open) => !open && setSalaryChange(null)}
+        title="Change salary"
+        description={`${employee.firstName}'s salary is changing${
+          salaryChange?.monthlyPay !== undefined ? ` to ₹${salaryChange.monthlyPay.toLocaleString('en-IN')} a month` : ''
+        }. A salary only changes with the promotion letter attached.`}
+        confirmLabel="Attach & change salary"
+        isPending={changeSalary.isPending}
+        canConfirm={/^\d{4}-\d{2}$/.test(effectiveFrom)}
+        onConfirm={onConfirmSalaryChange}
+      >
+        <div className="grid gap-1.5">
+          <Label htmlFor="salaryEffectiveFrom">New salary counts from</Label>
+          <Input id="salaryEffectiveFrom" type="month" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+          <p className="text-xs text-muted-foreground">
+            Salary slips for this month and later use the new amount. Slips for earlier months keep the old one, even if generated again.
+          </p>
+        </div>
+      </LetterDialog>
 
       {/* PROFILE HEADER — the passport photo (once one's on file, see
           requested documents) renders as a fixed-size portrait beside the
@@ -577,6 +671,32 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                       )}
                     />
                   </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-1.5">
+                    <Label className="text-xs text-muted-foreground">Marital status</Label>
+                    <Controller
+                      control={control}
+                      name="maritalStatus"
+                      render={({ field }) => (
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="single">Single</SelectItem>
+                            <SelectItem value="married">Married</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </div>
+                  {watch('maritalStatus') === 'married' && (
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="anniversaryDate" className="text-xs text-muted-foreground">Anniversary date</Label>
+                      <Input id="anniversaryDate" type="date" {...register('anniversaryDate')} />
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>
@@ -829,9 +949,11 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 name="probationCompleted"
                 render={({ field }) => (
                   <CheckboxRow
-                    label="Probation completed? (unlocks the one paid off a month)"
+                    label="Probation completed? (needs a letter · unlocks the one paid off a month)"
                     checked={field.value}
-                    onChange={field.onChange}
+                    // Ticking it opens the letter dialog — it is only saved
+                    // with a letter. Unticking is a plain correction.
+                    onChange={(checked) => (checked ? setProbationOpen(true) : field.onChange(false))}
                   />
                 )}
               />
@@ -1158,6 +1280,20 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   <Label htmlFor="panNumber" className="text-xs text-muted-foreground">PAN number</Label>
                   <Input id="panNumber" className="uppercase" {...register('panNumber')} />
                 </div>
+              {(employee.salaryHistory?.length ?? 0) > 0 && (
+                <div className="rounded-lg bg-secondary/30 p-3 md:col-span-4 text-xs text-muted-foreground">
+                  <p className="mb-1 font-semibold text-foreground">Salary changes</p>
+                  {[...(employee.salaryHistory ?? [])]
+                    .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))
+                    .map((c) => (
+                      <p key={c.effectiveFrom + String(c.changedAt)}>
+                        From {new Date(c.effectiveFrom).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })}: ₹
+                        {(c.previousMonthlyPay ?? 0).toLocaleString('en-IN')} → ₹{(c.monthlyPay ?? 0).toLocaleString('en-IN')} a month
+                      </p>
+                    ))}
+                  <p className="mt-1">Changing the salary asks for the promotion letter and the month it starts from.</p>
+                </div>
+              )}
                 <div className="grid gap-1.5">
                   <Label htmlFor="aadharNumber" className="text-xs text-muted-foreground">Aadhar number</Label>
                   <Input id="aadharNumber" {...register('aadharNumber')} />

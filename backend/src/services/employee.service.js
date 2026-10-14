@@ -1,4 +1,5 @@
 const employeeRepository = require('../repositories/employee.repository');
+const uploadRequestService = require('./uploadRequest.service');
 const counterRepository = require('../repositories/counter.repository');
 const userRepository = require('../repositories/user.repository');
 const orgChartService = require('./orgChart.service');
@@ -114,6 +115,19 @@ async function listBirthdays() {
   }));
 }
 
+// Wedding anniversaries of married employees — shown on the company
+// calendar every year, the same way birthdays are.
+async function listAnniversaries() {
+  const employees = await employeeRepository.listAllWithAnniversary();
+  return employees.map((e) => ({
+    _id: e._id,
+    firstName: e.firstName,
+    lastName: e.lastName,
+    employeeCode: e.employeeCode,
+    anniversaryDate: e.anniversaryDate,
+  }));
+}
+
 // Every new employee starts with these two placeholder rows in Extra
 // Details — HR fills the actual values in manually once the company
 // mailbox is set up, rather than leaving the section empty with no hint
@@ -189,6 +203,20 @@ async function updateEmployee(id, data, actor) {
     }
   }
   assertOffboardingHasLastDay(payload, existing);
+  // Probation can only be completed with a letter attached (completeProbation
+  // below); unticking it is an ordinary correction.
+  if (payload.probationCompleted === true && !existing.probationCompleted) {
+    throw ApiError.badRequest('Attach the letter to mark probation as completed');
+  }
+  // The first salary is entered directly; any change after that needs a
+  // promotion letter and a month to start from (changeSalary below).
+  const hasSalary = Boolean(existing.monthlyPay || existing.ctcAnnual);
+  const salaryChanged = ['monthlyPay', 'ctcAnnual'].some((f) => payload[f] !== undefined && !sameValue(payload[f], existing[f]));
+  if (hasSalary && salaryChanged) {
+    throw ApiError.badRequest('Attach the promotion letter to change the salary');
+  }
+  // Only a married person has an anniversary.
+  if (payload.maritalStatus !== undefined && payload.maritalStatus !== 'married') payload.anniversaryDate = null;
   const employee = await employeeRepository.updateById(id, payload);
   if (!employee) throw ApiError.notFound('Employee not found');
   await activityService.log(employee._id, 'EMPLOYEE_UPDATED', { fields: Object.keys(payload) });
@@ -197,6 +225,64 @@ async function updateEmployee(id, data, actor) {
     await userRepository.deactivateForEmployee(employee._id);
     await orgChartService.removeEmployeeEverywhere(employee._id);
   }
+  return employee;
+}
+
+function assertNotOwnRecord(actor, id, what) {
+  if (isSelf(actor, id)) throw ApiError.forbidden(`You can't change your own ${what} — someone else has to`);
+}
+
+// Marks probation completed — only with a letter, which is kept in the
+// employee's documents.
+async function completeProbation(id, file, actor) {
+  const existing = await employeeRepository.findById(id);
+  if (!existing) throw ApiError.notFound('Employee not found');
+  assertNotOwnRecord(actor, id, 'probation');
+  if (existing.probationCompleted) throw ApiError.conflict('Probation is already marked as completed');
+  if (!file) throw ApiError.badRequest('Attach the letter to mark probation as completed');
+
+  const letter = await uploadRequestService.adminUpload(id, { docType: 'probation_letter' }, file, { keepPrevious: true });
+  const employee = await employeeRepository.updateById(id, { probationCompleted: true });
+  await activityService.log(id, 'PROBATION_COMPLETED', { letter: letter._id });
+  return employee;
+}
+
+// Changes a salary that is already set — only with a promotion letter, and
+// from a chosen month on, so slips for earlier months keep the old amount
+// (salaryCalculation.service.js#salaryForPeriod).
+async function changeSalary(id, { monthlyPay, ctcAnnual, effectiveFrom }, file, actor) {
+  const existing = await employeeRepository.findById(id);
+  if (!existing) throw ApiError.notFound('Employee not found');
+  assertNotOwnRecord(actor, id, 'salary');
+  if (!existing.monthlyPay && !existing.ctcAnnual) {
+    throw ApiError.badRequest('No salary is set yet — enter the first one directly on the employee record');
+  }
+  const next = {
+    monthlyPay: monthlyPay !== undefined ? monthlyPay : existing.monthlyPay,
+    ctcAnnual: ctcAnnual !== undefined ? ctcAnnual : existing.ctcAnnual,
+  };
+  if (sameValue(next.monthlyPay, existing.monthlyPay) && sameValue(next.ctcAnnual, existing.ctcAnnual)) {
+    throw ApiError.badRequest('The salary is the same as it is now');
+  }
+  if (!file) throw ApiError.badRequest('Attach the promotion letter to change the salary');
+
+  const letter = await uploadRequestService.adminUpload(id, { docType: 'promotion_letter' }, file, { keepPrevious: true });
+  const [year, month] = effectiveFrom.split('-').map(Number);
+  const employee = await employeeRepository.updateById(id, {
+    ...next,
+    $push: {
+      salaryHistory: {
+        previousMonthlyPay: existing.monthlyPay,
+        previousCtcAnnual: existing.ctcAnnual,
+        ...next,
+        effectiveFrom: new Date(Date.UTC(year, month - 1, 1)),
+        letter: letter._id,
+        changedBy: actor?.id,
+        changedAt: new Date(),
+      },
+    },
+  });
+  await activityService.log(id, 'SALARY_CHANGED', { effectiveFrom, letter: letter._id });
   return employee;
 }
 
@@ -294,4 +380,7 @@ module.exports = {
   removeFlag,
   getFlagHistory,
   synthesizeLegacyInventoryItems,
+  listAnniversaries,
+  completeProbation,
+  changeSalary,
 };

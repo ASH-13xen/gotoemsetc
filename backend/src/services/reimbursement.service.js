@@ -5,18 +5,27 @@ const userRepository = require('../repositories/user.repository');
 const notificationService = require('./notification.service');
 const { REIMBURSEMENT_CATEGORY, REIMBURSEMENT_STATUS, NOTIFICATION_TYPES } = require('../config/constants');
 const { istDayStart, istParts } = require('../utils/istDate');
+const accessService = require('./access.service');
+const { ACCESS, GRANTS } = require('../config/access');
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-// A claim's expenseDate must be today or yesterday (IST) AND not before this
-// week's Sunday — that second clause is what makes Sunday the one day that
-// only accepts itself: yesterday (Saturday) is a payment cutoff, everything
-// up to and including it is expected to already be paid that same Saturday,
-// not newly claimed the day after.
+// Reimbursements run on a Monday-to-Sunday week and are paid on the Monday
+// after it. A claim's expenseDate must be today or yesterday (IST) AND not
+// before this week's Monday — that second clause is what makes Monday the
+// one day that only accepts itself: yesterday (Sunday) closed the week being
+// paid out today, so it is expected to be claimed by Sunday night, not newly
+// claimed on payday.
+function weekMondayStart(date) {
+  const dayStart = istDayStart(date);
+  // istParts().weekday: 0 = Sunday … 6 = Saturday.
+  return new Date(dayStart.getTime() - ((istParts(date).weekday + 6) % 7) * MS_PER_DAY);
+}
+
 function assertClaimWindow(expenseDate, now = new Date()) {
   const todayStart = istDayStart(now);
   const yesterdayStart = new Date(todayStart.getTime() - MS_PER_DAY);
-  const weekStart = new Date(todayStart.getTime() - istParts(now).weekday * MS_PER_DAY);
+  const weekStart = weekMondayStart(now);
   const expenseStart = istDayStart(expenseDate);
 
   const isTodayOrYesterday = expenseStart.getTime() === todayStart.getTime() || expenseStart.getTime() === yesterdayStart.getTime();
@@ -24,16 +33,31 @@ function assertClaimWindow(expenseDate, now = new Date()) {
 
   if (!isTodayOrYesterday || !isWithinCurrentWeek) {
     throw ApiError.badRequest(
-      'Reimbursements can only be claimed for today or yesterday, and never for a date already past its Saturday payment cutoff.'
+      'Reimbursements can only be claimed for today or yesterday, and never for a week that has already closed — a week runs Monday to Sunday and is paid on the following Monday.'
     );
   }
 }
 
-async function fileReimbursement(employeeId, input) {
+// The Monday a claim is paid on: the one after its expense's Monday–Sunday
+// week — or, if that has already gone by (it was approved late), the next
+// Monday from now.
+function payoutMonday(expenseDate, now = new Date()) {
+  const afterItsWeek = new Date(weekMondayStart(expenseDate).getTime() + 7 * MS_PER_DAY);
+  const todayStart = istDayStart(now);
+  if (afterItsWeek.getTime() >= todayStart.getTime()) return afterItsWeek;
+  const thisMonday = weekMondayStart(now);
+  return thisMonday.getTime() === todayStart.getTime() ? thisMonday : new Date(thisMonday.getTime() + 7 * MS_PER_DAY);
+}
+
+const fmtPayout = (date) => date.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'Asia/Kolkata' });
+
+// The receipt is part of the claim itself — no claim without one.
+async function fileReimbursement(employeeId, input, receipt) {
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) throw ApiError.notFound('Employee not found');
 
   assertClaimWindow(new Date(input.expenseDate));
+  if (!receipt) throw ApiError.badRequest('Attach the receipt for this expense');
 
   if (input.category === REIMBURSEMENT_CATEGORY.TRAVEL && !input.travelMode) {
     throw ApiError.badRequest('Select whether this travel was cab (Ola/Rapido/Uber) or bike/petrol.');
@@ -44,10 +68,10 @@ async function fileReimbursement(employeeId, input) {
     category: input.category,
     travelMode: input.category === REIMBURSEMENT_CATEGORY.TRAVEL ? input.travelMode : undefined,
     client: input.category === REIMBURSEMENT_CATEGORY.CLIENT_WORK ? input.client : undefined,
-    clientBrandName: input.category === REIMBURSEMENT_CATEGORY.CLIENT_WORK ? input.clientBrandName : undefined,
+    // The client's name as typed — any category can carry one.
+    clientBrandName: input.clientBrandName?.trim() || undefined,
     expenseDate: input.expenseDate,
-    startAt: input.startAt,
-    endAt: input.endAt,
+    receiptFile: { data: receipt.buffer, contentType: receipt.mimetype, filename: receipt.originalname },
     description: input.description,
     peopleInvolved: input.peopleInvolved || [],
     amount: input.amount,
@@ -106,13 +130,77 @@ async function approve(id, actingUser) {
     throw ApiError.conflict('This reimbursement has already been decided');
   }
 
+  // Finance's approval sends it on to the CEO/admin for the final say.
   const updated = await reimbursementRepository.updateById(id, {
-    status: REIMBURSEMENT_STATUS.APPROVED,
+    status: REIMBURSEMENT_STATUS.AWAITING_CEO,
     approvedBy: actingUser.id,
     approvedAt: new Date(),
   });
-  await notifyEmployee(updated, NOTIFICATION_TYPES.REIMBURSEMENT_APPROVED, 'Reimbursement approved', 'Your reimbursement claim was approved — it will be paid this Saturday.');
+  const approvers = await userRepository.findPayoutApprovers();
+  const employeeName = `${updated.employee.firstName} ${updated.employee.lastName || ''}`.trim();
+  await notificationService.createForUsers(
+    approvers.map((u) => u._id),
+    {
+      type: NOTIFICATION_TYPES.REIMBURSEMENT_AWAITING_CEO,
+      title: 'Reimbursement needs your approval',
+      message: `${employeeName} — ₹${updated.amount.toLocaleString('en-IN')} for ${updated.category.replace(/_/g, ' ')}. Finance has approved it.`,
+      employee: updated.employee._id,
+      reimbursement: updated._id,
+    }
+  );
+  await notifyEmployee(updated, NOTIFICATION_TYPES.REIMBURSEMENT_AWAITING_CEO, 'Reimbursement approved by Finance', 'Finance approved your reimbursement claim — it now needs the CEO\'s approval.');
   return updated;
+}
+
+// The CEO's or admin's final approval — only now is the claim payable.
+async function ceoApprove(id, actingUser) {
+  const existing = await reimbursementRepository.findById(id);
+  if (!existing) throw ApiError.notFound('Reimbursement not found');
+  assertNotOwnClaim(existing, actingUser);
+  if (existing.status !== REIMBURSEMENT_STATUS.AWAITING_CEO) {
+    throw ApiError.conflict(
+      existing.status === REIMBURSEMENT_STATUS.PENDING ? 'Finance has not approved this claim yet' : 'This reimbursement has already been decided'
+    );
+  }
+
+  const updated = await reimbursementRepository.updateById(id, {
+    status: REIMBURSEMENT_STATUS.APPROVED,
+    ceoApprovedBy: actingUser.id,
+    ceoApprovedAs: accessService.actingRole(actingUser, GRANTS[ACCESS.PAYOUT_APPROVAL]),
+    ceoApprovedAt: new Date(),
+  });
+  const payday = fmtPayout(payoutMonday(updated.expenseDate));
+  await notifyEmployee(updated, NOTIFICATION_TYPES.REIMBURSEMENT_APPROVED, 'Reimbursement approved', `Your reimbursement claim was approved — it will be paid on ${payday}.`);
+  return updated;
+}
+
+async function ceoReject(id, reason, actingUser) {
+  const existing = await reimbursementRepository.findById(id);
+  if (!existing) throw ApiError.notFound('Reimbursement not found');
+  assertNotOwnClaim(existing, actingUser);
+  if (existing.status !== REIMBURSEMENT_STATUS.AWAITING_CEO) {
+    throw ApiError.conflict('This reimbursement is not waiting for the final approval');
+  }
+  const updated = await reimbursementRepository.updateById(id, {
+    status: REIMBURSEMENT_STATUS.REJECTED,
+    ceoApprovedBy: actingUser.id,
+    ceoApprovedAs: accessService.actingRole(actingUser, GRANTS[ACCESS.PAYOUT_APPROVAL]),
+    ceoApprovedAt: new Date(),
+    rejectionReason: reason,
+    rejectedStage: 'ceo',
+  });
+  await notifyEmployee(updated, NOTIFICATION_TYPES.REIMBURSEMENT_REJECTED, 'Reimbursement rejected', `Your reimbursement claim was rejected: ${reason}`);
+  return updated;
+}
+
+// Claims Finance has approved that are waiting on the CEO/admin.
+async function listAwaitingCeo(actingUser) {
+  const claims = await reimbursementRepository.listAll({ status: REIMBURSEMENT_STATUS.AWAITING_CEO });
+  return claims.map((c) => {
+    const plain = c.toObject();
+    // Their own claim — someone else has to decide it.
+    return { ...plain, isOwn: Boolean(actingUser?.employeeLink && String(plain.employee?._id) === actingUser.employeeLink) };
+  });
 }
 
 async function reject(id, reason, actingUser) {
@@ -128,13 +216,14 @@ async function reject(id, reason, actingUser) {
     approvedBy: actingUser.id,
     approvedAt: new Date(),
     rejectionReason: reason,
+    rejectedStage: 'finance',
   });
   await notifyEmployee(updated, NOTIFICATION_TYPES.REIMBURSEMENT_REJECTED, 'Reimbursement rejected', `Your reimbursement claim was rejected: ${reason}`);
   return updated;
 }
 
 // requireFinanceAccess-gated, only from 'approved' — normally happens as
-// part of the Saturday payment batch (see jobs/reimbursementPaymentReminder.job.js)
+// part of the Monday payment batch (see jobs/reimbursementPaymentReminder.job.js)
 // but nothing stops paying one off-cycle if it's genuinely ready.
 // A screenshot of the payment is required — it is what the claimant sees as
 // proof on their dashboard.
@@ -183,4 +272,19 @@ async function notifyEmployee(reimbursement, type, title, message) {
   });
 }
 
-module.exports = { fileReimbursement, attachReceipt, listMine, listAll, approve, reject, markPaid, acknowledge, assertClaimWindow };
+module.exports = {
+  fileReimbursement,
+  attachReceipt,
+  listMine,
+  listAll,
+  listAwaitingCeo,
+  approve,
+  ceoApprove,
+  ceoReject,
+  reject,
+  markPaid,
+  acknowledge,
+  assertClaimWindow,
+  weekMondayStart,
+  payoutMonday,
+};

@@ -116,7 +116,7 @@ export function RequestDocumentsModal({
             <div className="grid gap-2">
               <Label>Documents to request</Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {(config?.docTypes ?? []).map((docType) => {
+                {(config?.docTypes ?? []).filter((d) => !d.internal).map((docType) => {
                   const selected = selectedTypes.includes(docType.key)
                   return (
                     <button

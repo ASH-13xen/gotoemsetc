@@ -95,6 +95,12 @@ function findFinanceUsers() {
 // deliberately just cfo + finance, not findFinanceUsers (which also pulls in
 // admin/ceo): the spec has ceo joining only inside the 1-day escalation, and
 // admin isn't part of the reminder audience at all.
+// Who gives the final approval on money going out — salary batches and
+// reimbursement claims (config/access.js PAYOUT_APPROVAL): admin and the CEO.
+function findPayoutApprovers() {
+  return withRoles(USER_ROLES.ADMIN, USER_ROLES.CEO);
+}
+
 function findFinanceTeam() {
   return withRoles(USER_ROLES.CFO, USER_ROLES.FINANCE);
 }
@@ -126,6 +132,7 @@ module.exports = {
   findCmsOversightUsers,
   findFinanceUsers,
   findFinanceTeam,
+  findPayoutApprovers,
   findInvoiceApprovers,
   findCeos,
 };

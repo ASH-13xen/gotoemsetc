@@ -7,15 +7,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { MarkPaidDialog } from '@/components/shared/MarkPaidDialog'
 import { useFinanceSlips, useMarkSalaryPaid } from '@/hooks/useSalarySlips'
+import { downloadFinanceMasterSheet, downloadFinanceSlip, downloadSalaryReceipt } from '@/api/salarySlips.api'
+
+// Slips and receipts sit behind the login, so they are fetched with the
+// session and opened from memory rather than linked to directly.
+async function openBlob(load: () => Promise<Blob>, failed: string) {
+  try {
+    const url = URL.createObjectURL(await load())
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch {
+    toast.error(failed)
+  }
+}
 
 const MONTH_LABEL = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
+// Salaries are paid for the month just gone, so that is where the tab opens.
 function currentYearMonth() {
-  const now = new Date()
-  return { year: now.getFullYear(), month: now.getMonth() + 1 }
+  const lastMonth = new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1)
+  return { year: lastMonth.getFullYear(), month: lastMonth.getMonth() + 1 }
 }
 
 export function SalaryTab() {
@@ -53,7 +67,24 @@ export function SalaryTab() {
             ))}
           </SelectContent>
         </Select>
+        {slips.length > 0 && (
+          <Button
+            variant="outline"
+            onClick={() => openBlob(() => downloadFinanceMasterSheet(year, month), 'Could not open the master salary sheet')}
+          >
+            Master salary sheet
+          </Button>
+        )}
       </div>
+      <p className="text-xs text-muted-foreground">
+        Only slips the CEO or admin has approved are listed. Each payment is marked paid with its receipt, which is mailed to the
+        employee.
+        {slips.length > 0 &&
+          ` ${slips.filter((s) => s.paymentStatus === 'paid').length} of ${slips.length} paid · ₹${slips
+            .filter((s) => s.paymentStatus !== 'paid')
+            .reduce((t, s) => t + Number(s.netPayable), 0)
+            .toLocaleString('en-IN')} still due.`}
+      </p>
 
       {isLoading ? (
         <div className="space-y-2">
@@ -61,7 +92,7 @@ export function SalaryTab() {
           <Skeleton className="h-14 w-full rounded-xl" />
         </div>
       ) : slips.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No salary slips generated for this month yet.</p>
+        <p className="text-sm text-muted-foreground">No approved salary slips for this month yet.</p>
       ) : (
         <div className="space-y-2">
           {slips.map((slip) => {
@@ -75,7 +106,19 @@ export function SalaryTab() {
                     ₹{Number(slip.netPayable).toLocaleString('en-IN')}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => openBlob(() => downloadFinanceSlip(slip._id), 'Could not open the salary slip')}>
+                    View slip
+                  </Button>
+                  {slip.paymentReceiptFile?.filename && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openBlob(() => downloadSalaryReceipt(slip._id), 'Could not open the receipt')}
+                    >
+                      View receipt
+                    </Button>
+                  )}
                   {slip.paymentStatus === 'paid' ? (
                     <Badge variant="success">Paid</Badge>
                   ) : (
@@ -85,13 +128,20 @@ export function SalaryTab() {
                     <MarkPaidDialog
                       trigger={<Button size="sm">Mark paid</Button>}
                       title={`Mark ${employeeName}'s salary as paid`}
+                      description="Attach the payment receipt — it is mailed to the employee and shown to them on their dashboard."
                       isPending={markPaid.isPending}
-                      onSubmit={(input) =>
+                      requireProof
+                      proofLabel="Payment receipt"
+                      proofHint="Required — mailed to the employee's company mail and shown on their dashboard. Image or PDF, up to 10 MB."
+                      onSubmit={(input, receipt) =>
                         markPaid.mutateAsync(
-                          { id: slip._id, input },
+                          { id: slip._id, input, receipt: receipt as File },
                           {
-                            onSuccess: () => toast.success('Salary marked paid'),
-                            onError: () => toast.error('Could not mark salary paid'),
+                            onSuccess: () => toast.success('Salary marked paid — the receipt has been sent to the employee'),
+                            onError: (err) =>
+                              toast.error(
+                                (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Could not mark salary paid'
+                              ),
                           }
                         )
                       }

@@ -1,7 +1,7 @@
 const { z } = require('zod');
 const DOC_TYPES = require('../config/docTypes');
 
-const DOC_TYPE_KEYS = DOC_TYPES.map((d) => d.key);
+const DOC_TYPE_KEYS = DOC_TYPES.filter((d) => !d.internal).map((d) => d.key);
 
 const idParam = z.object({ id: z.string().min(1) });
 const tokenParam = z.object({ token: z.string().min(10) });

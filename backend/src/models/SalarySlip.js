@@ -1,5 +1,5 @@
 const { Schema, model } = require('mongoose');
-const { PAYMENT_STATUS } = require('../config/constants');
+const { PAYMENT_STATUS, SALARY_SLIP_APPROVAL } = require('../config/constants');
 
 // Stored on local disk, same as quotations — Cloudinary's account-level
 // security policy blocks unauthenticated PDF delivery entirely.
@@ -59,10 +59,29 @@ const salarySlipSchema = new Schema(
     createdAs: { type: String },
 
     // Finance section — see services/salarySlip.service.js#markSalaryPaid.
+    // The CEO's/admin's approval (salaryBatch.service.js). Unset on slips
+    // from before this existed — those count as approved.
+    approvalStatus: { type: String, enum: [...Object.values(SALARY_SLIP_APPROVAL), null], default: null },
+    batch: { type: Schema.Types.ObjectId, ref: 'SalaryBatch' },
+    approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    approvedAs: String,
+    approvedAt: Date,
+    // What happened when the slip was mailed to the employee on approval.
+    slipEmail: { to: String, status: String, error: String, at: Date },
+
     paymentStatus: { type: String, enum: Object.values(PAYMENT_STATUS), default: PAYMENT_STATUS.DUE },
     paidAt: Date,
     paidBy: { type: Schema.Types.ObjectId, ref: 'User' },
     transactionDetails: transactionDetailsSchema,
+    // Finance's receipt for the payment — required to mark a slip paid, and
+    // mailed to the employee. The file itself is only loaded when asked for.
+    paymentReceiptFile: {
+      data: { type: Buffer, select: false },
+      contentType: String,
+      filename: String,
+    },
+    // Until the employee closes the "salary paid" notice on their dashboard.
+    paidSeenByEmployee: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

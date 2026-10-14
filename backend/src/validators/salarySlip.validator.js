@@ -68,6 +68,15 @@ const bulkZip = {
   }),
 };
 
+const batchDecision = {
+  params: idParam,
+  body: z.object({ note: z.string().trim().max(1000).optional() }),
+};
+const batchSendBack = {
+  params: idParam,
+  body: z.object({ note: z.string().trim().min(1, 'Say what needs changing').max(1000) }),
+};
+
 const listForFinance = {
   query: z.object({
     year: z.coerce.number().int().min(2000).max(3000),
@@ -97,4 +106,6 @@ module.exports = {
   bulkZip,
   listForFinance,
   markPaid,
+  batchDecision,
+  batchSendBack,
 };

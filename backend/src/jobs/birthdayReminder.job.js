@@ -12,6 +12,7 @@ const COMPANY_EVENT_LABEL = {
   [COMPANY_EVENT_TYPE.CLIENT_ANNIVERSARY]: 'anniversary',
   [COMPANY_EVENT_TYPE.BRAND_ANNIVERSARY]: 'anniversary',
   [COMPANY_EVENT_TYPE.IMPORTANT]: 'reminder',
+  [COMPANY_EVENT_TYPE.FESTIVE]: 'reminder',
 };
 
 function isMonthDay(date, month, day) {
@@ -105,7 +106,7 @@ async function sendDueCompanyEventNotifications() {
   for (const event of events) {
     const date = new Date(event.date);
     const label = COMPANY_EVENT_LABEL[event.type] || 'event';
-    const isImportant = event.type === COMPANY_EVENT_TYPE.IMPORTANT;
+    const isImportant = event.type === COMPANY_EVENT_TYPE.IMPORTANT || event.type === COMPANY_EVENT_TYPE.FESTIVE;
     if (isImportant && date.getFullYear() !== today.getFullYear()) continue;
 
     const title = label === 'birthday' ? 'Birthday' : label === 'anniversary' ? 'Anniversary' : 'Reminder';

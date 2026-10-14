@@ -8,6 +8,19 @@ export interface BirthdayEmployee {
   dob: string
 }
 
+export interface AnniversaryEmployee {
+  _id: string
+  firstName: string
+  lastName?: string
+  anniversaryDate: string
+}
+
+// Wedding anniversaries of married employees — on the calendar every year.
+export async function getAnniversaries(): Promise<{ employees: AnniversaryEmployee[] }> {
+  const { data } = await apiClient.get('/employees/anniversaries')
+  return data
+}
+
 export async function getBirthdays(): Promise<{ employees: BirthdayEmployee[] }> {
   const { data } = await apiClient.get('/employees/birthdays')
   return data

@@ -15,7 +15,8 @@ import { CATEGORY_LABEL, fetchPaymentProof, type Reimbursement, type Reimburseme
 // takes it off this card — it stays under "Show all reimbursements".
 function StatusBadge({ status }: { status: ReimbursementStatus }) {
   if (status === 'paid') return <Badge variant="success">Paid</Badge>
-  if (status === 'approved') return <Badge variant="secondary">Approved — to be paid</Badge>
+  if (status === 'approved') return <Badge variant="secondary">Approved — paid on Monday</Badge>
+  if (status === 'awaiting_ceo') return <Badge variant="warning">Waiting for the CEO</Badge>
   if (status === 'rejected') return <Badge variant="destructive">Rejected</Badge>
   return <Badge variant="warning">Pending</Badge>
 }

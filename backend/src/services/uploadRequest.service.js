@@ -202,11 +202,13 @@ async function listUploadedForEmployee(employeeId) {
 // Fixed doc types still replace any prior version of themselves, same as
 // attachDocuments; 'other' never does, since two different custom documents
 // can legitimately coexist under that one generic type.
-async function adminUpload(employeeId, { docType, otherLabel }, file) {
+// `keepPrevious` leaves earlier documents of the same type in place — for
+// letters, where each one is its own record (every promotion has a letter).
+async function adminUpload(employeeId, { docType, otherLabel }, file, { keepPrevious = false } = {}) {
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) throw ApiError.notFound('Employee not found');
 
-  if (docType !== 'other') {
+  if (docType !== 'other' && !keepPrevious) {
     const previous = await uploadedDocumentRepository.findByEmployeeAndDocType(employeeId, docType);
     for (const prior of previous) {
       // eslint-disable-next-line no-await-in-loop

@@ -23,7 +23,7 @@ export const CATEGORY_LABEL: Record<ReimbursementCategory, string> = {
 }
 
 export type TravelMode = 'cab' | 'bike_petrol'
-export type ReimbursementStatus = 'pending' | 'approved' | 'rejected' | 'paid'
+export type ReimbursementStatus = 'pending' | 'awaiting_ceo' | 'approved' | 'rejected' | 'paid'
 
 export interface Reimbursement {
   _id: string

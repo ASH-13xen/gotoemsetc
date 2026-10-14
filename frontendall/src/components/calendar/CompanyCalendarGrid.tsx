@@ -2,7 +2,7 @@ import { can } from '@/lib/access'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Cake, CalendarDays, CalendarOff, ChevronLeft, ChevronRight, Clock3, LogOut, PartyPopper, Star } from 'lucide-react'
+import { Cake, CalendarDays, CalendarOff, ChevronLeft, ChevronRight, Clock3, Heart, LogOut, PartyPopper, Sparkles, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { useCreateHoliday, useDeleteHoliday, useHolidays } from '@/hooks/useHolidays'
 import { useCreateCompanyEvent, useDeleteCompanyEvent, useCompanyEvents } from '@/hooks/useCompanyEvents'
-import { useBirthdays } from '@/hooks/useBirthdays'
+import { useAnniversaries, useBirthdays } from '@/hooks/useBirthdays'
 import { useWhosOut } from '@/hooks/useCompanyCalendar'
 import { STATUS_CONFIG } from '@/lib/attendanceStatusColors'
 import type { CompanyEvent, CompanyEventType } from '@/api/companyEvents.api'
@@ -44,7 +44,8 @@ function dayOfMonthUTC(dateStr: string) {
 }
 
 function isEventOnDate(event: CompanyEvent, dateKey: string) {
-  if (event.type === 'important') return event.date.slice(0, 10) === dateKey
+  // Important markers and festive days are one-offs — matched on the full date.
+  if (event.type === 'important' || event.type === 'festive') return event.date.slice(0, 10) === dateKey
   return dayOfMonthUTC(event.date) === Number(dateKey.slice(8, 10))
 }
 
@@ -58,6 +59,8 @@ function eventVisual(type: CompanyEventType) {
       return { Icon: PartyPopper, color: 'text-emerald-500', label: 'brand anniversary' }
     case 'important':
       return { Icon: Star, color: 'text-red-500', label: 'important' }
+    case 'festive':
+      return { Icon: Sparkles, color: 'text-orange-500', label: 'festive day' }
   }
 }
 
@@ -94,6 +97,7 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
   const { data: holidaysData, isLoading: holidaysLoading } = useHolidays(month, year)
   const { data: eventsData } = useCompanyEvents(month, year)
   const { data: birthdaysData } = useBirthdays()
+  const { data: anniversariesData } = useAnniversaries()
   const { data: whosOutData } = useWhosOut(month, year)
   const createHoliday = useCreateHoliday()
   const deleteHoliday = useDeleteHoliday()
@@ -111,6 +115,16 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
     const list = birthdaysByDay.get(day) ?? []
     list.push(e)
     birthdaysByDay.set(day, list)
+  }
+
+  // Wedding anniversaries recur on month/day, like birthdays.
+  const anniversariesByDay = new Map<number, { _id: string; firstName: string; lastName?: string }[]>()
+  for (const e of anniversariesData?.employees ?? []) {
+    const date = new Date(e.anniversaryDate)
+    if (date.getUTCMonth() + 1 !== month) continue
+    const list = anniversariesByDay.get(date.getUTCDate()) ?? []
+    list.push(e)
+    anniversariesByDay.set(date.getUTCDate(), list)
   }
 
   const eventsByDay = new Map<number, CompanyEvent[]>()
@@ -170,8 +184,8 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
     createEvent.mutate(
       { date: dateKey, type, name },
       {
-        onSuccess: () => toast.success('Event added'),
-        onError: () => toast.error('Could not add event'),
+        onSuccess: () => toast.success(type === 'festive' ? 'Festive day marked' : 'Event added'),
+        onError: () => toast.error(type === 'festive' ? 'Could not mark the festive day' : 'Could not add event'),
       }
     )
   }
@@ -241,6 +255,8 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
                 const isPastDate = dateKey < today
                 const birthdays = birthdaysByDay.get(dayNum) ?? []
                 const dayEvents = (eventsByDay.get(dayNum) ?? []).filter((e) => isEventOnDate(e, dateKey))
+                const anniversaries = anniversariesByDay.get(dayNum) ?? []
+                const isFestive = dayEvents.some((e) => e.type === 'festive')
                 const whosOut = outByDate.get(dateKey) ?? []
 
                 return (
@@ -255,6 +271,8 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
                           (isSunday || holiday) && !isHalfDay && !isSlDay && 'bg-secondary/25 text-muted-foreground/60',
                           isHalfDay && 'bg-indigo-500/10 text-indigo-700',
                           isSlDay && 'bg-teal-500/10 text-teal-700',
+                          // A festive day is only a marker — a warm tint, nothing more.
+                          isFestive && !holiday && 'bg-orange-500/10 text-orange-800',
                           dateKey === today && 'ring-1 ring-inset ring-primary'
                         )}
                       >
@@ -267,6 +285,7 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
                           {birthdays.length > 0 && (
                             <Cake className={cn(compact ? 'size-2.5' : 'size-3', 'text-yellow-500')} />
                           )}
+                          {anniversaries.length > 0 && <Heart className={cn(compact ? 'size-2.5' : 'size-3', 'text-pink-500')} />}
                           {dayEvents.map((e) => {
                             const { Icon, color } = eventVisual(e.type)
                             return <Icon key={e._id} className={cn(compact ? 'size-2.5' : 'size-3', color)} />
@@ -323,6 +342,18 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
                             ))}
                           </div>
                         )}
+                        {anniversaries.length > 0 && (
+                          <div className="grid gap-1">
+                            <p className="flex items-center gap-1.5 text-xs text-pink-600">
+                              <Heart className="size-3" /> Wedding anniversaries
+                            </p>
+                            {anniversaries.map((a) => (
+                              <p key={a._id} className="text-xs font-medium text-foreground">
+                                {a.firstName} {a.lastName}
+                              </p>
+                            ))}
+                          </div>
+                        )}
                         {dayEvents.length > 0 && (
                           <div className="grid gap-1">
                             {dayEvents.map((e) => {
@@ -333,6 +364,7 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
                                     <Icon className="size-3" />
                                     {e.name}
                                     {e.type !== 'important' && ` — ${label}`}
+                                    {e.type === 'festive' && ' (not a holiday by itself)'}
                                     {e.type === 'important' && e.notes && ` — ${e.notes}`}
                                   </p>
                                   {canManage && (
@@ -366,7 +398,7 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
                             ))}
                           </div>
                         )}
-                        {!holiday && !isSunday && birthdays.length === 0 && dayEvents.length === 0 && whosOut.length === 0 && (
+                        {!holiday && !isSunday && birthdays.length === 0 && anniversaries.length === 0 && dayEvents.length === 0 && whosOut.length === 0 && (
                           <p className="text-xs text-muted-foreground">Nothing marked on this day.</p>
                         )}
                         {canManage && (
@@ -410,6 +442,13 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
                                 </Button>
                               </>
                             )}
+                            {/* A festive day can go on any day, past or future, holiday or not. */}
+                            {!isFestive && (
+                              <Button size="sm" variant="outline" onClick={() => onAddEvent(dateKey, 'festive', 'Name of the festive day? (e.g. Diwali)')}>
+                                <Sparkles className="size-3.5 text-orange-500" />
+                                Mark as festive day
+                              </Button>
+                            )}
                             <Button size="sm" variant="outline" onClick={() => onAddEvent(dateKey, 'client_birthday', "Client's name for this birthday?")}>
                               <Cake className="size-3.5 text-blue-500" />
                               Add client birthday
@@ -435,6 +474,14 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
               })}
             </div>
             <div className={cn('mt-6 flex-wrap gap-x-5 gap-y-2 border-t border-border pt-4', compact ? 'hidden' : 'flex')}>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Sparkles className="size-3.5 text-orange-500" />
+                Festive day
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Heart className="size-3.5 text-pink-500" />
+                Wedding anniversary
+              </div>
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Cake className="size-3.5 text-yellow-500" />
                 Employee birthday

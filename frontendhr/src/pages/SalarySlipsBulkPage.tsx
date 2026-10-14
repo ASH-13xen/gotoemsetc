@@ -77,7 +77,7 @@ export default function SalarySlipsBulkPage() {
       {
         onSuccess: (data) => {
           const generatedSlips = data.results.filter((r) => r.outcome === 'generated' && r.slipId)
-          toast.success(`Generated ${generatedSlips.length} of ${data.results.length} salary slips`)
+          toast.success(`Generated ${generatedSlips.length} of ${data.results.length} salary slips — sent to the CEO for approval`)
 
           if (generatedSlips.length === 0) {
             setAdjustOpen(false)
@@ -125,7 +125,7 @@ export default function SalarySlipsBulkPage() {
       <PageHeader
         eyebrow="HRMS"
         title="Generate salary slips"
-        description="Generate the month's salary slip for everyone — active employees and anyone who left during the month — in one action. You're asked first whether anything needs adding or changing for anyone, then you get one zip with every slip and the master salary sheet."
+        description="Generate the month's salary slip for everyone — active employees and anyone who left during the month — in one action. You're asked first whether anything needs adding or changing for anyone, then you get one zip with every slip and the master salary sheet. The slips then wait for the CEO's approval before they are mailed or reach Finance."
       />
 
       <Card className="p-6">
@@ -175,6 +175,12 @@ export default function SalarySlipsBulkPage() {
         onGenerate={onGenerate}
       />
 
+      {generate.data && (
+        <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-800">
+          These slips are waiting for the CEO's (or admin's) approval. Nothing has been mailed, and Finance and the employees can't see
+          them yet. On approval each employee is mailed their own slip and Finance is mailed the master sheet.
+        </p>
+      )}
       {generate.data && (
         <Card className="p-6">
           <CardContent className="p-0">

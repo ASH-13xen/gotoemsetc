@@ -13,6 +13,23 @@ const getById = asyncHandler(async (req, res) => {
   res.json({ employee: shapeForRole('Employee', employee, req.user) });
 });
 
+const anniversaries = asyncHandler(async (req, res) => {
+  const employees = await employeeService.listAnniversaries();
+  res.json({ employees });
+});
+
+const completeProbation = asyncHandler(async (req, res) => {
+  const employee = await employeeService.completeProbation(req.params.id, req.file, req.user);
+  req.auditContext = { action: 'employee.completeProbation', resourceType: 'Employee', resourceId: employee._id };
+  res.json({ employee: shapeForRole('Employee', employee, req.user) });
+});
+
+const changeSalary = asyncHandler(async (req, res) => {
+  const employee = await employeeService.changeSalary(req.params.id, req.body, req.file, req.user);
+  req.auditContext = { action: 'employee.changeSalary', resourceType: 'Employee', resourceId: employee._id, metadata: req.body };
+  res.json({ employee: shapeForRole('Employee', employee, req.user) });
+});
+
 const birthdays = asyncHandler(async (req, res) => {
   const employees = await employeeService.listBirthdays();
   res.json({ employees });
@@ -83,4 +100,4 @@ const flagHistory = asyncHandler(async (req, res) => {
   res.json({ entries });
 });
 
-module.exports = { list, getById, birthdays, directory, create, update, remove, activity, addFlag, removeFlag, flagHistory };
+module.exports = { list, getById, birthdays, anniversaries, completeProbation, changeSalary, directory, create, update, remove, activity, addFlag, removeFlag, flagHistory };

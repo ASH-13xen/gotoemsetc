@@ -36,6 +36,9 @@ import { KeysDialog } from '@/components/keys/KeysDialog'
 import { OrgChartTeaser } from '@/components/orgChart/OrgChartTeaser'
 import { AttendanceChangeRequestsCard } from '@/components/attendance/AttendanceChangeRequestsCard'
 import { OvertimeApprovalsCard } from '@/components/attendance/OvertimeApprovalsCard'
+import { SalaryApprovalCard } from '@/components/finance/SalaryApprovalCard'
+import { SalaryPaidModal } from '@/components/finance/SalaryPaidModal'
+import { ReimbursementApprovalsCard } from '@/components/reimbursements/ReimbursementApprovalsCard'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useMyOvertimeRequests } from '@/hooks/useOvertimeRequests'
@@ -193,6 +196,7 @@ export default function DashboardPage() {
       <PendingLeaveApprovalsModal />
       <MonthlyBillReminderModal />
       <PendingAnnouncementsModal />
+      <SalaryPaidModal />
 
       <DashboardToggle views={views} value={view} onChange={choose} />
 
@@ -228,6 +232,9 @@ export default function DashboardPage() {
       {/* Overtime waiting on this person — a content manager's team queue, HR's
           final approvals. Shown whichever view is open; nothing when empty. */}
       <OvertimeApprovalsCard />
+      {/* The CEO's/admin's final say on money going out — nothing when empty. */}
+      <SalaryApprovalCard />
+      <ReimbursementApprovalsCard />
 
       {view === 'me' && (
         <>

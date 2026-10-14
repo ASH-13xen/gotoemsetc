@@ -10,6 +10,7 @@ const POPULATE = [
   { path: 'client', select: 'name brandName' },
   { path: 'peopleInvolved', select: EMPLOYEE_FIELDS },
   { path: 'approvedBy', select: 'username role' },
+  { path: 'ceoApprovedBy', select: 'username role' },
   { path: 'paidBy', select: 'username role' },
 ];
 

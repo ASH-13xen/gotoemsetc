@@ -16,6 +16,10 @@ export interface SalarySlip {
   totalReimbursements: number
   netPayable: number
   netPayableWords?: string
+  // Waiting for the CEO/admin, approved, sent back, or replaced by a newer
+  // one. Unset on slips from before approvals existed (they count as approved).
+  approvalStatus?: 'pending' | 'approved' | 'rejected' | 'superseded' | null
+  paymentStatus?: 'due' | 'paid'
   createdAt: string
 }
 

@@ -15,29 +15,40 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { useFileReimbursement, useUploadReceipt } from '@/hooks/useReimbursements'
+import { useFileReimbursement } from '@/hooks/useReimbursements'
 import { useOpenEmployeeDirectory } from '@/hooks/useEmployees'
-import { useClientDirectory } from '@/hooks/useClients'
 import { CATEGORY_LABEL, TRAVEL_MODE_LABEL, type ReimbursementCategory, type TravelMode } from '@/api/reimbursements.api'
 import { cn } from '@/lib/utils'
 
+// The device's own calendar date — not toISOString(), which is UTC and still
+// says "yesterday" until 5:30 in the morning here.
 function dateKey(d: Date) {
-  return d.toISOString().slice(0, 10)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-// Claims are only accepted for today or yesterday — and never for yesterday
-// when yesterday was a Saturday (the weekly payment cutoff; see
+// A reimbursement week runs Monday to Sunday and is paid on the Monday after
+// it. Claims are only accepted for today or yesterday — and never for
+// yesterday when today is Monday: Sunday closed the week being paid today,
+// so a Sunday expense has to be claimed on Sunday itself (see
 // backend/src/services/reimbursement.service.js#assertClaimWindow for the
 // authoritative rule). Offering only valid choices here avoids explaining
 // the rule to every employee — the backend still enforces it either way.
 function claimableDates() {
   const today = new Date()
-  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000)
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1)
   const options = [{ label: 'Today', value: dateKey(today) }]
-  if (today.getDay() !== 0) {
+  if (today.getDay() !== 1) {
     options.push({ label: 'Yesterday', value: dateKey(yesterday) })
   }
   return options
+}
+
+// The Monday after the expense's Monday–Sunday week.
+function payoutMonday(expenseDateKey: string) {
+  const [y, m, d] = expenseDateKey.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  const daysToNextMonday = ((8 - date.getDay()) % 7) || 7
+  return new Date(y, m - 1, d + daysToNextMonday).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'short' })
 }
 
 export function ClaimReimbursementDialog() {
@@ -45,21 +56,16 @@ export function ClaimReimbursementDialog() {
   const [infoOpen, setInfoOpen] = useState(false)
   const [category, setCategory] = useState<ReimbursementCategory>('miscellaneous')
   const [travelMode, setTravelMode] = useState<TravelMode>('cab')
-  const [clientId, setClientId] = useState<string>('')
   const [clientBrandName, setClientBrandName] = useState('')
   const dateOptions = claimableDates()
   const [expenseDate, setExpenseDate] = useState(dateOptions[0].value)
-  const [startAt, setStartAt] = useState('')
-  const [endAt, setEndAt] = useState('')
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
   const [peopleInvolved, setPeopleInvolved] = useState<string[]>([])
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
 
   const { data: employeesData } = useOpenEmployeeDirectory()
-  const { data: clientsData } = useClientDirectory()
   const fileReimbursement = useFileReimbursement()
-  const uploadReceipt = useUploadReceipt()
 
   const togglePerson = (id: string) => {
     setPeopleInvolved((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]))
@@ -67,10 +73,7 @@ export function ClaimReimbursementDialog() {
 
   const reset = () => {
     setCategory('miscellaneous')
-    setClientId('')
     setClientBrandName('')
-    setStartAt('')
-    setEndAt('')
     setDescription('')
     setAmount('')
     setPeopleInvolved([])
@@ -82,29 +85,31 @@ export function ClaimReimbursementDialog() {
       toast.error('Please fill in the amount and description')
       return
     }
+    if (!receiptFile) {
+      toast.error('Attach the receipt — a claim needs one')
+      return
+    }
     fileReimbursement.mutate(
       {
-        category,
-        travelMode: category === 'travel' ? travelMode : undefined,
-        client: category === 'client_work' && clientId ? clientId : undefined,
-        clientBrandName: category === 'client_work' && !clientId ? clientBrandName.trim() || undefined : undefined,
-        expenseDate,
-        startAt: startAt || undefined,
-        endAt: endAt || undefined,
-        description: description.trim(),
-        peopleInvolved,
-        amount: Number(amount),
+        input: {
+          category,
+          travelMode: category === 'travel' ? travelMode : undefined,
+          clientBrandName: clientBrandName.trim() || undefined,
+          expenseDate,
+          description: description.trim(),
+          peopleInvolved,
+          amount: Number(amount),
+        },
+        receipt: receiptFile,
       },
       {
-        onSuccess: ({ reimbursement }) => {
-          if (receiptFile) {
-            uploadReceipt.mutate({ id: reimbursement._id, file: receiptFile })
-          }
-          toast.success('Reimbursement claimed — CEO has been notified')
+        onSuccess: () => {
+          toast.success(`Claim sent to Finance — once approved it is paid on ${payoutMonday(expenseDate)}`)
           setOpen(false)
           reset()
         },
-        onError: () => toast.error('Could not file the claim'),
+        onError: (err) =>
+          toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Could not file the claim'),
       }
     )
   }
@@ -124,7 +129,9 @@ export function ClaimReimbursementDialog() {
         <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Claim a reimbursement</DialogTitle>
-          <DialogDescription>Approved claims are paid on Saturdays.</DialogDescription>
+          <DialogDescription>
+            A week runs Monday to Sunday and is paid on the following Monday, after Finance and the CEO approve.
+          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-1.5">
@@ -161,35 +168,10 @@ export function ClaimReimbursementDialog() {
             </div>
           )}
 
-          {category === 'client_work' && (
-            <>
-              <div className="grid gap-1.5">
-                <Label>Client / brand</Label>
-                <Select value={clientId} onValueChange={setClientId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a client (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(clientsData ?? []).map((c) => (
-                      <SelectItem key={c._id} value={c._id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {!clientId && (
-                <div className="grid gap-1.5">
-                  <Label htmlFor="clientBrandName">Or type a brand name</Label>
-                  <Input
-                    id="clientBrandName"
-                    value={clientBrandName}
-                    onChange={(e) => setClientBrandName(e.target.value)}
-                  />
-                </div>
-              )}
-            </>
-          )}
+          <div className="grid gap-1.5">
+            <Label htmlFor="clientBrandName">Client name</Label>
+            <Input id="clientBrandName" value={clientBrandName} onChange={(e) => setClientBrandName(e.target.value)} />
+          </div>
 
           <div className="grid gap-1.5">
             <Label>Expense date</Label>
@@ -205,17 +187,6 @@ export function ClaimReimbursementDialog() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="startAt">Start</Label>
-              <Input id="startAt" type="datetime-local" value={startAt} onChange={(e) => setStartAt(e.target.value)} />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="endAt">End</Label>
-              <Input id="endAt" type="datetime-local" value={endAt} onChange={(e) => setEndAt(e.target.value)} />
-            </div>
           </div>
 
           <div className="grid gap-1.5">
@@ -258,7 +229,7 @@ export function ClaimReimbursementDialog() {
           </div>
 
           <div className="grid gap-1.5">
-            <Label htmlFor="receipt">Receipt (optional)</Label>
+            <Label htmlFor="receipt">Receipt</Label>
             <Input
               id="receipt"
               type="file"
@@ -268,7 +239,7 @@ export function ClaimReimbursementDialog() {
           </div>
         </div>
         <DialogFooter>
-          <Button onClick={onSubmit} disabled={fileReimbursement.isPending}>
+          <Button onClick={onSubmit} disabled={fileReimbursement.isPending || !receiptFile}>
             {fileReimbursement.isPending && <Loader2 className="size-4 animate-spin" />}
             Submit claim
           </Button>
@@ -297,9 +268,10 @@ export function ClaimReimbursementDialog() {
             <div className="grid gap-1">
               <p className="font-semibold text-foreground">When you can claim</p>
               <p className="text-muted-foreground">
-                Only for an expense from today or yesterday — you can't backdate further than that. The one
-                exception: on a Sunday, "yesterday" (Saturday) isn't offered, since Saturday is payment day and
-                anything from that far back is expected to already be paid, not newly claimed.
+                Only for an expense from today or yesterday — you can't backdate further than that. A week runs
+                Monday to Sunday and is paid on the Monday after it. The one exception: on a Monday, "yesterday"
+                (Sunday) isn't offered, since Monday is payment day for the week that just closed — a Sunday expense
+                has to be claimed on Sunday itself.
               </p>
             </div>
             <div className="grid gap-1">
@@ -314,17 +286,13 @@ export function ClaimReimbursementDialog() {
               <p className="text-muted-foreground">Required when the category is Travel — Cab (Ola/Rapido/Uber) or Bike/Petrol.</p>
             </div>
             <div className="grid gap-1">
-              <p className="font-semibold text-foreground">Client / brand (Client Work only)</p>
-              <p className="text-muted-foreground">
-                Pick the client from the list if they're already registered, or just type the brand name if they're
-                not — either is fine, and both are optional.
-              </p>
+              <p className="font-semibold text-foreground">Client name</p>
+              <p className="text-muted-foreground">Type the client this expense was for, if it was for one.</p>
             </div>
             <div className="grid gap-1">
-              <p className="font-semibold text-foreground">Start / End, description, amount</p>
+              <p className="font-semibold text-foreground">Description, amount</p>
               <p className="text-muted-foreground">
-                Start and End are optional timestamps for the work itself. Description and Amount are required —
-                describe what the expense was for and how much to reimburse.
+                Both are required — describe what the expense was for and how much to reimburse.
               </p>
             </div>
             <div className="grid gap-1">
@@ -334,16 +302,16 @@ export function ClaimReimbursementDialog() {
             <div className="grid gap-1">
               <p className="font-semibold text-foreground">Receipt</p>
               <p className="text-muted-foreground">
-                Optional. Attach a PDF or image and it uploads right after the claim is created — you don't need one
-                to submit.
+                Required. Attach a PDF or image of the bill — a claim can't be submitted without one.
               </p>
             </div>
             <div className="grid gap-1 border-t border-border pt-3">
               <p className="font-semibold text-foreground">What happens after you submit</p>
               <p className="text-muted-foreground">
-                Finance is notified immediately and reviews it — they'll either approve or reject with a reason.
-                Once approved, it's paid out in the weekly Saturday payment batch. You can track the status (Pending
-                / Approved / Paid / Rejected) on your dashboard.
+                Finance is notified immediately and reviews it, then it goes to the CEO for the final approval —
+                either can reject it with a reason. Once both have approved, it's paid on the Monday after the week
+                of the expense, and you get the payment proof. You can track the status (Pending / Waiting for the
+                CEO / Approved / Paid / Rejected) on your dashboard.
               </p>
             </div>
           </div>
