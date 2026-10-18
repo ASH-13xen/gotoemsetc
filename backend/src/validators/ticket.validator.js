@@ -1,5 +1,5 @@
 const { z } = require('zod');
-const { TICKET_PIPELINE, TICKET_PRIORITY } = require('../config/constants');
+const { TICKET_PIPELINE, TICKET_PRIORITY, TICKET_REPEAT } = require('../config/constants');
 
 const id = z.string().regex(/^[a-f0-9]{24}$/i, 'Invalid id');
 const idParam = { params: z.object({ id }) };
@@ -13,6 +13,8 @@ const raise = {
       dueAt: z.coerce.date(),
       clientName: z.string().trim().max(120).optional(),
       pipeline: z.enum(Object.values(TICKET_PIPELINE)),
+      // Raise a fresh copy every day/week/month/year until it's stopped.
+      repeat: z.enum(['none', ...Object.values(TICKET_REPEAT)]).optional(),
       raisedFor: id.optional(),
       team: id.optional(),
       // Story/Post/Reel: the team's Social Media Manager it is for.
@@ -99,4 +101,5 @@ const taskCalendar = {
     .refine((q) => q.to >= q.from && q.to - q.from <= 62 * 86400000, { message: 'Pick a range of up to 62 days' }),
 };
 
-module.exports = { idParam, taskCalendar, raise, list, calendarList, note, requiredNote, reason, edit, reassign, comment, link, analysis, calendarDecision };
+module.exports = {
+  stopRepeat: { params: z.object({ id }), body: z.object({ reason: z.string().trim().max(300).optional() }) }, idParam, taskCalendar, raise, list, calendarList, note, requiredNote, reason, edit, reassign, comment, link, analysis, calendarDecision };

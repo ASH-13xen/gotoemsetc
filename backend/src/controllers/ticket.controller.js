@@ -1,5 +1,6 @@
 const asyncHandler = require('../utils/asyncHandler');
 const ticketService = require('../services/ticket.service');
+const ticketRepeatService = require('../services/ticketRepeat.service');
 const calendarTickets = require('../services/calendarTickets.service');
 const taskCalendar = require('../services/taskCalendar.service');
 
@@ -30,8 +31,19 @@ const get = asyncHandler(async (req, res) => {
 
 const raise = asyncHandler(async (req, res) => {
   const ticket = await ticketService.raise(req.user, req.body);
+  // "Repeat": the rule that raises a fresh copy on each date until stopped.
+  const rule = await ticketRepeatService.start(req.user, req.body, ticket);
+  if (rule) {
+    ticket.repeat = { _id: String(rule._id), repeat: rule.repeat, active: true, nextAt: rule.nextAt, raisedCount: 1, stoppedAt: null, canStop: true };
+  }
   audit(req, 'ticket.raise', ticket);
   res.status(201).json({ ticket });
+});
+
+const stopRepeat = asyncHandler(async (req, res) => {
+  const result = await ticketRepeatService.stop(req.user, req.params.id, req.body);
+  req.auditContext = { action: 'ticket.repeat.stop', resourceType: 'TicketRepeat', resourceId: req.params.id, metadata: req.body };
+  res.json(result);
 });
 
 const advance = asyncHandler(async (req, res) => {
@@ -110,6 +122,7 @@ module.exports = {
   analysis,
   get,
   raise,
+  stopRepeat,
   advance,
   sendBack,
   reject,

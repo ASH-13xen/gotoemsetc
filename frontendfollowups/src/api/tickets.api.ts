@@ -38,6 +38,7 @@ export interface RecordEntry {
     | 'completed'
     | 'submitted_to_ceo'
     | 'ceo_reviewed'
+    | 'repeat_stopped'
   at: string
   byName: string
   actingAs: string | null
@@ -95,7 +96,32 @@ export interface Ticket {
   customSteps: { key: string; label: string; color: string; assignee: string }[]
   can: { act: boolean; sendBack: boolean; edit: boolean; review: boolean; comment: boolean }
   actingAs: string | null
+  // Raised by a repeat — how it repeats, whether it still does, who may stop it.
+  repeat: TicketRepeatInfo | null
   record?: RecordEntry[]
+}
+
+export type TicketRepeatKind = 'daily' | 'weekly' | 'monthly' | 'yearly'
+export interface TicketRepeatInfo {
+  _id: string
+  repeat: TicketRepeatKind
+  active: boolean
+  nextAt: string | null
+  raisedCount: number
+  stoppedAt: string | null
+  canStop: boolean
+}
+
+export const REPEAT_LABEL: Record<TicketRepeatKind, string> = {
+  daily: 'Every day',
+  weekly: 'Every week',
+  monthly: 'Every month',
+  yearly: 'Every year',
+}
+
+export async function stopTicketRepeat(id: string, reason?: string) {
+  const { data } = await apiClient.post<{ stopped: boolean }>(`/tickets/repeats/${id}/stop`, { reason })
+  return data
 }
 
 export interface CalendarTicket {
@@ -191,6 +217,8 @@ export interface RaiseInput {
   dueAt: string
   clientName?: string
   pipeline: Pipeline
+  // Raise a fresh copy every day/week/month/year until it's stopped.
+  repeat?: TicketRepeatKind | 'none'
   raisedFor?: string
   team?: string
   smm?: string

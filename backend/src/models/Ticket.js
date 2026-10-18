@@ -57,6 +57,8 @@ const ticketSchema = new Schema(
     },
     customSteps: [customStepSchema],
 
+    // Raised by a repeat (models/TicketRepeat.js) — each date's copy, and the first one.
+    repeat: { type: Schema.Types.ObjectId, ref: 'TicketRepeat', default: null, index: true },
     raisedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     raisedByEmployee: { type: Schema.Types.ObjectId, ref: 'Employee', default: null },
     raisedFor: { type: Schema.Types.ObjectId, ref: 'Employee', required: true, index: true },

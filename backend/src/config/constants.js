@@ -181,6 +181,8 @@ module.exports = {
     SALARY_SLIPS_HELD: 'salary_slips_held',
     SALARY_SLIPS_RELEASED: 'salary_slips_released',
     TICKET_RAISED: 'ticket_raised',
+    // A repeating ticket stopped by itself (the raiser can no longer raise it).
+    TICKET_REPEAT_STOPPED: 'ticket_repeat_stopped',
     TICKET_YOUR_STEP: 'ticket_your_step',
     TICKET_SENT_BACK: 'ticket_sent_back',
     TICKET_REJECTED: 'ticket_rejected',
@@ -768,6 +770,10 @@ module.exports = {
   // ---------------------------------------------------------------------
   TICKET_PIPELINE: { SIMPLE: 'simple', STORY: 'story', POST: 'post', REEL: 'reel', CUSTOM: 'custom' },
   TICKET_PRIORITY: { LOW: 'low', NORMAL: 'normal', HIGH: 'high', URGENT: 'urgent' },
+  // A ticket raised again automatically (models/TicketRepeat.js) until it is
+  // stopped. Daily skips Sundays and company holidays; monthly and yearly keep
+  // the date and skip a month (year) that hasn't got it.
+  TICKET_REPEAT: { DAILY: 'daily', WEEKLY: 'weekly', MONTHLY: 'monthly', YEARLY: 'yearly' },
   TICKET_STATUS: { OPEN: 'open', COMPLETED: 'completed', REJECTED: 'rejected' },
   // Every entry in a ticket's permanent record (TicketEvent).
   TICKET_EVENT: {
@@ -787,6 +793,8 @@ module.exports = {
     COMPLETED: 'completed',
     SUBMITTED_TO_CEO: 'submitted_to_ceo',
     CEO_REVIEWED: 'ceo_reviewed',
+    // Its repeat was stopped — no more copies will be raised.
+    REPEAT_STOPPED: 'repeat_stopped',
   },
   PAID_LEAVE_COMPENSATION_FROM: '2026-09-01',
 

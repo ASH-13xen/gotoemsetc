@@ -92,4 +92,5 @@ export const RECORD_LABEL: Record<string, string> = {
   completed: 'Completed',
   submitted_to_ceo: 'Submitted to the CEO',
   ceo_reviewed: 'Reviewed by the CEO',
+  repeat_stopped: 'Stopped repeating',
 }

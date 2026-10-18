@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, ExternalLink, Link2, Loader2, Pencil, Send, ShieldCheck, UserRoundCog } from 'lucide-react'
+import { ArrowLeft, ExternalLink, Link2, Loader2, Pencil, Repeat2, Send, ShieldCheck, UserRoundCog } from 'lucide-react'
 import { TicketNav } from '@/components/layout/TicketNav'
 import { TicketStub } from '@/components/tickets/TicketStub'
 import { StepTrail } from '@/components/tickets/StepTrail'
@@ -26,8 +26,11 @@ import {
   rejectTicket,
   reviewTicket,
   sendBackTicket,
+  stopTicketRepeat,
+  REPEAT_LABEL,
   type Priority,
   type Ticket,
+  type TicketRepeatInfo,
 } from '@/api/tickets.api'
 import { useTicket, useTicketMeta, useTicketMutation } from '@/hooks/useTickets'
 import { PRIORITY_LABEL, fmtDateTime, fmtDuration } from '@/lib/ticketFormat'
@@ -303,6 +306,7 @@ export default function TicketPage() {
               </Button>
             )}
           </div>
+          {t.repeat && <RepeatStrip repeat={t.repeat} />}
         </div>
 
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
@@ -427,5 +431,49 @@ export default function TicketPage() {
         }}
       />
     </>
+  )
+}
+
+// A repeating ticket: how it repeats, when the next copy comes, and — for the
+// person who set it up, the CEO or admin — a way to stop it.
+function RepeatStrip({ repeat }: { repeat: TicketRepeatInfo }) {
+  const stop = useTicketMutation(() => stopTicketRepeat(repeat._id))
+  const [confirming, setConfirming] = useState(false)
+  return (
+    <div className={cn('flex flex-wrap items-center gap-3 rounded-2xl p-3 text-sm ring-1', repeat.active ? 'bg-violet-500/8 ring-violet-500/30' : 'bg-secondary/40 ring-border')}>
+      <Repeat2 className={cn('size-4', repeat.active ? 'text-violet-600' : 'text-muted-foreground')} />
+      <span className="min-w-0 flex-1">
+        <b>{REPEAT_LABEL[repeat.repeat]}</b>
+        {repeat.active
+          ? ` · next copy ${repeat.nextAt ? fmtDateTime(repeat.nextAt) : 'soon'} · ${repeat.raisedCount} raised so far`
+          : ` · stopped${repeat.stoppedAt ? ` ${fmtDateTime(repeat.stoppedAt)}` : ''} after ${repeat.raisedCount}`}
+      </span>
+      {repeat.canStop &&
+        (confirming ? (
+          <span className="flex gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+              Keep it
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={stop.isPending}
+              onClick={() =>
+                stop
+                  .mutateAsync(undefined)
+                  .then(() => toast.success('Stopped — no more copies will be raised'))
+                  .catch(() => toast.error('Could not stop it'))
+              }
+            >
+              {stop.isPending && <Loader2 className="size-4 animate-spin" />}
+              Stop repeating
+            </Button>
+          </span>
+        ) : (
+          <Button size="sm" variant="outline" onClick={() => setConfirming(true)}>
+            Stop repeating
+          </Button>
+        ))}
+    </div>
   )
 }

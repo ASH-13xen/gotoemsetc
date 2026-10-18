@@ -2,6 +2,7 @@ const ApiError = require('../utils/ApiError');
 const logger = require('../utils/logger');
 const Ticket = require('../models/Ticket');
 const TicketEvent = require('../models/TicketEvent');
+const TicketRepeat = require('../models/TicketRepeat');
 const Employee = require('../models/Employee');
 const User = require('../models/User');
 const counterRepository = require('../repositories/counter.repository');
@@ -277,7 +278,23 @@ async function toView(user, ticket, chart, { withRecord = false } = {}) {
       comment: true,
     },
     actingAs: ctx.canAct ? ctx.actingAs : null,
+    repeat: null,
   };
+  // Raised by a repeat: how it repeats, whether it still does, and who may stop it.
+  if (ticket.repeat) {
+    const rule = await TicketRepeat.findById(ticket.repeat).select('repeat active nextAt raisedCount raisedBy stoppedAt').lean();
+    if (rule) {
+      view.repeat = {
+        _id: idOf(rule._id),
+        repeat: rule.repeat,
+        active: rule.active,
+        nextAt: rule.active ? rule.nextAt : null,
+        raisedCount: rule.raisedCount,
+        stoppedAt: rule.stoppedAt || null,
+        canStop: rule.active && (idOf(rule.raisedBy) === idOf(user.id) || seesEveryone(user)),
+      };
+    }
+  }
   if (withRecord) {
     const events = await TicketEvent.find({ ticket: ticket._id }).sort({ at: 1, _id: 1 }).lean();
     view.record = events.map((e) => ({
@@ -440,7 +457,9 @@ function cleanAssignments(pipeline, a = {}) {
   return {};
 }
 
-async function raise(user, input) {
+// `repeatId`: raised by a repeat (ticketRepeat.service.js) — the copy is
+// tied to it and its record says so.
+async function raise(user, input, { repeatId = null, repeatLabel = null } = {}) {
   const chart = await org.loadChart();
   const raisable = await org.raisableFor(user, chart);
   const { pipeline } = input;
@@ -521,6 +540,7 @@ async function raise(user, input) {
     raisedBy: user.id,
     raisedByEmployee: user.employeeLink || null,
     raisedFor,
+    repeat: repeatId,
     stage: 'created',
     metrics: { stepMs: {}, reverts: 0, lastMovedAt: now },
   });
@@ -545,6 +565,7 @@ async function raise(user, input) {
       steps: pipe.trail(ticket).map((s) => ({ label: s.label, color: s.color, by: s.actorLabel })),
       people: Object.fromEntries(Object.entries(assignments).map(([k, v]) => [k, nameOf(names.get(idOf(v)))])),
       customSteps: customSteps.map((s) => ({ label: s.label, color: s.color, person: nameOf(names.get(idOf(s.assignee))) })),
+      ...(repeatLabel ? { repeat: repeatLabel } : {}),
     },
   });
 
@@ -1041,7 +1062,9 @@ module.exports = {
   ceoReview,
   analysis,
   sweepOverdue,
-  // for the calendar tickets and tests
+  // for the calendar tickets, repeats and tests
+  record,
+  seesEveryone,
   actorsFor,
   actingContext,
   codeOf,

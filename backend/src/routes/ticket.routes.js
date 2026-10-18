@@ -28,6 +28,7 @@ router.post('/calendar/items/:id/reject', validate(v.reason), c.calendarReject);
 
 router.get('/', validate(v.list), c.list);
 router.post('/', validate(v.raise), c.raise);
+router.post('/repeats/:id/stop', validate(v.stopRepeat), c.stopRepeat);
 router.get('/:id', validate(v.idParam), c.get);
 router.patch('/:id', validate(v.edit), c.edit);
 router.post('/:id/advance', validate(v.note), c.advance);

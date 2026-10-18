@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DateTimePicker } from '@/components/shared/DateTimePicker'
-import { errorMessage, raiseTicket, type Pipeline, type Priority, type Ticket, type TicketMeta } from '@/api/tickets.api'
+import { errorMessage, raiseTicket, type Pipeline, type Priority, type Ticket, type TicketMeta, type TicketRepeatKind } from '@/api/tickets.api'
 import { useTicketMeta, useTicketMutation } from '@/hooks/useTickets'
 import { PRIORITY_LABEL, inkOn } from '@/lib/ticketFormat'
 import { ticketStub } from '@/lib/stubData'
@@ -75,6 +75,7 @@ export function RaiseTicketDialog({ trigger }: { trigger?: React.ReactNode }) {
   const [priority, setPriority] = useState<Priority>('normal')
   const [due, setDue] = useState(defaultDue())
   const [clientName, setClientName] = useState('')
+  const [repeat, setRepeat] = useState<TicketRepeatKind | 'none'>('none')
   const [raisedFor, setRaisedFor] = useState('')
   const [team, setTeam] = useState('')
   const [smm, setSmm] = useState('')
@@ -173,6 +174,7 @@ export function RaiseTicketDialog({ trigger }: { trigger?: React.ReactNode }) {
       dueAt: new Date(due).toISOString(),
       clientName: clientName.trim() || undefined,
       pipeline,
+      repeat,
     }
     if (pipeline === 'simple') {
       if (!raisedFor) return toast.error('Choose who this ticket is for')
@@ -422,6 +424,29 @@ export function RaiseTicketDialog({ trigger }: { trigger?: React.ReactNode }) {
                         <Label htmlFor="t-client">Client name {needsTeam ? '' : '(optional)'}</Label>
                         <Input id="t-client" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Typed, since Client Management is off" maxLength={120} />
                       </div>
+                    </div>
+
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="t-repeat">Repeat</Label>
+                      <select
+                        id="t-repeat"
+                        value={repeat}
+                        onChange={(e) => setRepeat(e.target.value as TicketRepeatKind | 'none')}
+                        className="h-9 rounded-md border border-border bg-background px-3 text-sm"
+                      >
+                        <option value="none">Doesn't repeat</option>
+                        <option value="daily">Every day (not Sundays or holidays)</option>
+                        <option value="weekly">Every week</option>
+                        <option value="monthly">Every month</option>
+                        <option value="yearly">Every year</option>
+                      </select>
+                      {repeat !== 'none' && (
+                        <p className="text-[11px] text-muted-foreground">
+                          A fresh copy is raised for the same people at 9:00 am on each{' '}
+                          {repeat === 'daily' ? 'working day' : repeat === 'weekly' ? 'week, on this weekday' : repeat === 'monthly' ? 'month, on this date (months without it are skipped)' : 'year, on this date'}
+                          , due as long after as this one is. It keeps going until you stop it from the ticket.
+                        </p>
+                      )}
                     </div>
 
                     <div className="grid gap-1.5">
