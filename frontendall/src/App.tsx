@@ -16,6 +16,7 @@ import EventsPage from '@/pages/EventsPage'
 import EventDetailPage from '@/pages/EventDetailPage'
 import CompanyCalendarPage from '@/pages/CompanyCalendarPage'
 import WeeklyCalendarPage from '@/pages/WeeklyCalendarPage'
+import TaskCalendarPage from '@/pages/TaskCalendarPage'
 import CalendarInvitePage from '@/pages/CalendarInvitePage'
 import { ShellLayout } from '@/components/layout/ShellLayout'
 import { ensureRemoteStyles } from '@/lib/remoteStyles'
@@ -82,6 +83,20 @@ export default function App() {
                     <ShellLayout section="Weekly Calendar" wide>
                       <WeeklyCalendarPage />
                     </ShellLayout>
+                  </RequireAuth>
+                }
+              />
+              {/* Tickets on their due days — the CEO and admin see every one,
+                  everyone else the ones they raised or are on the pipeline of. */}
+              <Route
+                path="/task-calendar"
+                element={
+                  <RequireAuth>
+                    <RequireFeature feature="TASK_MANAGEMENT">
+                      <ShellLayout section="Task Calendar" wide>
+                        <TaskCalendarPage />
+                      </ShellLayout>
+                    </RequireFeature>
                   </RequireAuth>
                 }
               />
@@ -186,7 +201,7 @@ export default function App() {
                 element={
                   <RequireAuth>
                     <RequireFeature feature="TASK_MANAGEMENT">
-                      <ShellLayout section="Task Management">
+                      <ShellLayout section="Tickets">
                       <Suspense fallback={<RemoteFallback />}>
                         <RemoteFollowups basename="/followups" />
                       </Suspense>

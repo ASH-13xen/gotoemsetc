@@ -9,7 +9,7 @@ import { downloadFnfFile } from '@/api/fnfSettlements.api'
 
 // Full & final settlements the CEO/admin has approved. One payment covers
 // the final salary slip and the severance; it is marked paid with its
-// receipt, which is mailed to the employee (their company and personal mail).
+// receipt, which is mailed to the employee's personal mail (they have left).
 
 const rupees = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
@@ -31,9 +31,10 @@ export function FnfTab() {
 
   if (isLoading) {
     return (
-      <div className="space-y-2">
-        <Skeleton className="h-14 w-full rounded-xl" />
-        <Skeleton className="h-14 w-full rounded-xl" />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <Skeleton className="h-36 w-full rounded-xl" />
+        <Skeleton className="h-36 w-full rounded-xl" />
+        <Skeleton className="h-36 w-full rounded-xl" />
       </div>
     )
   }
@@ -48,15 +49,18 @@ export function FnfTab() {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {settlements.map((settlement) => {
         const employeeName = `${settlement.employee.firstName} ${settlement.employee.lastName || ''}`.trim()
         const hasSlip = Boolean(settlement.salarySlip)
         return (
-          <Card key={settlement._id} className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <Card key={settlement._id} className="flex flex-col justify-between gap-3 p-4">
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-foreground">{employeeName}</p>
-              <p className="text-xs text-muted-foreground">
+              <div className="flex items-start justify-between gap-2">
+                <p className="truncate text-sm font-semibold text-foreground">{employeeName}</p>
+                {settlement.status === 'paid' ? <Badge variant="success">Paid</Badge> : <Badge variant="warning">Due</Badge>}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
                 {settlement.employee.employeeCode ? `${settlement.employee.employeeCode} · ` : ''}
                 {settlement.lastWorkingDay ? `Last working day ${fmt(settlement.lastWorkingDay)} · ` : ''}
                 {hasSlip
@@ -80,7 +84,6 @@ export function FnfTab() {
                   Receipt
                 </Button>
               )}
-              {settlement.status === 'paid' ? <Badge variant="success">Paid</Badge> : <Badge variant="warning">Due</Badge>}
               {settlement.status === 'due' && (
                 <MarkPaidDialog
                   trigger={<Button size="sm">Mark paid</Button>}
@@ -89,7 +92,7 @@ export function FnfTab() {
                   isPending={markPaid.isPending}
                   requireProof
                   proofLabel="Payment receipt"
-                  proofHint="Required — mailed to the employee's company and personal mail. Image or PDF, up to 10 MB."
+                  proofHint="Required — mailed to the employee's personal mail. Image or PDF, up to 10 MB."
                   onSubmit={(input, receipt) =>
                     markPaid.mutateAsync(
                       { id: settlement._id, input, receipt: receipt as File },

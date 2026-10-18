@@ -38,6 +38,8 @@ const fnfSettlementSchema = new Schema(
     // Why the CEO/admin sent it back to HR.
     sendBackNote: { type: String, trim: true },
     financeEmail: { to: String, status: String, error: String },
+    // The employee's copy (settlement + final slip) on approval, to their personal mail.
+    employeeEmail: { to: String, status: String, error: String },
 
     status: { type: String, enum: Object.values(PAYMENT_STATUS), default: PAYMENT_STATUS.DUE },
     paidAt: Date,

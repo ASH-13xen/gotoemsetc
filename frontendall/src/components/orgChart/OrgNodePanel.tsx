@@ -36,7 +36,7 @@ import {
   useSetOrgNodeAssignees,
   useUpdateOrgNode,
 } from '@/hooks/useOrgChart'
-import {
+import { teamRolesInOrder,
   accentFor,
   avatarGradient,
   canMoveUnder,
@@ -229,7 +229,7 @@ export function OrgNodePanel({
   const [moveTarget, setMoveTarget] = useState<string>('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [newTitle, setNewTitle] = useState('')
-  const [newKind, setNewKind] = useState<OrgNodeKind>(node.kind === 'team' ? 'team_role' : 'position')
+  const [newKind, setNewKind] = useState<OrgNodeKind>(node.kind === 'team' || node.kind === 'team_role' ? 'team_role' : 'position')
   const [newRole, setNewRole] = useState<TeamRole>('social_media_manager')
   const [newWorkTeam, setNewWorkTeam] = useState<string>(NONE)
 
@@ -240,7 +240,7 @@ export function OrgNodePanel({
     setMoveTarget('')
     setConfirmDelete(false)
     setNewTitle('')
-    setNewKind(node.kind === 'team' ? 'team_role' : 'position')
+    setNewKind(node.kind === 'team' || node.kind === 'team_role' ? 'team_role' : 'position')
     setNewWorkTeam(NONE)
   }, [node._id, node.title, node.description, node.kind])
 
@@ -320,7 +320,9 @@ export function OrgNodePanel({
   }
 
   const childCount = childrenOf(index, node._id).length
-  const canHaveChildren = node.kind !== 'team_role'
+  // A role box can have role boxes under it too (Content Manager → SMM →
+  // that SMM's Videographer and Editor).
+  const canHaveChildren = true
   const workTeamOptions = [
     ...(node.workTeam ? [{ _id: node.workTeam._id, name: node.workTeam.name }] : []),
     ...linkableWorkTeams,
@@ -375,11 +377,12 @@ export function OrgNodePanel({
         {node.kind === 'team' && (
           <Section title="Team roster">
             <div className="grid gap-1.5">
-              {childrenOf(index, node._id).map((role) => (
+              {teamRolesInOrder(index, node._id).map(({ node: role, level }) => (
                 <button
                   key={role._id}
                   type="button"
                   onClick={() => onSelect(role._id)}
+                  style={{ marginLeft: (level - 1) * 14 }}
                   className="flex items-center gap-2.5 rounded-xl border border-border/70 bg-secondary/30 px-2.5 py-2 text-left transition-colors hover:bg-secondary/70"
                 >
                   <div className="min-w-0 flex-1">
@@ -666,7 +669,7 @@ export function OrgNodePanel({
         {/* Add a child */}
         {canHaveChildren && (
           <Section title="Add a box under this">
-            {node.kind !== 'team' && (
+            {node.kind !== 'team' && node.kind !== 'team_role' && (
               <div className="flex gap-1 rounded-xl bg-secondary/60 p-1">
                 {(['position', 'team'] as OrgNodeKind[]).map((kind) => (
                   <button

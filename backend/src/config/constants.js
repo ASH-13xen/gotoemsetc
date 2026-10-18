@@ -172,6 +172,18 @@ module.exports = {
     // Fired when a for_review task is sent back to pending instead of
     // approved — see employeeTask.service.js#rejectTask.
     EMPLOYEE_TASK_REJECTED: 'employee_task_rejected',
+    // Tickets (ticket.service.js) — in-app only, never emailed.
+    // Salary slips the CEO/admin held back when approving, and released later.
+    SALARY_SLIPS_HELD: 'salary_slips_held',
+    SALARY_SLIPS_RELEASED: 'salary_slips_released',
+    TICKET_RAISED: 'ticket_raised',
+    TICKET_YOUR_STEP: 'ticket_your_step',
+    TICKET_SENT_BACK: 'ticket_sent_back',
+    TICKET_REJECTED: 'ticket_rejected',
+    TICKET_COMPLETED: 'ticket_completed',
+    TICKET_SUBMITTED: 'ticket_submitted',
+    TICKET_OVERDUE: 'ticket_overdue',
+    TICKET_COMMENT: 'ticket_comment',
     // Sent to the employee themself when HR/admin logs a "not informed"
     // warning against them on the daily attendance report — see
     // attendanceWarning.service.js#sendWarning.
@@ -726,8 +738,42 @@ module.exports = {
   // reminder jobs paused, and anything that would create work in them
   // refused. Nothing is deleted; flip these back to true to bring them back.
   FEATURES: {
-    TASK_MANAGEMENT: false,
+    // Task Management is now the ticket system (ticket.service.js).
+    TASK_MANAGEMENT: true,
     CLIENT_MANAGEMENT: false,
+    // The old personal/team/event task screens and their API, replaced by
+    // tickets. Their records stay in the database, untouched.
+    LEGACY_TASKS: false,
+  },
+
+  // ---------------------------------------------------------------------
+  // Tickets — Task Management (ticket.service.js, utils/ticketPipeline.js).
+  // A ticket follows one pipeline. Story, Post and Reel are the content
+  // calendar's own step tables and colours (config/cmsPipelines.js,
+  // CMS_STAGE_COLORS), unchanged; Custom is 2–5 steps the raiser defines,
+  // each with its own colour and person; Simple is the one-person job.
+  // ---------------------------------------------------------------------
+  TICKET_PIPELINE: { SIMPLE: 'simple', STORY: 'story', POST: 'post', REEL: 'reel', CUSTOM: 'custom' },
+  TICKET_PRIORITY: { LOW: 'low', NORMAL: 'normal', HIGH: 'high', URGENT: 'urgent' },
+  TICKET_STATUS: { OPEN: 'open', COMPLETED: 'completed', REJECTED: 'rejected' },
+  // Every entry in a ticket's permanent record (TicketEvent).
+  TICKET_EVENT: {
+    RAISED: 'raised',
+    SEEN: 'seen',
+    ADVANCED: 'advanced',
+    // Moving forward again after being sent back.
+    RESTARTED: 'restarted',
+    SENT_BACK: 'sent_back',
+    REJECTED: 'rejected',
+    EDITED: 'edited',
+    DUE_CHANGED: 'due_changed',
+    REASSIGNED: 'reassigned',
+    COMMENTED: 'commented',
+    LINK_ADDED: 'link_added',
+    OVERDUE: 'overdue',
+    COMPLETED: 'completed',
+    SUBMITTED_TO_CEO: 'submitted_to_ceo',
+    CEO_REVIEWED: 'ceo_reviewed',
   },
   PAID_LEAVE_COMPENSATION_FROM: '2026-09-01',
 
@@ -743,7 +789,9 @@ module.exports = {
   // Salary slips wait for the CEO/admin before they are mailed or reach
   // Finance (salaryBatch.service.js). A slip with no approvalStatus at all
   // predates this and counts as approved.
-  SALARY_SLIP_APPROVAL: { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected', SUPERSEDED: 'superseded' },
+  // HELD = the CEO/admin unticked it when approving the month: not mailed, not
+  // payable (Finance sees it faded) until they release it.
+  SALARY_SLIP_APPROVAL: { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected', SUPERSEDED: 'superseded', HELD: 'held' },
   SALARY_BATCH_STATUS: { PENDING: 'pending', APPROVED: 'approved', SENT_BACK: 'sent_back', SUPERSEDED: 'superseded' },
   // bulk = the whole month from HR Work; single = one slip from an employee's page.
   SALARY_BATCH_KIND: { BULK: 'bulk', SINGLE: 'single' },

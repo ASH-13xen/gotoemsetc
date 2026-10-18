@@ -3,7 +3,8 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Users,
-  CalendarClock,
+  Ticket,
+  CalendarRange,
   CalendarDays,
   Briefcase,
   ShieldAlert,
@@ -70,9 +71,13 @@ export function ShellLayout({
     { to: "/ems", label: "EMS", icon: Users },
     // Everyone plans their week here — meetings, events, blocked time.
     { to: "/calendar", label: "Weekly Calendar", icon: CalendarDays },
-    // Hidden while switched off (backend constants.js FEATURES).
+    // Task Management, as tickets. Hidden while switched off (backend
+    // constants.js FEATURES).
     ...(featureOn(user, "TASK_MANAGEMENT")
-      ? [{ to: "/followups", label: "Task Management", icon: CalendarClock }]
+      ? [
+          { to: "/followups", label: "Tickets", icon: Ticket },
+          { to: "/task-calendar", label: "Task Calendar", icon: CalendarRange },
+        ]
       : []),
     ...(featureOn(user, "CLIENT_MANAGEMENT")
       ? [{ to: "/sales", label: "Client Management", icon: Briefcase }]

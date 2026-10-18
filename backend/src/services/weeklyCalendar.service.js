@@ -11,7 +11,7 @@ const AttendanceRecord = require('../models/AttendanceRecord');
 const holidayRepository = require('../repositories/holiday.repository');
 const notificationService = require('./notification.service');
 const emailService = require('./email.service');
-const employeeTaskService = require('./employeeTask.service');
+const ticketService = require('./ticket.service');
 const accessService = require('./access.service');
 const { can } = require('../utils/roles');
 const { ACCESS } = require('../config/access');
@@ -364,6 +364,7 @@ function shapeEvent(event, viewer, people) {
           dueDay: n.dueDay ?? null,
           done: Boolean(n.done),
           task: n.task ? idOf(n.task) : null,
+          ticket: n.ticket ? { _id: idOf(n.ticket), code: n.ticketCode || null } : null,
         }))
       : [],
     cancelledAt: event.cancelledAt ?? null,
@@ -1060,31 +1061,30 @@ async function deleteNote(viewer, id, noteId) {
   return getEvent(viewer, id);
 }
 
-// An action item becomes a personal task for its assignee in Task Management.
+// An action item becomes a ticket (Simple pipeline) for its assignee in Task
+// Management — raised by whoever presses the button, so the Organisation
+// chart's rule applies: only for someone in their own box or below.
 async function noteToTask(viewer, id, noteId) {
   if (!FEATURES.TASK_MANAGEMENT) throw ApiError.badRequest('Task Management is switched off for now');
   const event = await noteContext(viewer, id);
   const note = event.notes.id(noteId);
   if (!note) throw ApiError.notFound('Note not found');
-  if (note.kind !== WEEKLY_NOTE_KIND.ACTION) throw ApiError.badRequest('Only action items can become tasks');
-  if (note.task) throw ApiError.conflict('This action item is already a task');
+  if (note.kind !== WEEKLY_NOTE_KIND.ACTION) throw ApiError.badRequest('Only action items can become tickets');
+  if (note.task || note.ticket) throw ApiError.conflict('This action item is already a ticket');
   if (!note.assignee) throw ApiError.badRequest('Pick who the action item is for first');
   const assigneeUser = await User.findById(note.assignee).select('employeeLink');
-  if (!assigneeUser?.employeeLink) throw ApiError.badRequest("This person has no employee record, so they can't get a task");
+  if (!assigneeUser?.employeeLink) throw ApiError.badRequest("This person has no employee record, so they can't get a ticket");
 
   const due = note.dueDay || addDays(nowIst().day > event.day ? nowIst().day : event.day, 2);
-  const task = await employeeTaskService.createTask(
-    {
-      title: note.text.length > 120 ? `${note.text.slice(0, 117)}…` : note.text,
-      description: `From the meeting "${event.title}" on ${fmtDay(event.day)}.\n\n${note.text}`,
-      type: EMPLOYEE_TASK_TYPE.PERSONAL,
-      startAt: new Date(),
-      endAt: toUtc(due, 18 * 60 + 30),
-      assignedEmployees: [assigneeUser.employeeLink],
-    },
-    viewer.employeeLink || undefined
-  );
-  note.task = task._id;
+  const ticket = await ticketService.raise(viewer, {
+    title: note.text.length > 120 ? `${note.text.slice(0, 117)}…` : note.text,
+    description: `From the meeting "${event.title}" on ${fmtDay(event.day)}.\n\n${note.text}`,
+    pipeline: 'simple',
+    dueAt: toUtc(due, 18 * 60 + 30),
+    raisedFor: assigneeUser.employeeLink,
+  });
+  note.ticket = ticket._id;
+  note.ticketCode = ticket.code;
   note.updatedBy = viewer.id;
   await event.save();
   return getEvent(viewer, id);

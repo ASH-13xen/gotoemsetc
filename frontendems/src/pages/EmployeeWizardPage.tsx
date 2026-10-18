@@ -265,8 +265,8 @@ export default function EmployeeWizardPage() {
       } else {
         toast.success('Documents generated')
       }
-    } catch {
-      toast.error('Could not generate documents')
+    } catch (err) {
+      toast.error(extractApiErrorMessage(err, 'Could not generate documents'))
     }
   }
 
@@ -296,6 +296,19 @@ export default function EmployeeWizardPage() {
                 {isTemplateStep && (
                   <TemplateSelectStep
                     templates={templates}
+                    blocked={Object.fromEntries(
+                      templates
+                        .filter((t) => t.key === 'fnf-settlement' && employee && (!employee.removedFromGroupsAndReels || !employee.mailDeactivated))
+                        .map((t) => [
+                          t._id,
+                          `Tick ${[
+                            !employee?.removedFromGroupsAndReels && '"Removed from groups + Go-To Reels"',
+                            !employee?.mailDeactivated && '"Mail deactivated"',
+                          ]
+                            .filter(Boolean)
+                            .join(' and ')} in their offboarding details first.`,
+                        ])
+                    )}
                     selectedIds={selectedTemplateIds}
                     onToggle={(templateId) =>
                       // Single-select: choosing a template replaces whatever

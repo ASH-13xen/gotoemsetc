@@ -407,9 +407,12 @@ async function advance(id, actingUser, { note } = {}) {
   await completeBackingSubtaskIfAny(item, step, actingUser);
 
   const onBehalfOf = cmsWorkflow.actingOnBehalfOf(actingUser, item, team);
-  const skips = cmsWorkflow.autoSkipsFor({ ...item, stage: step.key }, team, actingUser);
+  // A Mongoose document's fields don't survive being spread, so work on a
+  // plain copy when trying out the next stage.
+  const plain = typeof item.toObject === 'function' ? item.toObject() : item;
+  const skips = cmsWorkflow.autoSkipsFor({ ...plain, stage: step.key }, team, actingUser);
   const toStage = skips.length ? skips[skips.length - 1] : step.key;
-  const reachedTerminal = cmsWorkflow.isTerminal({ ...item, stage: toStage });
+  const reachedTerminal = cmsWorkflow.isTerminal({ ...plain, stage: toStage });
 
   const updated = await calendarItemRepository.updateById(id, {
     stage: toStage,

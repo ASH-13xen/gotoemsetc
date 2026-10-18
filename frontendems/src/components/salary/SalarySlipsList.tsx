@@ -71,6 +71,11 @@ export function SalarySlipsList({ employeeId, employeeName }: { employeeId: stri
                     Waiting for the CEO's approval — not mailed yet
                   </span>
                 )}
+                {slip.approvalStatus === 'held' && (
+                  <span className="mt-1 w-fit rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                    On hold by the CEO — not mailed or paid until released
+                  </span>
+                )}
                 {slip.approvalStatus === 'rejected' && (
                   <span className="mt-1 w-fit rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-semibold text-destructive">
                     Sent back by the CEO — generate it again

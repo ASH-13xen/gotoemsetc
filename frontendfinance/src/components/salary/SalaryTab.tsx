@@ -37,6 +37,9 @@ export function SalaryTab() {
   const { data, isLoading } = useFinanceSlips(year, month)
   const markPaid = useMarkSalaryPaid()
   const slips = data?.slips ?? []
+  const isHeld = (s: (typeof slips)[number]) => s.approvalStatus === 'held'
+  const payable = slips.filter((s) => !isHeld(s))
+  const heldCount = slips.length - payable.length
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i)
 
@@ -77,34 +80,56 @@ export function SalaryTab() {
         )}
       </div>
       <p className="text-xs text-muted-foreground">
-        Only slips the CEO or admin has approved are listed. Each payment is marked paid with its receipt, which is mailed to the
-        employee.
-        {slips.length > 0 &&
-          ` ${slips.filter((s) => s.paymentStatus === 'paid').length} of ${slips.length} paid · ₹${slips
+        Only slips the CEO or admin has approved can be paid. Salaries the CEO put on hold are shown faded until released. Each
+        payment is marked paid with its receipt, which is mailed to the employee.
+        {payable.length > 0 &&
+          ` ${payable.filter((s) => s.paymentStatus === 'paid').length} of ${payable.length} paid · ₹${payable
             .filter((s) => s.paymentStatus !== 'paid')
             .reduce((t, s) => t + Number(s.netPayable), 0)
-            .toLocaleString('en-IN')} still due.`}
+            .toLocaleString('en-IN', { maximumFractionDigits: 2 })} still due.`}
+        {heldCount > 0 && ` ${heldCount} on hold.`}
       </p>
 
       {isLoading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-14 w-full rounded-xl" />
-          <Skeleton className="h-14 w-full rounded-xl" />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <Skeleton className="h-32 w-full rounded-xl" />
+          <Skeleton className="h-32 w-full rounded-xl" />
+          <Skeleton className="h-32 w-full rounded-xl" />
         </div>
       ) : slips.length === 0 ? (
         <p className="text-sm text-muted-foreground">No approved salary slips for this month yet.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {slips.map((slip) => {
             const employeeName = `${slip.employee.firstName} ${slip.employee.lastName || ''}`.trim()
+            if (isHeld(slip)) {
+              // Held by the CEO — visible, but faded and not payable.
+              return (
+                <Card key={slip._id} className="flex flex-col justify-between gap-3 p-4 opacity-50" title="The CEO has put this salary on hold">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-foreground">{employeeName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {slip.employee.employeeCode ? `${slip.employee.employeeCode} · ` : ''}₹{Number(slip.netPayable).toLocaleString('en-IN')}
+                      </p>
+                    </div>
+                    <Badge variant="secondary">On hold</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Held by the CEO — it can be paid once released.</p>
+                </Card>
+              )
+            }
             return (
-              <Card key={slip._id} className="flex flex-wrap items-center justify-between gap-3 p-4">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">{employeeName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {slip.employee.employeeCode ? `${slip.employee.employeeCode} · ` : ''}
-                    ₹{Number(slip.netPayable).toLocaleString('en-IN')}
-                  </p>
+              <Card key={slip._id} className="flex flex-col justify-between gap-3 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-foreground">{employeeName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {slip.employee.employeeCode ? `${slip.employee.employeeCode} · ` : ''}
+                      ₹{Number(slip.netPayable).toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                  {slip.paymentStatus === 'paid' ? <Badge variant="success">Paid</Badge> : <Badge variant="warning">Due</Badge>}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button size="sm" variant="outline" onClick={() => openBlob(() => downloadFinanceSlip(slip._id), 'Could not open the salary slip')}>
@@ -118,11 +143,6 @@ export function SalaryTab() {
                     >
                       View receipt
                     </Button>
-                  )}
-                  {slip.paymentStatus === 'paid' ? (
-                    <Badge variant="success">Paid</Badge>
-                  ) : (
-                    <Badge variant="warning">Due</Badge>
                   )}
                   {slip.paymentStatus === 'due' && (
                     <MarkPaidDialog

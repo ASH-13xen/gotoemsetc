@@ -38,21 +38,22 @@ export function BillsTab() {
       )}
 
       {isLoading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-20 w-full rounded-xl" />
-          <Skeleton className="h-20 w-full rounded-xl" />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <Skeleton className="h-36 w-full rounded-xl" />
+          <Skeleton className="h-36 w-full rounded-xl" />
+          <Skeleton className="h-36 w-full rounded-xl" />
         </div>
       ) : bills.length === 0 ? (
         <p className="text-sm text-muted-foreground">No monthly bills set up yet.</p>
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {bills.map((bill) => {
             const sortedInstances = [...bill.instances].sort((a, b) =>
               a.year !== b.year ? b.year - a.year : b.month - a.month
             )
             const current = sortedInstances[0]
             return (
-              <Card key={bill._id} className="space-y-3 p-4">
+              <Card key={bill._id} className="flex flex-col justify-between gap-3 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="text-sm font-semibold text-foreground">{bill.name}</p>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
   Ban,
@@ -18,6 +19,7 @@ import {
   Repeat,
   Send,
   StickyNote,
+  Ticket,
   Trash2,
   UserPlus,
   X,
@@ -639,7 +641,7 @@ function NoteCard({ event, note, canDelete, members }: { event: CalEvent; note: 
         <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px]">
           <select
             value={note.assignee?._id ?? ''}
-            disabled={Boolean(note.task)}
+            disabled={Boolean(note.task || note.ticket)}
             onChange={(e) => patch({ id: event._id, noteId: note._id, assignee: e.target.value || null })}
             className="h-7 rounded-lg border border-border bg-background px-1.5 text-[11px] font-semibold"
           >
@@ -651,7 +653,14 @@ function NoteCard({ event, note, canDelete, members }: { event: CalEvent; note: 
             ))}
           </select>
           {note.dueDay && <span className="rounded-lg bg-secondary px-2 py-1 font-semibold text-muted-foreground">Due {fmtDay(note.dueDay)}</span>}
-          {note.task ? (
+          {note.ticket ? (
+            <Link
+              to={`/followups/tickets/${note.ticket._id}`}
+              className="ml-auto flex items-center gap-1 rounded-lg bg-emerald-500/12 px-2 py-1 font-bold text-emerald-700 hover:underline dark:text-emerald-300"
+            >
+              <Ticket className="size-3" /> Ticket {note.ticket.code}
+            </Link>
+          ) : note.task ? (
             <span className="ml-auto flex items-center gap-1 rounded-lg bg-emerald-500/12 px-2 py-1 font-bold text-emerald-700 dark:text-emerald-300">
               <ClipboardList className="size-3" /> In Task Management
             </span>
@@ -662,13 +671,13 @@ function NoteCard({ event, note, canDelete, members }: { event: CalEvent; note: 
               onClick={() =>
                 toTask
                   .mutateAsync({ id: event._id, noteId: note._id })
-                  .then(() => toast.success(`Task created for ${note.assignee?.name.split(' ')[0]}`))
-                  .catch((err) => toast.error(apiError(err, 'Could not create the task')))
+                  .then(() => toast.success(`Ticket raised for ${note.assignee?.name.split(' ')[0]}`))
+                  .catch((err) => toast.error(apiError(err, 'Could not raise the ticket')))
               }
               className="ml-auto flex items-center gap-1 rounded-lg bg-primary px-2 py-1 font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
-              title={note.assignee ? 'Create a task in Task Management' : 'Pick who it is for first'}
+              title={note.assignee ? 'Raise a ticket for them in Task Management' : 'Pick who it is for first'}
             >
-              <ClipboardList className="size-3" /> Make it a task
+              <Ticket className="size-3" /> Raise ticket
             </button>
           )}
         </div>

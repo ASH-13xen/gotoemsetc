@@ -3,3 +3,6 @@ node_modules/
 tmp/
 *.log
 storage/
+
+# Backups written by scripts/migrateOrgTeamTree.js
+scripts/orgnodes-backup-*.json

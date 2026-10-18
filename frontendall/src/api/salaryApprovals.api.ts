@@ -14,6 +14,14 @@ export interface BatchSlip {
   netPayable: number
   // Where their slip will be mailed; null = no Company Mail ID on their record.
   companyEmail: string | null
+  // Unticked by the CEO/admin when approving — not mailed, not payable yet.
+  held?: boolean
+}
+
+// A slip still on hold, waiting to be released.
+export interface HeldSlip extends BatchSlip {
+  heldAt?: string
+  periodLabel: string
 }
 
 export interface SlipEmailResult {
@@ -39,17 +47,24 @@ export interface SalaryBatch {
   decidedAt?: string
   createdByInfo?: { name: string; asLabel: string | null }
   emailResults: SlipEmailResult[]
-  masterSheetEmail?: { to?: string; status?: 'sent' | 'failed'; error?: string }
+  masterSheetEmail?: { to?: string; status?: 'sent' | 'failed' | 'skipped'; error?: string }
+  heldCount?: number
 }
 
 export async function listSalaryBatches() {
-  const { data } = await apiClient.get<{ pending: SalaryBatch[]; recent: SalaryBatch[] }>('/salary-slips/batches')
+  const { data } = await apiClient.get<{ pending: SalaryBatch[]; recent: SalaryBatch[]; held: HeldSlip[] }>('/salary-slips/batches')
   return data
 }
 
-export async function approveSalaryBatch(id: string) {
-  const { data } = await apiClient.post<{ batch: SalaryBatch }>(`/salary-slips/batches/${id}/approve`, {})
+// holdSlipIds = the slips the CEO/admin unticked.
+export async function approveSalaryBatch(id: string, holdSlipIds: string[] = []) {
+  const { data } = await apiClient.post<{ batch: SalaryBatch }>(`/salary-slips/batches/${id}/approve`, { holdSlipIds })
   return data.batch
+}
+
+export async function releaseHeldSlips(slipIds: string[]) {
+  const { data } = await apiClient.post<{ released: number }>('/salary-slips/held/release', { slipIds })
+  return data
 }
 
 export async function sendBackSalaryBatch(id: string, note: string) {

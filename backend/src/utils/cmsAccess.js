@@ -1,5 +1,5 @@
 const { USER_ROLES, TEAM_MEMBER_ROLE } = require('../config/constants');
-const { isAdminLike } = require('./roles');
+const { isAdminLike, hasRole } = require('./roles');
 const teamRoles = require('./teamRoles');
 
 // Access rules for the Client Management System, deliberately kept separate
@@ -30,16 +30,18 @@ function isCmsAdmin(user) {
 // tied to any one team (contrast WorkTeam.leader/"Team Main", which is).
 // Owns the "lead" step of every pipeline and Task Management's team
 // registry (see requireTeamManagementAccess in auth.middleware.js).
+// By login or by holding the Team Lead post in the Organisation chart.
 function isGlobalTeamLead(user) {
-  return Boolean(user) && user.role === USER_ROLES.TEAM_LEAD;
+  return Boolean(user) && hasRole(user, USER_ROLES.TEAM_LEAD);
 }
 
 // The literal "CEO and admin can mark any step as completed" rule from the
 // spec — independent of isCmsAdmin, since it's narrower (CEO gets to force
 // a step through without also gaining Digital Admin's client/plan-editing
 // rights). Every pipeline-step authorization check folds this in.
+// By login or post — the CEO is usually a person holding the CEO post.
 function canForceCompleteAnyStep(user) {
-  return Boolean(user) && (user.role === USER_ROLES.ADMIN || user.role === USER_ROLES.CEO);
+  return Boolean(user) && hasRole(user, USER_ROLES.ADMIN, USER_ROLES.CEO);
 }
 
 // HR sees everything and can change nothing. Every other logged-in employee

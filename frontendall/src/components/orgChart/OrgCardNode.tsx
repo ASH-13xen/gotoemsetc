@@ -111,7 +111,7 @@ function OrgCardNodeInner({ data }: NodeProps<OrgCardNodeType>) {
               </span>
             )}
           </div>
-          <p className="truncate text-[11px] text-muted-foreground">{subtitle(org, childCount, teamName)}</p>
+          <p className="truncate text-[11px] text-muted-foreground">{subtitle(org, org.kind === 'team' && team ? team.rolesTotal : childCount, teamName)}</p>
           {org.grantsRole && (
             <span className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-px text-[9.5px] font-bold text-primary">
               <KeyRound className="size-2.5" /> {GRANT_INFO[org.grantsRole].label} access
@@ -199,7 +199,7 @@ function OrgCardNodeInner({ data }: NodeProps<OrgCardNodeType>) {
       </div>
 
       <Handle type="source" position={Position.Bottom} className="!opacity-0" isConnectable={false} />
-      {org.kind === 'team' && (
+      {(org.kind === 'team' || isRole) && (
         <Handle id="rail" type="source" position={Position.Bottom} style={{ left: 14 }} className="!opacity-0" isConnectable={false} />
       )}
       {dropTarget && (

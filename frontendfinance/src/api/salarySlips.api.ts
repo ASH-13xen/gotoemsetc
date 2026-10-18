@@ -21,6 +21,8 @@ export interface FinanceSalarySlip {
   endDate: string
   netPayable: number
   paymentStatus: 'due' | 'paid'
+  // 'held' = the CEO held this salary back: shown faded, can't be paid.
+  approvalStatus?: 'approved' | 'held' | null
   paidAt?: string
   transactionDetails?: TransactionDetails
   // Finance's receipt for the payment (the file is fetched separately).

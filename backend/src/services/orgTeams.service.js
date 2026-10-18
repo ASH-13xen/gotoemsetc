@@ -2,8 +2,8 @@ const OrgNode = require('../models/OrgNode');
 const { ORG_NODE_KIND, TEAM_MEMBER_ROLE } = require('../config/constants');
 
 // Who is on which team, read straight from the Organisation chart: someone
-// is on a team when they hold one of the role boxes directly under that
-// team's box (Content Manager, Social Media Manager, Videographer, …), and
+// is on a team when they hold one of the role boxes inside that team's box
+// (Content Manager, Social Media Manager, Videographer, …, at any depth), and
 // that team's content managers are whoever holds a Content Manager box
 // there. Leave applications and overtime go to these content managers first
 // — anyone in no team box goes straight to HR. The old Task Management team
@@ -11,16 +11,24 @@ const { ORG_NODE_KIND, TEAM_MEMBER_ROLE } = require('../config/constants');
 
 const idOf = (value) => (value ? String(value._id || value) : null);
 
-// Every team box with its members and content managers.
+// Every team box with its members and content managers. A role box can sit
+// directly under its team or deeper (Content Manager → SMM → Videographer),
+// so each one is traced up to its team.
 async function allTeams() {
-  const roleBoxes = await OrgNode.find({ kind: ORG_NODE_KIND.TEAM_ROLE }).select('parent teamRole assignees').lean();
-  const teamIds = new Set(
-    (await OrgNode.find({ kind: ORG_NODE_KIND.TEAM }).select('_id').lean()).map((n) => idOf(n._id))
-  );
+  const nodes = await OrgNode.find({ kind: { $in: [ORG_NODE_KIND.TEAM, ORG_NODE_KIND.TEAM_ROLE] } })
+    .select('kind parent teamRole assignees')
+    .lean();
+  const byId = new Map(nodes.map((n) => [idOf(n._id), n]));
+  const teamOf = (box) => {
+    let current = byId.get(idOf(box.parent));
+    while (current && current.kind === ORG_NODE_KIND.TEAM_ROLE) current = byId.get(idOf(current.parent));
+    return current?.kind === ORG_NODE_KIND.TEAM ? idOf(current._id) : null;
+  };
+  const roleBoxes = nodes.filter((n) => n.kind === ORG_NODE_KIND.TEAM_ROLE);
   const teams = new Map();
   for (const box of roleBoxes) {
-    const teamId = idOf(box.parent);
-    if (!teamIds.has(teamId)) continue;
+    const teamId = teamOf(box);
+    if (!teamId) continue;
     if (!teams.has(teamId)) teams.set(teamId, { members: new Set(), contentManagers: new Set() });
     const team = teams.get(teamId);
     for (const employeeId of (box.assignees || []).map(idOf)) {

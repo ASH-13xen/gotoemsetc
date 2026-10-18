@@ -165,14 +165,15 @@ export function ReimbursementsTab() {
       </Select>
 
       {isLoading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-24 w-full rounded-xl" />
-          <Skeleton className="h-24 w-full rounded-xl" />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <Skeleton className="h-36 w-full rounded-xl" />
+          <Skeleton className="h-36 w-full rounded-xl" />
+          <Skeleton className="h-36 w-full rounded-xl" />
         </div>
       ) : reimbursements.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing here.</p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {reimbursements.map((r) => (
             <ReimbursementRow key={r._id} reimbursement={r} />
           ))}

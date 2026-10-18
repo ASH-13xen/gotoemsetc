@@ -44,6 +44,12 @@ router.post(
   salarySlipController.approveBatch
 );
 router.post(
+  '/held/release',
+  requireAccess(ACCESS.PAYOUT_APPROVAL),
+  validate(salarySlipValidator.releaseHeld),
+  salarySlipController.releaseHeld
+);
+router.post(
   '/batches/:id/send-back',
   requireAccess(ACCESS.PAYOUT_APPROVAL),
   validate(salarySlipValidator.batchSendBack),

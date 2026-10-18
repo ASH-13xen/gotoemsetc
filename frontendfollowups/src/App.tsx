@@ -6,12 +6,11 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { AuthProvider } from '@/context/AuthContext'
 import { RequireAuth } from '@/components/auth/RequireAuth'
 import LoginPage from '@/pages/LoginPage'
-import TaskListPage from '@/pages/TaskListPage'
-import ReviewTasksPage from '@/pages/ReviewTasksPage'
-import TaskDetailPage from '@/pages/TaskDetailPage'
-import WorkTeamsPage from '@/pages/WorkTeamsPage'
-import TaskClientsPage from '@/pages/TaskClientsPage'
-import TaskEventsPage from '@/pages/TaskEventsPage'
+import TicketsBoardPage from '@/pages/TicketsBoardPage'
+import TicketPage from '@/pages/TicketPage'
+import SubmittedPage from '@/pages/SubmittedPage'
+import AnalysisPage from '@/pages/AnalysisPage'
+import { CalendarItemPage, StoriesPage } from '@/pages/CalendarTicketPages'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,6 +24,9 @@ interface AppProps {
   basename?: string
 }
 
+// Task Management — tickets (see backend services/ticket.service.js). The
+// old personal/team/event task screens were replaced; their records are
+// untouched in the database.
 export default function App({ basename }: AppProps = {}) {
   return (
     <ErrorBoundary>
@@ -33,15 +35,16 @@ export default function App({ basename }: AppProps = {}) {
           <BrowserRouter basename={basename}>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/" element={<Navigate to="/tasks" replace />} />
+              <Route path="/" element={<Navigate to="/tickets" replace />} />
 
-              <Route path="/tasks" element={<RequireAuth><TaskListPage /></RequireAuth>} />
-              <Route path="/review" element={<RequireAuth><ReviewTasksPage /></RequireAuth>} />
-              <Route path="/tasks/:id" element={<RequireAuth><TaskDetailPage /></RequireAuth>} />
-
-              <Route path="/teams" element={<RequireAuth><WorkTeamsPage /></RequireAuth>} />
-              <Route path="/clients" element={<RequireAuth><TaskClientsPage /></RequireAuth>} />
-              <Route path="/events" element={<RequireAuth><TaskEventsPage /></RequireAuth>} />
+              <Route path="/tickets" element={<RequireAuth><TicketsBoardPage /></RequireAuth>} />
+              <Route path="/tickets/:id" element={<RequireAuth><TicketPage /></RequireAuth>} />
+              <Route path="/calendar/items/:id" element={<RequireAuth><CalendarItemPage /></RequireAuth>} />
+              <Route path="/calendar/stories/:id" element={<RequireAuth><StoriesPage /></RequireAuth>} />
+              <Route path="/submitted" element={<RequireAuth><SubmittedPage /></RequireAuth>} />
+              <Route path="/analysis" element={<RequireAuth><AnalysisPage /></RequireAuth>} />
+              {/* Old task links land on the board. */}
+              <Route path="*" element={<Navigate to="/tickets" replace />} />
             </Routes>
           </BrowserRouter>
           <Toaster richColors position="top-right" />

@@ -51,6 +51,9 @@ const noteSchema = new Schema(
     dueDay: { type: String }, // YYYY-MM-DD
     done: { type: Boolean, default: false },
     task: { type: Schema.Types.ObjectId, ref: 'EmployeeTask' },
+    // The ticket raised from this action item (Task Management).
+    ticket: { type: Schema.Types.ObjectId, ref: 'Ticket' },
+    ticketCode: { type: String },
   },
   { timestamps: true }
 );

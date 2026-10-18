@@ -22,7 +22,8 @@ async function list({ search, status, page = 1, limit = 20 }) {
   const skip = (page - 1) * limit;
 
   const [items, total] = await Promise.all([
-    Employee.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    // Alphabetical by name, ignoring capitals (names are typed both ways).
+    Employee.find(query).collation({ locale: 'en', strength: 2 }).sort({ firstName: 1, lastName: 1, _id: 1 }).skip(skip).limit(limit),
     Employee.countDocuments(query),
   ]);
 

@@ -564,8 +564,9 @@ async function renderMasterSheet({ periodLabel, rows }) {
 // response right away; files are queued into it asynchronously as each
 // slip's employee is looked up. A slip that's gone missing (deleted
 // employee, etc.) is skipped rather than failing the whole download.
-// `month`/`year` together add that month's Master Salary Sheet to the zip.
-function buildBulkZip(slipIds, { month, year } = {}) {
+// `month`/`year` together add that month's Master Salary Sheet to the zip;
+// `approvedOnly` makes it Finance's sheet (approved slips only).
+function buildBulkZip(slipIds, { month, year, approvedOnly = false } = {}) {
   if (!Array.isArray(slipIds) || slipIds.length === 0) {
     throw ApiError.badRequest('No salary slips to zip');
   }
@@ -586,7 +587,7 @@ function buildBulkZip(slipIds, { month, year } = {}) {
         archive.file(absolutePath, { name: entryName });
       }
       if (month && year) {
-        const sheet = await buildMasterSheet({ month, year });
+        const sheet = await buildMasterSheet({ month, year }, { approvedOnly });
         archive.append(sheet, { name: `Master Salary Sheet - ${year}-${String(month).padStart(2, '0')}.pdf` });
       }
       archive.finalize();
@@ -596,6 +597,17 @@ function buildBulkZip(slipIds, { month, year } = {}) {
   })();
 
   return archive;
+}
+
+// The same zip as one Buffer — for attaching to a mail.
+function buildZipBuffer(slipIds, options) {
+  return new Promise((resolve, reject) => {
+    const archive = buildBulkZip(slipIds, options);
+    const chunks = [];
+    archive.on('data', (chunk) => chunks.push(chunk));
+    archive.on('end', () => resolve(Buffer.concat(chunks)));
+    archive.on('error', reject);
+  });
 }
 
 // Someone looking at their own slips sees only the approved ones; HR, the
@@ -692,9 +704,11 @@ async function listDueForFinance(year, month) {
 
   const latestByEmployee = new Map();
   for (const slip of slips) {
-    // Finance only ever sees what the CEO/admin has approved — and a final
-    // slip is paid with its full & final settlement (Finance → FnF), not here.
-    if (!isApproved(slip) || slip.fnfSettlement) continue;
+    // Finance only ever sees what the CEO/admin has approved — plus the ones
+    // they held back, shown faded and not payable — and a final slip is paid
+    // with its full & final settlement (Finance → FnF), not here.
+    const held = slip.approvalStatus === SALARY_SLIP_APPROVAL.HELD;
+    if ((!isApproved(slip) && !held) || slip.fnfSettlement) continue;
     const employeeId = slip.employee?._id?.toString();
     if (!employeeId) continue;
     const existing = latestByEmployee.get(employeeId);
@@ -719,7 +733,7 @@ function salaryPaidEmailHtml(slip, transactionDetails) {
 <strong>Reference number:</strong> ${transactionDetails.referenceNumber || '—'}<br/>
 <strong>Paid on:</strong> ${transactionDetails.paidOn ? new Date(transactionDetails.paidOn).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : '—'}</p>
 ${transactionDetails.note ? `<p>${transactionDetails.note}</p>` : ''}
-<p>Thanks,<br/>Finance</p>`;
+<p>Thank you,<br/>Finance Team<br/>GO-TO Friend</p>`;
 }
 
 // requireFinanceAccess-gated. Marks the slip paid with Finance's receipt
@@ -728,6 +742,7 @@ ${transactionDetails.note ? `<p>${transactionDetails.note}</p>` : ''}
 async function markSalaryPaid(id, transactionDetails, actingUser, receipt) {
   const existing = await salarySlipRepository.findById(id);
   if (!existing) throw ApiError.notFound('Salary slip not found');
+  if (existing.approvalStatus === SALARY_SLIP_APPROVAL.HELD) throw ApiError.conflict('The CEO has put this salary on hold — it cannot be paid until released');
   if (!isApproved(existing)) throw ApiError.conflict('This salary slip has not been approved by the CEO yet');
   if (existing.paymentStatus === 'paid') throw ApiError.conflict('This salary slip is already marked paid');
   if (!receipt) throw ApiError.badRequest('Attach the payment receipt to mark this salary paid');
@@ -798,6 +813,7 @@ module.exports = {
   generateBulkSlips,
   listBulkCandidates,
   buildBulkZip,
+  buildZipBuffer,
   listForEmployee,
   getFilePath,
   listRecentMonthsForEmployee,

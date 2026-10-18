@@ -8,7 +8,7 @@ interface TemplateSelectStepProps {
   onToggle: (id: string) => void
 }
 
-export function TemplateSelectStep({ templates, selectedIds, onToggle }: TemplateSelectStepProps) {
+export function TemplateSelectStep({ templates, selectedIds, onToggle, blocked = {} }: TemplateSelectStepProps & { blocked?: Record<string, string> }) {
   return (
     <div className="grid gap-3">
       <p className="text-sm text-muted-foreground">
@@ -16,16 +16,21 @@ export function TemplateSelectStep({ templates, selectedIds, onToggle }: Templat
       </p>
       {templates.map((template) => {
         const selected = selectedIds.includes(template._id)
+        // A document that can't be made yet (the full & final settlement
+        // before both offboarding boxes are ticked) — shown with why.
+        const blockedReason = blocked[template._id]
         return (
           <button
             key={template._id}
             type="button"
             role="radio"
             aria-checked={selected}
+            disabled={Boolean(blockedReason)}
             onClick={() => onToggle(template._id)}
             className={cn(
               'flex items-start gap-3 rounded-xl border p-4 text-left transition-colors',
-              selected ? 'border-primary bg-accent/50' : 'hover:bg-muted/50'
+              selected ? 'border-primary bg-accent/50' : 'hover:bg-muted/50',
+              blockedReason && 'cursor-not-allowed opacity-60 hover:bg-transparent'
             )}
           >
             <span
@@ -46,6 +51,7 @@ export function TemplateSelectStep({ templates, selectedIds, onToggle }: Templat
                   {template.description}
                 </span>
               )}
+              {blockedReason && <span className="mt-1 block text-xs font-medium text-amber-700">{blockedReason}</span>}
             </span>
           </button>
         )

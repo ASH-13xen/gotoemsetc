@@ -1,10 +1,8 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import gsap from 'gsap'
 import {
   CalendarClock,
   Inbox,
-  ListChecks,
   PartyPopper,
   Timer,
   UserCheck,
@@ -18,7 +16,6 @@ import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { DashboardCard, DashboardCardEmpty } from '@/components/dashboard/DashboardCard'
-import { useMyUpcomingTasks } from '@/hooks/useEmployeeTasks'
 import { useAttendanceSummary } from '@/hooks/useAttendance'
 import { useMyUploadRequests } from '@/hooks/useUploadRequests'
 import { PendingWarningsModal } from '@/components/attendance/PendingWarningsModal'
@@ -46,7 +43,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useMyOvertimeRequests } from '@/hooks/useOvertimeRequests'
 import { CreateAnnouncementDialog, canCreateAnnouncements } from '@/components/announcements/CreateAnnouncementDialog'
 import { PendingAnnouncementsModal } from '@/components/announcements/PendingAnnouncementsModal'
-import { PlanNextDayCard } from '@/components/tasks/PlanNextDayCard'
+import { TicketsWaitingCard } from '@/components/tickets/TicketsWaitingCard'
 import { UpcomingCalendarWidget } from '@/components/calendar/UpcomingCalendarWidget'
 import { CompanyCalendarGrid } from '@/components/calendar/CompanyCalendarGrid'
 import { featureOn } from '@/lib/access'
@@ -246,11 +243,8 @@ export default function DashboardPage() {
         <>
           <OrgChartTeaser />
 
-          {tasksOn && (
-            <div className="dashboard-card">
-              <PlanNextDayCard />
-            </div>
-          )}
+          {/* Task Management — what is waiting on this person. */}
+          {tasksOn && <TicketsWaitingCard />}
 
           {/* My registered complaints and My leave applications sit last,
               directly above the calendar. No animation class on this wrapper —
@@ -259,7 +253,6 @@ export default function DashboardPage() {
             <SectionLabel>Your work</SectionLabel>
             <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
               <MyOvertimeCard />
-              {tasksOn && <MyUpcomingTasksWidget />}
               <MyUploadRequestsCard />
               <MyReimbursementsCard />
               <MyComplaintsCard />
@@ -312,75 +305,6 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
-  )
-}
-
-const TASK_TYPE_LABEL: Record<string, string> = {
-  personal: 'Personal',
-  team: 'Team',
-  client: 'Client',
-  event: 'Event',
-}
-
-// Upcoming Employee Task Management tasks for the logged-in employee, due in
-// the next 7 days (still includes anything already overdue), soonest-due
-// first — self-scoped via /employee-tasks/mine/upcoming, same "mine"
-// convention as MyEventResponsibilitiesWidget below. No count cap: every
-// task due within the window shows, in a scrollable list rather than a
-// fixed top-N. Full task management (create/review/complete, past tasks)
-// lives in the Task Management remote at /followups; this is just a
-// glance from the dashboard.
-function MyUpcomingTasksWidget() {
-  const { data, isLoading } = useMyUpcomingTasks()
-  const tasks = data?.tasks ?? []
-
-  return (
-    <DashboardCard
-      icon={<ListChecks className="size-4" />}
-      title="Upcoming tasks — next 7 days"
-      viewAllHref="/followups"
-      viewAllLabel="View all tasks"
-    >
-      {isLoading ? (
-        <div className="grid gap-2">
-          <Skeleton className="h-12 w-full rounded-xl" />
-          <Skeleton className="h-12 w-full rounded-xl" />
-        </div>
-      ) : tasks.length === 0 ? (
-        <DashboardCardEmpty icon={<ListChecks className="size-4" />} message="Nothing pending — you're all caught up." />
-      ) : (
-        <div className="grid gap-2 max-h-96 overflow-y-auto pr-0.5">
-          {tasks.map((task) => {
-            const isOverdue = new Date(task.endAt) < new Date()
-            const subtitle = task.client?.name ?? task.event?.name ?? task.team?.name
-            return (
-              <Link
-                key={task._id}
-                to="/followups"
-                className="flex items-center justify-between gap-3 rounded-xl bg-secondary/30 p-3 transition-colors hover:bg-secondary/60"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-foreground">{task.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {TASK_TYPE_LABEL[task.type]}
-                    {subtitle && ` · ${subtitle}`}
-                  </p>
-                </div>
-                <span
-                  className={cn(
-                    'flex shrink-0 items-center gap-1 text-xs font-bold',
-                    isOverdue ? 'text-destructive' : 'text-primary'
-                  )}
-                >
-                  <CalendarClock className="size-3" />
-                  {new Date(task.endAt).toLocaleDateString()}
-                </span>
-              </Link>
-            )
-          })}
-        </div>
-      )}
-    </DashboardCard>
   )
 }
 

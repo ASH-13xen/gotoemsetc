@@ -69,6 +69,12 @@ const salarySlipSchema = new Schema(
     approvedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     approvedAs: String,
     approvedAt: Date,
+    // Held back by the CEO/admin when approving the month, and released later.
+    heldBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    heldAs: String,
+    heldAt: Date,
+    releasedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    releasedAt: Date,
     // What happened when the slip was mailed to the employee on approval.
     slipEmail: { to: String, status: String, error: String, at: Date },
 

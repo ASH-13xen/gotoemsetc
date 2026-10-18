@@ -21,7 +21,12 @@ export function ShellNav() {
     { to: "/", label: "Home", end: true },
     { to: "/ems", label: "EMS" },
     ...(featureOn(user, "CLIENT_MANAGEMENT") ? [{ to: "/sales", label: "Sales" }] : []),
-    ...(featureOn(user, "TASK_MANAGEMENT") ? [{ to: "/followups", label: "Task Management" }] : []),
+    ...(featureOn(user, "TASK_MANAGEMENT")
+      ? [
+          { to: "/followups", label: "Tickets" },
+          { to: "/task-calendar", label: "Task Calendar" },
+        ]
+      : []),
     ...(can(user, "hrms") ? [{ to: "/hr", label: "HRMS" }] : []),
     ...(can(user, "operations") ? [{ to: "/operations", label: "Operations" }] : []),
     ...(can(user, "finance") ? [{ to: "/finance", label: "Finance" }] : []),

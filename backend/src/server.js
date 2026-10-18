@@ -15,15 +15,18 @@ const invoiceGenerationJob = require('./jobs/invoiceGeneration.job');
 const { FEATURES } = require('./config/constants');
 const weeklyCalendarJob = require('./jobs/weeklyCalendar.job');
 const overtimeRequestJob = require('./jobs/overtimeRequest.job');
+const ticketOverdueJob = require('./jobs/ticketOverdue.job');
 
 async function main() {
   await connectDb();
   interviewReminderJob.start();
   birthdayReminderJob.start();
   attendanceClassifierJob.start();
-  // Task Management and Client Management are hidden for now — their
-  // reminders would only point people at pages they can't open.
-  if (FEATURES.TASK_MANAGEMENT) employeeTaskFollowUpReminderJob.start();
+  // A section that is switched off sends no reminders — they would only
+  // point people at pages they can't open. The old tasks' follow-ups belong
+  // to the replaced task screens.
+  if (FEATURES.LEGACY_TASKS) employeeTaskFollowUpReminderJob.start();
+  if (FEATURES.TASK_MANAGEMENT) ticketOverdueJob.start();
   cmsMonthCloseJob.start();
   if (FEATURES.CLIENT_MANAGEMENT) meetingReminderJob.start();
   monthlyBillCycleJob.start();

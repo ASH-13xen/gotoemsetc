@@ -51,18 +51,38 @@ async function descendantIds(nodeId) {
   return ids;
 }
 
-// Team roles only make sense directly under a team box (that's how they
-// know which WorkTeam to sync to); everything else can sit anywhere.
+// Team roles sit inside a team: directly under the team box, or under
+// another role box of the same team (Content Manager → Social Media Manager
+// → that SMM's Videographer and Editor). That is how they know which
+// WorkTeam to sync to. Nothing else goes inside a team; everything else can
+// sit anywhere.
 async function assertValidPlacement({ kind, parentId }) {
   if (!parentId) throw ApiError.badRequest('Choose where this box goes');
   const parent = await OrgNode.findById(parentId).select('kind');
   if (!parent) throw ApiError.badRequest('That parent box no longer exists');
-  if (kind === ORG_NODE_KIND.TEAM_ROLE && parent.kind !== ORG_NODE_KIND.TEAM) {
-    throw ApiError.badRequest('A team role can only sit directly under a team');
+  const insideTeam = parent.kind === ORG_NODE_KIND.TEAM || parent.kind === ORG_NODE_KIND.TEAM_ROLE;
+  if (kind === ORG_NODE_KIND.TEAM_ROLE && !insideTeam) {
+    throw ApiError.badRequest('A team role can only sit under a team or under another role in that team');
   }
-  if (kind !== ORG_NODE_KIND.TEAM_ROLE && parent.kind === ORG_NODE_KIND.TEAM) {
-    throw ApiError.badRequest('Only team roles can sit directly under a team');
+  if (kind !== ORG_NODE_KIND.TEAM_ROLE && insideTeam) {
+    throw ApiError.badRequest('Only team roles can sit inside a team');
   }
+}
+
+// The team box a role box belongs to — its nearest team ancestor.
+async function teamNodeOf(nodeOrId) {
+  let current = nodeOrId && nodeOrId.kind ? nodeOrId : await OrgNode.findById(nodeOrId).select('kind parent');
+  while (current) {
+    if (current.kind === ORG_NODE_KIND.TEAM) return current;
+    current = current.parent ? await OrgNode.findById(current.parent).select('kind parent') : null;
+  }
+  return null;
+}
+
+// Every role box inside a team, however deep.
+async function roleNodesOf(teamNodeId) {
+  const ids = await descendantIds(teamNodeId);
+  return OrgNode.find({ _id: { $in: ids }, kind: ORG_NODE_KIND.TEAM_ROLE });
 }
 
 async function assertWorkTeamFree(workTeamId, exceptNodeId) {
@@ -87,7 +107,7 @@ async function syncTeam(teamNodeId) {
   const team = await WorkTeam.findOne({ _id: teamNode.workTeam, isDeleted: false });
   if (!team) return;
 
-  const roleNodes = await OrgNode.find({ parent: teamNode._id, kind: ORG_NODE_KIND.TEAM_ROLE });
+  const roleNodes = await roleNodesOf(teamNode._id);
   const managedRoles = new Set(roleNodes.map((n) => n.teamRole).filter(Boolean));
 
   const rolesByEmployee = new Map();
@@ -120,11 +140,15 @@ async function syncTeam(teamNodeId) {
 }
 
 async function syncTeamsFor(nodeIds) {
-  const nodes = await OrgNode.find({ _id: { $in: nodeIds } }).select('kind parent');
+  const nodes = await OrgNode.find({ _id: { $in: nodeIds.filter(Boolean) } }).select('kind parent');
   const teamIds = new Set();
   for (const node of nodes) {
     if (node.kind === ORG_NODE_KIND.TEAM) teamIds.add(idOf(node._id));
-    if (node.kind === ORG_NODE_KIND.TEAM_ROLE && node.parent) teamIds.add(idOf(node.parent));
+    if (node.kind === ORG_NODE_KIND.TEAM_ROLE) {
+      // eslint-disable-next-line no-await-in-loop
+      const team = await teamNodeOf(node);
+      if (team) teamIds.add(idOf(team._id));
+    }
   }
   for (const teamId of teamIds) {
     // eslint-disable-next-line no-await-in-loop
@@ -199,6 +223,7 @@ async function moveNode(id, { parent, order }) {
   const node = await findNodeOrThrow(id);
   if (!node.parent) throw ApiError.badRequest('The top box cannot be moved');
   const oldParent = node.parent;
+  const oldTeam = node.kind === ORG_NODE_KIND.TEAM_ROLE ? await teamNodeOf(node) : null;
   const newParent = parent || node.parent;
 
   if (idOf(newParent) !== idOf(oldParent)) {
@@ -219,7 +244,7 @@ async function moveNode(id, { parent, order }) {
     })
   );
 
-  await syncTeamsFor([node._id, oldParent]);
+  await syncTeamsFor([node._id, oldParent, oldTeam?._id]);
   accessService.invalidate();
   return node;
 }
@@ -229,10 +254,19 @@ async function moveNode(id, { parent, order }) {
 async function deleteNode(id, { mode = 'lift' } = {}) {
   const node = await findNodeOrThrow(id);
   if (!node.parent) throw ApiError.badRequest('The top box cannot be deleted');
-  const affectedTeams = [node.kind === ORG_NODE_KIND.TEAM_ROLE ? node.parent : null].filter(Boolean);
+  const roleTeam = node.kind === ORG_NODE_KIND.TEAM_ROLE ? await teamNodeOf(node) : null;
+  const affectedTeams = [roleTeam?._id].filter(Boolean);
 
   if (mode === 'branch') {
     const ids = await descendantIds(node._id);
+    // Role boxes further down the branch drop their tags from the team too.
+    if (roleTeam) {
+      const below = await OrgNode.find({ _id: { $in: ids }, kind: ORG_NODE_KIND.TEAM_ROLE });
+      for (const r of below) {
+        // eslint-disable-next-line no-await-in-loop
+        if (r.teamRole) await clearRoleOnTeam(roleTeam._id, r.teamRole, r.assignees);
+      }
+    }
     await OrgNode.deleteMany({ _id: { $in: [node._id, ...ids] } });
   } else {
     const children = await OrgNode.find({ parent: node._id }).sort({ order: 1 });
@@ -296,7 +330,8 @@ async function setAssignees(id, employeeIds) {
   node.assignees = unique;
   await node.save();
   if (node.kind === ORG_NODE_KIND.TEAM_ROLE && node.teamRole && removed.length) {
-    await clearRoleOnTeam(node.parent, node.teamRole, removed);
+    const team = await teamNodeOf(node);
+    if (team) await clearRoleOnTeam(team._id, node.teamRole, removed);
   }
   await syncTeamsFor([node._id]);
   accessService.invalidate();

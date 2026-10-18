@@ -216,8 +216,46 @@ async function mailFinance(settlement) {
   }
 }
 
+// The employee gets their settlement document and final salary slip once it
+// is approved — at their personal mail, since they have left.
+async function mailEmployee(settlement) {
+  const to = settlement.employee?.personalEmail;
+  if (!to) return { status: 'no_address', error: 'No personal email on their record' };
+  if (!env.resendConfigured) return { to, status: 'failed', error: 'Email is not set up on the server' };
+  try {
+    const name = nameOf(settlement.employee);
+    const { finalSalary, severance, total } = totals(settlement);
+    const attachments = [];
+    const document = await generatedDocumentRepository.findByIdWithFile(settlement.generatedDocument);
+    if (document?.pdf?.data) attachments.push({ filename: `Full and Final Settlement - ${name}.pdf`, content: document.pdf.data });
+    if (settlement.salarySlip?.generatedFile?.filePath) {
+      const pdf = await fs.readFile(localFileStorage.absolutePathFor(settlement.salarySlip.generatedFile.filePath, SLIP_NAMESPACE));
+      attachments.push({ filename: `Final Salary Slip - ${name}.pdf`, content: pdf });
+    }
+    await emailService.sendEmail({
+      to,
+      subject: 'Your full & final settlement',
+      html: `<p>Hi ${settlement.employee.firstName || name},</p>
+<p>Your full &amp; final settlement has been approved. The settlement document and your final salary slip are attached.</p>
+<p><strong>Last working day:</strong> ${prettyDay(settlement.lastWorkingDay)}<br/>
+<strong>Final salary:</strong> ${rupees(finalSalary)}<br/>
+<strong>Severance:</strong> ${rupees(severance)}<br/>
+<strong>Total:</strong> ${rupees(total)}</p>
+<p>You will get a separate mail with the receipt once it is paid.</p>
+<p>Thanks,<br/>HR — ${env.companyName || 'GO-TO Friend'}</p>`,
+      text: `Your full & final settlement has been approved: final salary ${rupees(finalSalary)} + severance ${rupees(severance)} = ${rupees(total)}. The documents are attached.`,
+      attachments,
+    });
+    return { to, status: 'sent' };
+  } catch (err) {
+    logger.error({ err, settlement: settlement._id }, 'Could not mail the full & final settlement to the employee');
+    return { to, status: 'failed', error: err.message || 'Could not be sent' };
+  }
+}
+
 // Approves the settlement and its final slip together, then hands it to
-// Finance (by mail and in the Finance tab).
+// Finance (by mail and in the Finance tab) and mails the employee their
+// documents at their personal mail.
 async function approve(id, actor) {
   const settlement = await load(id);
   if (settlement.stage !== CEO) throw ApiError.conflict('This settlement is not waiting for approval');
@@ -239,6 +277,7 @@ async function approve(id, actor) {
   );
 
   settlement.financeEmail = await mailFinance(settlement);
+  settlement.employeeEmail = await mailEmployee(settlement);
   await settlement.save();
 
   const financeUsers = await userRepository.findFinanceUsers();
@@ -303,12 +342,13 @@ function fnfPaidEmailHtml(settlement, transactionDetails) {
 <strong>Reference number:</strong> ${transactionDetails.referenceNumber || '—'}<br/>
 <strong>Paid on:</strong> ${transactionDetails.paidOn ? new Date(transactionDetails.paidOn).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : '—'}</p>
 ${transactionDetails.note ? `<p>${transactionDetails.note}</p>` : ''}
-<p>Thanks,<br/>Finance</p>`;
+<p>Thank you,<br/>Finance Team<br/>GO-TO Friend</p>`;
 }
 
 // Finance pays the whole settlement (final salary + severance) with a
-// receipt, which is mailed to the employee — their company mail and their
-// personal one, since they have left. The final slip is marked paid with it.
+// receipt, which is mailed to the employee's personal mail only — they have
+// left and their company mail is deactivated. The final slip is marked paid
+// with it.
 async function markPaid(id, transactionDetails, actingUser, receipt) {
   const settlement = await load(id);
   if (settlement.stage && settlement.stage !== FINANCE) throw ApiError.conflict('This settlement has not been approved yet');
@@ -331,11 +371,11 @@ async function markPaid(id, transactionDetails, actingUser, receipt) {
   const document = await generatedDocumentRepository.findByIdWithFile(fresh.generatedDocument);
   const attachments = [{ filename: receipt.originalname || 'payment-receipt', content: receipt.buffer }];
   if (document?.pdf?.data) attachments.push({ filename: document.pdf.filename || 'fnf-settlement.pdf', content: document.pdf.data });
-  const recipients = [...new Set([companyEmailOf(fresh.employee), fresh.employee?.personalEmail].filter(Boolean))];
-  if (recipients.length) {
+  const personal = fresh.employee?.personalEmail;
+  if (personal) {
     await emailService
       .sendEmail({
-        to: recipients,
+        to: personal,
         subject: 'Your Full & Final settlement has been paid',
         html: fnfPaidEmailHtml(fresh, transactionDetails),
         from: financeFrom(),

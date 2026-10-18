@@ -56,7 +56,7 @@ function useWeeklyMutation<TVars, TData>(fn: (vars: TVars) => Promise<TData>) {
       }
       queryClient.invalidateQueries({ queryKey: ROOT })
       // Action items can turn into tasks.
-      queryClient.invalidateQueries({ queryKey: ['employee-tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['tickets'] })
     },
   })
 }

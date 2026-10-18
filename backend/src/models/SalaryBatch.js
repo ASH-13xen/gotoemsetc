@@ -4,7 +4,7 @@ const { SALARY_BATCH_STATUS, SALARY_BATCH_KIND } = require('../config/constants'
 // Salary slips don't go out by themselves. Every run of the bulk generator
 // (and every single slip generated from an employee's page) lands in a
 // batch that waits for the CEO or admin. Approving it mails each employee
-// their own slip, mails the master sheet to Finance, and only then do the
+// their own slip, mails Finance one zip of the slips with the master sheet, and only then do the
 // slips appear in the Finance tab and to the employees. See
 // salaryBatch.service.js.
 const emailResultSchema = new Schema(
@@ -39,7 +39,10 @@ const salaryBatchSchema = new Schema(
 
     // What happened to each mail when it was approved.
     emailResults: [emailResultSchema],
+    // Finance's mail: one zip of the approved slips with the master sheet inside.
     masterSheetEmail: { to: String, status: String, error: String },
+    // How many slips the CEO/admin held back when approving.
+    heldCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

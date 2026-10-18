@@ -62,9 +62,26 @@ async function generateOne(employee, template, overrides) {
 // Generates one document per requested template. Each template succeeds or
 // fails independently — one bad template (missing field, broken tag) doesn't
 // block the others from being generated.
+// The full & final settlement can only be made once both offboarding boxes
+// are ticked — the person is out of the groups and Go-To Reels, and their
+// company mail is deactivated.
+function assertCanGenerateFnf(employee) {
+  const missing = [];
+  if (!employee.removedFromGroupsAndReels) missing.push('"Removed from groups + Go-To Reels"');
+  if (!employee.mailDeactivated) missing.push('"Mail deactivated"');
+  if (missing.length) {
+    throw ApiError.badRequest(
+      `Tick ${missing.join(' and ')} in their offboarding details before generating the full & final settlement`
+    );
+  }
+}
+
 async function generateForEmployee(employeeId, templateIds, overrides = {}) {
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) throw ApiError.notFound('Employee not found');
+
+  const requested = await Promise.all(templateIds.map((id) => documentTemplateRepository.findById(id)));
+  if (requested.some((t) => t?.key === 'fnf-settlement')) assertCanGenerateFnf(employee);
 
   const results = [];
 

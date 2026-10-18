@@ -132,9 +132,21 @@ const listBatches = asyncHandler(async (req, res) => {
 });
 
 const approveBatch = asyncHandler(async (req, res) => {
-  const batch = await salaryBatchService.approve(req.params.id, req.user);
-  req.auditContext = { action: 'salaryBatch.approve', resourceType: 'SalaryBatch', resourceId: req.params.id, metadata: { slips: batch.slipCount } };
+  const batch = await salaryBatchService.approve(req.params.id, req.user, { holdSlipIds: req.body.holdSlipIds || [] });
+  req.auditContext = {
+    action: 'salaryBatch.approve',
+    resourceType: 'SalaryBatch',
+    resourceId: req.params.id,
+    metadata: { slips: batch.slipCount, held: (req.body.holdSlipIds || []).length },
+  };
   res.json({ batch });
+});
+
+// Releases salary slips that were on hold.
+const releaseHeld = asyncHandler(async (req, res) => {
+  const result = await salaryBatchService.release(req.body.slipIds, req.user);
+  req.auditContext = { action: 'salarySlip.release', resourceType: 'SalarySlip', metadata: { slips: req.body.slipIds } };
+  res.json(result);
 });
 
 const sendBackBatch = asyncHandler(async (req, res) => {
@@ -183,6 +195,7 @@ module.exports = {
   downloadFinanceFile,
   listBatches,
   approveBatch,
+  releaseHeld,
   sendBackBatch,
   listPaidUnseen,
   markPaidSeen,

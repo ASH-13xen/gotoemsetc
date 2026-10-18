@@ -38,6 +38,8 @@ export interface CalNote {
   dueDay: string | null
   done: boolean
   task: string | null
+  // The ticket raised from this action item (Task Management).
+  ticket: { _id: string; code: string | null } | null
 }
 
 export interface CalSegment {

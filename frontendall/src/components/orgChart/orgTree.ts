@@ -57,13 +57,38 @@ export function depthOf(index: OrgIndex, id: string) {
 }
 
 // Can `node` be moved under `target`? Mirrors the server's rules: never
-// under itself or its own branch; team roles only directly under a team;
-// nothing else directly under a team.
+// under itself or its own branch; team roles under a team or under another
+// role in a team (Content Manager → SMM → Videographer/Editor); nothing else
+// inside a team.
 export function canMoveUnder(index: OrgIndex, node: OrgNode, target: OrgNode) {
   if (node._id === target._id || !node.parent) return false
   if (descendantIds(index, node._id).has(target._id)) return false
-  if (node.kind === 'team_role') return target.kind === 'team'
+  if (node.kind === 'team_role') return target.kind === 'team' || target.kind === 'team_role'
   return target.kind !== 'team' && target.kind !== 'team_role'
+}
+
+// The team box a role box belongs to — its nearest team ancestor.
+export function teamOf(index: OrgIndex, node: OrgNode): OrgNode | null {
+  let current: OrgNode | undefined = node
+  while (current) {
+    if (current.kind === 'team') return current
+    current = current.parent ? index.byId.get(current.parent) : undefined
+  }
+  return null
+}
+
+// Every role box inside a team, top-down (a parent before its children),
+// with how deep it sits: 1 = directly under the team.
+export function teamRolesInOrder(index: OrgIndex, teamId: string): { node: OrgNode; level: number }[] {
+  const out: { node: OrgNode; level: number }[] = []
+  const walk = (id: string, level: number) => {
+    for (const child of childrenOf(index, id).filter((c) => c.kind === 'team_role')) {
+      out.push({ node: child, level })
+      walk(child._id, level + 1)
+    }
+  }
+  walk(teamId, 1)
+  return out
 }
 
 export function fullName(person: { firstName: string; lastName?: string }) {
@@ -76,8 +101,9 @@ export function fullName(person: { firstName: string; lastName?: string }) {
 
 export const CARD_WIDTH = 264
 export const ROOT_WIDTH = 300
-export const ROLE_WIDTH = 236
-export const ROLE_INDENT = 28
+// A team is wider, so its role boxes can step in level by level.
+export const TEAM_WIDTH = 300
+export const ROLE_INDENT = 26
 const ROLE_GAP = 14
 const MAX_VISIBLE_PEOPLE = 3
 
@@ -106,8 +132,10 @@ export interface LaidOutNode {
 // children (or its own card), parents sit centred over their children, and
 // every depth gets a row as tall as its tallest box. Team-role boxes aren't
 // laid out as children: each team reserves a tall slot and its roles stack
-// in a column beneath the team card (joined by an elbow "rail"), which
-// keeps five teams × several roles from spreading thousands of pixels wide.
+// in a column beneath the team card, each level stepped in a little further
+// (Content Manager, then its SMMs, then each SMM's Videographer and Editor)
+// and joined to its parent by an elbow "rail" — which keeps five teams ×
+// several roles from spreading thousands of pixels wide.
 const SIBLING_GAP = 44
 const RANK_GAP = 92
 
@@ -120,18 +148,18 @@ export function layoutTree(index: OrgIndex, collapsed: Set<string>): LaidOutNode
     width: number
     cardHeight: number
     slotHeight: number
-    roles: OrgNode[]
+    roles: { node: OrgNode; level: number }[]
     kids: Slot[]
     subtreeWidth: number
   }
 
   const build = (node: OrgNode, depth: number): Slot => {
-    const width = node.parent ? CARD_WIDTH : ROOT_WIDTH
+    const width = !node.parent ? ROOT_WIDTH : node.kind === 'team' ? TEAM_WIDTH : CARD_WIDTH
     const own = cardHeight(node)
     const all = childrenOf(index, node._id)
     const isCollapsed = collapsed.has(node._id)
-    const roles = node.kind === 'team' && !isCollapsed ? all.filter((k) => k.kind === 'team_role') : []
-    const slotHeight = own + roles.reduce((sum, r) => sum + ROLE_GAP + cardHeight(r), 0)
+    const roles = node.kind === 'team' && !isCollapsed ? teamRolesInOrder(index, node._id) : []
+    const slotHeight = own + roles.reduce((sum, r) => sum + ROLE_GAP + cardHeight(r.node), 0)
     const kids = isCollapsed || node.kind === 'team' ? [] : all.map((child) => build(child, depth + 1))
     const childrenWidth = kids.reduce((sum, k) => sum + k.subtreeWidth, 0) + Math.max(0, kids.length - 1) * SIBLING_GAP
     return { node, depth, width, cardHeight: own, slotHeight, roles, kids, subtreeWidth: Math.max(width, childrenWidth) }
@@ -157,10 +185,10 @@ export function layoutTree(index: OrgIndex, collapsed: Set<string>): LaidOutNode
     out.push({ node: slot.node, x, y, width: slot.width, height: slot.cardHeight })
 
     let cursor = y + slot.cardHeight
-    for (const role of slot.roles) {
+    for (const { node: role, level } of slot.roles) {
       cursor += ROLE_GAP
       const height = cardHeight(role)
-      out.push({ node: role, x: x + ROLE_INDENT, y: cursor, width: ROLE_WIDTH, height })
+      out.push({ node: role, x: x + ROLE_INDENT * level, y: cursor, width: slot.width - ROLE_INDENT * level, height })
       cursor += height
     }
 
@@ -196,7 +224,7 @@ export type Accent = typeof ROOT_ACCENT
 
 export function accentFor(index: OrgIndex, node: OrgNode): Accent {
   if (!node.parent) return ROOT_ACCENT
-  const team = node.kind === 'team' ? node : node.kind === 'team_role' ? index.byId.get(node.parent) : null
+  const team = node.kind === 'team' || node.kind === 'team_role' ? teamOf(index, node) : null
   if (team?.parent) {
     const siblings = childrenOf(index, team.parent).filter((n) => n.kind === 'team')
     const i = Math.max(0, siblings.findIndex((s) => s._id === team._id))

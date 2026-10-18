@@ -68,9 +68,16 @@ const bulkZip = {
   }),
 };
 
+// holdSlipIds = the slips the CEO/admin unticked — held back, not paid.
 const batchDecision = {
   params: idParam,
-  body: z.object({ note: z.string().trim().max(1000).optional() }),
+  body: z.object({
+    note: z.string().trim().max(1000).optional(),
+    holdSlipIds: z.array(z.string().regex(/^[a-f0-9]{24}$/i)).max(500).optional(),
+  }),
+};
+const releaseHeld = {
+  body: z.object({ slipIds: z.array(z.string().regex(/^[a-f0-9]{24}$/i)).min(1).max(500) }),
 };
 const batchSendBack = {
   params: idParam,
@@ -108,4 +115,5 @@ module.exports = {
   markPaid,
   batchDecision,
   batchSendBack,
+  releaseHeld,
 };

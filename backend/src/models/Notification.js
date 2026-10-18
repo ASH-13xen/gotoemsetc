@@ -24,6 +24,8 @@ const notificationSchema = new Schema(
     salesLead: { type: Schema.Types.ObjectId, ref: 'SalesLead' },
     // Weekly Calendar — see services/weeklyCalendar.service.js.
     weeklyEvent: { type: Schema.Types.ObjectId, ref: 'WeeklyEvent' },
+    // Tickets — see services/ticket.service.js.
+    ticket: { type: Schema.Types.ObjectId, ref: 'Ticket' },
     isRead: { type: Boolean, default: false },
   },
   { timestamps: true }

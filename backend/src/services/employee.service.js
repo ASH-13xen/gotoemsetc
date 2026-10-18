@@ -158,10 +158,11 @@ async function alertLeadership(employee, kind, actor) {
   const onboarded = kind === 'onboarded';
   await notificationService.createForUsers(recipients, {
     type: onboarded ? NOTIFICATION_TYPES.EMPLOYEE_ONBOARDED : NOTIFICATION_TYPES.EMPLOYEE_OFFBOARDED,
-    title: onboarded ? `New joiner: ${name}` : `${name} has left`,
+    title: onboarded ? `New joiner: ${name}` : `${name} is offboarded`,
     message: onboarded
       ? `${name}${employee.designation ? ` joined as ${employee.designation}` : ' joined'}${employee.dateOfJoining ? ` on ${day(employee.dateOfJoining)}` : ''}.`
-      : `${name}${employee.designation ? ` (${employee.designation})` : ''} was offboarded${employee.endDate ? ` — last working day ${day(employee.endDate)}` : ''}.`,
+      : // The reason HR gave when offboarding them.
+        `Reason: ${employee.reasonForLeaving?.trim() || 'not given'}${employee.endDate ? ` · last working day ${day(employee.endDate)}` : ''}${employee.designation ? ` · ${employee.designation}` : ''}.`,
     employee: employee._id,
   });
 }

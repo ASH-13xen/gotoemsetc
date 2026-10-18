@@ -39,7 +39,7 @@ function InvoiceRow({ invoice }: { invoice: Invoice }) {
   const markPaid = useMarkInvoicePaid()
 
   return (
-    <Card className="flex flex-wrap items-center justify-between gap-3 p-4">
+    <Card className="flex flex-col justify-between gap-3 p-4">
       <div>
         <p className="text-sm font-semibold text-foreground">
           {invoice.client.brandName || invoice.client.name} — {invoice.invoiceNumber}
@@ -136,14 +136,15 @@ export function InvoicingTab() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-16 w-full rounded-xl" />
-          <Skeleton className="h-16 w-full rounded-xl" />
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <Skeleton className="h-32 w-full rounded-xl" />
+          <Skeleton className="h-32 w-full rounded-xl" />
+          <Skeleton className="h-32 w-full rounded-xl" />
         </div>
       ) : invoices.length === 0 ? (
         <p className="text-sm text-muted-foreground">No invoices here.</p>
       ) : (
-        <div className="space-y-2">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {invoices.map((inv) => (
             <InvoiceRow key={inv._id} invoice={inv} />
           ))}

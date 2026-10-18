@@ -36,6 +36,8 @@ import {
   fullName,
   initials,
   layoutTree,
+  teamOf,
+  teamRolesInOrder,
   ROOT_WIDTH,
 } from '@/components/orgChart/orgTree'
 import '@/components/orgChart/orgChart.css'
@@ -212,7 +214,7 @@ function OrgChartCanvas() {
 
   const teamSummary = useCallback(
     (teamId: string) => {
-      const roles = childrenOf(index, teamId).filter((c) => c.kind === 'team_role')
+      const roles = teamRolesInOrder(index, teamId).map((r) => r.node)
       const people = new Map<string, OrgNode['assignees'][number]>()
       roles.forEach((r) => r.assignees.forEach((a) => people.set(a._id, a)))
       return { people: [...people.values()], rolesFilled: roles.filter((r) => r.assignees.length > 0).length, rolesTotal: roles.length }
@@ -246,7 +248,7 @@ function OrgChartCanvas() {
             dimmed: Boolean(q) && !matches.has(l.node._id) && !pathIds.has(l.node._id),
             dropTarget: drop?.id === l.node._id ? (drop.valid ? 'valid' : 'invalid') : null,
             team: l.node.kind === 'team' ? teamSummary(l.node._id) : undefined,
-            teamName: l.node.kind === 'team_role' && l.node.parent ? index.byId.get(l.node.parent)?.title : undefined,
+            teamName: l.node.kind === 'team_role' ? teamOf(index, l.node)?.title : undefined,
             onToggle: toggle,
           },
         })),
