@@ -1,10 +1,13 @@
 import { can } from '@/lib/access'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { createPortal } from 'react-dom'
 import gsap from 'gsap'
 import { toast } from 'sonner'
 import {
   ArrowRight,
+  Maximize2,
+  Minimize2,
   CalendarDays,
   CalendarRange,
   ChevronLeft,
@@ -175,6 +178,39 @@ export default function WeeklyCalendarPage() {
   }
   const panelOpen = Boolean(creating || openEventId)
 
+  // ---- Full screen: the week fills the whole window (over the sidebar and
+  // top bar), and the browser goes full screen too where it allows it. The
+  // button, F, or the browser's own Esc brings it back. ----
+  const [fullScreen, setFullScreen] = useState(false)
+  const toggleFullScreen = () => {
+    const next = !fullScreen
+    setFullScreen(next)
+    try {
+      if (next && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {})
+      if (!next && document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+    } catch {
+      // the browser may refuse — the in-page full screen still works
+    }
+  }
+  // Leaving the browser's full screen (Esc) leaves ours too.
+  useEffect(() => {
+    let wasBrowserFull = Boolean(document.fullscreenElement)
+    const onChange = () => {
+      const isFull = Boolean(document.fullscreenElement)
+      if (wasBrowserFull && !isFull) setFullScreen(false)
+      wasBrowserFull = isFull
+    }
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+  // …and leaving the page always restores the browser.
+  useEffect(
+    () => () => {
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+    },
+    []
+  )
+
   // Keyboard: ← → weeks, T today, Esc closes / clears.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -182,8 +218,10 @@ export default function WeeklyCalendarPage() {
       if (target.closest('input, textarea, select, [contenteditable], [role="dialog"]')) return
       if (e.key === 'Escape') {
         if (creating || openEventId) closePanels()
-        else setSelections([])
-      } else if (e.key === 'ArrowRight') goWeek(1)
+        else if (selections.length) setSelections([])
+        else if (fullScreen) toggleFullScreen()
+      } else if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey) toggleFullScreen()
+      else if (e.key === 'ArrowRight') goWeek(1)
       else if (e.key === 'ArrowLeft') goWeek(-1)
       else if (e.key.toLowerCase() === 't') goToday()
     }
@@ -241,10 +279,20 @@ export default function WeeklyCalendarPage() {
       })
       .catch((err) => toast.error(apiError(err, 'Could not copy the week')))
 
-  return (
+  const content = (
     // On a wide screen the week makes room for the side panel instead of
     // hiding the weekend under it.
-    <div className={cn('wc-page min-h-full transition-[padding] duration-300', panelOpen && 'min-[1400px]:pr-109')}>
+    // Full screen covers the sidebar and top bar; side panels and dialogs still
+    // open above it.
+    <div
+      className={cn(
+        'wc-page min-h-full transition-[padding] duration-300',
+        fullScreen ? 'fixed inset-0 z-50 overflow-y-auto p-4' : '',
+        panelOpen && (fullScreen ? 'min-[1120px]:pr-112' : 'min-[1400px]:pr-109')
+      )}
+      // The gradient on .wc-page would otherwise leave it see-through.
+      style={fullScreen ? { backgroundColor: 'var(--background)' } : undefined}
+    >
       {/* Header */}
       <div ref={headerRef} className="mb-4 flex flex-wrap items-center gap-3">
         <div className="wc-head-item flex items-center gap-3">
@@ -343,6 +391,15 @@ export default function WeeklyCalendarPage() {
               </PopoverContent>
             </Popover>
           )}
+          <Button
+            variant={fullScreen ? 'default' : 'outline'}
+            className="gap-2 rounded-xl"
+            onClick={toggleFullScreen}
+            title={fullScreen ? 'Back to the normal view (F or Esc)' : 'Full screen — the week fills the window (F)'}
+          >
+            {fullScreen ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+            {fullScreen ? 'Exit full screen' : 'Full screen'}
+          </Button>
           <Button variant="outline" size="icon" className="rounded-xl" onClick={exportPdf} disabled={pdfBusy} title="Download this week as a PDF">
             {pdfBusy ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
           </Button>
@@ -385,13 +442,14 @@ export default function WeeklyCalendarPage() {
           }}
           readOnly={viewingOther}
           direction={direction}
+          fullScreen={fullScreen}
         />
       )}
 
       {/* Legend + tip */}
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <MousePointer2 className="size-3.5" /> Drag down a day to pick slots · hold Ctrl to add another (any day, even the same one)
+          <MousePointer2 className="size-3.5" /> Drag down a day to pick slots · hold Ctrl to add another (any day, even the same one) · F for full screen
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-3 w-5 rounded border-[1.5px] border-dashed border-indigo-500" /> Invite waiting for you
@@ -461,6 +519,9 @@ export default function WeeklyCalendarPage() {
       )}
     </div>
   )
+  // Full screen sits on the page body itself, so the sidebar and top bar
+  // (which have their own stacking layers) can't paint over it.
+  return fullScreen ? createPortal(content, document.body) : content
 }
 
 // "My calendar" or any colleague's week (busy-only unless you're admin).

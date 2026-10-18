@@ -132,6 +132,7 @@ export function WeekGrid({
   onOpenEvent,
   readOnly,
   direction,
+  fullScreen = false,
 }: {
   week: WeekData
   sections: Sections
@@ -142,6 +143,8 @@ export function WeekGrid({
   onOpenEvent: (id: string) => void
   readOnly: boolean
   direction: number
+  // Full screen: the week gets (nearly) the whole window's height.
+  fullScreen?: boolean
 }) {
   const grid = week.grid
   const rows = useMemo(() => buildRows(grid, sections), [grid, sections])
@@ -330,7 +333,12 @@ export function WeekGrid({
         </div>
       )}
 
-      <div className="max-h-[calc(100vh-15rem)] min-h-[420px] overflow-x-hidden overflow-y-auto overscroll-contain">
+      <div
+        className={cn(
+          'min-h-[420px] overflow-x-hidden overflow-y-auto overscroll-contain',
+          fullScreen ? 'max-h-[calc(100vh-8.5rem)]' : 'max-h-[calc(100vh-15rem)]'
+        )}
+      >
         {/* Header — the strip above does this job on a narrow screen */}
         <div className={cn('sticky top-0 z-30 grid border-b border-border bg-card/95 backdrop-blur', narrow && 'hidden')} style={{ gridTemplateColumns: columns }}>
           <div className="flex min-w-0 flex-col justify-center border-r border-border px-2 py-2">
