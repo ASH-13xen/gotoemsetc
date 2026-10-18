@@ -298,7 +298,10 @@ function PeopleSection({
   const remove = useRemoveAttendee()
   const [adding, setAdding] = useState(false)
   const [picked, setPicked] = useState<string[]>([])
-  const [scope, setScope] = useState<Scope>('one')
+  // On a repeating meeting, someone invited is usually meant for every date —
+  // so that's the starting choice ("Just this date" is one tap away).
+  const repeating = Boolean(event.repeat && !event.repeat.ended && upcomingInSeries > 1)
+  const [scope, setScope] = useState<Scope>(repeating ? 'series' : 'one')
   // Availability is checked against the next few weeks; anyone busy on a
   // later date simply isn't invited to that one.
   const occurrences = useMemo(
@@ -399,7 +402,8 @@ function AgendaSection({ event, members, isPast, upcomingInSeries }: { event: Ca
 
   const begin = () => {
     setDraft((event.segments ?? []).map((s) => ({ startMin: s.startMin, endMin: s.endMin, label: s.label, users: (s.users ?? []).map((u) => u._id) })))
-    setScope('one')
+    // A repeating meeting's split normally applies to every date from here on.
+    setScope(event.repeat && !event.repeat.ended && upcomingInSeries > 1 ? 'series' : 'one')
     setEditing(true)
   }
   // Cut the whole meeting into equal slices, keeping who had which (or
