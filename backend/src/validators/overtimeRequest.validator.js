@@ -39,4 +39,14 @@ const forEmployee = {
   }),
 };
 
-module.exports = { apply, cmApprove, approve, reject, forEmployee };
+// HR Work → Overtime requests.
+const list = {
+  query: z.object({
+    status: z.enum(['pending', 'approved', 'rejected']).optional(),
+    month: z.coerce.number().int().min(1).max(12).optional(),
+    year: z.coerce.number().int().min(2000).max(3000).optional(),
+    employee: objectId.optional(),
+  }),
+};
+
+module.exports = { apply, cmApprove, approve, reject, forEmployee, list };

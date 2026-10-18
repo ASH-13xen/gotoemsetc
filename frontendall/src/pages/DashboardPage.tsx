@@ -21,34 +21,24 @@ import { useMyUploadRequests } from '@/hooks/useUploadRequests'
 import { PendingWarningsModal } from '@/components/attendance/PendingWarningsModal'
 import { AttendanceOutcomeModal } from '@/components/attendance/AttendanceOutcomeModal'
 import { ApplyLeaveDialog } from '@/components/attendance/ApplyLeaveDialog'
-import { PendingLeaveApprovalsModal } from '@/components/attendance/PendingLeaveApprovalsModal'
 import { MyLeaveApplicationsCard } from '@/components/attendance/MyLeaveApplicationsCard'
 import { RegisterComplaintDialog } from '@/components/complaints/RegisterComplaintDialog'
 import { ComplaintReviewModal } from '@/components/complaints/ComplaintReviewModal'
 import { MyComplaintsCard } from '@/components/complaints/MyComplaintsCard'
-import { MonthlyBillReminderModal } from '@/components/finance/MonthlyBillReminderModal'
 import { ClaimReimbursementDialog } from '@/components/reimbursements/ClaimReimbursementDialog'
 import { MyReimbursementsCard } from '@/components/reimbursements/MyReimbursementsCard'
 import { KeysDialog } from '@/components/keys/KeysDialog'
 import { OrgChartTeaser } from '@/components/orgChart/OrgChartTeaser'
-import { AttendanceChangeRequestsCard } from '@/components/attendance/AttendanceChangeRequestsCard'
-import { OvertimeApprovalsCard } from '@/components/attendance/OvertimeApprovalsCard'
-import { SalaryApprovalCard } from '@/components/finance/SalaryApprovalCard'
-import { PeopleChangeAlerts } from '@/components/dashboard/PeopleChangeAlerts'
-import { FnfCards } from '@/components/finance/FnfCards'
 import { SalaryPaidModal } from '@/components/finance/SalaryPaidModal'
-import { ReimbursementApprovalsCard } from '@/components/reimbursements/ReimbursementApprovalsCard'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useMyOvertimeRequests } from '@/hooks/useOvertimeRequests'
 import { CreateAnnouncementDialog, canCreateAnnouncements } from '@/components/announcements/CreateAnnouncementDialog'
-import { PendingAnnouncementsModal } from '@/components/announcements/PendingAnnouncementsModal'
 import { TicketsWaitingCard } from '@/components/tickets/TicketsWaitingCard'
 import { UpcomingCalendarWidget } from '@/components/calendar/UpcomingCalendarWidget'
 import { CompanyCalendarGrid } from '@/components/calendar/CompanyCalendarGrid'
 import { featureOn } from '@/lib/access'
 import {
-  CeoLeaveApprovalsCard,
   DashboardToggle,
   FinanceDashboard,
   OperationsDashboard,
@@ -192,9 +182,6 @@ export default function DashboardPage() {
       <PendingWarningsModal />
       <AttendanceOutcomeModal />
       <ComplaintReviewModal />
-      <PendingLeaveApprovalsModal />
-      <MonthlyBillReminderModal />
-      <PendingAnnouncementsModal />
       <SalaryPaidModal />
 
       <DashboardToggle views={views} value={view} onChange={choose} />
@@ -228,16 +215,9 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Overtime waiting on this person — a content manager's team queue, HR's
-          final approvals. Shown whichever view is open; nothing when empty. */}
-      {/* Who joined or left — the CEO and admin only (nobody else is sent these). */}
-      <PeopleChangeAlerts />
-
-      <OvertimeApprovalsCard />
-      {/* The CEO's/admin's final say on money going out — nothing when empty. */}
-      <SalaryApprovalCard />
-      <FnfCards />
-      <ReimbursementApprovalsCard />
+      {/* Approvals and alerts (salary, FnF, reimbursements, overtime, leave for
+          the CEO, attendance changes, team leave reviews, bills, who joined
+          or left) live in the Action centre by the notification bell. */}
 
       {view === 'me' && (
         <>
@@ -275,13 +255,9 @@ export default function DashboardPage() {
           </div>
 
           {(view === 'ceo' || view === 'admin') && (
-            <>
-              <AttendanceChangeRequestsCard />
-              <div className="grid items-stretch gap-6 lg:grid-cols-2">
-                <CeoLeaveApprovalsCard />
-                <MyEventResponsibilitiesWidget />
-              </div>
-            </>
+            <div className="grid items-stretch gap-6 lg:grid-cols-2">
+              <MyEventResponsibilitiesWidget />
+            </div>
           )}
           {view === 'hr' && (
             <div className="grid items-stretch gap-6 lg:grid-cols-2">

@@ -15,5 +15,6 @@ router.patch('/nodes/:id', validate(orgChartValidator.updateNode), orgChartContr
 router.post('/nodes/:id/move', validate(orgChartValidator.moveNode), orgChartController.moveNode);
 router.put('/nodes/:id/assignees', validate(orgChartValidator.setAssignees), orgChartController.setAssignees);
 router.delete('/nodes/:id', validate(orgChartValidator.deleteNode), orgChartController.deleteNode);
+router.put('/coordinators', validate(orgChartValidator.setCoordinators), orgChartController.setCoordinators);
 
 module.exports = router;

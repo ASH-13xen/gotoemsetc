@@ -9,6 +9,7 @@ const notificationService = require('./notification.service');
 const notifyRecipients = require('./notifyRecipients.service');
 const accessService = require('./access.service');
 const orgTeams = require('./orgTeams.service');
+const approvalRouting = require('./approvalRouting.service');
 const { istDateKey } = require('../utils/istDate');
 const { needsOvertimeApproval, isAboveReviewThreshold } = require('../utils/overtimeApproval');
 const { can, isSelf } = require('../utils/roles');
@@ -216,6 +217,14 @@ function assertNotOwn(user, request) {
   }
 }
 
+// HR only decides overtime a content manager has passed on — or, when the
+// person has no content manager who can act, straight away. The chart may
+// have changed since it was raised, so it's checked again here.
+async function assertRoutedForHr(request) {
+  const moved = await approvalRouting.rerouteOvertime(request);
+  if (moved === CONTENT_MANAGER) throw ApiError.conflict("This overtime needs the content manager's approval first — it has been sent to them");
+}
+
 // Content manager → HR, with the minutes they vouch for and why.
 async function approveAsContentManager(user, id, { minutes, reason }) {
   const request = await loadPending(id);
@@ -241,6 +250,7 @@ async function approve(user, id, { minutes, note }) {
   if (!canDecideAsHr(user)) throw ApiError.forbidden('Only HR can give the final approval');
   if (request.stage !== HR) throw ApiError.conflict('This overtime is still with the content manager');
   assertNotOwn(user, request);
+  await assertRoutedForHr(request);
 
   const approvedMinutes = minutes ?? suggestedMinutes(request);
   if (!approvedMinutes) throw ApiError.badRequest('Enter the overtime minutes to approve');
@@ -283,6 +293,8 @@ async function reject(user, id, { reason }) {
     }
   } else if (!canDecideAsHr(user)) {
     throw ApiError.forbidden('Only HR can decide this');
+  } else {
+    await assertRoutedForHr(request);
   }
 
   request.status = REJECTED;
@@ -309,6 +321,7 @@ const shape = (user, docs) => accessService.shapeAttribution(user, docs, ATTRIBU
 // what is still with a content manager).
 async function listForApprover(user) {
   await raiseFromBiometric().catch((err) => logger.error({ err }, 'Overtime sweep failed'));
+  await approvalRouting.rerouteAll().catch((err) => logger.error({ err }, 'Approval re-routing failed'));
 
   const out = { contentManager: [], hr: [], withContentManager: [], isContentManager: false, isHr: canDecideAsHr(user) };
   const sort = { date: 1, createdAt: 1 };
@@ -368,6 +381,25 @@ async function listDaySummaries(employeeId, query = {}) {
     .lean();
 }
 
+// HR Work → Overtime requests: every request for a month (or all pending),
+// optionally one person's, with who passed it on and who decided it.
+async function listAll(user, { status, month, year, employee } = {}) {
+  if (!canDecideAsHr(user)) throw ApiError.forbidden();
+  await approvalRouting.rerouteAll().catch((err) => logger.error({ err }, 'Approval re-routing failed'));
+  const query = {};
+  if (status) query.status = status;
+  if (month || year || status !== PENDING) query.date = monthRange({ month, year });
+  if (employee) query.employee = employee;
+  // Who decided it shows only to those allowed to see it (decidedByInfo).
+  const docs = await OvertimeRequest.find(query).sort({ date: -1, createdAt: -1 }).populate(POPULATE_REVIEW);
+  return (await shape(user, docs)).map(({ cmApprovedBy, ...d }) => ({
+    ...d,
+    cmApprovedByName: cmApprovedBy?.employeeLink ? nameOf(cmApprovedBy.employeeLink) : cmApprovedBy?.username || null,
+    isOwn: isSelf(user, d.employee?._id),
+    suggestedMinutes: suggestedMinutes(d),
+  }));
+}
+
 // How many overtime decisions are still open for a month — shown before
 // salary slips are generated, since unapproved overtime isn't paid.
 async function countPendingForMonth({ month, year }) {
@@ -381,6 +413,7 @@ module.exports = {
   approve,
   reject,
   listForApprover,
+  listAll,
   listForEmployee,
   listDaySummaries,
   countPendingForMonth,

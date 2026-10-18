@@ -209,7 +209,7 @@ export function ApplyLeaveDialog() {
           <DialogHeader>
             <DialogTitle>Apply for leave or overtime</DialogTitle>
             <DialogDescription>
-              Pick a type and date — HR will review and you'll see the outcome on your dashboard.
+              Pick a type and date — your content manager reviews it first (if you have one), then HR. You'll see the outcome on your dashboard.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">

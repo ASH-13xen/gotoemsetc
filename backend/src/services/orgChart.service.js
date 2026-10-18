@@ -1,8 +1,9 @@
 const ApiError = require('../utils/ApiError');
 const OrgNode = require('../models/OrgNode');
 const WorkTeam = require('../models/WorkTeam');
+const Employee = require('../models/Employee');
 const employeeRepository = require('../repositories/employee.repository');
-const { ORG_NODE_KIND, EMPLOYEE_STATUS } = require('../config/constants');
+const { ORG_NODE_KIND, EMPLOYEE_STATUS, TEAM_MEMBER_ROLE } = require('../config/constants');
 const accessService = require('./access.service');
 
 const ASSIGNEE_FIELDS = 'firstName lastName designation employeeCode status';
@@ -13,6 +14,28 @@ function idOf(value) {
 
 // The whole chart as a flat list — the client builds the tree from each
 // node's `parent`, which keeps every write here a single-node operation.
+// Everyone marked a Coordinator (any number) — they can give performance
+// flags to anyone. Shown as a badge on the chart.
+async function listCoordinators() {
+  const people = await Employee.find({ isCoordinator: true, isDeleted: { $ne: true }, status: EMPLOYEE_STATUS.ACTIVE })
+    .select(ASSIGNEE_FIELDS)
+    .sort({ firstName: 1 })
+    .lean();
+  return people;
+}
+
+async function setCoordinators(employeeIds) {
+  const unique = [...new Set(employeeIds.map(String))];
+  if (unique.length) {
+    const active = await Employee.countDocuments({ _id: { $in: unique }, status: EMPLOYEE_STATUS.ACTIVE, isDeleted: { $ne: true } });
+    if (active !== unique.length) throw ApiError.badRequest('Only active employees can be coordinators');
+  }
+  await Employee.updateMany({ isCoordinator: true, _id: { $nin: unique } }, { $set: { isCoordinator: false } });
+  if (unique.length) await Employee.updateMany({ _id: { $in: unique } }, { $set: { isCoordinator: true } });
+  accessService.invalidate();
+  return listCoordinators();
+}
+
 async function getTree() {
   const nodes = await OrgNode.find()
     .sort({ order: 1, createdAt: 1 })
@@ -101,6 +124,11 @@ async function assertWorkTeamFree(workTeamId, exceptNodeId) {
 //     that box is vacant);
 //   - everyone assigned is added as a member. Nobody is ever removed from
 //     the team's membership here — only their role tags change.
+// The team roles a box's holders get: a Videographer + Video Editor box
+// gives both, so the content calendar and tickets treat them as either.
+const rolesOfBox = (teamRole) =>
+  teamRole === TEAM_MEMBER_ROLE.VIDEOGRAPHER_EDITOR ? [TEAM_MEMBER_ROLE.VIDEOGRAPHER, TEAM_MEMBER_ROLE.EDITOR] : teamRole ? [teamRole] : [];
+
 async function syncTeam(teamNodeId) {
   const teamNode = await OrgNode.findById(teamNodeId);
   if (!teamNode || teamNode.kind !== ORG_NODE_KIND.TEAM || !teamNode.workTeam) return;
@@ -108,7 +136,7 @@ async function syncTeam(teamNodeId) {
   if (!team) return;
 
   const roleNodes = await roleNodesOf(teamNode._id);
-  const managedRoles = new Set(roleNodes.map((n) => n.teamRole).filter(Boolean));
+  const managedRoles = new Set(roleNodes.flatMap((n) => rolesOfBox(n.teamRole)));
 
   const rolesByEmployee = new Map();
   for (const entry of team.memberRoles || []) {
@@ -119,7 +147,7 @@ async function syncTeam(teamNodeId) {
     if (!node.teamRole) continue;
     for (const employeeId of node.assignees.map(idOf)) {
       if (!rolesByEmployee.has(employeeId)) rolesByEmployee.set(employeeId, new Set());
-      rolesByEmployee.get(employeeId).add(node.teamRole);
+      rolesOfBox(node.teamRole).forEach((role) => rolesByEmployee.get(employeeId).add(role));
     }
   }
 
@@ -137,6 +165,17 @@ async function syncTeam(teamNodeId) {
   team.members = [...memberIds];
   team.memberRoles = [...rolesByEmployee.entries()].map(([employee, roles]) => ({ employee, roles: [...roles] }));
   await team.save();
+}
+
+// After any change to the chart: access is worked out afresh, and pending
+// leave/modification/overtime requests move to whoever reviews them now.
+function chartChanged() {
+  accessService.invalidate();
+  // Required lazily — the routing service reads the chart through orgTeams.
+  // eslint-disable-next-line global-require
+  require('./approvalRouting.service')
+    .rerouteAll({ force: true })
+    .catch((err) => require('../utils/logger').error({ err }, 'Re-routing approvals after a chart change failed')); // eslint-disable-line global-require
 }
 
 async function syncTeamsFor(nodeIds) {
@@ -188,7 +227,7 @@ async function createNode({ title, description, kind = ORG_NODE_KIND.POSITION, p
     grantsRole: grantsRole || null,
   });
   if (node.kind === ORG_NODE_KIND.TEAM) await syncTeam(node._id);
-  accessService.invalidate();
+  chartChanged();
   return node;
 }
 
@@ -212,7 +251,7 @@ async function updateNode(id, { title, description, workTeam, teamRole, isTeamHe
   }
   await node.save();
   await syncTeamsFor([node._id]);
-  accessService.invalidate();
+  chartChanged();
   return node;
 }
 
@@ -245,7 +284,7 @@ async function moveNode(id, { parent, order }) {
   );
 
   await syncTeamsFor([node._id, oldParent, oldTeam?._id]);
-  accessService.invalidate();
+  chartChanged();
   return node;
 }
 
@@ -290,7 +329,7 @@ async function deleteNode(id, { mode = 'lift' } = {}) {
     await clearRoleOnTeam(affectedTeams[0], node.teamRole, node.assignees);
   }
   await syncTeamsFor(affectedTeams);
-  accessService.invalidate();
+  chartChanged();
   return { deleted: idOf(node._id) };
 }
 
@@ -307,9 +346,10 @@ async function clearRoleOnTeam(teamNodeId, role, employeeIds) {
   const team = await WorkTeam.findOne({ _id: teamNode.workTeam, isDeleted: false });
   if (!team) return;
   const ids = new Set(employeeIds.map(idOf));
+  const drop = new Set(rolesOfBox(role));
   team.memberRoles = (team.memberRoles || [])
     .map((entry) =>
-      ids.has(idOf(entry.employee)) ? { employee: entry.employee, roles: entry.roles.filter((r) => r !== role) } : entry
+      ids.has(idOf(entry.employee)) ? { employee: entry.employee, roles: entry.roles.filter((r) => !drop.has(r)) } : entry
     )
     .filter((entry) => entry.roles.length > 0);
   await team.save();
@@ -334,7 +374,7 @@ async function setAssignees(id, employeeIds) {
     if (team) await clearRoleOnTeam(team._id, node.teamRole, removed);
   }
   await syncTeamsFor([node._id]);
-  accessService.invalidate();
+  chartChanged();
   return node;
 }
 
@@ -345,7 +385,7 @@ async function removeEmployeeEverywhere(employeeId) {
   if (nodes.length === 0) return;
   await OrgNode.updateMany({ assignees: employeeId }, { $pull: { assignees: employeeId } });
   await syncTeamsFor(nodes.map((n) => n._id));
-  accessService.invalidate();
+  chartChanged();
 }
 
 // Work teams not yet linked to a team box — for the "link a work team"
@@ -359,6 +399,8 @@ async function listLinkableWorkTeams() {
 }
 
 module.exports = {
+  listCoordinators,
+  setCoordinators,
   getTree,
   createNode,
   updateNode,

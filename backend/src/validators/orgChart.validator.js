@@ -50,4 +50,6 @@ const setAssignees = {
   body: z.object({ employeeIds: z.array(objectId).max(50) }),
 };
 
-module.exports = { createNode, updateNode, moveNode, deleteNode, setAssignees };
+const setCoordinators = { body: z.object({ employeeIds: z.array(objectId).max(200) }) };
+
+module.exports = { createNode, updateNode, moveNode, deleteNode, setAssignees, setCoordinators };

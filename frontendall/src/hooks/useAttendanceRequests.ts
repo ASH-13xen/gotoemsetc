@@ -43,7 +43,7 @@ export function useCreateLeaveApplication() {
   })
 }
 
-// The Content Manager's own dashboard queue — see PendingLeaveApprovalsModal.
+// The Content Manager's own review queue — see CmLeaveReviews (Action centre).
 export function useMyPendingCmReviews() {
   return useQuery({
     queryKey: PENDING_CM_REVIEWS_KEY,

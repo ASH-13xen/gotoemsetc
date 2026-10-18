@@ -42,6 +42,10 @@ export function useSetOrgNodeAssignees() {
   )
 }
 
+export function useSetCoordinators() {
+  return useOrgMutation((employeeIds: string[]) => orgChartApi.setCoordinators(employeeIds))
+}
+
 export function useDeleteOrgNode() {
   return useOrgMutation(({ id, mode }: { id: string; mode: 'lift' | 'branch' }) => orgChartApi.deleteOrgNode(id, mode))
 }

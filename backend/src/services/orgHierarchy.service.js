@@ -125,8 +125,12 @@ function roleBoxesOf(chart, teamBoxId) {
   return descendants(chart, team).filter((n) => n.kind === ORG_NODE_KIND.TEAM_ROLE);
 }
 
+// Whoever holds `role` in a team — a Videographer + Video Editor box counts
+// for either of those two roles.
 function roleHolders(chart, teamBoxId, role) {
-  return [...new Set(roleBoxesOf(chart, teamBoxId).filter((n) => n.teamRole === role).flatMap(holders))];
+  const both = [TEAM_MEMBER_ROLE.VIDEOGRAPHER, TEAM_MEMBER_ROLE.EDITOR].includes(role);
+  const fits = (n) => n.teamRole === role || (both && n.teamRole === TEAM_MEMBER_ROLE.VIDEOGRAPHER_EDITOR);
+  return [...new Set(roleBoxesOf(chart, teamBoxId).filter(fits).flatMap(holders))];
 }
 
 function teamHeads(chart, teamBoxId) {
@@ -142,8 +146,10 @@ function smmsOf(chart, teamBoxId) {
     for (const id of holders(box)) {
       if (!out.has(id)) out.set(id, { employeeId: id, videographers: new Set(), editors: new Set() });
       const e = out.get(id);
-      under.filter((n) => n.teamRole === TEAM_MEMBER_ROLE.VIDEOGRAPHER).flatMap(holders).forEach((x) => e.videographers.add(x));
-      under.filter((n) => n.teamRole === TEAM_MEMBER_ROLE.EDITOR).flatMap(holders).forEach((x) => e.editors.add(x));
+      // A Videographer + Video Editor box counts as both.
+      const both = (n) => n.teamRole === TEAM_MEMBER_ROLE.VIDEOGRAPHER_EDITOR;
+      under.filter((n) => n.teamRole === TEAM_MEMBER_ROLE.VIDEOGRAPHER || both(n)).flatMap(holders).forEach((x) => e.videographers.add(x));
+      under.filter((n) => n.teamRole === TEAM_MEMBER_ROLE.EDITOR || both(n)).flatMap(holders).forEach((x) => e.editors.add(x));
     }
   }
   return [...out.values()].map((e) => ({ employeeId: e.employeeId, videographers: [...e.videographers], editors: [...e.editors] }));

@@ -39,11 +39,37 @@ export interface FlagHistoryEntry {
   color: FlagColor
   note: string
   date: string
+  // Who gave it — on the CEO's/admin's full history.
+  addedByName?: string | null
 }
 
-// Backs the Performance Flags page — admin/hr/ceo only (see
+// Backs the Performance Flags page — admin/ceo only (see
 // backend/src/routes/employee.routes.js's GET /flags/history).
 export async function getFlagHistory(): Promise<{ entries: FlagHistoryEntry[] }> {
   const { data } = await apiClient.get('/employees/flags/history')
+  return data
+}
+
+// The flags this person gave — what a coordinator sees.
+export async function getFlagsGiven(): Promise<{ entries: FlagHistoryEntry[] }> {
+  const { data } = await apiClient.get('/employees/flags/given')
+  return data
+}
+
+export interface FlagPerson {
+  _id: string
+  name: string
+  designation: string
+  employeeCode: string
+}
+
+// Everyone a flag can go to (CEO, admin, coordinators).
+export async function getFlagPeople(): Promise<{ people: FlagPerson[] }> {
+  const { data } = await apiClient.get('/employees/flags/people')
+  return data
+}
+
+export async function giveFlag(employeeId: string, input: { color: FlagColor; note: string }) {
+  const { data } = await apiClient.post(`/employees/${employeeId}/flags`, input)
   return data
 }

@@ -1,15 +1,20 @@
 const cron = require('node-cron');
 const overtimeRequestService = require('../services/overtimeRequest.service');
+const approvalRouting = require('../services/approvalRouting.service');
 const logger = require('../utils/logger');
 
 // Overtime is sent for review once its day is closed: shortly after
 // midnight (the attendance backstop settles the day at 23:55), and once at
-// start-up in case the server was down overnight.
+// start-up in case the server was down overnight. Each run also puts every
+// pending leave/modification/overtime request with whoever the Organisation
+// chart says reviews it now (approvalRouting.service.js).
 function run() {
   overtimeRequestService
     .raiseFromBiometric({ force: true })
     .then((raised) => raised && logger.info({ raised }, 'Overtime sent for review'))
-    .catch((err) => logger.error({ err }, 'Overtime review job failed'));
+    .catch((err) => logger.error({ err }, 'Overtime review job failed'))
+    .then(() => approvalRouting.rerouteAll({ force: true }))
+    .catch((err) => logger.error({ err }, 'Approval re-routing failed'));
 }
 
 function start() {

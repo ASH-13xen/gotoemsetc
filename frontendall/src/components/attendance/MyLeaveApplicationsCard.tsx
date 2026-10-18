@@ -21,11 +21,15 @@ import {
 // backend/src/config/constants.js#ATTENDANCE_REQUEST_STATUS.
 // Once decided, the employee can Acknowledge it, which takes it off this
 // card — it stays under "Show all leave applications".
-function StatusBadge({ status }: { status: AttendanceRequestStatus }) {
+// Where it is (or who turned it down): content manager, then HR, then (for
+// unpaid leave) the CEO.
+const STEP_WHO: Record<AttendanceModificationRequest['approvalStage'], string> = { content_manager: 'content manager', hr: 'HR', ceo: 'CEO' }
+
+function StatusBadge({ status, stage }: { status: AttendanceRequestStatus; stage: AttendanceModificationRequest['approvalStage'] }) {
   if (status === 'resolved') return <Badge variant="success">Approved</Badge>
-  if (status === 'rejected') return <Badge variant="destructive">Denied</Badge>
+  if (status === 'rejected') return <Badge variant="destructive">Denied by {STEP_WHO[stage] ?? 'HR'}</Badge>
   if (status === 'revoked') return <Badge variant="destructive">Revoked</Badge>
-  return <Badge variant="warning">Pending</Badge>
+  return <Badge variant="warning">With {STEP_WHO[stage] === 'content manager' ? 'your content manager' : STEP_WHO[stage] ?? 'HR'}</Badge>
 }
 
 function formatDateRange(date: string, endDate: string) {
@@ -59,7 +63,7 @@ function Row({ request, onDashboard }: { request: AttendanceModificationRequest;
             </>
           )}
         </div>
-        <StatusBadge status={request.status} />
+        <StatusBadge status={request.status} stage={request.approvalStage} />
       </div>
       {request.status === 'rejected' && request.rejectionReason && (
         <p className="mt-2 rounded-lg bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">Reason: {request.rejectionReason}</p>

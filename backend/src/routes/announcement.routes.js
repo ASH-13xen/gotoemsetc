@@ -16,6 +16,8 @@ router.post(
   announcementController.acknowledge
 );
 
+router.post('/:id/later', validate(announcementValidator.acknowledge), announcementController.later);
+
 router.get('/', requireAnnouncementCreateAccess(), announcementController.list);
 router.post(
   '/',

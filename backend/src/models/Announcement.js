@@ -17,6 +17,20 @@ const announcementSchema = new Schema(
         acknowledgedAt: { type: Date, default: Date.now },
       },
     ],
+    // Who put it aside with "Later" — it stays in their Announcements list
+    // (and on the button's count) but doesn't open by itself any more.
+    laterBy: [
+      {
+        _id: false,
+        employee: { type: Schema.Types.ObjectId, ref: 'Employee', required: true },
+        at: { type: Date, default: Date.now },
+      },
+    ],
+    // 'general' is one HR/the CEO wrote; 'performance_flag' is the automatic
+    // notice someone gets when they receive a flag (not listed with the
+    // general ones on the management page).
+    kind: { type: String, enum: ['general', 'performance_flag'], default: 'general' },
+    flagColor: { type: String, enum: ['red', 'green', null], default: null },
   },
   { timestamps: true }
 );

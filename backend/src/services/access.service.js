@@ -1,7 +1,7 @@
 const User = require('../models/User');
 const OrgNode = require('../models/OrgNode');
 const { USER_ROLES } = require('../config/constants');
-const { accessForRoles, ROLE_RANK, ROLE_LABEL } = require('../config/access');
+const { ACCESS, accessForRoles, ROLE_RANK, ROLE_LABEL } = require('../config/access');
 
 // ---------------------------------------------------------------------------
 // Works out, live, what each signed-in person may do: their login's role
@@ -63,7 +63,7 @@ async function resolveUser(userId) {
 
   const user = await User.findById(userId)
     .select('username role permissions employeeLink isActive')
-    .populate('employeeLink', 'firstName lastName status')
+    .populate('employeeLink', 'firstName lastName status isCoordinator')
     .lean();
   let value = null;
   if (user && user.isActive) {
@@ -77,7 +77,9 @@ async function resolveUser(userId) {
       role: user.role,
       roles,
       postRoles: fromPosts,
-      access: accessForRoles(roles),
+      // A coordinator (Organisation chart) can give performance flags.
+      access: [...new Set([...accessForRoles(roles), ...(employee?.isCoordinator ? [ACCESS.PERFORMANCE_FLAGS_GIVE] : [])])],
+      isCoordinator: Boolean(employee?.isCoordinator),
       employeeLink: employee ? idOf(employee._id) : null,
       displayName: employee ? `${employee.firstName} ${employee.lastName || ''}`.trim() : user.username,
       permissions: user.permissions || [],

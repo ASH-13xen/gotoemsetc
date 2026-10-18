@@ -27,4 +27,9 @@ const acknowledge = asyncHandler(async (req, res) => {
   res.json({ announcement });
 });
 
-module.exports = { create, list, listMinePending, acknowledge };
+const later = asyncHandler(async (req, res) => {
+  await announcementService.seeLater(req.params.id, req.user.employeeLink);
+  res.json({ ok: true });
+});
+
+module.exports = { create, list, listMinePending, acknowledge, later };

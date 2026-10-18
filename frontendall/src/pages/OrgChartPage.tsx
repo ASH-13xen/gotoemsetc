@@ -15,16 +15,16 @@ import {
   type NodeMouseHandler,
   type OnNodeDrag,
 } from '@xyflow/react'
-import { ChevronsDownUp, ChevronsUpDown, Crown, Loader2, Maximize2, Network, Search, UserX, X } from 'lucide-react'
+import { Check, ChevronsDownUp, ChevronsUpDown, Crown, Flag, Loader2, Maximize2, Network, Search, UserX, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { useOpenEmployeeDirectory } from '@/hooks/useEmployees'
 import { useAuth } from '@/hooks/useAuth'
-import { useCreateOrgNode, useMoveOrgNode, useOrgChart } from '@/hooks/useOrgChart'
+import { useCreateOrgNode, useMoveOrgNode, useOrgChart, useSetCoordinators } from '@/hooks/useOrgChart'
 import { OrgCardNode, type OrgCardNodeType } from '@/components/orgChart/OrgCardNode'
-import type { OrgNode } from '@/api/orgChart.api'
+import type { OrgAssignee, OrgNode } from '@/api/orgChart.api'
 import { OrgNodePanel, apiErrorMessage } from '@/components/orgChart/OrgNodePanel'
 import {
   accentFor,
@@ -70,6 +70,101 @@ function AnimatedNumber({ value }: { value: number }) {
   return <span ref={ref}>0</span>
 }
 
+// Coordinators — any number of people who can give performance flags to
+// anyone, whatever their place in the chart. Everyone can see who they are;
+// only the admin changes the list.
+function CoordinatorsButton({
+  coordinators,
+  employees,
+  canEdit,
+}: {
+  coordinators: OrgAssignee[]
+  employees: { _id: string; firstName: string; lastName?: string; designation?: string }[]
+  canEdit: boolean
+}) {
+  const save = useSetCoordinators()
+  const [open, setOpen] = useState(false)
+  const [picked, setPicked] = useState<string[]>([])
+  const [query, setQuery] = useState('')
+  useEffect(() => {
+    if (open) setPicked(coordinators.map((c) => c._id))
+  }, [open, coordinators])
+  const shown = canEdit ? employees.filter((e) => !query.trim() || fullName(e).toLowerCase().includes(query.trim().toLowerCase())) : coordinators
+  const commit = () =>
+    save.mutate(picked, {
+      onSuccess: () => {
+        toast.success(`${picked.length} coordinator${picked.length === 1 ? '' : 's'} saved`)
+        setOpen(false)
+      },
+      onError: (err) => toast.error(apiErrorMessage(err, 'Could not save the coordinators')),
+    })
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button type="button" className="org-glass pointer-events-auto flex items-center gap-2 rounded-2xl px-3.5 py-2.5 text-left transition-colors hover:bg-secondary/50">
+          <span className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 text-white">
+            <Flag className="size-3.5" />
+          </span>
+          <span>
+            <span className="block text-sm leading-tight font-black">Coordinators · {coordinators.length}</span>
+            <span className="block text-[10px] text-muted-foreground">Can give performance flags to anyone</span>
+          </span>
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 p-2">
+        <p className="px-2 pt-1 pb-2 text-xs text-muted-foreground">
+          {canEdit ? 'Tick everyone who should be a coordinator — any number.' : 'Coordinators can give a red or green performance flag to anyone.'}
+        </p>
+        {canEdit && (
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search people…"
+            aria-label="Search people"
+            className="mb-1 h-8 w-full rounded-lg border border-border bg-background px-2 text-xs outline-none"
+          />
+        )}
+        <div className="max-h-72 space-y-0.5 overflow-y-auto">
+          {shown.length === 0 ? (
+            <p className="p-2 text-xs text-muted-foreground">{canEdit ? 'No one matches.' : 'No coordinators yet.'}</p>
+          ) : (
+            shown.map((e) => {
+              const on = canEdit ? picked.includes(e._id) : true
+              return (
+                <button
+                  key={e._id}
+                  type="button"
+                  disabled={!canEdit}
+                  onClick={() => setPicked(on ? picked.filter((p) => p !== e._id) : [...picked, e._id])}
+                  className={cn('flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left', canEdit && 'hover:bg-secondary', canEdit && on && 'bg-amber-500/10')}
+                >
+                  <span className="flex size-6 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ background: avatarGradient(e._id) }}>
+                    {initials(e)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-xs font-medium capitalize">{fullName(e).toLowerCase()}</span>
+                  {canEdit && on && <Check className="size-3.5 text-amber-600" />}
+                </button>
+              )
+            })
+          )}
+        </div>
+        {canEdit && (
+          <div className="flex justify-end gap-2 border-t border-border pt-2">
+            <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={commit} disabled={save.isPending}>
+              {save.isPending && <Loader2 className="size-3.5 animate-spin" />}
+              Save {picked.length}
+            </Button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 function OrgChartCanvas() {
   const { data, isLoading, isError } = useOrgChart()
   // Everyone can view the chart; only admin can change it.
@@ -78,6 +173,8 @@ function OrgChartCanvas() {
   const { data: employees = [] } = useOpenEmployeeDirectory()
   const move = useMoveOrgNode()
   const create = useCreateOrgNode()
+  const coordinators = useMemo(() => data?.coordinators ?? [], [data])
+  const coordinatorIds = useMemo(() => new Set(coordinators.map((c) => c._id)), [coordinators])
   const flow = useReactFlow()
   const toolbarRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
@@ -249,10 +346,11 @@ function OrgChartCanvas() {
             dropTarget: drop?.id === l.node._id ? (drop.valid ? 'valid' : 'invalid') : null,
             team: l.node.kind === 'team' ? teamSummary(l.node._id) : undefined,
             teamName: l.node.kind === 'team_role' ? teamOf(index, l.node)?.title : undefined,
+            coordinatorIds,
             onToggle: toggle,
           },
         })),
-    [laid, positions, index, effectiveCollapsed, selectedId, matches, pathIds, q, drop, toggle, teamSummary, canEdit]
+    [laid, positions, index, effectiveCollapsed, selectedId, matches, pathIds, q, drop, toggle, teamSummary, canEdit, coordinatorIds]
   )
 
   const rfEdges: Edge[] = useMemo(
@@ -562,6 +660,8 @@ function OrgChartCanvas() {
             <ChevronsDownUp className="size-4" />
           </Button>
         </div>
+
+        <CoordinatorsButton coordinators={coordinators} employees={employees} canEdit={canEdit} />
       </div>
 
       {/* Team legend — click to fly to a team */}

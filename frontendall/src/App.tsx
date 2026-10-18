@@ -162,7 +162,7 @@ export default function App() {
                 path="/performance-flags"
                 element={
                   <RequireAuth>
-                    <RequireAccess access="performance_flags">
+                    <RequireAccess access="performance_flags_give">
                       <ShellLayout section="Performance Flags">
                         <PerformanceFlagsPage />
                       </ShellLayout>

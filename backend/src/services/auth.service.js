@@ -20,6 +20,7 @@ function toPublicUser(resolved) {
     displayName: resolved.displayName,
     employeeLink: resolved.employeeLink,
     permissions: resolved.permissions,
+    isCoordinator: resolved.isCoordinator,
     // Which whole sections are switched on (constants.js FEATURES).
     features: FEATURES,
   };

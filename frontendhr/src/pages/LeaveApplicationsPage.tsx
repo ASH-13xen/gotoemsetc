@@ -158,7 +158,9 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
           {request.requestedHalfDayPeriod && (
             <Badge variant="outline">{HALF_DAY_PERIOD_LABEL[request.requestedHalfDayPeriod]}</Badge>
           )}
-          {awaitingContentManager && <Badge variant="warning">Awaiting Content Manager</Badge>}
+          {awaitingContentManager && <Badge variant="warning">With content manager</Badge>}
+          {request.status === 'rejected' && request.approvalStage === 'content_manager' && <Badge variant="destructive">Rejected by content manager</Badge>}
+          {request.status === 'pending' && request.approvalStage === 'hr' && request.cmApprovedAt && <Badge variant="success">Content manager approved</Badge>}
           {awaitingCeo && <Badge variant="warning">Awaiting CEO</Badge>}
           <Badge variant={REQUEST_STATUS_BADGE_VARIANT[request.status]}>{request.status}</Badge>
         </div>
@@ -172,16 +174,13 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
         <p className="text-xs text-muted-foreground">This approval was later revoked and attendance was restored.</p>
       )}
 
-      {/* Still with the Content Manager — read-only here; HR can only
-          reject at this stage, never approve/override the attendance
-          record directly (see requireCmOrHrApprovalAccess on the backend). */}
-      {awaitingContentManager && !rejecting && (
-        <div>
-          <Button size="sm" variant="outline" onClick={() => setRejecting(true)}>
-            <XCircle className="size-4" />
-            Reject
-          </Button>
-        </div>
+      {/* Still with the content manager — read-only here. HR acts only once
+          they approve it; if they reject it, it ends there and never reaches
+          HR (attendanceRequest.service.js). */}
+      {awaitingContentManager && (
+        <p className="rounded-lg bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
+          Waiting for their content manager. HR can approve or reject once it's passed on.
+        </p>
       )}
 
       {/* Unpaid Leave HR has already approved — HR's choice is shown, and
@@ -300,7 +299,7 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
         </div>
       )}
 
-      {request.status === 'pending' && rejecting && (
+      {request.status === 'pending' && !awaitingContentManager && rejecting && (
         <div className="grid gap-2">
           <Textarea
             placeholder="Reason for rejecting (optional)"
@@ -352,6 +351,8 @@ function RequestColumn({
   requests: AttendanceModificationRequest[]
   isLoading: boolean
 }) {
+  const withCm = requests.filter((r) => r.status === 'pending' && r.approvalStage === 'content_manager')
+  const actionable = requests.filter((r) => !(r.status === 'pending' && r.approvalStage === 'content_manager'))
   return (
     <Card className="min-w-0 p-5">
       <CardContent className="grid gap-4 p-0">
@@ -371,7 +372,15 @@ function RequestColumn({
           </div>
         ) : (
           <div className="grid max-h-168 min-w-0 grid-cols-1 gap-2 overflow-y-auto pr-1">
-            {requests.map((request) => (
+            {actionable.map((request) => (
+              <RequestRow key={request._id} request={request} />
+            ))}
+            {withCm.length > 0 && (
+              <p className="mt-2 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                With content managers · {withCm.length}
+              </p>
+            )}
+            {withCm.map((request) => (
               <RequestRow key={request._id} request={request} />
             ))}
           </div>

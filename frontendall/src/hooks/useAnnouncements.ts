@@ -9,8 +9,16 @@ export function useAnnouncements() {
   return useQuery({ queryKey: LIST_KEY, queryFn: () => announcementsApi.listAnnouncements() })
 }
 
-export function useMyPendingAnnouncements() {
-  return useQuery({ queryKey: PENDING_KEY, queryFn: () => announcementsApi.listMyPendingAnnouncements() })
+export function useMyPendingAnnouncements(enabled = true) {
+  return useQuery({ queryKey: PENDING_KEY, queryFn: () => announcementsApi.listMyPendingAnnouncements(), enabled, refetchInterval: 120_000 })
+}
+
+export function useSeeAnnouncementLater() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => announcementsApi.seeAnnouncementLater(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PENDING_KEY }),
+  })
 }
 
 export function useCreateAnnouncement() {

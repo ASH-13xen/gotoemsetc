@@ -40,9 +40,42 @@ async function listAllAnnouncements() {
 // Self-scoped — returns [] for an account with no linked employee record
 // (e.g. a pure admin/HR login), same convention as the other "pending for
 // me" modals (PendingWarningsModal, ComplaintReviewModal).
+// Each carries `later` — whether this employee put it aside — so the
+// Announcements button can count everything but only open for new ones.
 async function listPendingForEmployee(employeeId) {
   if (!employeeId) return [];
-  return announcementRepository.listPendingForEmployee(employeeId);
+  const pending = await announcementRepository.listPendingForEmployee(employeeId);
+  return pending.map((a) => ({
+    _id: a._id,
+    title: a.title,
+    message: a.message,
+    kind: a.kind || 'general',
+    flagColor: a.flagColor || null,
+    createdAt: a.createdAt,
+    later: (a.laterBy || []).some((l) => String(l.employee) === String(employeeId)),
+  }));
+}
+
+async function seeLater(id, employeeId) {
+  const announcement = await announcementRepository.findById(id);
+  if (!announcement) throw ApiError.notFound('Announcement not found');
+  if (!announcement.recipients.some((r) => r.toString() === employeeId)) {
+    throw ApiError.forbidden('This announcement was not sent to you');
+  }
+  return (await announcementRepository.markLater(id, employeeId)) || announcement;
+}
+
+// The notice someone gets when they receive a performance flag — colour and
+// note only; who gave it stays in the flag history for the CEO and admin.
+async function announceFlag(employeeId, { color, note }, createdByUserId) {
+  return announcementRepository.create({
+    title: color === 'red' ? 'You received a red flag' : 'You received a green flag',
+    message: note?.trim() || (color === 'red' ? 'A red performance flag was added to your record.' : 'A green performance flag was added to your record — well done!'),
+    createdBy: createdByUserId,
+    recipients: [employeeId],
+    kind: 'performance_flag',
+    flagColor: color,
+  });
 }
 
 // Idempotent — acknowledging twice (e.g. a double click) is a no-op the
@@ -56,4 +89,4 @@ async function acknowledgeAnnouncement(id, employeeId) {
   return announcementRepository.addAcknowledgement(id, employeeId);
 }
 
-module.exports = { createAnnouncement, listAllAnnouncements, listPendingForEmployee, acknowledgeAnnouncement };
+module.exports = { createAnnouncement, listAllAnnouncements, listPendingForEmployee, acknowledgeAnnouncement, seeLater, announceFlag };

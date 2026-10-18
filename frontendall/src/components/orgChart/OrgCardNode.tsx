@@ -21,6 +21,8 @@ export interface OrgCardData extends Record<string, unknown> {
   // those roles have someone. Team roles: the team's name.
   team?: { people: OrgNode['assignees']; rolesFilled: number; rolesTotal: number }
   teamName?: string
+  // Everyone marked a Coordinator — a small badge next to their name.
+  coordinatorIds?: Set<string>
   onToggle: (id: string) => void
 }
 
@@ -32,7 +34,7 @@ function KindIcon({ org }: { org: OrgNode }) {
   if (org.kind === 'team') return <Users className={cls} />
   if (org.kind === 'team_role') {
     if (org.isTeamHead) return <Star className={cls} />
-    if (org.teamRole === 'videographer') return <Video className={cls} />
+    if (org.teamRole === 'videographer' || org.teamRole === 'videographer_editor') return <Video className={cls} />
     if (org.teamRole === 'editor') return <Clapperboard className={cls} />
     if (org.teamRole === 'social_media_manager') return <Megaphone className={cls} />
     return <Sparkles className={cls} />
@@ -54,7 +56,7 @@ function subtitle(org: OrgNode, childCount: number, teamName?: string) {
 }
 
 function OrgCardNodeInner({ data }: NodeProps<OrgCardNodeType>) {
-  const { org, accent, width, height, childCount, collapsed, selected, highlight, dimmed, dropTarget, onToggle, team, teamName } = data
+  const { org, accent, width, height, childCount, collapsed, selected, highlight, dimmed, dropTarget, onToggle, team, teamName, coordinatorIds } = data
   const isRole = org.kind === 'team_role'
   const isRoot = !org.parent
   const people = org.assignees.slice(0, MAX_PEOPLE_ON_CARD)
@@ -189,7 +191,17 @@ function OrgCardNodeInner({ data }: NodeProps<OrgCardNodeType>) {
                 {initials(person)}
               </span>
               <div className="min-w-0 leading-tight">
-                <p className="truncate text-xs font-semibold text-foreground capitalize">{fullName(person).toLowerCase()}</p>
+                <p className="flex min-w-0 items-center gap-1 text-xs font-semibold text-foreground capitalize">
+                  <span className="truncate">{fullName(person).toLowerCase()}</span>
+                  {coordinatorIds?.has(person._id) && (
+                    <span
+                      title="Coordinator — can give performance flags to anyone"
+                      className="shrink-0 rounded-full bg-amber-500/15 px-1 text-[8.5px] font-black tracking-wide text-amber-700 uppercase dark:text-amber-300"
+                    >
+                      Coord
+                    </span>
+                  )}
+                </p>
                 <p className="truncate text-[10px] text-muted-foreground capitalize">{(person.designation || '').toLowerCase()}</p>
               </div>
             </div>

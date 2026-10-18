@@ -9,6 +9,7 @@ const router = Router();
 
 router.post('/', validate(validator.apply), controller.apply);
 router.get('/pending', controller.pending);
+router.get('/all', validate(validator.list), controller.list);
 router.get('/employee/:employeeId', validate(validator.forEmployee), controller.forEmployee);
 router.post('/:id/cm-approve', validate(validator.cmApprove), controller.cmApprove);
 router.post('/:id/approve', validate(validator.approve), controller.approve);

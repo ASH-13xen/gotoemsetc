@@ -6,11 +6,18 @@ function audit(req, action, nodeId, metadata) {
 }
 
 const getTree = asyncHandler(async (req, res) => {
-  const [nodes, linkableWorkTeams] = await Promise.all([
+  const [nodes, linkableWorkTeams, coordinators] = await Promise.all([
     orgChartService.getTree(),
     orgChartService.listLinkableWorkTeams(),
+    orgChartService.listCoordinators(),
   ]);
-  res.json({ nodes, linkableWorkTeams });
+  res.json({ nodes, linkableWorkTeams, coordinators });
+});
+
+const setCoordinators = asyncHandler(async (req, res) => {
+  const coordinators = await orgChartService.setCoordinators(req.body.employeeIds);
+  req.auditContext = { action: 'orgChart.coordinators', resourceType: 'Employee', metadata: { employeeIds: req.body.employeeIds } };
+  res.json({ coordinators });
 });
 
 const createNode = asyncHandler(async (req, res) => {
@@ -43,4 +50,4 @@ const setAssignees = asyncHandler(async (req, res) => {
   res.json({ node });
 });
 
-module.exports = { getTree, createNode, updateNode, moveNode, deleteNode, setAssignees };
+module.exports = { getTree, createNode, updateNode, moveNode, deleteNode, setAssignees, setCoordinators };

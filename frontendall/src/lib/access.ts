@@ -15,6 +15,7 @@ export type AccessKey =
   | 'finance'
   | 'finance_approve'
   | 'performance_flags'
+  | 'performance_flags_give'
   | 'events'
   | 'announcements_create'
   | 'audit_log'

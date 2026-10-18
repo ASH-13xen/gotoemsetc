@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { CalendarRange, ClipboardList, FileStack, HardDrive, Inbox } from 'lucide-react'
+import { CalendarRange, ClipboardList, FileStack, HardDrive, Inbox, Timer } from 'lucide-react'
 
 import { PageHeader } from '@/components/layout/PageHeader'
 import { QuickActions, QuickActionItem } from '@/components/layout/QuickActions'
@@ -31,6 +31,12 @@ export default function HrWorkPage() {
           label="Leave/Modification requests"
           description="Approve, reject, revoke"
           onClick={() => navigate('/leave-applications')}
+        />
+        <QuickActionItem
+          icon={<Timer className="size-4" />}
+          label="Overtime requests"
+          description="Approve, reject, history"
+          onClick={() => navigate('/overtime-requests')}
         />
         <QuickActionItem
           icon={<FileStack className="size-4" />}

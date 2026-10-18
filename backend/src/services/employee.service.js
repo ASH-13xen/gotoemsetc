@@ -5,6 +5,9 @@ const userRepository = require('../repositories/user.repository');
 const orgChartService = require('./orgChart.service');
 const activityService = require('./activity.service');
 const notificationService = require('./notification.service');
+const announcementService = require('./announcement.service');
+const Employee = require('../models/Employee');
+const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const { can, isSelf } = require('../utils/roles');
 const { ACCESS } = require('../config/access');
@@ -359,17 +362,43 @@ async function addFlag(id, { color, note, date }, addedBy, actor) {
   if (!employee) throw ApiError.notFound('Employee not found');
   await activityService.log(employee._id, 'EMPLOYEE_FLAG_ADDED', { color, note, date });
   await notifyFlagMilestone(employee, color).catch(() => {});
+  // The person sees it as an announcement — colour and note, not who gave it.
+  await announcementService.announceFlag(employee._id, { color, note }, addedBy).catch(() => {});
   return employee;
+}
+
+// Everyone a flag can be given to — the picker on the Performance Flags page
+// (coordinators may not have the EMS, so just names).
+async function listFlagPeople(actor) {
+  const people = await Employee.find({ status: EMPLOYEE_STATUS.ACTIVE, isDeleted: { $ne: true } })
+    .select('firstName lastName designation employeeCode')
+    .sort({ firstName: 1, lastName: 1 })
+    .collation({ locale: 'en', strength: 2 })
+    .lean();
+  return people
+    .filter((p) => !isSelf(actor, p._id))
+    .map((p) => ({ _id: p._id, name: `${p.firstName} ${p.lastName || ''}`.trim(), designation: p.designation || '', employeeCode: p.employeeCode || '' }));
 }
 
 // Flattened across every employee, most recent first — backs frontendall's
 // Performance Flags history section (see routes/employee.routes.js's
 // GET /flags/history, gated the same as HR Work).
-async function getFlagHistory() {
+// Who gave each flag is included (the CEO and admin see it; a coordinator
+// only ever gets their own — see getFlagsGivenBy).
+async function getFlagHistory({ givenBy } = {}) {
   const employees = await employeeRepository.listAllForFlagHistory();
+  const giverIds = [...new Set(employees.flatMap((e) => e.flags.map((f) => String(f.addedBy || ''))).filter(Boolean))];
+  const givers = await User.find({ _id: { $in: giverIds } })
+    .select('username employeeLink')
+    .populate('employeeLink', 'firstName lastName')
+    .lean();
+  const giverName = new Map(
+    givers.map((u) => [String(u._id), u.employeeLink ? `${u.employeeLink.firstName} ${u.employeeLink.lastName || ''}`.trim() : u.username])
+  );
   const entries = [];
   for (const employee of employees) {
     for (const flag of employee.flags) {
+      if (givenBy && String(flag.addedBy || '') !== String(givenBy)) continue;
       entries.push({
         _id: flag._id,
         employeeId: employee._id,
@@ -378,12 +407,15 @@ async function getFlagHistory() {
         color: flag.color,
         note: flag.note,
         date: flag.date,
+        addedByName: flag.addedBy ? giverName.get(String(flag.addedBy)) || null : null,
       });
     }
   }
   entries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   return entries;
 }
+
+const getFlagsGivenBy = (userId) => getFlagHistory({ givenBy: userId });
 
 async function removeFlag(id, flagId, actor) {
   if (isSelf(actor, id)) throw ApiError.forbidden("You can't change your own flags");
@@ -403,6 +435,8 @@ module.exports = {
   deleteEmployee,
   addFlag,
   removeFlag,
+  listFlagPeople,
+  getFlagsGivenBy,
   getFlagHistory,
   synthesizeLegacyInventoryItems,
   listAnniversaries,

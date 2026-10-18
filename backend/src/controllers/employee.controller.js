@@ -2,6 +2,8 @@ const asyncHandler = require('../utils/asyncHandler');
 const employeeService = require('../services/employee.service');
 const activityService = require('../services/activity.service');
 const { shapeForRole } = require('../utils/fieldGate');
+const { can } = require('../utils/roles');
+const { ACCESS } = require('../config/access');
 
 const list = asyncHandler(async (req, res) => {
   const result = await employeeService.listEmployees(req.query);
@@ -81,6 +83,8 @@ const addFlag = asyncHandler(async (req, res) => {
     resourceId: employee._id,
     metadata: req.body,
   };
+  // A coordinator gives flags without seeing anyone's employee record.
+  if (!can(req.user, ACCESS.EMS_ALL)) return res.status(201).json({ ok: true });
   res.status(201).json({ employee: shapeForRole('Employee', employee, req.user) });
 });
 
@@ -100,4 +104,12 @@ const flagHistory = asyncHandler(async (req, res) => {
   res.json({ entries });
 });
 
-module.exports = { list, getById, birthdays, anniversaries, completeProbation, changeSalary, directory, create, update, remove, activity, addFlag, removeFlag, flagHistory };
+const flagsGiven = asyncHandler(async (req, res) => {
+  res.json({ entries: await employeeService.getFlagsGivenBy(req.user.id) });
+});
+
+const flagPeople = asyncHandler(async (req, res) => {
+  res.json({ people: await employeeService.listFlagPeople(req.user) });
+});
+
+module.exports = { list, getById, birthdays, anniversaries, completeProbation, changeSalary, directory, create, update, remove, activity, addFlag, removeFlag, flagHistory, flagsGiven, flagPeople };

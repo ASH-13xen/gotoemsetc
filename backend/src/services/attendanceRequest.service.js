@@ -7,6 +7,7 @@ const notificationService = require('./notification.service');
 const notifyRecipients = require('./notifyRecipients.service');
 const attendanceService = require('./attendance.service');
 const orgTeams = require('./orgTeams.service');
+const approvalRouting = require('./approvalRouting.service');
 const {
   ATTENDANCE_REQUEST_STATUS,
   ATTENDANCE_REQUEST_APPROVAL_STAGE,
@@ -28,6 +29,34 @@ function assertNotOwnRequest(actor, request) {
 }
 const asHr = (actor) => accessService.actingRole(actor, GRANTS[ACCESS.HRMS]);
 const asFinal = (actor) => accessService.actingRole(actor, GRANTS[ACCESS.ATTENDANCE_FINAL_APPROVAL]);
+
+const kindOf = (request) => (approvalRouting.isLeave(request) ? 'leave application' : 'modification request');
+const dayOf = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const spanOf = (r) => {
+  const a = dayOf(r.date);
+  const b = r.endDate ? dayOf(r.endDate) : a;
+  return a === b ? a : `${a} – ${b}`;
+};
+
+// Tells the applicant how their request moved — every step, so a rejection
+// by the content manager (or anyone after) is never silent.
+async function tellApplicant(request, type, title, message) {
+  const user = await userRepository.findByEmployeeId(request.employee?._id || request.employee);
+  if (!user) return;
+  await notificationService.createForUsers([user._id], { type, title, message, employee: request.employee?._id || request.employee });
+}
+
+// The chart may have changed since the request was made: put it where it
+// belongs now before anyone acts, and stop the action if it had to move.
+async function assertRouted(request) {
+  const moved = await approvalRouting.rerouteAttendanceRequest(request);
+  if (moved === ATTENDANCE_REQUEST_APPROVAL_STAGE.CONTENT_MANAGER) {
+    throw ApiError.conflict("This needs the content manager's approval first — it has been sent to them");
+  }
+  if (moved === ATTENDANCE_REQUEST_APPROVAL_STAGE.HR) {
+    throw ApiError.conflict('There is no content manager to review this any more — it is now with HR');
+  }
+}
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const REQUEST_SUBMISSION_CUTOFF_DAYS = 2;
@@ -182,18 +211,16 @@ async function withMonthlyCounts(requests) {
   );
 }
 
-// Which tier must review a structured leave application first — the
-// free-text flow (frontendems) never calls this at all, and always stays
-// at the model's 'hr' default. The teams are the Organisation chart's team
+// Which tier reviews a request first — leave applications and free-text
+// modification requests alike. The teams are the Organisation chart's team
 // boxes (orgTeams.service.js). Content Manager review is skipped straight
 // to HR when: the employee holds no box in any team; the employee is
 // themself a Content Manager (self-review makes no sense); or none of their
-// teams has a Content Manager (so a request is never permanently
-// unroutable). An employee on several teams can be approved by a Content
-// Manager from ANY of them.
-async function resolveApprovalStage(employeeId, isLeaveApplication) {
-  if (!isLeaveApplication) return { stage: ATTENDANCE_REQUEST_APPROVAL_STAGE.HR, cmIds: [] };
-
+// teams has a Content Manager who can act (so a request is never stuck).
+// An employee on several teams can be approved by a Content Manager from
+// ANY of them. If the chart changes later, approvalRouting.service.js moves
+// the request to match.
+async function resolveApprovalStage(employeeId) {
   const cmIds = await orgTeams.contentManagersFor(employeeId);
   if (cmIds.length === 0) return { stage: ATTENDANCE_REQUEST_APPROVAL_STAGE.HR, cmIds: [] };
 
@@ -263,7 +290,7 @@ async function createRequest(
     }
   }
 
-  const { stage, cmIds } = await resolveApprovalStage(employeeId, isLeaveApplication);
+  const { stage, cmIds } = await resolveApprovalStage(employeeId);
 
   const request = await attendanceRequestRepository.create({
     employee: employeeId,
@@ -283,8 +310,10 @@ async function createRequest(
     const cmUserIds = await notifyRecipients.resolveUserIdsForEmployees(cmIds);
     await notificationService.createForUsers(cmUserIds, {
       type: NOTIFICATION_TYPES.LEAVE_APPLICATION_PENDING_CM_REVIEW,
-      title: 'Leave application needs your review',
-      message: `${employeeName} applied for leave starting ${date}: ${reason}`,
+      title: isLeaveApplication ? 'Leave application needs your review' : 'Modification request needs your review',
+      message: isLeaveApplication
+        ? `${employeeName} applied for leave starting ${date}: ${reason}`
+        : `${employeeName} asked to correct their attendance on ${date}: ${reason}`,
       employee: employeeId,
     });
   } else {
@@ -293,8 +322,10 @@ async function createRequest(
       hrUsers.map((u) => u._id),
       {
         type: NOTIFICATION_TYPES.ATTENDANCE_MODIFICATION_REQUESTED,
-        title: 'Attendance modification requested',
-        message: `${employeeName} requested a change to their attendance on ${date}: ${reason}`,
+        title: isLeaveApplication ? 'Leave application needs HR review' : 'Attendance modification requested',
+        message: isLeaveApplication
+          ? `${employeeName} applied for leave starting ${date} (no content manager to review it first): ${reason}`
+          : `${employeeName} requested a change to their attendance on ${date}: ${reason}`,
         employee: employeeId,
       }
     );
@@ -303,7 +334,12 @@ async function createRequest(
   return request;
 }
 
+// Before any list is read, pending requests are put where the Organisation
+// chart says they belong now (throttled — see approvalRouting.service.js).
+const keepRouted = () => approvalRouting.rerouteAll().catch(() => {});
+
 async function listRequests({ employeeId, status } = {}) {
+  await keepRouted();
   const requests = await attendanceRequestRepository.list({ employeeId, status });
   return withMonthlyCounts(requests);
 }
@@ -328,13 +364,11 @@ async function notifyCeosOfUnpaidLeave(request) {
 // request.endDate (inclusive — the same single day for a plain correction
 // request, since endDate defaults to date) and tagged modifiedByRequest:
 // true on each, which is what makes the calendar show "Modified by HR" on
-// that day. A request can sit pending for a few days, so the date range's
-// age is checked fresh here (at resolution time), not at submission time —
-// the same 2-day HR cutoff used by direct marking
-// (attendance.service.js#markAttendance) applies here too, since this writes
-// to the same AttendanceRecord via a different path. Checked for every day
-// in the range before touching any of them, so a cutoff failure partway
-// through a multi-day span never leaves a partial edit behind.
+// that day. HR's 2-day cutoff for direct marking
+// (attendance.service.js#markAttendance) does not apply: the employee asked
+// within their own 2-day window, and the request may then have waited on
+// their content manager. Every day is checked before any is touched, so a
+// failure partway through a multi-day span never leaves a partial edit.
 //
 // Before applying any change, each date's current AttendanceRecord (if any)
 // is snapshotted onto the request as a {date, snapshot} array — this is the
@@ -349,6 +383,7 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actor) {
   if (request.approvalStage === ATTENDANCE_REQUEST_APPROVAL_STAGE.CONTENT_MANAGER) {
     throw ApiError.conflict('This request is still awaiting content manager review');
   }
+  await assertRouted(request);
 
   // Unpaid Leave goes CM -> HR -> CEO. HR's approval only forwards it, with
   // HR's chosen per-day change parked on the request; the CEO's approval is
@@ -368,14 +403,22 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actor) {
     await attendanceService.assertPaidOffAllowed(employee, enumerateDates(request.date, request.endDate || request.date));
   }
 
+  // HR's 2-day limit is for changing old attendance directly. Approving an
+  // employee's own request — made within its window, then waiting on the
+  // content manager — is not held to it.
   if (request.approvalStage !== ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO && request.requestedMultiDayLeave && !canGiveFinalApproval) {
     for (const date of enumerateDates(request.date, request.endDate || request.date)) {
-      attendanceService.assertCanEditAttendanceDate(actor, date);
       // eslint-disable-next-line no-await-in-loop
       await attendanceService.assertStatusForOvertime(request.employee, date, attendanceUpdate);
     }
     const forwarded = await attendanceRequestRepository.advanceToCeoStage(id, resolvedByUserId, attendanceUpdate || null, asHr(actor));
     await notifyCeosOfUnpaidLeave(request);
+    await tellApplicant(
+      request,
+      NOTIFICATION_TYPES.ATTENDANCE_REQUEST_FORWARDED,
+      'Unpaid leave approved by HR',
+      `Your unpaid leave for ${spanOf(request)} was approved by HR and now needs the CEO's final approval.`
+    );
     return forwarded;
   }
 
@@ -390,7 +433,6 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actor) {
   if (hasChange) {
     const dates = enumerateDates(request.date, request.endDate || request.date);
     for (const date of dates) {
-      attendanceService.assertCanEditAttendanceDate(actor, date);
       // eslint-disable-next-line no-await-in-loop
       await attendanceService.assertStatusForOvertime(request.employee, date, attendanceUpdate);
     }
@@ -423,11 +465,19 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actor) {
     }
   }
 
-  return attendanceRequestRepository.resolve(id, resolvedByUserId, {
+  const resolved = await attendanceRequestRepository.resolve(id, resolvedByUserId, {
     attendanceWasModified: Boolean(hasChange),
     previousRecordSnapshot,
     resolvedAs: canGiveFinalApproval ? asFinal(actor) : asHr(actor),
   });
+  const by = request.approvalStage === ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO ? 'the CEO' : 'HR';
+  await tellApplicant(
+    request,
+    NOTIFICATION_TYPES.ATTENDANCE_REQUEST_DECIDED,
+    `Your ${kindOf(request)} was approved`,
+    `Your ${kindOf(request)} for ${spanOf(request)} was approved by ${by}.`
+  );
+  return resolved;
 }
 
 // Is `cmEmployeeId` an eligible Content Manager for `applicantEmployeeId`'s
@@ -454,6 +504,9 @@ async function approveAtContentManagerStage(id, actingUserId, actor) {
   if (request.approvalStage !== ATTENDANCE_REQUEST_APPROVAL_STAGE.CONTENT_MANAGER) {
     throw ApiError.conflict('This request is not awaiting content manager review');
   }
+  if (!actor || !(await isEligibleContentManagerFor(request.employee, actor.employeeLink))) {
+    throw ApiError.forbidden("Only the content manager of this person's team can approve this step");
+  }
 
   const updated = await attendanceRequestRepository.advanceToHrStage(id, actingUserId);
 
@@ -464,10 +517,16 @@ async function approveAtContentManagerStage(id, actingUserId, actor) {
     hrUsers.map((u) => u._id),
     {
       type: NOTIFICATION_TYPES.ATTENDANCE_MODIFICATION_REQUESTED,
-      title: 'Attendance modification requested',
-      message: `${employeeName}'s leave application was approved by their content manager and now needs HR review.`,
+      title: approvalRouting.isLeave(request) ? 'Leave application needs HR review' : 'Modification request needs HR review',
+      message: `${employeeName}'s ${kindOf(request)} for ${spanOf(request)} was approved by their content manager and now needs HR review.`,
       employee: request.employee,
     }
+  );
+  await tellApplicant(
+    request,
+    NOTIFICATION_TYPES.ATTENDANCE_REQUEST_FORWARDED,
+    'Approved by your content manager',
+    `Your ${kindOf(request)} for ${spanOf(request)} was approved by your content manager and is now with HR.`
   );
 
   return updated;
@@ -478,6 +537,7 @@ async function approveAtContentManagerStage(id, actingUserId, actor) {
 // chart — the CM's dashboard "pending my review" queue. Returns [] for
 // anyone holding no Content Manager box, rather than erroring.
 async function listPendingForContentManager(cmEmployeeId) {
+  await keepRouted();
   const { employeeIds } = await orgTeams.reviewedBy(cmEmployeeId);
   if (employeeIds.length === 0) return [];
   const requests = await attendanceRequestRepository.list({
@@ -499,11 +559,29 @@ async function rejectRequest(id, resolvedByUserId, reason, actor) {
   }
   assertNotOwnRequest(actor, request);
   const isFinal = can(actor, ACCESS.ATTENDANCE_FINAL_APPROVAL);
-  if (request.approvalStage === ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO && !isFinal) {
-    throw ApiError.forbidden('This request is awaiting the CEO');
+  const stage = request.approvalStage;
+  // Each step is decided by whoever it is with: the content manager first —
+  // HR can't turn a request down before the content manager has seen it.
+  if (stage === ATTENDANCE_REQUEST_APPROVAL_STAGE.CONTENT_MANAGER) {
+    if (!(await isEligibleContentManagerFor(request.employee, actor.employeeLink))) {
+      throw ApiError.forbidden("This is still with the employee's content manager");
+    }
+  } else if (stage === ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO) {
+    if (!isFinal) throw ApiError.forbidden('This request is awaiting the CEO');
+  } else {
+    await assertRouted(request);
   }
-  const rejectedAs = request.approvalStage === ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO ? asFinal(actor) : asHr(actor);
-  return attendanceRequestRepository.reject(id, resolvedByUserId, reason, rejectedAs);
+  const rejectedAs =
+    stage === ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO ? asFinal(actor) : stage === ATTENDANCE_REQUEST_APPROVAL_STAGE.HR ? asHr(actor) : null;
+  const rejected = await attendanceRequestRepository.reject(id, resolvedByUserId, reason, rejectedAs);
+  const by = stage === ATTENDANCE_REQUEST_APPROVAL_STAGE.CONTENT_MANAGER ? 'your content manager' : stage === ATTENDANCE_REQUEST_APPROVAL_STAGE.CEO ? 'the CEO' : 'HR';
+  await tellApplicant(
+    request,
+    NOTIFICATION_TYPES.ATTENDANCE_REQUEST_DECIDED,
+    `Your ${kindOf(request)} was not approved`,
+    `Your ${kindOf(request)} for ${spanOf(request)} was not approved by ${by}.${reason ? ` Reason: ${reason}` : ''}`
+  );
+  return rejected;
 }
 
 // previousRecordSnapshot is an array of {date, snapshot} for any request

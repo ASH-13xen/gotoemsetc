@@ -147,6 +147,10 @@ module.exports = {
     // An Unpaid Leave application HR has approved and forwarded for the
     // CEO's final sign-off — see attendanceRequest.service.js#resolveRequest.
     LEAVE_APPLICATION_PENDING_CEO_REVIEW: 'leave_application_pending_ceo_review',
+    // The applicant hearing how their leave/modification request moved: passed
+    // on by their content manager, or decided (approved/rejected) at any step.
+    ATTENDANCE_REQUEST_FORWARDED: 'attendance_request_forwarded',
+    ATTENDANCE_REQUEST_DECIDED: 'attendance_request_decided',
     // Fired whenever HR (not admin) manually marks/edits an attendance day —
     // carries HR's required reason, notified to admins for oversight. See
     // attendance.service.js#markAttendance.
@@ -454,6 +458,9 @@ module.exports = {
   TEAM_MEMBER_ROLE: {
     VIDEOGRAPHER: 'videographer',
     EDITOR: 'editor',
+    // One person who both shoots and edits — counts as a Videographer and a
+    // Video Editor everywhere (tickets, content calendar).
+    VIDEOGRAPHER_EDITOR: 'videographer_editor',
     SOCIAL_MEDIA_MANAGER: 'social_media_manager',
     CONTENT_MANAGER: 'content_manager',
     GRAPHIC_DESIGNER: 'graphic_designer',

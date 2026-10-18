@@ -304,6 +304,9 @@ const employeeSchema = new Schema(
     selectionNotes: String,
 
     flags: [flagSchema],
+    // Marked on the Organisation chart: a coordinator can give performance
+    // flags to anyone, whatever their place in the chart.
+    isCoordinator: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

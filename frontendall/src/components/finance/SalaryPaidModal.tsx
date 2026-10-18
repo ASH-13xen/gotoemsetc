@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { closePaidSalaryNotice, fetchSalaryReceipt, listMyPaidSalaryNotices, type PaidSlipNotice } from '@/api/salaryApprovals.api'
 
 // Shown to an employee the moment Finance has marked their salary paid —
-// the same can't-be-missed pattern as PendingAnnouncementsModal: it stays
+// a can't-be-missed pop-up: it stays
 // until each notice is closed with "Got it". The receipt Finance attached
 // is one click away (and was also mailed to their company mail).
 

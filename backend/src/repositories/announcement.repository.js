@@ -9,7 +9,7 @@ function create(data) {
 
 // Admin-side management view — newest first.
 function listAll() {
-  return Announcement.find()
+  return Announcement.find({ kind: { $ne: 'performance_flag' } })
     .sort({ createdAt: -1 })
     .populate('createdBy', CREATED_BY_FIELDS)
     .populate('recipients', EMPLOYEE_FIELDS);
@@ -37,4 +37,13 @@ function addAcknowledgement(id, employeeId) {
   );
 }
 
-module.exports = { create, listAll, findById, listPendingForEmployee, addAcknowledgement };
+// "Later": stays pending, just doesn't pop up by itself again. Idempotent.
+function markLater(id, employeeId) {
+  return Announcement.findOneAndUpdate(
+    { _id: id, 'laterBy.employee': { $ne: employeeId } },
+    { $push: { laterBy: { employee: employeeId, at: new Date() } } },
+    { new: true }
+  );
+}
+
+module.exports = { create, listAll, findById, listPendingForEmployee, addAcknowledgement, markLater };

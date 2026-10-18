@@ -39,6 +39,9 @@ const ACCESS = {
   FINANCE_APPROVE: 'finance_approve',
   // Performance flags — giving/removing them and the history page.
   PERFORMANCE_FLAGS: 'performance_flags',
+  // Giving a performance flag to anyone — the CEO and admin, plus everyone
+  // marked a Coordinator on the Organisation chart (see access.service.js).
+  PERFORMANCE_FLAGS_GIVE: 'performance_flags_give',
   // Event Management page.
   EVENTS: 'events',
   // Sending announcements.
@@ -62,6 +65,7 @@ const GRANTS = {
   [ACCESS.FINANCE]: [R.ADMIN, R.CFO, R.FINANCE],
   [ACCESS.FINANCE_APPROVE]: [R.ADMIN, R.CFO],
   [ACCESS.PERFORMANCE_FLAGS]: [R.ADMIN, R.CEO],
+  [ACCESS.PERFORMANCE_FLAGS_GIVE]: [R.ADMIN, R.CEO],
   [ACCESS.EVENTS]: [R.ADMIN, R.CEO, R.HR],
   [ACCESS.ANNOUNCEMENTS_CREATE]: [R.ADMIN, R.CEO, R.CTO, R.CFO, R.HR, R.TEAM_LEAD, R.OPERATIONS_MANAGER, R.SALES],
   [ACCESS.AUDIT_LOG]: [R.ADMIN],

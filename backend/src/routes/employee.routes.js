@@ -45,6 +45,9 @@ router.get('/directory', employeeController.directory);
 router.get('/attendance-today', requirePermission(PERMISSIONS.MARK_ATTENDANCE), attendanceController.markedToday);
 // Performance Flags history — admin and CEO only. Must come before /:id.
 router.get('/flags/history', requireAccess(ACCESS.PERFORMANCE_FLAGS), employeeController.flagHistory);
+// Coordinators (and the CEO/admin): who a flag can go to, and the flags they gave.
+router.get('/flags/people', requireAccess(ACCESS.PERFORMANCE_FLAGS_GIVE), employeeController.flagPeople);
+router.get('/flags/given', requireAccess(ACCESS.PERFORMANCE_FLAGS_GIVE), employeeController.flagsGiven);
 router.get('/:id', requireSelfOrDirectoryAccess(), validate(employeeValidator.getOrDelete), employeeController.getById);
 router.patch(
   '/:id',
@@ -71,10 +74,11 @@ router.post(
 // Deletion — EMS-for-everyone (admin, CEO, HR); not a grantable permission.
 router.delete('/:id', requireAccess(ACCESS.EMS_ALL), validate(employeeValidator.getOrDelete), employeeController.remove);
 
-// Flags (red/green performance markers) — admin and CEO only.
+// Flags (red/green performance markers) — given by the CEO, admin and any
+// coordinator; removed by the CEO and admin only.
 router.post(
   '/:id/flags',
-  requireAccess(ACCESS.PERFORMANCE_FLAGS),
+  requireAccess(ACCESS.PERFORMANCE_FLAGS_GIVE),
   validate(employeeValidator.addFlag),
   employeeController.addFlag
 );

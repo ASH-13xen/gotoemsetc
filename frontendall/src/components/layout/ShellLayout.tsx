@@ -24,6 +24,8 @@ import { roleLabel } from "@/lib/roles";
 import { can, featureOn } from "@/lib/access";
 import { cn } from "@/lib/utils";
 import { NotificationBell } from "./NotificationBell";
+import { AnnouncementsButton } from "./AnnouncementsButton";
+import { ActionCentre } from "./ActionCentre";
 import "./ShellLayout.css";
 
 // Display names for the underlying role values (permissions/auth logic stays
@@ -85,7 +87,8 @@ export function ShellLayout({
     ...(can(user, "hrms") ? [{ to: "/hr", label: "HR Work", icon: ClipboardList }] : []),
     ...(can(user, "operations") ? [{ to: "/operations", label: "Operations", icon: Wrench }] : []),
     ...(can(user, "finance") ? [{ to: "/finance", label: "Finance", icon: Wallet }] : []),
-    ...(can(user, "performance_flags")
+    // The CEO and admin (full history), and coordinators (give flags).
+    ...(can(user, "performance_flags_give")
       ? [{ to: "/performance-flags", label: "Performance Flags", icon: Flag }]
       : []),
     ...(can(user, "audit_log") ? [{ to: "/audit-log", label: "Audit Log", icon: ShieldAlert }] : []),
@@ -236,7 +239,11 @@ export function ShellLayout({
               Workspace / {section || "Dashboard"}
             </span>
           </div>
-          <div className="flex shrink-0 items-center gap-4">
+          {/* Announcements (they no longer block the screen) and the Action
+              centre — everything waiting on this person — sit by the bell. */}
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+            <AnnouncementsButton />
+            <ActionCentre />
             <NotificationBell />
           </div>
         </header>

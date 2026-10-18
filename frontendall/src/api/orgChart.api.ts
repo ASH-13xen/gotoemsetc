@@ -7,6 +7,7 @@ export type TeamRole =
   | 'social_media_manager'
   | 'videographer'
   | 'editor'
+  | 'videographer_editor'
   | 'graphic_designer'
   | 'event_manager'
   | 'podcast_manager'
@@ -18,6 +19,8 @@ export const TEAM_ROLE_LABEL: Record<TeamRole, string> = {
   social_media_manager: 'Social Media Manager',
   videographer: 'Videographer',
   editor: 'Video Editor',
+  // One person who shoots and edits — counts as both everywhere.
+  videographer_editor: 'Videographer + Video Editor',
   graphic_designer: 'Graphic Designer',
   event_manager: 'Event Manager',
   podcast_manager: 'Podcast Manager',
@@ -81,8 +84,15 @@ export interface LinkableWorkTeam {
   name: string
 }
 
-export async function getOrgChart(): Promise<{ nodes: OrgNode[]; linkableWorkTeams: LinkableWorkTeam[] }> {
+// `coordinators` — everyone marked a Coordinator: they can give performance
+// flags to anyone, whatever their place in the chart.
+export async function getOrgChart(): Promise<{ nodes: OrgNode[]; linkableWorkTeams: LinkableWorkTeam[]; coordinators: OrgAssignee[] }> {
   const { data } = await apiClient.get('/org-chart')
+  return data
+}
+
+export async function setCoordinators(employeeIds: string[]) {
+  const { data } = await apiClient.put('/org-chart/coordinators', { employeeIds })
   return data
 }
 

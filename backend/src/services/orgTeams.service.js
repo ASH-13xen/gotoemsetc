@@ -1,5 +1,7 @@
 const OrgNode = require('../models/OrgNode');
-const { ORG_NODE_KIND, TEAM_MEMBER_ROLE } = require('../config/constants');
+const Employee = require('../models/Employee');
+const User = require('../models/User');
+const { ORG_NODE_KIND, TEAM_MEMBER_ROLE, EMPLOYEE_STATUS } = require('../config/constants');
 
 // Who is on which team, read straight from the Organisation chart: someone
 // is on a team when they hold one of the role boxes inside that team's box
@@ -45,14 +47,29 @@ async function teamsOf(employeeId) {
   return (await allTeams()).filter((t) => t.members.has(id));
 }
 
-// Who reviews this employee's leave/overtime before HR: the content managers
-// of their teams. Empty (so straight to HR) when they are on no team, are a
-// content manager themself, or their teams have no content manager.
+// Of these employees, the ones who can actually act: still active, with an
+// active login. Someone who has left (or has no login) never holds up a
+// request — it moves on to HR instead.
+async function ableToAct(employeeIds) {
+  if (!employeeIds.length) return [];
+  const [employees, users] = await Promise.all([
+    Employee.find({ _id: { $in: employeeIds }, status: EMPLOYEE_STATUS.ACTIVE, isDeleted: { $ne: true } }).select('_id').lean(),
+    User.find({ employeeLink: { $in: employeeIds }, isActive: true }).select('employeeLink').lean(),
+  ]);
+  const active = new Set(employees.map((e) => idOf(e._id)));
+  const withLogin = new Set(users.map((u) => idOf(u.employeeLink)));
+  return employeeIds.filter((id) => active.has(id) && withLogin.has(id));
+}
+
+// Who reviews this employee's leave, modification requests and overtime
+// before HR: the content managers of their teams who can act. Empty (so
+// straight to HR) when they are on no team, are a content manager themself,
+// or their teams have no content manager who can act.
 async function contentManagersFor(employeeId) {
   const id = idOf(employeeId);
   const teams = await teamsOf(id);
   if (teams.some((t) => t.contentManagers.has(id))) return [];
-  return [...new Set(teams.flatMap((t) => [...t.contentManagers]))];
+  return ableToAct([...new Set(teams.flatMap((t) => [...t.contentManagers]))]);
 }
 
 async function isContentManagerOf(applicantEmployeeId, cmEmployeeId) {

@@ -15,6 +15,10 @@ const pending = asyncHandler(async (req, res) => {
   res.json(await service.listForApprover(req.user));
 });
 
+const list = asyncHandler(async (req, res) => {
+  res.json({ requests: await service.listAll(req.user, req.query) });
+});
+
 const forEmployee = asyncHandler(async (req, res) => {
   res.json({ requests: await service.listForEmployee(req.user, req.params.employeeId, req.query) });
 });
@@ -37,4 +41,4 @@ const reject = asyncHandler(async (req, res) => {
   res.json({ request });
 });
 
-module.exports = { apply, pending, forEmployee, cmApprove, approve, reject };
+module.exports = { apply, pending, list, forEmployee, cmApprove, approve, reject };

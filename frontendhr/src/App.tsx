@@ -8,6 +8,7 @@ import { RequireHrAccess } from '@/components/auth/RequireHrAccess'
 import LoginPage from '@/pages/LoginPage'
 import HrWorkPage from '@/pages/HrWorkPage'
 import LeaveApplicationsPage from '@/pages/LeaveApplicationsPage'
+import OvertimeRequestsPage from '@/pages/OvertimeRequestsPage'
 import SalarySlipsBulkPage from '@/pages/SalarySlipsBulkPage'
 import AttendanceOverviewPage from '@/pages/AttendanceOverviewPage'
 import DocumentsOverviewPage from '@/pages/DocumentsOverviewPage'
@@ -51,6 +52,16 @@ export default function App({ basename }: AppProps = {}) {
                 <RequireAuth>
                   <RequireHrAccess>
                     <LeaveApplicationsPage />
+                  </RequireHrAccess>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/overtime-requests"
+              element={
+                <RequireAuth>
+                  <RequireHrAccess>
+                    <OvertimeRequestsPage />
                   </RequireHrAccess>
                 </RequireAuth>
               }

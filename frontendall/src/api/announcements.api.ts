@@ -26,6 +26,11 @@ export interface PendingAnnouncement {
   title: string
   message: string
   createdAt: string
+  // 'performance_flag' — the notice someone gets when they receive a flag.
+  kind?: 'general' | 'performance_flag'
+  flagColor?: 'red' | 'green' | null
+  // Put aside with "Later": still counted, doesn't open by itself.
+  later?: boolean
 }
 
 export interface CreateAnnouncementInput {
@@ -52,4 +57,8 @@ export async function listMyPendingAnnouncements(): Promise<{ announcements: Pen
 
 export async function acknowledgeAnnouncement(id: string): Promise<void> {
   await apiClient.post(`/announcements/${id}/acknowledge`)
+}
+
+export async function seeAnnouncementLater(id: string): Promise<void> {
+  await apiClient.post(`/announcements/${id}/later`)
 }
