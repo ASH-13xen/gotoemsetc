@@ -162,7 +162,12 @@ export default function WeeklyCalendarPage() {
         location: event.location ?? '',
         link: event.link ?? '',
         invitees: (event.attendees ?? []).filter((a) => a.status !== 'declined' && a.user._id !== viewerId).map((a) => a.user._id),
-        slices: (event.segments ?? []).map((s) => ({ start: s.startMin - event.startMin, end: s.endMin - event.startMin, label: s.label, user: s.user?._id ?? null })),
+        slices: (event.segments ?? []).map((s) => ({
+          start: s.startMin - event.startMin,
+          end: s.endMin - event.startMin,
+          label: s.label,
+          users: (s.users ?? []).map((u) => u._id),
+        })),
         from: event.title ?? 'event',
       },
     })

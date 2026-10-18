@@ -47,6 +47,7 @@ const createEvent = {
           start: z.number().int().min(0).max(24 * 60),
           end: z.number().int().min(1).max(24 * 60),
           label: optionalText(80),
+          users: z.array(objectId).max(50).optional(),
           user: objectId.nullable().optional(),
         })
       )
@@ -83,7 +84,15 @@ const segments = {
   ...idParam,
   body: z.object({
     segments: z
-      .array(z.object({ startMin: minute, endMin: minute, label: optionalText(80), user: objectId.nullable().optional() }))
+      .array(
+        z.object({
+          startMin: minute,
+          endMin: minute,
+          label: optionalText(80),
+          users: z.array(objectId).max(50).optional(),
+          user: objectId.nullable().optional(),
+        })
+      )
       .max(40),
     scope,
   }),

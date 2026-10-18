@@ -21,14 +21,17 @@ const attendeeSchema = new Schema(
   { _id: false }
 );
 
-// A slice of the meeting given to one person — e.g. the Co-ordinators
-// Meeting's 15 minutes each. A guest with a slice only holds that slice of
+// A slice of the meeting given to one or more people — e.g. the
+// Co-ordinators Meeting's 15 minutes each. Slices can be any length and
+// needn't fill the meeting. A guest with a slice only holds their slices of
 // the time; the rest of the meeting stays free on their calendar.
 const segmentSchema = new Schema({
   startMin: { type: Number, required: true },
   endMin: { type: Number, required: true },
   label: { type: String, trim: true },
-  user: { type: Schema.Types.ObjectId, ref: 'User' },
+  users: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+  user: { type: Schema.Types.ObjectId, ref: 'User' }, // older slices: one person
+  // When each person was reminded — the first time any of them is.
   remindedAt: { type: Date },
 });
 

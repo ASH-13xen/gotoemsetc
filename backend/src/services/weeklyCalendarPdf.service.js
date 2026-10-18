@@ -70,7 +70,10 @@ function eventCell(e, piece) {
   const segments = piece.slice
     ? ''
     : (e.segments || [])
-        .map((s) => `<div class="seg">${clock(s.startMin)}-${clock(s.endMin)}- <b>${esc((s.user?.name || s.label || '').toUpperCase())}</b>${s.user && s.label ? ` (${esc(s.label)})` : ''}</div>`)
+        .map((s) => {
+          const names = (s.users || []).map((u) => u.name).join(', ');
+          return `<div class="seg">${clock(s.startMin)}-${clock(s.endMin)}- <b>${esc((names || s.label || '').toUpperCase())}</b>${names && s.label ? ` (${esc(s.label)})` : ''}</div>`;
+        })
         .join('');
   const people = e.attendees?.filter((a) => a.status === 'accepted').length ?? 0;
   return {

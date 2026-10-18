@@ -50,7 +50,8 @@ export interface CalSegment {
   startMin: number
   endMin: number
   label: string
-  user: CalPerson | null
+  users: CalPerson[] // everyone this slice is for
+  user: CalPerson | null // the first of them
 }
 
 export interface CalAttendee {
@@ -62,11 +63,12 @@ export interface CalAttendee {
 }
 
 // A time slice as minutes from the meeting's start (used when creating).
+// Any length, gaps allowed, and for any number of people.
 export interface SliceInput {
   start: number
   end: number
   label?: string
-  user?: string | null
+  users: string[]
 }
 
 // A block on a week. `busy: true` means it's someone else's time the
@@ -186,7 +188,7 @@ export const removeAttendee = async (id: string, userId: string, scope: Scope = 
 export const respond = async (id: string, input: { response: 'accept' | 'decline'; reason?: string; scope?: Scope }) =>
   (await apiClient.post<{ updated: number; skipped: string[] }>(`${BASE}/events/${id}/respond`, input)).data
 export const join = async (id: string) => (await apiClient.post<{ event: CalEvent }>(`${BASE}/events/${id}/join`)).data.event
-export const setSegments = async (id: string, segments: { startMin: number; endMin: number; label?: string; user?: string | null }[], scope: Scope = 'one') =>
+export const setSegments = async (id: string, segments: { startMin: number; endMin: number; label?: string; users: string[] }[], scope: Scope = 'one') =>
   (await apiClient.put<{ event: CalEvent }>(`${BASE}/events/${id}/segments`, { segments, scope })).data.event
 
 export const addNote = async (id: string, input: { kind?: 'note' | 'action'; text: string; assignee?: string; dueDay?: string }) =>

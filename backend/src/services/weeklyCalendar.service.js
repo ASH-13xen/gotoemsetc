@@ -280,9 +280,21 @@ async function listPeople() {
 
 const wholeOf = (event) => ({ day: event.day, startMin: event.startMin, endMin: event.endMin });
 
+// Everyone a slice is for (older slices hold a single `user`).
+const peopleIn = (s) => [...new Set([...(s.users || []), ...(s.user ? [s.user] : [])].map(idOf))];
+
 // The slices of a meeting given to this person.
 const slicesOf = (event, userId) =>
-  (event.segments || []).filter((s) => s.user && idOf(s.user) === userId).map((s) => ({ day: event.day, startMin: s.startMin, endMin: s.endMin }));
+  (event.segments || []).filter((s) => peopleIn(s).includes(userId)).map((s) => ({ day: event.day, startMin: s.startMin, endMin: s.endMin }));
+
+// A slice keeping only the people in `keep` — or nothing, if it was for
+// people and none of them are left (and it has no topic of its own).
+function sliceFor(s, keep) {
+  const had = peopleIn(s);
+  const users = had.filter((u) => keep(u));
+  if (had.length && !users.length && !s.label) return null;
+  return { ...s, users, user: undefined };
+}
 
 // The time this person has (or would have) in an event: the host all of it;
 // a guest their own slices if the meeting is split and they have one,
@@ -453,7 +465,10 @@ function shapeEvent(event, viewer, people, { forUser = viewer.id } = {}) {
     segments: (event.segments || [])
       .slice()
       .sort((a, b) => a.startMin - b.startMin)
-      .map((s) => ({ _id: idOf(s._id), startMin: s.startMin, endMin: s.endMin, label: s.label ?? '', user: s.user ? personOrGone(people, s.user) : null })),
+      .map((s) => {
+        const users = peopleIn(s).map((u) => personOrGone(people, u));
+        return { _id: idOf(s._id), startMin: s.startMin, endMin: s.endMin, label: s.label ?? '', users, user: users[0] ?? null };
+      }),
     notes: isMember(event, viewer)
       ? (event.notes || []).map((n) => ({
           _id: idOf(n._id),
@@ -915,20 +930,21 @@ function assertNoSelfOverlap(occurrences) {
 }
 
 // Slices come in as minutes from the meeting's start, so one split fits
-// every date. Each must sit inside every picked time, without overlapping.
+// every date. Each must sit inside every picked time, without overlapping;
+// they can be any length, leave gaps, and be for several people at once.
 function checkSlices(slices, lengths, members) {
   const sorted = [...(slices || [])].sort((a, b) => a.start - b.start);
   const shortest = Math.min(...lengths);
   sorted.forEach((s, i) => {
     if (s.start < 0 || s.end <= s.start || s.end > shortest) throw ApiError.badRequest('Every slice must sit inside the meeting time');
     if (i > 0 && s.start < sorted[i - 1].end) throw ApiError.badRequest('Two slices overlap');
-    if (s.user && !members.has(idOf(s.user))) throw ApiError.badRequest('A slice can only go to someone in this meeting');
+    if (peopleIn(s).some((u) => !members.has(u))) throw ApiError.badRequest('A slice can only go to people in this meeting');
   });
-  return sorted.map((s) => ({ start: s.start, end: s.end, label: s.label || undefined, user: s.user ? idOf(s.user) : undefined }));
+  return sorted.map((s) => ({ start: s.start, end: s.end, label: s.label || undefined, users: peopleIn(s) }));
 }
 
 const slicesAt = (slices, startMin) =>
-  (slices || []).map((s) => ({ startMin: startMin + s.start, endMin: startMin + s.end, label: s.label, user: s.user }));
+  (slices || []).map((s) => ({ startMin: startMin + s.start, endMin: startMin + s.end, label: s.label, users: peopleIn(s) }));
 
 // One of a series' dates, ready to insert.
 function occurrenceDoc(fields, o, { host, series, slices, attendees }) {
@@ -1054,7 +1070,7 @@ async function scopedEvents(event, scope) {
 function placeAt(doc, next) {
   const shift = next.startMin - doc.startMin;
   doc.segments = (doc.segments || [])
-    .map((s) => ({ startMin: s.startMin + shift, endMin: s.endMin + shift, label: s.label, user: s.user }))
+    .map((s) => ({ startMin: s.startMin + shift, endMin: s.endMin + shift, label: s.label, users: peopleIn(s) }))
     .filter((s) => s.endMin <= next.endMin);
   doc.day = next.day;
   doc.startMin = next.startMin;
@@ -1105,7 +1121,7 @@ async function moveSeries(viewer, event, next, people) {
   const template = stream[0].toObject();
   const extra = moved.slice(pairs).map((o) => ({
     ...occurrenceDoc(template, o, { host: template.host, series: template.series, slices: [], attendees: [] }),
-    segments: slicesAt((template.segments || []).map((s) => ({ start: s.startMin - template.startMin, end: s.endMin - template.startMin, label: s.label, user: s.user })), o.startMin),
+    segments: slicesAt((template.segments || []).map((s) => ({ start: s.startMin - template.startMin, end: s.endMin - template.startMin, label: s.label, users: peopleIn(s) })), o.startMin),
     attendees: template.attendees.map(({ user, status, invitedBy, invitedAt, reason }) => ({ user, status, invitedBy, invitedAt, reason })),
   }));
   const added = extra.length ? await WeeklyEvent.insertMany(extra) : [];
@@ -1268,11 +1284,14 @@ async function removeAttendee(viewer, id, userId, { scope = 'one' } = {}) {
   const targets = await scopedEvents(event, scope);
   for (const t of targets) {
     t.attendees = t.attendees.filter((a) => idOf(a.user) !== userId);
-    t.segments = (t.segments || []).filter((s) => idOf(s.user) !== userId);
+    t.segments = (t.segments || []).map((s) => sliceFor(s.toObject(), (u) => u !== userId)).filter(Boolean);
   }
   await Promise.all(targets.map((t) => t.save()));
-  if (scope === 'series' && event.series) {
-    await WeeklySeries.updateOne({ _id: event.series }, { $pull: { attendees: { user: userId }, slices: { user: userId } } });
+  const rule = scope === 'series' ? await loadRule(event) : null;
+  if (rule) {
+    rule.attendees = rule.attendees.filter((a) => idOf(a.user) !== userId);
+    rule.slices = rule.slices.map((s) => sliceFor(s.toObject(), (u) => u !== userId)).filter(Boolean);
+    await rule.save();
   }
   const people = await loadPeople();
   notificationService.createForUsers([userId], {
@@ -1376,16 +1395,19 @@ async function setSegments(viewer, id, segments, { scope = 'one' } = {}) {
       throw ApiError.badRequest(`Every slice must sit inside ${fmtMin(event.startMin)} – ${fmtMin(event.endMin)}`);
     }
     if (i > 0 && s.startMin < sorted[i - 1].endMin) throw ApiError.badRequest('Two slices overlap');
-    if (s.user && !members.has(idOf(s.user))) throw ApiError.badRequest('A slice can only go to someone in this meeting');
+    if (peopleIn(s).some((u) => !members.has(u))) throw ApiError.badRequest('A slice can only go to people in this meeting');
   });
-  const relative = sorted.map((s) => ({ start: s.startMin - event.startMin, end: s.endMin - event.startMin, label: s.label || undefined, user: s.user ? idOf(s.user) : undefined }));
+  const relative = sorted.map((s) => ({ start: s.startMin - event.startMin, end: s.endMin - event.startMin, label: s.label || undefined, users: peopleIn(s) }));
 
   const targets = scope === 'series' ? await scopedEvents(event, 'series') : [event];
   if (!targets.some((t) => idOf(t._id) === idOf(event._id))) targets.unshift(event);
   const next = new Map(
     targets.map((t) => {
       const here = membersOf(t);
-      const fits = relative.filter((s) => s.end <= t.endMin - t.startMin && (!s.user || here.has(s.user)));
+      const fits = relative
+        .filter((s) => s.end <= t.endMin - t.startMin)
+        .map((s) => sliceFor(s, (u) => here.has(u)))
+        .filter(Boolean);
       return [idOf(t._id), slicesAt(fits, t.startMin)];
     })
   );
@@ -1542,8 +1564,9 @@ async function copyWeek(viewer, { from, to }) {
       host: viewer.id,
       series,
       segments: (e.segments || [])
-        .filter((s) => !s.user || idOf(s.user) === viewer.id || free.includes(idOf(s.user)))
-        .map(({ startMin, endMin, label, user }) => ({ startMin, endMin, label, user })),
+        .map((s) => sliceFor(s, (u) => u === viewer.id || free.includes(u)))
+        .filter(Boolean)
+        .map(({ startMin, endMin, label, users }) => ({ startMin, endMin, label, users })),
       attendees: free.map((user) => ({ user, status: INVITED, invitedBy: viewer.id })),
     });
     created.push(doc);
@@ -1612,11 +1635,11 @@ async function sendDueReminders() {
   const due = await WeeklyEvent.find({
     day: now.day,
     cancelledAt: null,
-    $or: [{ reminderSentAt: null, startMin: window }, { segments: { $elemMatch: { remindedAt: null, user: { $ne: null }, startMin: window } } }],
+    $or: [{ reminderSentAt: null, startMin: window }, { segments: { $elemMatch: { remindedAt: null, startMin: window } } }],
   });
   let sent = 0;
   for (const event of due) {
-    const sliced = new Set((event.segments || []).filter((s) => s.user).map((s) => idOf(s.user)));
+    const sliced = new Set((event.segments || []).flatMap(peopleIn));
     const accepted = new Set(event.attendees.filter((a) => a.status === ACCEPTED).map((a) => idOf(a.user)));
     if (!event.reminderSentAt && event.startMin > now.min && event.startMin <= now.min + 10) {
       const recipients = [idOf(event.host), ...[...accepted].filter((u) => !sliced.has(u))];
@@ -1630,11 +1653,11 @@ async function sendDueReminders() {
       sent += 1;
     }
     for (const s of event.segments || []) {
-      if (!s.user || s.remindedAt || s.startMin <= now.min || s.startMin > now.min + 10) continue;
+      if (s.remindedAt || s.startMin <= now.min || s.startMin > now.min + 10) continue;
       s.remindedAt = new Date();
-      const userId = idOf(s.user);
-      if (!accepted.has(userId) || userId === idOf(event.host)) continue;
-      await notificationService.createForUsers([userId], {
+      const to = peopleIn(s).filter((u) => accepted.has(u) && u !== idOf(event.host));
+      if (!to.length) continue;
+      await notificationService.createForUsers(to, {
         type: NOTIFICATION_TYPES.WEEKLY_EVENT_REMINDER,
         title: `Your slot at ${fmtMin(s.startMin)}: ${event.title}`,
         message: `${event.location ? `${event.location} · ` : ''}${fmtMin(s.startMin)} – ${fmtMin(s.endMin)}${s.label ? ` · ${s.label}` : ''}`,
@@ -1733,7 +1756,9 @@ async function extendRepeats() {
       occurrenceDoc(rule, o, {
         host: rule.host,
         series: rule._id,
-        slices: rule.slices.filter((s) => !s.user || idOf(s.user) === host || rule.attendees.some((a) => idOf(a.user) === idOf(s.user) && a.status !== DECLINED)),
+        slices: rule.slices
+          .map((s) => sliceFor(s.toObject(), (u) => u === host || rule.attendees.some((a) => idOf(a.user) === u && a.status !== DECLINED)))
+          .filter(Boolean),
         attendees: rule.attendees.map((a) => {
           const busy = a.status === ACCEPTED && (guestBusy.get(idOf(a.user)) || []).some((h) => overlaps(h.occurrence, o));
           return { user: a.user, status: busy ? INVITED : a.status, invitedBy: a.invitedBy, invitedAt: a.invitedAt ?? now, respondedAt: busy ? undefined : a.respondedAt };

@@ -52,7 +52,7 @@ import {
 import { CATEGORY, CATEGORY_KEYS, PERSONAL, addDays, apiError, fmtDay, fmtDayLong, fmtMin, fmtRange, fmtWhen, gridTimes, nowIst } from './calendarUtils'
 import { Avatar, PeoplePicker } from './PeoplePicker'
 import { Chip, Sec, SidePanel } from './SidePanel'
-import { SliceBar } from './CreateEventPanel'
+import { SliceBar, SlicePeople } from './CreateEventPanel'
 
 function timeAgo(iso: string) {
   const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
@@ -389,36 +389,39 @@ function AgendaSection({ event, members, isPast, upcomingInSeries }: { event: Ca
   const save = useSetSegments()
   const [editing, setEditing] = useState(false)
   const [scope, setScope] = useState<Scope>('one')
-  const [draft, setDraft] = useState<{ startMin: number; endMin: number; label: string; user: string }[]>([])
+  const [draft, setDraft] = useState<{ startMin: number; endMin: number; label: string; users: string[] }[]>([])
   const options = slotOptions(event.startMin, event.endMin, 5)
   const length = event.endMin - event.startMin
   const nameOf = (id: string) => members.find((m) => m._id === id)?.name ?? 'Someone'
+  const hostId = event.host?._id ?? ''
+  const sorted = [...draft].sort((a, b) => a.startMin - b.startMin)
+  const overlapping = sorted.some((d, i) => i > 0 && d.startMin < sorted[i - 1].endMin)
 
   const begin = () => {
-    setDraft(
-      (event.segments ?? []).map((s) => ({ startMin: s.startMin, endMin: s.endMin, label: s.label, user: s.user?._id ?? '' }))
-    )
+    setDraft((event.segments ?? []).map((s) => ({ startMin: s.startMin, endMin: s.endMin, label: s.label, users: (s.users ?? []).map((u) => u._id) })))
     setScope('one')
     setEditing(true)
   }
   // Cut the whole meeting into equal slices, keeping who had which (or
   // handing them to the guests in order).
   const cut = (each: number) => {
-    const guests = members.filter((m) => m._id !== event.host?._id).map((m) => m._id)
-    const people = draft.some((d) => d.user) ? draft.map((d) => d.user) : guests
+    const guests = members.filter((m) => m._id !== hostId).map((m) => [m._id])
+    const people = draft.some((d) => d.users.length) ? draft.map((d) => d.users) : guests
     const next: typeof draft = []
-    for (let s = event.startMin, i = 0; s + each <= event.endMin; s += each, i += 1) next.push({ startMin: s, endMin: s + each, label: draft[i]?.label ?? '', user: people[i] ?? '' })
+    for (let s = event.startMin, i = 0; s + each <= event.endMin; s += each, i += 1) next.push({ startMin: s, endMin: s + each, label: draft[i]?.label ?? '', users: people[i] ?? [] })
     setDraft(next)
   }
+  // A new slice starts where the last one ends; change its start to leave a gap.
   const addRow = () => {
-    const last = draft[draft.length - 1]
-    const start = last ? last.endMin : event.startMin
-    if (start >= event.endMin) return toast.info('The agenda already fills the meeting')
-    setDraft([...draft, { startMin: start, endMin: Math.min(start + 15, event.endMin), label: '', user: '' }])
+    const start = draft.length ? Math.max(...draft.map((d) => d.endMin)) : event.startMin
+    if (start >= event.endMin) return toast.info('The slices already reach the end of the meeting')
+    setDraft([...draft, { startMin: start, endMin: Math.min(start + 15, event.endMin), label: '', users: [] }])
   }
+  const patch = (i: number, p: Partial<(typeof draft)[number]>) => setDraft(draft.map((x, j) => (j === i ? { ...x, ...p } : x)))
   const commit = async () => {
+    if (overlapping) return toast.error('Two slices overlap — change one of their times')
     try {
-      await save.mutateAsync({ id: event._id, scope, segments: draft.map((d) => ({ startMin: d.startMin, endMin: d.endMin, label: d.label || undefined, user: d.user || null })) })
+      await save.mutateAsync({ id: event._id, scope, segments: sorted.map((d) => ({ startMin: d.startMin, endMin: d.endMin, label: d.label || undefined, users: d.users })) })
       toast.success(scope === 'series' ? `Slices saved on ${upcomingInSeries} dates` : 'Slices saved')
       setEditing(false)
     } catch (err) {
@@ -441,19 +444,26 @@ function AgendaSection({ event, members, isPast, upcomingInSeries }: { event: Ca
         event.segments?.length ? (
           <div className="grid gap-1.5">
             <SliceBar
-              slices={event.segments.map((s) => ({ start: s.startMin - event.startMin, end: s.endMin - event.startMin, label: s.label, user: s.user?._id ?? null }))}
+              slices={event.segments.map((s) => ({ start: s.startMin - event.startMin, end: s.endMin - event.startMin, label: s.label, users: (s.users ?? []).map((u) => u._id) }))}
               length={length}
-              nameOf={nameOf}
+              nameOf={(id) => event.segments?.flatMap((s) => s.users ?? []).find((u) => u._id === id)?.name ?? nameOf(id)}
             />
             <div className="grid gap-1">
               {event.segments.map((s) => (
                 <div key={s._id} className="flex items-center gap-2.5 rounded-xl border border-border/70 bg-secondary/30 px-2.5 py-1.5">
                   <span className="w-23 shrink-0 text-[11px] font-bold text-primary tabular-nums">{fmtRange(s.startMin, s.endMin)}</span>
-                  {s.user && <Avatar person={s.user} size="size-5" className="text-[8px]" />}
+                  {(s.users ?? []).length > 0 && (
+                    <span className="flex shrink-0 -space-x-1.5">
+                      {(s.users ?? []).slice(0, 4).map((u) => (
+                        <Avatar key={u._id} person={u} size="size-5" className="text-[8px] ring-2 ring-card" />
+                      ))}
+                    </span>
+                  )}
                   <span className="truncate text-sm font-semibold text-foreground">
-                    {s.user?.name ?? s.label}
-                    {s.user && s.label && <span className="font-normal text-muted-foreground"> · {s.label}</span>}
+                    {(s.users ?? []).length ? (s.users ?? []).map((u) => u.name.split(' ')[0]).join(', ') : s.label}
+                    {(s.users ?? []).length > 0 && s.label && <span className="font-normal text-muted-foreground"> · {s.label}</span>}
                   </span>
+                  <span className="ml-auto shrink-0 text-[10.5px] text-muted-foreground">{s.endMin - s.startMin} min</span>
                 </div>
               ))}
             </div>
@@ -479,16 +489,26 @@ function AgendaSection({ event, members, isPast, upcomingInSeries }: { event: Ca
             ))}
           </div>
           <SliceBar
-            slices={draft.map((d) => ({ start: d.startMin - event.startMin, end: d.endMin - event.startMin, label: d.label, user: d.user || null }))}
+            slices={sorted.map((d) => ({ start: d.startMin - event.startMin, end: d.endMin - event.startMin, label: d.label, users: d.users }))}
             length={length}
             nameOf={nameOf}
           />
           {draft.map((d, i) => (
-            <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-1.5 rounded-xl border border-border p-2">
+            <div
+              key={i}
+              className={cn(
+                'grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded-xl border p-2',
+                draft.some((o, j) => j !== i && o.startMin < d.endMin && d.startMin < o.endMin) ? 'border-rose-500/60 bg-rose-500/5' : 'border-border'
+              )}
+            >
               <select
                 value={d.startMin}
-                onChange={(e) => setDraft(draft.map((x, j) => (j === i ? { ...x, startMin: Number(e.target.value) } : x)))}
-                className="h-8 rounded-lg border border-border bg-background px-1.5 text-xs"
+                onChange={(e) => {
+                  const startMin = Number(e.target.value)
+                  patch(i, { startMin, endMin: Math.max(d.endMin, startMin + 5) })
+                }}
+                className="h-8 min-w-0 rounded-lg border border-border bg-background px-1.5 text-xs"
+                aria-label="Slice starts"
               >
                 {options.slice(0, -1).map((m) => (
                   <option key={m} value={m}>
@@ -498,38 +518,35 @@ function AgendaSection({ event, members, isPast, upcomingInSeries }: { event: Ca
               </select>
               <select
                 value={d.endMin}
-                onChange={(e) => setDraft(draft.map((x, j) => (j === i ? { ...x, endMin: Number(e.target.value) } : x)))}
-                className="h-8 rounded-lg border border-border bg-background px-1.5 text-xs"
+                onChange={(e) => patch(i, { endMin: Number(e.target.value) })}
+                className="h-8 min-w-0 rounded-lg border border-border bg-background px-1.5 text-xs"
+                aria-label="Slice ends"
               >
-                {options.slice(1).map((m) => (
-                  <option key={m} value={m}>
-                    {fmtMin(m)}
-                  </option>
-                ))}
+                {options
+                  .filter((m) => m > d.startMin)
+                  .map((m) => (
+                    <option key={m} value={m}>
+                      {fmtMin(m)}
+                    </option>
+                  ))}
               </select>
+              <span className="w-12 text-center text-[10.5px] font-bold text-primary tabular-nums">{d.endMin - d.startMin} min</span>
               <button type="button" onClick={() => setDraft(draft.filter((_, j) => j !== i))} className="rounded-lg px-1.5 text-muted-foreground hover:text-rose-600" aria-label="Remove slice">
                 <Trash2 className="size-3.5" />
               </button>
-              <select
-                value={d.user}
-                onChange={(e) => setDraft(draft.map((x, j) => (j === i ? { ...x, user: e.target.value } : x)))}
-                className="h-8 rounded-lg border border-border bg-background px-1.5 text-xs"
-              >
-                <option value="">No one in particular</option>
-                {members.map((m) => (
-                  <option key={m._id} value={m._id}>
-                    {m.name}
-                  </option>
-                ))}
-              </select>
+              <div className="col-span-4">
+                <SlicePeople value={d.users} onChange={(users) => patch(i, { users })} viewerId={hostId} members={members.map((m) => m._id)} nameOf={nameOf} />
+              </div>
               <input
                 value={d.label}
-                onChange={(e) => setDraft(draft.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+                onChange={(e) => patch(i, { label: e.target.value })}
                 placeholder="Topic"
-                className="col-span-2 h-8 rounded-lg border border-border bg-background px-2 text-xs"
+                className="col-span-4 h-8 rounded-lg border border-border bg-background px-2 text-xs"
               />
             </div>
           ))}
+          {overlapping && <p className="text-[11px] font-semibold text-rose-600">Two slices overlap — change one of their times.</p>}
+          <p className="text-[11px] text-muted-foreground">Slices can be any length, leave free minutes in between, and be for several people.</p>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={addRow}>
               <Plus className="size-3.5" /> Add slice

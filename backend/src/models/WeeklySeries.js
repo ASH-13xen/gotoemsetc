@@ -26,7 +26,8 @@ const sliceSchema = new Schema(
     start: { type: Number, required: true },
     end: { type: Number, required: true },
     label: { type: String, trim: true },
-    user: { type: Schema.Types.ObjectId, ref: 'User' },
+    users: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    user: { type: Schema.Types.ObjectId, ref: 'User' }, // older slices: one person
   },
   { _id: false }
 );

@@ -23,6 +23,7 @@ import {
   fmtRange,
   fmtWhen,
   gridTimes,
+  namesShort,
   nowIst,
   overlaps,
   repeatDates,
@@ -140,31 +141,35 @@ export function CreateEventPanel({
   // ---- Slices ----
   const fitting = meetingLength ? slices.filter((s) => s.end <= meetingLength) : []
   const guests = kind === 'personal' ? [] : invitees
-  const fillEven = (each: number, people = guests) => {
+  // Cut the meeting into equal slices — keeping who had which, in order.
+  const fillEven = (each: number, groups?: string[][]) => {
     if (!meetingLength) return
     setSliceLen(each)
-    setSlices(evenSlices(meetingLength, each, people))
+    const cut = evenSlices(meetingLength, each)
+    const who = groups ?? (slices.some((s) => s.users.length) ? slices.map((s) => s.users) : guests.map((g) => [g]))
+    setSlices(cut.map((s, i) => ({ ...s, users: who[i] ?? [], label: slices[i]?.label ?? '' })))
   }
-  // Re-cutting keeps who had which slice, in order.
-  const keptPeople = () => (slices.some((s) => s.user) ? slices.map((s) => s.user ?? '') : guests)
   const startSplit = () => {
     if (!meetingLength) return toast.info('Give every picked time the same length to split it')
     setSplitting(true)
     if (!slices.length) fillEven(sliceLen)
   }
   const setSlice = (i: number, patch: Partial<SliceInput>) => {
-    if (patch.user && patch.user !== viewerId && !invitees.includes(patch.user)) setInvitees([...invitees, patch.user])
-    setSlices(slices.map((s, j) => (j === i ? { ...s, ...patch } : s)))
+    const fresh = (patch.users ?? []).filter((u) => u !== viewerId && !invitees.includes(u))
+    if (fresh.length) setInvitees([...invitees, ...fresh])
+    setSlices(slices.map((s, j) => (j === i ? { ...s, ...patch } : s)).sort((a, b) => a.start - b.start))
   }
+  // A new slice starts where the last one ends (leave a gap by changing its start).
   const addSlice = () => {
     if (!meetingLength) return
-    const start = slices.length ? slices[slices.length - 1].end : 0
-    if (start + 5 > meetingLength) return toast.info('The slices already fill the meeting')
-    setSlices([...slices, { start, end: Math.min(start + sliceLen, meetingLength), user: null, label: '' }])
+    const start = slices.length ? Math.max(...slices.map((s) => s.end)) : 0
+    if (start + 5 > meetingLength) return toast.info('The slices already reach the end of the meeting')
+    setSlices([...slices, { start, end: Math.min(start + sliceLen, meetingLength), users: [], label: '' }])
   }
+  const sliceClash = fitting.some((s, i) => i > 0 && s.start < fitting[i - 1].end)
   // A guest with a slice only has to be free for their slice.
   const windowsFor = (id: string) => {
-    const mine = fitting.filter((s) => s.user === id)
+    const mine = fitting.filter((s) => s.users.includes(id))
     return mine.length ? sorted.flatMap((o) => mine.map((s) => ({ day: o.day, startMin: o.startMin + s.start, endMin: o.startMin + s.end }))) : undefined
   }
 
@@ -174,6 +179,7 @@ export function CreateEventPanel({
     if (pastSlots.length) return toast.error(`${fmtWhen(pastSlots[0])} has already passed`)
     if (overlapping) return toast.error('Two of the picked times overlap')
     if (repeat !== 'none' && sorted.length > 7) return toast.error('A repeating event can have up to 7 times')
+    if (splitting && sliceClash) return toast.error('Two slices overlap — change one of their times')
     try {
       const result = await create.mutateAsync({
         title: title.trim(),
@@ -186,7 +192,7 @@ export function CreateEventPanel({
         slots: sorted,
         repeat,
         invitees: kind === 'personal' ? [] : invitees,
-        slices: kind !== 'personal' && splitting ? fitting.map((s) => ({ start: s.start, end: s.end, label: s.label?.trim() || undefined, user: s.user || null })) : [],
+        slices: kind !== 'personal' && splitting ? fitting.map((s) => ({ start: s.start, end: s.end, label: s.label?.trim() || undefined, users: s.users.filter(Boolean) })) : [],
       })
       const invited = kind === 'personal' ? 0 : invitees.length
       toast.success(
@@ -453,7 +459,7 @@ export function CreateEventPanel({
                   <button
                     key={l}
                     type="button"
-                    onClick={() => fillEven(l, keptPeople())}
+                    onClick={() => fillEven(l)}
                     className={cn(
                       'rounded-full border px-2.5 py-0.5 text-[11px] font-bold transition-colors',
                       sliceLen === l ? 'border-transparent bg-primary text-primary-foreground' : 'border-border text-muted-foreground hover:text-foreground'
@@ -471,7 +477,7 @@ export function CreateEventPanel({
                     step={5}
                     value={sliceLen}
                     onChange={(e) => setSliceLen(Math.max(5, Math.min(meetingLength, Number(e.target.value) || 5)))}
-                    onBlur={() => fillEven(sliceLen, keptPeople())}
+                    onBlur={() => fillEven(sliceLen)}
                     className="h-6 w-14 rounded-md border border-border bg-background px-1.5 text-[11px] font-semibold text-foreground"
                     aria-label="Minutes per slice"
                   />
@@ -479,7 +485,7 @@ export function CreateEventPanel({
                 </label>
                 <button
                   type="button"
-                  onClick={() => fillEven(sliceLen, guests)}
+                  onClick={() => fillEven(sliceLen, guests.map((g) => [g]))}
                   disabled={!guests.length}
                   className="ml-auto flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-bold text-primary disabled:opacity-40"
                   title={guests.length ? 'Hand the slices to the invited people, in order' : 'Invite people first'}
@@ -492,52 +498,36 @@ export function CreateEventPanel({
 
               <div className="grid gap-1">
                 {slices.map((s, i) => {
-                  const start = base ? base.startMin + s.start : s.start
                   const out = s.end > meetingLength
+                  const clash = i > 0 && s.start < slices[i - 1].end
+                  const gap = i > 0 && s.start > slices[i - 1].end ? s.start - slices[i - 1].end : 0
                   return (
-                    <div key={i} className={cn('grid grid-cols-[84px_1fr_auto] items-center gap-1.5 rounded-xl border border-border p-1.5', out && 'opacity-45')}>
-                      <span className="text-[11px] font-bold text-primary tabular-nums">{base ? fmtRange(start, start + s.end - s.start) : `${s.start}–${s.end}m`}</span>
-                      <select
-                        value={s.user ?? ''}
-                        onChange={(e) => setSlice(i, { user: e.target.value || null })}
-                        className="h-8 min-w-0 rounded-lg border border-border bg-background px-1.5 text-xs"
-                        aria-label="Who this slice is for"
-                      >
-                        <option value="">No one in particular</option>
-                        <option value={viewerId}>You</option>
-                        {invitees.map((id) => (
-                          <option key={id} value={id}>
-                            {nameOf(id)}
-                          </option>
-                        ))}
-                        {everyoneElse.length > 0 && (
-                          <optgroup label="Invite someone else">
-                            {everyoneElse.map((p) => (
-                              <option key={p._id} value={p._id}>
-                                {p.name}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                      </select>
-                      <button type="button" onClick={() => setSlices(slices.filter((_, j) => j !== i))} className="rounded-lg p-1.5 text-muted-foreground hover:text-rose-600" aria-label="Remove slice">
-                        <Trash2 className="size-3.5" />
-                      </button>
-                      <input
-                        value={s.label ?? ''}
-                        onChange={(e) => setSlice(i, { label: e.target.value })}
-                        placeholder="Topic (optional)"
-                        className="col-span-3 h-7 rounded-lg border border-border bg-background px-2 text-xs"
+                    <div key={i} className="grid gap-1">
+                      {gap > 0 && <p className="pl-2 text-[10.5px] text-muted-foreground italic">{gap} min free</p>}
+                      <SliceRow
+                        startMin={base?.startMin ?? 0}
+                        length={meetingLength}
+                        slice={s}
+                        dim={out}
+                        clash={clash}
+                        viewerId={viewerId}
+                        members={invitees}
+                        others={everyoneElse}
+                        nameOf={nameOf}
+                        onChange={(patch) => setSlice(i, patch)}
+                        onRemove={() => setSlices(slices.filter((_, j) => j !== i))}
                       />
                     </div>
                   )
                 })}
               </div>
+              {sliceClash && <p className="text-[11px] font-semibold text-rose-600">Two slices overlap — change one of their times.</p>}
               <button type="button" onClick={addSlice} className="flex w-fit items-center gap-1 text-xs font-semibold text-primary hover:underline">
                 <Plus className="size-3.5" /> Add slice
               </button>
               <p className="text-[11px] text-muted-foreground">
-                The same split is used on every date{repeat !== 'none' ? ' it repeats' : ''}. You can change it later from the event.
+                Slices can be different lengths and leave free minutes in between; a slice can be for several people. The same split is used on every date
+                {repeat !== 'none' ? ' it repeats' : ''}, and you can change it later from the event.
               </p>
             </div>
           )}
@@ -617,25 +607,161 @@ function SlotRow({
   )
 }
 
-// The meeting as a bar, cut into its slices — who gets which part at a glance.
+// The meeting as a bar, cut into its slices — who gets which part at a
+// glance. Free minutes between slices show as gaps.
 export function SliceBar({ slices, length, nameOf }: { slices: SliceInput[]; length: number; nameOf: (id: string) => string }) {
   if (!slices.length || !length) return null
   return (
-    <div className="relative flex h-7 overflow-hidden rounded-lg border border-border bg-secondary/40">
-      {slices.map((s, i) => (
-        <span
-          key={i}
-          className="absolute inset-y-0 flex items-center justify-center overflow-hidden border-r border-background text-[9.5px] font-bold text-white"
-          style={{
-            left: `${(s.start / length) * 100}%`,
-            width: `${((s.end - s.start) / length) * 100}%`,
-            background: s.user ? avatarGradient(s.user) : 'color-mix(in oklch, var(--muted-foreground) 45%, transparent)',
+    <div className="relative flex h-7 overflow-hidden rounded-lg border border-dashed border-border bg-secondary/30">
+      {slices.map((s, i) => {
+        const names = s.users.map(nameOf)
+        return (
+          <span
+            key={i}
+            className="absolute inset-y-0 flex items-center justify-center overflow-hidden border-x border-background text-[9.5px] font-bold text-white"
+            style={{
+              left: `${(s.start / length) * 100}%`,
+              width: `${((s.end - s.start) / length) * 100}%`,
+              background: s.users[0] ? avatarGradient(s.users[0]) : 'color-mix(in oklch, var(--muted-foreground) 45%, transparent)',
+            }}
+            title={`${s.end - s.start} min${names.length ? ` · ${names.join(', ')}` : ''}${s.label ? ` · ${s.label}` : ''}`}
+          >
+            <span className="truncate px-0.5">{names.length ? namesShort(names) : s.label || '—'}</span>
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+// One slice while creating: its own start and end (any length, in 5-minute
+// steps), who it's for — any number of people — and a topic.
+function SliceRow({
+  startMin,
+  length,
+  slice,
+  dim,
+  clash,
+  viewerId,
+  members,
+  others,
+  nameOf,
+  onChange,
+  onRemove,
+}: {
+  startMin: number
+  length: number
+  slice: SliceInput
+  dim: boolean
+  clash: boolean
+  viewerId: string
+  members: string[]
+  others: { _id: string; name: string }[]
+  nameOf: (id: string) => string
+  onChange: (patch: Partial<SliceInput>) => void
+  onRemove: () => void
+}) {
+  const offsets = Array.from({ length: length / 5 + 1 }, (_, i) => i * 5)
+  return (
+    <div className={cn('grid gap-1.5 rounded-xl border p-1.5', clash ? 'border-rose-500/60 bg-rose-500/5' : 'border-border', dim && 'opacity-45')}>
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] items-center gap-1">
+        <select
+          value={slice.start}
+          onChange={(e) => {
+            const start = Number(e.target.value)
+            onChange({ start, end: Math.max(slice.end, start + 5) })
           }}
-          title={`${s.start}–${s.end} min${s.user ? ` · ${nameOf(s.user)}` : ''}${s.label ? ` · ${s.label}` : ''}`}
+          className="h-8 min-w-0 rounded-lg border border-border bg-background px-1 text-xs font-semibold"
+          aria-label="Slice starts"
         >
-          <span className="truncate px-0.5">{s.user ? nameOf(s.user).split(' ')[0] : s.label || '—'}</span>
+          {offsets.slice(0, -1).map((o) => (
+            <option key={o} value={o}>
+              {fmtMin(startMin + o)}
+            </option>
+          ))}
+        </select>
+        <select
+          value={slice.end}
+          onChange={(e) => onChange({ end: Number(e.target.value) })}
+          className="h-8 min-w-0 rounded-lg border border-border bg-background px-1 text-xs font-semibold"
+          aria-label="Slice ends"
+        >
+          {offsets
+            .filter((o) => o > slice.start)
+            .map((o) => (
+              <option key={o} value={o}>
+                {fmtMin(startMin + o)}
+              </option>
+            ))}
+        </select>
+        <span className="w-12 text-center text-[10.5px] font-bold text-primary tabular-nums">{slice.end - slice.start} min</span>
+        <button type="button" onClick={onRemove} className="rounded-lg p-1.5 text-muted-foreground hover:text-rose-600" aria-label="Remove slice">
+          <Trash2 className="size-3.5" />
+        </button>
+      </div>
+      <SlicePeople value={slice.users} onChange={(users) => onChange({ users })} viewerId={viewerId} members={members} others={others} nameOf={nameOf} />
+      <input
+        value={slice.label ?? ''}
+        onChange={(e) => onChange({ label: e.target.value })}
+        placeholder="Topic (optional)"
+        className="h-7 rounded-lg border border-border bg-background px-2 text-xs"
+      />
+    </div>
+  )
+}
+
+// Who a slice is for: chips, plus a picker to add more — people in the
+// meeting first, then anyone else (picking them invites them too).
+export function SlicePeople({
+  value,
+  onChange,
+  viewerId,
+  members,
+  others = [],
+  nameOf,
+}: {
+  value: string[]
+  onChange: (users: string[]) => void
+  viewerId: string
+  members: string[]
+  others?: { _id: string; name: string }[]
+  nameOf: (id: string) => string
+}) {
+  const inMeeting = [viewerId, ...members.filter((m) => m !== viewerId)].filter((id) => !value.includes(id))
+  const rest = others.filter((p) => !value.includes(p._id) && !members.includes(p._id) && p._id !== viewerId)
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {value.map((id) => (
+        <span key={id} className="flex items-center gap-1 rounded-full border border-border bg-secondary/60 py-0.5 pr-1 pl-0.5 text-[11px] font-semibold">
+          <span className="size-4 rounded-full" style={{ background: avatarGradient(id) }} />
+          {id === viewerId ? 'You' : nameOf(id).split(' ')[0]}
+          <button type="button" onClick={() => onChange(value.filter((v) => v !== id))} className="rounded-full p-0.5 text-muted-foreground hover:text-foreground" aria-label={`Take ${nameOf(id)} off this slice`}>
+            <X className="size-2.5" />
+          </button>
         </span>
       ))}
+      <select
+        value=""
+        onChange={(e) => e.target.value && onChange([...value, e.target.value])}
+        className="h-7 min-w-0 flex-1 rounded-lg border border-dashed border-border bg-background px-1.5 text-[11px] text-muted-foreground"
+        aria-label="Add a person to this slice"
+      >
+        <option value="">{value.length ? '+ Add another person' : '+ Who is this slice for? (optional)'}</option>
+        {inMeeting.map((id) => (
+          <option key={id} value={id}>
+            {id === viewerId ? 'You' : nameOf(id)}
+          </option>
+        ))}
+        {rest.length > 0 && (
+          <optgroup label="Invite someone else">
+            {rest.map((p) => (
+              <option key={p._id} value={p._id}>
+                {p.name}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
     </div>
   )
 }

@@ -142,8 +142,15 @@ export const REPEAT_CHOICES: { value: Repeat | 'none'; label: string }[] = [
 
 export function evenSlices(length: number, each: number, people: string[] = []): SliceInput[] {
   const out: SliceInput[] = []
-  for (let s = 0, i = 0; s + each <= length; s += each, i += 1) out.push({ start: s, end: s + each, user: people[i] ?? null, label: '' })
+  for (let s = 0, i = 0; s + each <= length; s += each, i += 1) out.push({ start: s, end: s + each, users: people[i] ? [people[i]] : [], label: '' })
   return out
+}
+
+// "Mansi", "Mansi & Tara", "Mansi +2" — who a slice is for, briefly.
+export function namesShort(names: string[]) {
+  const first = names.map((n) => n.split(' ')[0])
+  if (first.length <= 2) return first.join(' & ')
+  return `${first[0]} +${first.length - 1}`
 }
 
 // ---------------------------------------------------------------------------

@@ -16,6 +16,7 @@ import {
   fmtRange,
   initialsOf,
   isLunch,
+  namesShort,
   nowIst,
 } from './calendarUtils'
 
@@ -670,12 +671,12 @@ function EventBlock({
             className="pointer-events-none absolute right-0 left-1 border-t border-dashed"
             style={{ top: y, height: h, borderColor: atTop ? 'transparent' : `color-mix(in oklch, ${meta.from} 50%, transparent)` }}
           >
-            {roomy && h >= 16 && (s.user || s.label) && (
+            {roomy && h >= 16 && ((s.users ?? []).length > 0 || s.label) && (
               <span
                 className="absolute right-1 bottom-0.5 max-w-[60%] truncate rounded px-1 text-[9px] leading-3.25 font-bold text-white shadow-sm"
-                style={{ background: s.user ? avatarGradient(s.user._id) : meta.from }}
+                style={{ background: s.users?.[0] ? avatarGradient(s.users[0]._id) : meta.from }}
               >
-                {s.user ? s.user.name.split(' ')[0] : s.label}
+                {(s.users ?? []).length ? namesShort((s.users ?? []).map((u) => u.name)) : s.label}
               </span>
             )}
           </span>
