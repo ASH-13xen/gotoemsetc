@@ -4,6 +4,9 @@ export type WeeklyCategory = 'team' | 'sales' | 'hr' | 'client' | 'event' | 'tra
 export type InviteStatus = 'invited' | 'accepted' | 'declined'
 export type MyRole = 'host' | InviteStatus | 'open' | 'viewer'
 export type Scope = 'one' | 'series'
+// Repeats until the host stops it. Monthly/yearly keep the date and skip
+// months (years) that don't have it.
+export type Repeat = 'weekly' | 'monthly' | 'yearly'
 
 export interface CalPerson {
   _id: string
@@ -58,11 +61,25 @@ export interface CalAttendee {
   reason: string
 }
 
+// A time slice as minutes from the meeting's start (used when creating).
+export interface SliceInput {
+  start: number
+  end: number
+  label?: string
+  user?: string | null
+}
+
 // A block on a week. `busy: true` means it's someone else's time the
-// viewer may not see — only the time is sent.
+// viewer may not see — only the time is sent. `held` is the slices the
+// person whose calendar this is holds, when they have one — only that time
+// is theirs.
 export interface CalEvent extends Occurrence {
   _id: string
   busy: boolean
+  held?: { startMin: number; endMin: number }[] | null
+  repeat?: { repeat: Repeat; label: string; ended: boolean } | null
+  slot?: number | null
+  pendingCount?: number
   title?: string
   description?: string
   category?: WeeklyCategory
@@ -79,7 +96,7 @@ export interface CalEvent extends Occurrence {
   canNote?: boolean
   segments?: CalSegment[]
   notes?: CalNote[]
-  occurrences?: (Occurrence & { _id: string })[]
+  occurrences?: (Occurrence & { _id: string; slot?: number | null })[]
 }
 
 export interface WeekGridConfig {
@@ -117,8 +134,9 @@ export interface CreateEventInput {
   location?: string
   link?: string
   slots: Occurrence[]
-  repeatWeeks?: number
+  repeat?: Repeat | 'none'
   invitees?: string[]
+  slices?: SliceInput[]
 }
 
 export interface PublicInvite {
@@ -132,6 +150,9 @@ export interface PublicInvite {
   cancelled: boolean
   status: InviteStatus | null
   scope: Scope
+  repeat: string | null
+  mySlot: { startMin: number; endMin: number }[] | null
+  total: number
   occurrences: (Occurrence & { status: InviteStatus | null })[]
   attendees: CalPerson[]
 }
@@ -151,20 +172,22 @@ export const getInvites = async () => (await apiClient.get<{ invites: CalEvent[]
 export const getEvent = async (id: string) => (await apiClient.get<{ event: CalEvent }>(`${BASE}/events/${id}`)).data.event
 
 export const createEvent = async (input: CreateEventInput) =>
-  (await apiClient.post<{ events: CalEvent[]; count: number }>(`${BASE}/events`, input)).data
-export const updateEvent = async (id: string, input: Partial<Omit<CreateEventInput, 'slots' | 'invitees'>> & Partial<Occurrence> & { scope?: Scope }) =>
-  (await apiClient.patch<{ event: CalEvent }>(`${BASE}/events/${id}`, input)).data.event
+  (await apiClient.post<{ events: CalEvent[]; count: number; skipped: string[] }>(`${BASE}/events`, input)).data
+export const updateEvent = async (
+  id: string,
+  input: Partial<Omit<CreateEventInput, 'slots' | 'invitees' | 'repeat' | 'slices'>> & Partial<Occurrence> & { scope?: Scope }
+) => (await apiClient.patch<{ event: CalEvent }>(`${BASE}/events/${id}`, input)).data.event
 export const cancelEvent = async (id: string, input: { scope?: Scope; reason?: string }) =>
-  (await apiClient.post<{ cancelled: number }>(`${BASE}/events/${id}/cancel`, input)).data
+  (await apiClient.post<{ cancelled: number; stopped: boolean }>(`${BASE}/events/${id}/cancel`, input)).data
 export const inviteMore = async (id: string, input: { userIds: string[]; scope?: Scope }) =>
-  (await apiClient.post<{ event: CalEvent }>(`${BASE}/events/${id}/invite`, input)).data.event
+  (await apiClient.post<{ event: CalEvent; skipped: string[] }>(`${BASE}/events/${id}/invite`, input)).data
 export const removeAttendee = async (id: string, userId: string, scope: Scope = 'one') =>
   (await apiClient.delete<{ event: CalEvent }>(`${BASE}/events/${id}/attendees/${userId}`, { params: { scope } })).data.event
 export const respond = async (id: string, input: { response: 'accept' | 'decline'; reason?: string; scope?: Scope }) =>
   (await apiClient.post<{ updated: number; skipped: string[] }>(`${BASE}/events/${id}/respond`, input)).data
 export const join = async (id: string) => (await apiClient.post<{ event: CalEvent }>(`${BASE}/events/${id}/join`)).data.event
-export const setSegments = async (id: string, segments: { startMin: number; endMin: number; label?: string; user?: string | null }[]) =>
-  (await apiClient.put<{ event: CalEvent }>(`${BASE}/events/${id}/segments`, { segments })).data.event
+export const setSegments = async (id: string, segments: { startMin: number; endMin: number; label?: string; user?: string | null }[], scope: Scope = 'one') =>
+  (await apiClient.put<{ event: CalEvent }>(`${BASE}/events/${id}/segments`, { segments, scope })).data.event
 
 export const addNote = async (id: string, input: { kind?: 'note' | 'action'; text: string; assignee?: string; dueDay?: string }) =>
   (await apiClient.post<{ event: CalEvent }>(`${BASE}/events/${id}/notes`, input)).data.event

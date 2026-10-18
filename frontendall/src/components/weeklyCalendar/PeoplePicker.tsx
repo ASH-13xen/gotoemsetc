@@ -27,24 +27,28 @@ function statusText(a: Availability) {
 }
 
 // Pick people for a meeting. Only people free for every chosen slot can be
-// picked — anyone busy (or on leave) is shown, greyed out, with why.
+// picked — anyone busy (or on leave) is shown, greyed out, with why. Someone
+// with a slice of the meeting only needs their slice free (`windowsFor`).
 export function PeoplePicker({
   occurrences,
   selected,
   onChange,
   exclude = [],
   ignoreEventId,
+  windowsFor,
 }: {
   occurrences: Occurrence[]
   selected: string[]
   onChange: (ids: string[]) => void
   exclude?: string[]
   ignoreEventId?: string
+  windowsFor?: (id: string) => Occurrence[] | undefined
 }) {
   const { data } = useCalendarPeople()
   const weeks = useMemo(() => weeksOf(occurrences), [occurrences])
   const { busy, isLoading } = useBusyWeeks(weeks, undefined, occurrences.length > 0)
   const [query, setQuery] = useState('')
+  const availability = (id: string) => availabilityFor(busy[id], windowsFor?.(id) ?? occurrences, ignoreEventId)
 
   const rows = useMemo(() => {
     const skip = new Set(exclude)
@@ -52,12 +56,12 @@ export function PeoplePicker({
     return (data?.people ?? [])
       .filter((p) => !skip.has(p._id))
       .filter((p) => !q || `${p.name} ${p.subtitle}`.toLowerCase().includes(q))
-      .map((p) => ({ person: p, availability: availabilityFor(busy[p._id], occurrences, ignoreEventId) }))
+      .map((p) => ({ person: p, availability: availability(p._id) }))
       .sort((a, b) => {
         const rank = (x: Availability) => (x.state === 'free' ? 0 : x.state === 'tentative' ? 1 : 2)
         return rank(a.availability) - rank(b.availability) || a.person.name.localeCompare(b.person.name)
       })
-  }, [data, busy, occurrences, exclude, query, ignoreEventId])
+  }, [data, busy, occurrences, exclude, query, ignoreEventId, windowsFor]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const byId = useMemo(() => new Map(rows.map((r) => [r.person._id, r])), [rows])
   const selectedSet = new Set(selected)
@@ -69,7 +73,7 @@ export function PeoplePicker({
     const skip = new Set(exclude)
     const candidates = userIds.filter((id) => !skip.has(id) && !selectedSet.has(id))
     const free = candidates.filter((id) => {
-      const r = byId.get(id) ?? { availability: availabilityFor(busy[id], occurrences, ignoreEventId) }
+      const r = byId.get(id) ?? { availability: availability(id) }
       return r.availability.state === 'free' || r.availability.state === 'tentative'
     })
     const busyCount = candidates.length - free.length

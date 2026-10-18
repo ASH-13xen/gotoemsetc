@@ -1,5 +1,5 @@
 const { z } = require('zod');
-const { WEEKLY_EVENT_CATEGORY, WEEKLY_NOTE_KIND } = require('../config/constants');
+const { WEEKLY_EVENT_CATEGORY, WEEKLY_NOTE_KIND, WEEKLY_REPEAT } = require('../config/constants');
 
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid id');
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
@@ -37,8 +37,21 @@ const createEvent = {
       .array(z.object({ day, startMin: minute, endMin: minute }))
       .min(1, 'Pick at least one slot')
       .max(14),
-    repeatWeeks: z.number().int().min(0).max(12).optional(),
+    // Repeats until the host stops it.
+    repeat: z.enum(['none', ...Object.values(WEEKLY_REPEAT)]).optional(),
     invitees: z.array(objectId).max(200).optional(),
+    // Time slices, as minutes from the meeting's start.
+    slices: z
+      .array(
+        z.object({
+          start: z.number().int().min(0).max(24 * 60),
+          end: z.number().int().min(1).max(24 * 60),
+          label: optionalText(80),
+          user: objectId.nullable().optional(),
+        })
+      )
+      .max(40)
+      .optional(),
   }),
 };
 
@@ -72,6 +85,7 @@ const segments = {
     segments: z
       .array(z.object({ startMin: minute, endMin: minute, label: optionalText(80), user: objectId.nullable().optional() }))
       .max(40),
+    scope,
   }),
 };
 

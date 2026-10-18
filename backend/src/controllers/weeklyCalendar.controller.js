@@ -41,6 +41,8 @@ const createEvent = asyncHandler(async (req, res) => {
   audit(req, 'weeklyCalendar.create', result.events[0]?._id, {
     title: req.body.title,
     dates: result.count,
+    repeat: req.body.repeat ?? 'none',
+    slices: req.body.slices?.length ?? 0,
     invitees: req.body.invitees?.length ?? 0,
     isPersonal: Boolean(req.body.isPersonal),
   });
@@ -60,9 +62,9 @@ const cancelEvent = asyncHandler(async (req, res) => {
 });
 
 const invite = asyncHandler(async (req, res) => {
-  const event = await weeklyCalendarService.inviteMore(viewer(req), req.params.id, req.body);
+  const { event, skipped } = await weeklyCalendarService.inviteMore(viewer(req), req.params.id, req.body);
   audit(req, 'weeklyCalendar.invite', req.params.id, req.body);
-  res.json({ event });
+  res.json({ event, skipped });
 });
 
 const removeAttendee = asyncHandler(async (req, res) => {
@@ -84,8 +86,8 @@ const join = asyncHandler(async (req, res) => {
 });
 
 const segments = asyncHandler(async (req, res) => {
-  const event = await weeklyCalendarService.setSegments(viewer(req), req.params.id, req.body.segments);
-  audit(req, 'weeklyCalendar.segments', req.params.id, { count: req.body.segments.length });
+  const event = await weeklyCalendarService.setSegments(viewer(req), req.params.id, req.body.segments, { scope: req.body.scope });
+  audit(req, 'weeklyCalendar.segments', req.params.id, { count: req.body.segments.length, scope: req.body.scope ?? 'one' });
   res.json({ event });
 });
 

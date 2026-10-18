@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock3,
+  Copy,
   History,
   Link2,
   ListTodo,
@@ -17,6 +18,7 @@ import {
   Pencil,
   Plus,
   Repeat,
+  Scissors,
   Send,
   StickyNote,
   Ticket,
@@ -47,9 +49,10 @@ import {
   useUpdateCalEvent,
   useUpdateNote,
 } from '@/hooks/useWeeklyCalendar'
-import { CATEGORY, CATEGORY_KEYS, PERSONAL, addDays, apiError, fmtDay, fmtDayLong, fmtMin, fmtRange, fmtWhen, nowIst } from './calendarUtils'
+import { CATEGORY, CATEGORY_KEYS, PERSONAL, addDays, apiError, fmtDay, fmtDayLong, fmtMin, fmtRange, fmtWhen, gridTimes, nowIst } from './calendarUtils'
 import { Avatar, PeoplePicker } from './PeoplePicker'
 import { Chip, Sec, SidePanel } from './SidePanel'
+import { SliceBar } from './CreateEventPanel'
 
 function timeAgo(iso: string) {
   const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
@@ -89,7 +92,7 @@ const slotOptions = (from: number, to: number, step: number) => {
   return out
 }
 
-export function EventPanel({ eventId, onClose }: { eventId: string; onClose: () => void }) {
+export function EventPanel({ eventId, onClose, onDuplicate }: { eventId: string; onClose: () => void; onDuplicate: (event: CalEvent) => void }) {
   const { data: event, isLoading, isError } = useCalEvent(eventId)
 
   if (isLoading || !event) {
@@ -101,10 +104,10 @@ export function EventPanel({ eventId, onClose }: { eventId: string; onClose: () 
       </SidePanel>
     )
   }
-  return <EventPanelBody key={event._id} event={event} onClose={onClose} />
+  return <EventPanelBody key={event._id} event={event} onClose={onClose} onDuplicate={() => onDuplicate(event)} />
 }
 
-function EventPanelBody({ event, onClose }: { event: CalEvent; onClose: () => void }) {
+function EventPanelBody({ event, onClose, onDuplicate }: { event: CalEvent; onClose: () => void; onDuplicate: () => void }) {
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
   const accent = event.isPersonal ? PERSONAL : CATEGORY[event.category ?? 'other']
@@ -123,7 +126,8 @@ function EventPanelBody({ event, onClose }: { event: CalEvent; onClose: () => vo
     try {
       const result = await respond.mutateAsync({ id: event._id, response, reason: reason.trim() || undefined, scope: rsvpScope })
       toast.success(response === 'accept' ? `You're in${result.updated > 1 ? ` for ${result.updated} dates` : ''} — it's on your calendar` : 'Declined — the host has been told')
-      result.skipped.forEach((s) => toast.warning(`Skipped ${s}`))
+      result.skipped.slice(0, 3).forEach((s) => toast.warning(`Skipped ${s}`))
+      if (result.skipped.length > 3) toast.warning(`…and ${result.skipped.length - 3} more dates skipped`)
       setDeclining(false)
     } catch (err) {
       toast.error(apiError(err, 'Could not respond'))
@@ -147,10 +151,17 @@ function EventPanelBody({ event, onClose }: { event: CalEvent; onClose: () => vo
               <Megaphone className="size-3" /> Open for all
             </Chip>
           )}
-          {seriesSize > 1 && (
+          {event.repeat ? (
             <span className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
-              <Repeat className="size-3" /> {seriesSize} dates
+              <Repeat className="size-3" /> {event.repeat.label}
+              {event.repeat.ended && ' · stopped'}
             </span>
+          ) : (
+            seriesSize > 1 && (
+              <span className="flex items-center gap-1 text-[11px] font-semibold text-muted-foreground">
+                <Repeat className="size-3" /> {seriesSize} dates
+              </span>
+            )
           )}
         </>
       }
@@ -161,6 +172,11 @@ function EventPanelBody({ event, onClose }: { event: CalEvent; onClose: () => vo
             <Clock3 className="size-3.5" />
             {fmtDayLong(event.day)} · {fmtRange(event.startMin, event.endMin)}
           </span>
+          {event.held?.length ? (
+            <span className="flex items-center gap-1 rounded-full bg-primary/12 px-2 py-0.5 font-bold text-primary">
+              <Scissors className="size-3" /> Your slot: {event.held.map((h) => fmtRange(h.startMin, h.endMin)).join(', ')}
+            </span>
+          ) : null}
           {event.host && (
             <span className="flex items-center gap-1.5">
               <Avatar person={event.host} size="size-4" className="text-[7px]" /> Hosted by {event.host.name}
@@ -196,7 +212,10 @@ function EventPanelBody({ event, onClose }: { event: CalEvent; onClose: () => vo
               </div>
             </div>
           )}
-          <p className="text-[11px] text-muted-foreground">Until you accept, this shows as tentative and doesn't block your time.</p>
+          <p className="text-[11px] text-muted-foreground">
+            Until you accept, this shows as tentative and doesn't block your time.
+            {event.held?.length ? ' Once you do, only your slot is blocked.' : ''}
+          </p>
         </Sec>
       )}
       {event.myRole === 'accepted' && (
@@ -247,11 +266,13 @@ function EventPanelBody({ event, onClose }: { event: CalEvent; onClose: () => vo
         <PeopleSection event={event} going={going} pending={pending} declined={declined} isPast={isPast} upcomingInSeries={upcomingInSeries} />
       )}
 
-      {!event.isPersonal && (event.segments?.length || event.canManage) ? <AgendaSection event={event} members={members} /> : null}
+      {!event.isPersonal && (event.segments?.length || event.canManage) ? (
+        <AgendaSection event={event} members={members} isPast={isPast} upcomingInSeries={upcomingInSeries} />
+      ) : null}
 
       {event.canNote && <NotesSection event={event} members={members} viewerId={user?.id ?? ''} isAdmin={isAdmin} />}
 
-      {event.canManage && <HostTools event={event} isPast={isPast} upcomingInSeries={upcomingInSeries} onClosed={onClose} />}
+      {event.canManage && <HostTools event={event} isPast={isPast} upcomingInSeries={upcomingInSeries} onClosed={onClose} onDuplicate={onDuplicate} />}
     </SidePanel>
   )
 }
@@ -278,16 +299,22 @@ function PeopleSection({
   const [adding, setAdding] = useState(false)
   const [picked, setPicked] = useState<string[]>([])
   const [scope, setScope] = useState<Scope>('one')
+  // Availability is checked against the next few weeks; anyone busy on a
+  // later date simply isn't invited to that one.
   const occurrences = useMemo(
-    () => (scope === 'series' ? (event.occurrences ?? []).filter((o) => o.day >= event.day) : [{ day: event.day, startMin: event.startMin, endMin: event.endMin }]),
+    () =>
+      scope === 'series'
+        ? (event.occurrences ?? []).filter((o) => o.day >= event.day && o.day <= addDays(event.day, 27))
+        : [{ day: event.day, startMin: event.startMin, endMin: event.endMin }],
     [scope, event]
   )
   const already = [event.host?._id, ...(event.attendees ?? []).filter((a) => a.status !== 'declined').map((a) => a.user._id)].filter(Boolean) as string[]
 
   const send = async () => {
     try {
-      await invite.mutateAsync({ id: event._id, userIds: picked, scope })
+      const result = await invite.mutateAsync({ id: event._id, userIds: picked, scope })
       toast.success(`Invited ${picked.length} more`)
+      result.skipped.slice(0, 3).forEach((s) => toast.warning(s))
       setPicked([])
       setAdding(false)
     } catch (err) {
@@ -358,17 +385,30 @@ function PeopleSection({
 
 // ---------------------------------------------------------------------------
 
-function AgendaSection({ event, members }: { event: CalEvent; members: CalPerson[] }) {
+function AgendaSection({ event, members, isPast, upcomingInSeries }: { event: CalEvent; members: CalPerson[]; isPast: boolean; upcomingInSeries: number }) {
   const save = useSetSegments()
   const [editing, setEditing] = useState(false)
+  const [scope, setScope] = useState<Scope>('one')
   const [draft, setDraft] = useState<{ startMin: number; endMin: number; label: string; user: string }[]>([])
   const options = slotOptions(event.startMin, event.endMin, 5)
+  const length = event.endMin - event.startMin
+  const nameOf = (id: string) => members.find((m) => m._id === id)?.name ?? 'Someone'
 
   const begin = () => {
     setDraft(
       (event.segments ?? []).map((s) => ({ startMin: s.startMin, endMin: s.endMin, label: s.label, user: s.user?._id ?? '' }))
     )
+    setScope('one')
     setEditing(true)
+  }
+  // Cut the whole meeting into equal slices, keeping who had which (or
+  // handing them to the guests in order).
+  const cut = (each: number) => {
+    const guests = members.filter((m) => m._id !== event.host?._id).map((m) => m._id)
+    const people = draft.some((d) => d.user) ? draft.map((d) => d.user) : guests
+    const next: typeof draft = []
+    for (let s = event.startMin, i = 0; s + each <= event.endMin; s += each, i += 1) next.push({ startMin: s, endMin: s + each, label: draft[i]?.label ?? '', user: people[i] ?? '' })
+    setDraft(next)
   }
   const addRow = () => {
     const last = draft[draft.length - 1]
@@ -378,11 +418,11 @@ function AgendaSection({ event, members }: { event: CalEvent; members: CalPerson
   }
   const commit = async () => {
     try {
-      await save.mutateAsync({ id: event._id, segments: draft.map((d) => ({ startMin: d.startMin, endMin: d.endMin, label: d.label || undefined, user: d.user || null })) })
-      toast.success('Agenda saved')
+      await save.mutateAsync({ id: event._id, scope, segments: draft.map((d) => ({ startMin: d.startMin, endMin: d.endMin, label: d.label || undefined, user: d.user || null })) })
+      toast.success(scope === 'series' ? `Slices saved on ${upcomingInSeries} dates` : 'Slices saved')
       setEditing(false)
     } catch (err) {
-      toast.error(apiError(err, 'Could not save the agenda'))
+      toast.error(apiError(err, 'Could not save the slices'))
     }
   }
 
@@ -390,7 +430,7 @@ function AgendaSection({ event, members }: { event: CalEvent; members: CalPerson
     <Sec
       title="Agenda · time slices"
       action={
-        event.canManage && !editing ? (
+        event.canManage && !editing && !isPast ? (
           <button type="button" onClick={begin} className="flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
             <Pencil className="size-3" /> {event.segments?.length ? 'Edit' : 'Split into slices'}
           </button>
@@ -399,23 +439,50 @@ function AgendaSection({ event, members }: { event: CalEvent; members: CalPerson
     >
       {!editing ? (
         event.segments?.length ? (
-          <div className="grid gap-1">
-            {event.segments.map((s) => (
-              <div key={s._id} className="flex items-center gap-2.5 rounded-xl border border-border/70 bg-secondary/30 px-2.5 py-1.5">
-                <span className="w-[92px] shrink-0 text-[11px] font-bold text-primary tabular-nums">{fmtRange(s.startMin, s.endMin)}</span>
-                {s.user && <Avatar person={s.user} size="size-5" className="text-[8px]" />}
-                <span className="truncate text-sm font-semibold text-foreground">
-                  {s.user?.name ?? s.label}
-                  {s.user && s.label && <span className="font-normal text-muted-foreground"> · {s.label}</span>}
-                </span>
-              </div>
-            ))}
+          <div className="grid gap-1.5">
+            <SliceBar
+              slices={event.segments.map((s) => ({ start: s.startMin - event.startMin, end: s.endMin - event.startMin, label: s.label, user: s.user?._id ?? null }))}
+              length={length}
+              nameOf={nameOf}
+            />
+            <div className="grid gap-1">
+              {event.segments.map((s) => (
+                <div key={s._id} className="flex items-center gap-2.5 rounded-xl border border-border/70 bg-secondary/30 px-2.5 py-1.5">
+                  <span className="w-23 shrink-0 text-[11px] font-bold text-primary tabular-nums">{fmtRange(s.startMin, s.endMin)}</span>
+                  {s.user && <Avatar person={s.user} size="size-5" className="text-[8px]" />}
+                  <span className="truncate text-sm font-semibold text-foreground">
+                    {s.user?.name ?? s.label}
+                    {s.user && s.label && <span className="font-normal text-muted-foreground"> · {s.label}</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground">Someone with a slice is only blocked for their slice.</p>
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">Give each person their own slice — like 15 minutes each in a co-ordinators meeting.</p>
         )
       ) : (
         <div className="grid gap-2">
+          <ScopeToggle value={scope} onChange={setScope} size={upcomingInSeries} />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-muted-foreground">Cut into</span>
+            {[10, 15, 20, 30].filter((l) => l <= length).map((l) => (
+              <button
+                key={l}
+                type="button"
+                onClick={() => cut(l)}
+                className="rounded-full border border-border px-2.5 py-0.5 text-[11px] font-bold text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+              >
+                {l} min
+              </button>
+            ))}
+          </div>
+          <SliceBar
+            slices={draft.map((d) => ({ start: d.startMin - event.startMin, end: d.endMin - event.startMin, label: d.label, user: d.user || null }))}
+            length={length}
+            nameOf={nameOf}
+          />
           {draft.map((d, i) => (
             <div key={i} className="grid grid-cols-[1fr_1fr_auto] gap-1.5 rounded-xl border border-border p-2">
               <select
@@ -711,11 +778,24 @@ function NoteCard({ event, note, canDelete, members }: { event: CalEvent; note: 
 
 // ---------------------------------------------------------------------------
 
-function HostTools({ event, isPast, upcomingInSeries, onClosed }: { event: CalEvent; isPast: boolean; upcomingInSeries: number; onClosed: () => void }) {
+function HostTools({
+  event,
+  isPast,
+  upcomingInSeries,
+  onClosed,
+  onDuplicate,
+}: {
+  event: CalEvent
+  isPast: boolean
+  upcomingInSeries: number
+  onClosed: () => void
+  onDuplicate: () => void
+}) {
   const update = useUpdateCalEvent()
   const cancel = useCancelCalEvent()
   const [mode, setMode] = useState<'none' | 'edit' | 'move' | 'cancel'>('none')
   const [scope, setScope] = useState<Scope>('one')
+  const repeating = Boolean(event.repeat && !event.repeat.ended)
   const [form, setForm] = useState({
     title: event.title ?? '',
     description: event.description ?? '',
@@ -726,9 +806,12 @@ function HostTools({ event, isPast, upcomingInSeries, onClosed }: { event: CalEv
   })
   const [move, setMove] = useState({ day: event.day, startMin: event.startMin, endMin: event.endMin })
   const [reason, setReason] = useState('')
-  const times = slotOptions(390, 1230, 30).filter((m) => m < 810 || m >= 870)
+  const times = gridTimes()
 
-  if (isPast) return null
+  const open = (next: typeof mode) => {
+    setScope('one')
+    setMode(next)
+  }
 
   const saveDetails = () =>
     update
@@ -738,31 +821,56 @@ function HostTools({ event, isPast, upcomingInSeries, onClosed }: { event: CalEv
 
   const reschedule = () =>
     update
-      .mutateAsync({ id: event._id, ...move })
-      .then(() => (toast.success('Moved — guests have been asked to confirm the new time'), setMode('none')))
+      .mutateAsync({ id: event._id, ...move, scope })
+      .then(() =>
+        (toast.success(scope === 'series' ? 'Moved this and every upcoming date — guests have been asked to confirm' : 'Moved — guests have been asked to confirm the new time'),
+        setMode('none'))
+      )
       .catch((err) => toast.error(apiError(err, 'Could not move it')))
 
   const doCancel = () =>
     cancel
       .mutateAsync({ id: event._id, scope, reason: reason.trim() || undefined })
       .then((r) => {
-        toast.success(r.cancelled > 1 ? `Cancelled ${r.cancelled} dates — everyone was told` : 'Cancelled — everyone was told')
+        toast.success(
+          r.stopped
+            ? `Stopped repeating — ${r.cancelled} upcoming date${r.cancelled === 1 ? '' : 's'} cancelled, everyone was told`
+            : r.cancelled > 1
+              ? `Cancelled ${r.cancelled} dates — everyone was told`
+              : 'Cancelled — everyone was told'
+        )
         onClosed()
       })
       .catch((err) => toast.error(apiError(err, 'Could not cancel')))
 
+  const duplicateButton = (
+    <Button size="sm" variant="outline" onClick={onDuplicate} title="Make a copy at another time">
+      <Copy className="size-3.5" /> Duplicate
+    </Button>
+  )
+
+  // A past date can't change any more, but it can still be copied.
+  if (isPast) {
+    return (
+      <Sec title="Host tools">
+        <div className="grid grid-cols-2 gap-1.5">{duplicateButton}</div>
+      </Sec>
+    )
+  }
+
   return (
     <Sec title="Host tools">
       {mode === 'none' && (
-        <div className="grid grid-cols-3 gap-1.5">
-          <Button size="sm" variant="outline" onClick={() => setMode('edit')}>
+        <div className="grid grid-cols-2 gap-1.5">
+          <Button size="sm" variant="outline" onClick={() => open('edit')}>
             <Pencil className="size-3.5" /> Edit
           </Button>
-          <Button size="sm" variant="outline" onClick={() => setMode('move')}>
+          <Button size="sm" variant="outline" onClick={() => open('move')}>
             <Clock3 className="size-3.5" /> Move
           </Button>
-          <Button size="sm" variant="outline" className="border-rose-500/40 text-rose-600 hover:bg-rose-500/10" onClick={() => setMode('cancel')}>
-            <Ban className="size-3.5" /> Cancel
+          {duplicateButton}
+          <Button size="sm" variant="outline" className="border-rose-500/40 text-rose-600 hover:bg-rose-500/10" onClick={() => open('cancel')}>
+            <Ban className="size-3.5" /> {repeating ? 'Cancel / stop' : 'Cancel'}
           </Button>
         </div>
       )}
@@ -808,6 +916,14 @@ function HostTools({ event, isPast, upcomingInSeries, onClosed }: { event: CalEv
 
       {mode === 'move' && (
         <div className="grid gap-2">
+          <ScopeToggle value={scope} onChange={setScope} size={upcomingInSeries} />
+          {scope === 'series' && (
+            <p className="text-[11px] text-muted-foreground">
+              {event.repeat
+                ? `Every upcoming date of this time moves${event.repeat.repeat === 'weekly' ? ' to the new weekday' : event.repeat.repeat === 'monthly' ? ' to the new date each month' : ' to the new date each year'} and hours.`
+                : 'Every upcoming date at this time moves by the same amount.'}
+            </p>
+          )}
           <input
             type="date"
             value={move.day}
@@ -838,7 +954,8 @@ function HostTools({ event, isPast, upcomingInSeries, onClosed }: { event: CalEv
               Back
             </Button>
             <Button size="sm" onClick={reschedule} disabled={update.isPending}>
-              Move to {fmtWhen(move)}
+              {update.isPending && <Loader2 className="size-3.5 animate-spin" />}
+              {scope === 'series' ? `Move ${upcomingInSeries} dates` : `Move to ${fmtWhen(move)}`}
             </Button>
           </div>
         </div>
@@ -847,13 +964,19 @@ function HostTools({ event, isPast, upcomingInSeries, onClosed }: { event: CalEv
       {mode === 'cancel' && (
         <div className="grid gap-2 rounded-xl border border-rose-500/30 bg-rose-500/5 p-3">
           <ScopeToggle value={scope} onChange={setScope} size={upcomingInSeries} />
+          {repeating && (
+            <p className="text-[11px] text-muted-foreground">
+              {scope === 'series' ? 'It stops repeating — this date and every one after it are cancelled.' : 'Only this date is removed; it keeps repeating after it.'}
+            </p>
+          )}
           <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional) — sent to everyone" className="h-9 text-sm" />
           <div className="flex justify-end gap-1.5">
             <Button size="sm" variant="ghost" onClick={() => setMode('none')}>
               Keep it
             </Button>
             <Button size="sm" variant="destructive" onClick={doCancel} disabled={cancel.isPending}>
-              <XCircle className="size-3.5" /> Cancel {scope === 'series' ? `${upcomingInSeries} dates` : 'event'}
+              <XCircle className="size-3.5" />
+              {scope === 'series' ? (repeating ? 'Stop repeating' : `Cancel ${upcomingInSeries} dates`) : repeating ? 'Remove this date' : 'Cancel event'}
             </Button>
           </div>
         </div>

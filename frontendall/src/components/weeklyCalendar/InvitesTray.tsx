@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { CalEvent } from '@/api/weeklyCalendar.api'
 import { useInvites, useRespond } from '@/hooks/useWeeklyCalendar'
-import { CATEGORY, apiError, fmtWhen } from './calendarUtils'
+import { CATEGORY, apiError, fmtDay, fmtRange, fmtWhen } from './calendarUtils'
 import { Avatar } from './PeoplePicker'
 
 // Pending invites, newest dates first — accept or decline right here, or
@@ -28,7 +28,8 @@ export function InvitesTray({ onOpen }: { onOpen: (event: CalEvent) => void }) {
       .mutateAsync({ id: event._id, response, scope: (event.seriesSize ?? 1) > 1 ? 'series' : 'one' })
       .then((r) => {
         toast.success(response === 'accept' ? `Accepted “${event.title}”${r.updated > 1 ? ` · ${r.updated} dates` : ''}` : `Declined “${event.title}”`)
-        r.skipped.forEach((s) => toast.warning(`Skipped ${s}`))
+        r.skipped.slice(0, 3).forEach((s) => toast.warning(`Skipped ${s}`))
+        if (r.skipped.length > 3) toast.warning(`…and ${r.skipped.length - 3} more dates skipped`)
       })
       .catch((err) => toast.error(apiError(err, 'Could not respond')))
 
@@ -64,11 +65,17 @@ export function InvitesTray({ onOpen }: { onOpen: (event: CalEvent) => void }) {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-bold text-foreground">{event.title}</span>
                       <span className="block text-[11px] font-semibold text-primary">
-                        {fmtWhen(event)}
-                        {(event.seriesSize ?? 1) > 1 && (
+                        {event.held?.length ? `${fmtDay(event.day)} · your slot ${event.held.map((h) => fmtRange(h.startMin, h.endMin)).join(', ')}` : fmtWhen(event)}
+                        {event.repeat ? (
                           <span className="ml-1 inline-flex items-center gap-0.5 text-muted-foreground">
-                            <Repeat className="size-3" /> +{(event.seriesSize ?? 1) - 1} more
+                            <Repeat className="size-3" /> {event.repeat.label.toLowerCase()}
                           </span>
+                        ) : (
+                          (event.pendingCount ?? 1) > 1 && (
+                            <span className="ml-1 inline-flex items-center gap-0.5 text-muted-foreground">
+                              <Repeat className="size-3" /> +{(event.pendingCount ?? 1) - 1} more
+                            </span>
+                          )
                         )}
                       </span>
                       {event.host && (

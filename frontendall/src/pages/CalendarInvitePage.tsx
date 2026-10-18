@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getPublicInvite, respondPublic } from '@/api/weeklyCalendar.api'
 import { Avatar } from '@/components/weeklyCalendar/PeoplePicker'
-import { CATEGORY, apiError, firstName, fmtWhen } from '@/components/weeklyCalendar/calendarUtils'
+import { CATEGORY, apiError, firstName, fmtRange, fmtWhen } from '@/components/weeklyCalendar/calendarUtils'
 import '@/components/weeklyCalendar/weeklyCalendar.css'
 
 // Opened from the invite email's Accept / Decline buttons — no login
@@ -83,6 +83,12 @@ export default function CalendarInvitePage() {
                     <Link2 className="size-3.5" /> {invite.link}
                   </a>
                 )}
+                {invite.repeat && <p className="mt-3 rounded-xl bg-primary/10 px-3 py-1.5 text-sm font-bold text-primary">{invite.repeat}</p>}
+                {invite.mySlot && (
+                  <p className="mt-2 text-sm font-semibold text-foreground">
+                    Your slot: {invite.mySlot.map((s) => fmtRange(s.startMin, s.endMin)).join(', ')} — only that time is blocked for you.
+                  </p>
+                )}
                 <div className="mt-3 grid gap-1">
                   {invite.occurrences.map((o) => (
                     <div key={`${o.day}-${o.startMin}`} className="flex items-center justify-between rounded-xl bg-secondary/50 px-3 py-1.5 text-sm font-semibold">
@@ -90,6 +96,9 @@ export default function CalendarInvitePage() {
                       {o.status === 'accepted' && <Check className="size-4 text-emerald-600" />}
                     </div>
                   ))}
+                  {invite.total > invite.occurrences.length && (
+                    <p className="px-3 text-xs text-muted-foreground">…and {invite.total - invite.occurrences.length} more dates</p>
+                  )}
                 </div>
                 {invite.attendees.length > 0 && (
                   <div className="mt-3 flex items-center gap-2">

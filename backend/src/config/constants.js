@@ -708,7 +708,8 @@ module.exports = {
 
   // Weekly Calendar (see models/WeeklyEvent.js). Times are minutes since
   // midnight IST on the grid's 30-minute slots, 06:30–20:30 — the template
-  // the CEO's weekly planner PDF uses. Lunch is a fixed company block.
+  // the CEO's weekly planner PDF uses. Lunch (1:30–2:30) is marked on the
+  // grid but can be booked like any other time.
   WEEKLY_EVENT_CATEGORY: {
     TEAM: 'team',
     SALES: 'sales',
@@ -722,6 +723,11 @@ module.exports = {
   WEEKLY_INVITE_STATUS: { INVITED: 'invited', ACCEPTED: 'accepted', DECLINED: 'declined' },
   WEEKLY_NOTE_KIND: { NOTE: 'note', ACTION: 'action' },
   WEEKLY_GRID: { START: 390, END: 1230, SLOT: 30, LUNCH_START: 810, LUNCH_END: 870 },
+  // How a repeating event repeats (models/WeeklySeries.js) — it keeps going
+  // until the host stops it. Monthly and yearly keep the same date, and skip
+  // a month (or year) that doesn't have it: the 31st only lands in months
+  // with 31 days, 29 Feb only in leap years.
+  WEEKLY_REPEAT: { WEEKLY: 'weekly', MONTHLY: 'monthly', YEARLY: 'yearly' },
 
   // HR's request to change attendance older than 2 days (see
   // models/AttendanceEditRequest.js) — decided by the CEO or admin.

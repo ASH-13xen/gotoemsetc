@@ -22,12 +22,14 @@ const attendeeSchema = new Schema(
 );
 
 // A slice of the meeting given to one person — e.g. the Co-ordinators
-// Meeting's 15 minutes each.
+// Meeting's 15 minutes each. A guest with a slice only holds that slice of
+// the time; the rest of the meeting stays free on their calendar.
 const segmentSchema = new Schema({
   startMin: { type: Number, required: true },
   endMin: { type: Number, required: true },
   label: { type: String, trim: true },
   user: { type: Schema.Types.ObjectId, ref: 'User' },
+  remindedAt: { type: Date },
 });
 
 // Shared meeting notes — anyone in the meeting can add and edit them, and
@@ -77,9 +79,12 @@ const weeklyEventSchema = new Schema(
     host: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     attendees: [attendeeSchema],
 
-    // Occurrences created together (several days at once, or repeated
-    // weekly) share a series id, so they can be edited/cancelled together.
+    // Occurrences created together (several days at once, or a repeating
+    // event) share a series id, so they can be edited/cancelled together.
+    // A repeating one also has a WeeklySeries with this _id, and `slot` says
+    // which of its repeating times this date belongs to.
     series: { type: Schema.Types.ObjectId, index: true },
+    slot: { type: Number },
 
     segments: [segmentSchema],
     notes: [noteSchema],

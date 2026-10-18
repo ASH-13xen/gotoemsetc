@@ -26,7 +26,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { downloadWeekPdf, type CalEvent, type Occurrence } from '@/api/weeklyCalendar.api'
 import { useCalendarPeople, useCopyWeek, useInvites, useWeek } from '@/hooks/useWeeklyCalendar'
 import { WeekGrid, type Sections } from '@/components/weeklyCalendar/WeekGrid'
-import { CreateEventPanel } from '@/components/weeklyCalendar/CreateEventPanel'
+import { CreateEventPanel, type CreatePrefill } from '@/components/weeklyCalendar/CreateEventPanel'
 import { EventPanel } from '@/components/weeklyCalendar/EventPanel'
 import { InvitesTray } from '@/components/weeklyCalendar/InvitesTray'
 import { FindTimeDialog } from '@/components/weeklyCalendar/FindTimeDialog'
@@ -90,7 +90,7 @@ export default function WeeklyCalendarPage() {
   const copyWeek = useCopyWeek()
 
   const [selections, setSelections] = useState<Occurrence[]>([])
-  const [creating, setCreating] = useState<{ invitees: string[] } | null>(null)
+  const [creating, setCreating] = useState<{ invitees: string[]; prefill?: CreatePrefill } | null>(null)
   const [direction, setDirection] = useState(0)
   const [findOpen, setFindOpen] = useState(false)
   const [sections, setSections] = useState<Sections>(readSections)
@@ -141,6 +141,35 @@ export default function WeeklyCalendarPage() {
     setParam({ event: null })
   }
 
+  // Duplicate: the create panel, filled in from the event, with the copy
+  // placed at the same time the next day — drag on the grid or change the
+  // time in the panel to put it somewhere else.
+  const duplicate = (event: CalEvent) => {
+    const now = nowIst()
+    let day = addDays(event.day, 1)
+    if (day < now.day) day = now.day
+    if (day === now.day && event.startMin <= now.min) day = addDays(now.day, 1)
+    const slot = { day, startMin: event.startMin, endMin: event.endMin }
+    setParam({ event: null, week: mondayOf(day) === mondayOf(now.day) ? null : mondayOf(day) })
+    setSelections([slot])
+    setCreating({
+      invitees: [],
+      prefill: {
+        title: event.title ?? '',
+        description: event.description ?? '',
+        category: event.category ?? 'other',
+        kind: event.isPersonal ? 'personal' : event.openForAll ? 'open' : 'meeting',
+        location: event.location ?? '',
+        link: event.link ?? '',
+        invitees: (event.attendees ?? []).filter((a) => a.status !== 'declined' && a.user._id !== viewerId).map((a) => a.user._id),
+        slices: (event.segments ?? []).map((s) => ({ start: s.startMin - event.startMin, end: s.endMin - event.startMin, label: s.label, user: s.user?._id ?? null })),
+        from: event.title ?? 'event',
+      },
+    })
+    toast.info('Pick where the copy goes — drag on the calendar or change the time in the panel')
+  }
+  const panelOpen = Boolean(creating || openEventId)
+
   // Keyboard: ← → weeks, T today, Esc closes / clears.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -160,7 +189,8 @@ export default function WeeklyCalendarPage() {
   // ---- Stats ----
   const stats = useMemo(() => {
     const mine = (week?.events ?? []).filter((e) => e.busy || e.myRole === 'host' || e.myRole === 'accepted')
-    const minutes = mine.reduce((sum, e) => sum + (e.endMin - e.startMin), 0)
+    // Someone with a slice of a meeting only spends their slice in it.
+    const minutes = mine.reduce((sum, e) => sum + (e.held?.length ? e.held.reduce((s, h) => s + h.endMin - h.startMin, 0) : e.endMin - e.startMin), 0)
     return { blocks: mine.length, hours: Math.round((minutes / 60) * 10) / 10, hosting: mine.filter((e) => e.myRole === 'host').length }
   }, [week])
 
@@ -207,7 +237,9 @@ export default function WeeklyCalendarPage() {
       .catch((err) => toast.error(apiError(err, 'Could not copy the week')))
 
   return (
-    <div className="wc-page min-h-full">
+    // On a wide screen the week makes room for the side panel instead of
+    // hiding the weekend under it.
+    <div className={cn('wc-page min-h-full transition-[padding] duration-300', panelOpen && 'min-[1400px]:pr-109')}>
       {/* Header */}
       <div ref={headerRef} className="mb-4 flex flex-wrap items-center gap-3">
         <div className="wc-head-item flex items-center gap-3">
@@ -354,7 +386,7 @@ export default function WeeklyCalendarPage() {
       {/* Legend + tip */}
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <MousePointer2 className="size-3.5" /> Drag down a day to pick slots · hold Ctrl to add another day
+          <MousePointer2 className="size-3.5" /> Drag down a day to pick slots · hold Ctrl to add another (any day, even the same one)
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-3 w-5 rounded border-[1.5px] border-dashed border-indigo-500" /> Invite waiting for you
@@ -373,10 +405,12 @@ export default function WeeklyCalendarPage() {
           <div className="wc-glass flex items-center gap-3 rounded-2xl py-2 pr-2 pl-4 shadow-[0_24px_50px_-20px_rgba(79,70,229,0.55)]">
             <div className="text-sm">
               <p className="font-bold">
-                {selections.length === 1 ? fmtDay(selections[0].day) : `${selections.length} days`} ·{' '}
+                {selections.length === 1 ? fmtDay(selections[0].day) : `${selections.length} times`} ·{' '}
                 {selections.length === 1 ? fmtRange(selections[0].startMin, selections[0].endMin) : `${totalMin / 60}h total`}
               </p>
-              <p className="text-[11px] text-muted-foreground">{totalMin / 30} slot{totalMin === 30 ? '' : 's'} picked</p>
+              <p className="text-[11px] text-muted-foreground">
+                {selections.length === 1 ? `${totalMin / 30} slot${totalMin === 30 ? '' : 's'} picked` : `on ${new Set(selections.map((s) => s.day)).size} day${new Set(selections.map((s) => s.day)).size === 1 ? '' : 's'}`}
+              </p>
             </div>
             <Button size="sm" variant="ghost" onClick={() => setSelections([])}>
               Clear
@@ -388,13 +422,14 @@ export default function WeeklyCalendarPage() {
         </div>
       )}
 
-      {creating && week && selections.length > 0 && (
+      {creating && week && (
         <CreateEventPanel
           week={week}
           viewerId={viewerId}
           selections={selections}
           onSelectionsChange={setSelections}
           initialInvitees={creating.invitees}
+          prefill={creating.prefill}
           onClose={() => setCreating(null)}
           onCreated={(id) => {
             setCreating(null)
@@ -403,7 +438,7 @@ export default function WeeklyCalendarPage() {
           }}
         />
       )}
-      {openEventId && !creating && <EventPanel eventId={openEventId} onClose={() => setParam({ event: null })} />}
+      {openEventId && !creating && <EventPanel eventId={openEventId} onClose={() => setParam({ event: null })} onDuplicate={duplicate} />}
 
       {week && (
         <FindTimeDialog

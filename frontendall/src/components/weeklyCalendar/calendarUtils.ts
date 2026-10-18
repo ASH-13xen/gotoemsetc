@@ -1,5 +1,5 @@
 import gsap from 'gsap'
-import type { BusyInterval, CalPerson, Occurrence, WeekGridConfig, WeeklyCategory } from '@/api/weeklyCalendar.api'
+import type { BusyInterval, CalPerson, Occurrence, Repeat, SliceInput, WeekGridConfig, WeeklyCategory } from '@/api/weeklyCalendar.api'
 
 // An empty week has nothing to animate — that's fine, not worth a warning.
 gsap.config({ nullTargetWarn: false })
@@ -65,7 +65,86 @@ export const DEFAULT_GRID: WeekGridConfig = { START: 390, END: 1230, SLOT: 30, L
 export const EARLY_END = 540 // 9:00 am — the template's first block ends here
 export const LATE_START = 1110 // 6:30 pm — the template's last block starts here
 
+// Lunch is marked on the grid but can be booked like any other time.
 export const isLunch = (min: number, grid: WeekGridConfig) => min >= grid.LUNCH_START && min < grid.LUNCH_END
+
+// Every bookable start time, 6:30 am – 8:00 pm.
+export const gridTimes = (grid: WeekGridConfig = DEFAULT_GRID) => {
+  const out: number[] = []
+  for (let m = grid.START; m < grid.END; m += grid.SLOT) out.push(m)
+  return out
+}
+
+// ---------------------------------------------------------------------------
+// Repeats — the same rules as the server (weeklyCalendar.service#repeatDates):
+// monthly and yearly keep the date and skip months/years that don't have it.
+// ---------------------------------------------------------------------------
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+const daysInMonth = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate()
+
+export function repeatDates(anchorDay: string, repeat: Repeat, count: number) {
+  const out: string[] = []
+  if (repeat === 'weekly') {
+    for (let i = 0; out.length < count; i += 1) out.push(addDays(anchorDay, 7 * i))
+    return out
+  }
+  const [y0, m0, dom] = anchorDay.split('-').map(Number)
+  const step = repeat === 'yearly' ? 12 : 1
+  for (let y = y0, m = m0, guard = 0; out.length < count && guard < 600; guard += 1) {
+    if (dom <= daysInMonth(y, m)) out.push(`${y}-${pad2(m)}-${pad2(dom)}`)
+    m += step
+    while (m > 12) {
+      m -= 12
+      y += 1
+    }
+  }
+  return out
+}
+
+const DOW_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const ordinal = (n: number) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`
+const joinAnd = (list: string[]) => (list.length < 2 ? list.join('') : `${list.slice(0, -1).join(', ')} & ${list[list.length - 1]}`)
+
+// "Every week on Monday & Wednesday", "Every month on the 31st" …
+export function repeatLabel(repeat: Repeat, days: string[]) {
+  const unique = [...new Set(days)].sort()
+  if (repeat === 'weekly') {
+    const dows = [...new Set(unique.map((d) => asDate(d).getUTCDay()))].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7))
+    return `Every week on ${joinAnd(dows.map((d) => DOW_LONG[d]))}`
+  }
+  if (repeat === 'monthly') return `Every month on the ${joinAnd([...new Set(unique.map((d) => Number(d.slice(8))))].sort((a, b) => a - b).map(ordinal))}`
+  return `Every year on ${joinAnd(unique.map((d) => asDate(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })))}`
+}
+
+// Which months a monthly/yearly repeat will skip, in words — or nothing.
+export function repeatSkipNote(repeat: Repeat, days: string[]) {
+  if (repeat === 'weekly') return null
+  const doms = days.map((d) => Number(d.slice(8)))
+  if (repeat === 'yearly') return days.some((d) => d.slice(5) === '02-29') ? 'Only in leap years — there is no 29 Feb otherwise.' : null
+  const top = Math.max(...doms)
+  if (top === 31) return 'Only in months that have a 31st.'
+  if (top === 30) return 'Skips February (no 30th).'
+  if (top === 29) return 'Skips February in years without a 29th.'
+  return null
+}
+
+export const REPEAT_CHOICES: { value: Repeat | 'none'; label: string }[] = [
+  { value: 'none', label: "Doesn't repeat" },
+  { value: 'weekly', label: 'Every week' },
+  { value: 'monthly', label: 'Every month' },
+  { value: 'yearly', label: 'Every year' },
+]
+
+// ---------------------------------------------------------------------------
+// Time slices — minutes from the meeting's start.
+// ---------------------------------------------------------------------------
+
+export function evenSlices(length: number, each: number, people: string[] = []): SliceInput[] {
+  const out: SliceInput[] = []
+  for (let s = 0, i = 0; s + each <= length; s += each, i += 1) out.push({ start: s, end: s + each, user: people[i] ?? null, label: '' })
+  return out
+}
 
 // ---------------------------------------------------------------------------
 // Categories — colours lifted from the CEO planner PDF, in a modern finish.
@@ -134,12 +213,6 @@ export function availabilityFor(intervals: BusyInterval[] | undefined, occurrenc
 
 // Which Mondays a set of occurrences touches — for fetching busy maps.
 export const weeksOf = (occurrences: Occurrence[]) => [...new Set(occurrences.map((o) => mondayOf(o.day)))].sort()
-
-export function expandRepeats(slots: Occurrence[], repeatWeeks: number) {
-  const out: Occurrence[] = []
-  for (let w = 0; w <= repeatWeeks; w += 1) for (const s of slots) out.push({ ...s, day: addDays(s.day, 7 * w) })
-  return out
-}
 
 export function apiError(err: unknown, fallback: string) {
   return (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? fallback

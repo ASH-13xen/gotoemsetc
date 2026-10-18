@@ -39,10 +39,8 @@ export function FindTimeDialog({
 
   const starts = useMemo(() => {
     const out: number[] = []
-    for (let m = g.START; m + duration <= g.END; m += g.SLOT) {
-      if (m < g.LUNCH_END && g.LUNCH_START < m + duration) continue
-      out.push(m)
-    }
+    // Lunch is bookable too.
+    for (let m = g.START; m + duration <= g.END; m += g.SLOT) out.push(m)
     return out
   }, [g, duration])
 

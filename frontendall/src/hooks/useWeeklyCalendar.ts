@@ -76,7 +76,9 @@ export const useRespond = () =>
   )
 export const useJoin = () => useWeeklyMutation((id: string) => api.join(id))
 export const useSetSegments = () =>
-  useWeeklyMutation(({ id, segments }: { id: string; segments: Parameters<typeof api.setSegments>[1] }) => api.setSegments(id, segments))
+  useWeeklyMutation(({ id, segments, scope }: { id: string; segments: Parameters<typeof api.setSegments>[1]; scope?: api.Scope }) =>
+    api.setSegments(id, segments, scope)
+  )
 export const useAddNote = () =>
   useWeeklyMutation(({ id, ...input }: { id: string } & Parameters<typeof api.addNote>[1]) => api.addNote(id, input))
 export const useUpdateNote = () =>
