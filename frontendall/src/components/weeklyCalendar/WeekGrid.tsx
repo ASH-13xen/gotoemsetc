@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import gsap from 'gsap'
-import { ChevronDown, ChevronUp, Lock, Megaphone, Repeat, Users, Utensils } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, Flag, Lock, Megaphone, Repeat, Ticket, Users, Utensils, X } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import type { CalEvent, Occurrence, WeekData } from '@/api/weeklyCalendar.api'
+import { planKey, type TicketPlan, type TrayItem } from '@/api/ticketPlans.api'
+import { PLAN_MIME, type PlanPayload } from './TicketTray'
 import {
   CATEGORY,
   EARLY_END,
@@ -30,6 +32,10 @@ import {
 //
 // Drag down a day to pick slots; hold Ctrl/⌘ (or Shift) to add another —
 // on another day or the same one.
+//
+// Ticket work (your own plan, from the tray under the week) drops onto a
+// day, moves by dragging, stretches by its bottom edge, and sits beside
+// whatever else is there — it never blocks anything.
 // ---------------------------------------------------------------------------
 
 const ROW_H = 48
@@ -96,10 +102,11 @@ const piecesOf = (event: CalEvent): Piece[] =>
     ? event.held.map((h) => ({ key: `${event._id}:${h.startMin}`, event, startMin: h.startMin, endMin: h.endMin, slice: true }))
     : [{ key: event._id, event, startMin: event.startMin, endMin: event.endMin, slice: false }]
 
-// Side-by-side lanes for blocks that overlap (an invite over a meeting).
-function layoutLanes(pieces: Piece[]) {
+// Side-by-side lanes for blocks that overlap (an invite over a meeting,
+// ticket work over either).
+function layoutLanes<T extends { startMin: number; endMin: number }>(pieces: T[]) {
   const sorted = [...pieces].sort((a, b) => a.startMin - b.startMin || b.endMin - a.endMin)
-  const placed: { piece: Piece; lane: number; lanes: number }[] = []
+  const placed: { piece: T; lane: number; lanes: number }[] = []
   let cluster: typeof placed = []
   let clusterEnd = -1
   const flush = () => {
@@ -122,6 +129,29 @@ function layoutLanes(pieces: Piece[]) {
 }
 
 const holdsTime = (e: CalEvent) => e.busy || e.myRole === 'host' || e.myRole === 'accepted'
+
+// What sits in a day's lanes: part of an event, or planned ticket work.
+type Laid = { key: string; startMin: number; endMin: number; piece?: Piece; plan?: TicketPlan }
+
+// A ticket-work block being moved or stretched.
+interface PlanDrag {
+  plan: TicketPlan
+  mode: 'move' | 'resize'
+  x0: number
+  y0: number
+  // How far down the block it was grabbed, in px.
+  grabDy: number
+  moved: boolean
+  day: string
+  startMin: number
+  endMin: number
+}
+
+// When something is due, in IST.
+function dueSpot(iso: string) {
+  const d = new Date(Date.parse(iso) + 330 * 60000)
+  return { day: d.toISOString().slice(0, 10), min: d.getUTCHours() * 60 + d.getUTCMinutes() }
+}
 const REPEAT_SHORT = { weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly' } as const
 
 export function WeekGrid({
@@ -135,6 +165,13 @@ export function WeekGrid({
   readOnly,
   direction,
   fullScreen = false,
+  plans,
+  planInfo,
+  openPlanId = null,
+  onPlanDrop,
+  onPlanChange,
+  onPlanRemove,
+  onOpenPlan,
 }: {
   week: WeekData
   sections: Sections
@@ -147,6 +184,15 @@ export function WeekGrid({
   direction: number
   // Full screen: the week gets (nearly) the whole window's height.
   fullScreen?: boolean
+  // Your planned ticket work this week, and what still waits on you (by
+  // planKey) — a plan whose ticket isn't in it has moved on.
+  plans?: TicketPlan[]
+  planInfo?: Map<string, TrayItem>
+  openPlanId?: string | null
+  onPlanDrop?: (day: string, startMin: number, payload: PlanPayload) => void
+  onPlanChange?: (plan: TicketPlan, change: { day: string; startMin: number; endMin: number }) => void
+  onPlanRemove?: (plan: TicketPlan) => void
+  onOpenPlan?: (id: string) => void
 }) {
   const grid = week.grid
   const rows = useMemo(() => buildRows(grid, sections), [grid, sections])
@@ -219,6 +265,108 @@ export function WeekGrid({
     },
     [rows]
   )
+
+  // ---- Ticket work: dropping, moving, stretching ----
+  // The minute under a point in a day, to the quarter hour (null over a
+  // folded stretch).
+  const minuteAt = useCallback(
+    (day: string, clientY: number) => {
+      const col = columnRefs.current[day]
+      if (!col) return null
+      const y = clientY - col.getBoundingClientRect().top
+      const row = rows.find((r) => y >= r.top && y < r.top + r.h)
+      if (!row || row.kind !== 'slot') return null
+      return row.start + Math.floor((((y - row.top) / row.h) * (row.end - row.start)) / 15) * 15
+    },
+    [rows]
+  )
+  const dayAtX = (clientX: number) =>
+    Object.entries(columnRefs.current).find(([, el]) => {
+      if (!el) return false
+      const r = el.getBoundingClientRect()
+      return clientX >= r.left && clientX < r.right
+    })?.[0] ?? null
+  const isPastMinute = (day: string, min: number) => day < now.day || (day === now.day && min + 15 <= now.min)
+
+  const [dropAt, setDropAt] = useState<{ day: string; min: number } | null>(null)
+  useEffect(() => {
+    const clear = () => setDropAt(null)
+    window.addEventListener('dragend', clear)
+    window.addEventListener('drop', clear)
+    return () => {
+      window.removeEventListener('dragend', clear)
+      window.removeEventListener('drop', clear)
+    }
+  }, [])
+
+  const dragRef = useRef<PlanDrag | null>(null)
+  const [planDrag, setPlanDragState] = useState<PlanDrag | null>(null)
+  const setPlanDrag = (d: PlanDrag | null) => {
+    dragRef.current = d
+    setPlanDragState(d)
+  }
+  const beginPlanDrag = (e: React.PointerEvent, plan: TicketPlan, mode: PlanDrag['mode']) => {
+    if (e.button !== 0) return
+    e.stopPropagation()
+    e.preventDefault()
+    const block = (e.currentTarget as HTMLElement).closest('[data-plan]') as HTMLElement | null
+    const top = block?.getBoundingClientRect().top ?? e.clientY
+    setPlanDrag({ plan, mode, x0: e.clientX, y0: e.clientY, grabDy: e.clientY - top, moved: false, day: plan.day, startMin: plan.startMin, endMin: plan.endMin })
+  }
+  const dragging = planDrag !== null
+  useEffect(() => {
+    if (!dragging) return
+    const onMove = (e: PointerEvent) => {
+      const d = dragRef.current
+      if (!d) return
+      const moved = d.moved || Math.abs(e.clientX - d.x0) + Math.abs(e.clientY - d.y0) > 4
+      if (!moved) return
+      if (d.mode === 'resize') {
+        const m = minuteAt(d.day, e.clientY)
+        setPlanDrag(m == null ? { ...d, moved } : { ...d, moved, endMin: Math.min(grid.END, Math.max(d.startMin + 15, m + 15)) })
+        return
+      }
+      const length = d.plan.endMin - d.plan.startMin
+      const day = dayAtX(e.clientX) ?? d.day
+      const m = minuteAt(day, e.clientY - d.grabDy)
+      if (m == null) return setPlanDrag({ ...d, moved })
+      const start = Math.max(grid.START, Math.min(m, grid.END - length))
+      setPlanDrag({ ...d, moved, day, startMin: start, endMin: start + length })
+    }
+    const onUp = () => {
+      const d = dragRef.current
+      setPlanDrag(null)
+      if (!d) return
+      if (!d.moved) onOpenPlan?.(d.plan._id)
+      else if (d.day !== d.plan.day || d.startMin !== d.plan.startMin || d.endMin !== d.plan.endMin) {
+        onPlanChange?.(d.plan, { day: d.day, startMin: d.startMin, endMin: d.endMin })
+      }
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp, { once: true })
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+  }, [dragging]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The plans as they are right now — the one being dragged where it's being dragged.
+  const livePlans = useMemo(
+    () => (plans ?? []).map((p) => (planDrag && p._id === planDrag.plan._id ? { ...p, day: planDrag.day, startMin: planDrag.startMin, endMin: planDrag.endMin } : p)),
+    [plans, planDrag]
+  )
+  // A small flag where each waiting ticket falls due this week.
+  const dueMarks = useMemo(() => {
+    const out = new Map<string, { key: string; min: number; code: string; title: string }[]>()
+    for (const item of planInfo?.values() ?? []) {
+      const spot = dueSpot(item.dueAt)
+      if (!week.days.includes(spot.day)) continue
+      const list = out.get(spot.day) ?? []
+      list.push({ key: planKey(item.kind, item._id), min: Math.min(grid.END, Math.max(grid.START, spot.min)), code: item.code, title: item.title })
+      out.set(spot.day, list)
+    }
+    return out
+  }, [planInfo, week.days, grid.START, grid.END])
 
   // Keep a drag inside one stretch of free-to-book slots: never across a
   // folded stretch or into the past.
@@ -295,7 +443,7 @@ export function WeekGrid({
   const leave = useMemo(() => new Set(week.leaveDays), [week.leaveDays])
   const folded = (kind: 'early' | 'late', day: string) => {
     const [a, b] = kind === 'early' ? [grid.START, EARLY_END] : [LATE_START, grid.END]
-    return (eventsByDay.get(day) ?? []).flatMap(piecesOf).filter((p) => p.startMin < b && a < p.endMin).length
+    return [...(eventsByDay.get(day) ?? []).flatMap(piecesOf), ...livePlans.filter((p) => p.day === day)].filter((p) => p.startMin < b && a < p.endMin).length
   }
   const nowInGrid = now.min >= grid.START && now.min < grid.END
 
@@ -439,7 +587,10 @@ export function WeekGrid({
           {/* Day columns */}
           {days.map((day) => {
             const past = day < now.day
-            const placed = layoutLanes((eventsByDay.get(day) ?? []).flatMap(piecesOf))
+            const placed = layoutLanes<Laid>([
+              ...(eventsByDay.get(day) ?? []).flatMap(piecesOf).map((piece) => ({ key: piece.key, startMin: piece.startMin, endMin: piece.endMin, piece })),
+              ...livePlans.filter((p) => p.day === day).map((plan) => ({ key: `plan:${plan._id}`, startMin: plan.startMin, endMin: plan.endMin, plan })),
+            ])
             const daySelections = liveSelections.filter((s) => s.day === day)
             const firstLunch = rows.find((r) => r.lunch)
             return (
@@ -457,6 +608,34 @@ export function WeekGrid({
                   !readOnly && !past && 'cursor-cell'
                 )}
                 onPointerDown={(e) => startDrag(e, day)}
+                // A ticket from the tray, dropped here.
+                onDragOver={(e) => {
+                  if (!onPlanDrop || !e.dataTransfer.types.includes(PLAN_MIME)) return
+                  const min = minuteAt(day, e.clientY)
+                  if (min == null || isPastMinute(day, min)) {
+                    setDropAt(null)
+                    return
+                  }
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'copy'
+                  setDropAt((d) => (d && d.day === day && d.min === min ? d : { day, min }))
+                }}
+                onDragLeave={(e) => {
+                  if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDropAt(null)
+                }}
+                onDrop={(e) => {
+                  const raw = e.dataTransfer.getData(PLAN_MIME)
+                  setDropAt(null)
+                  if (!raw || !onPlanDrop) return
+                  e.preventDefault()
+                  const min = minuteAt(day, e.clientY)
+                  if (min == null || isPastMinute(day, min)) return
+                  try {
+                    onPlanDrop(day, min, JSON.parse(raw) as PlanPayload)
+                  } catch {
+                    // not one of ours
+                  }
+                }}
               >
                 {rows.map((row) => {
                   if (row.kind !== 'slot') {
@@ -523,10 +702,56 @@ export function WeekGrid({
                   )
                 })}
 
+                {/* Where a dragged ticket will land */}
+                {dropAt?.day === day && (
+                  <div
+                    className="pointer-events-none absolute inset-x-1 z-30 rounded-xl border-2 border-dashed border-primary bg-primary/10"
+                    style={{ top: yOf(rows, dropAt.min) + 1, height: yOf(rows, Math.min(grid.END, dropAt.min + 60)) - yOf(rows, dropAt.min) - 2 }}
+                  >
+                    <span className="absolute top-1 left-1.5 max-w-[calc(100%-12px)] truncate rounded-md bg-white/85 px-1.5 py-0.5 text-[10px] font-bold text-primary shadow-sm dark:bg-black/50 dark:text-white">
+                      {fmtRange(dropAt.min, Math.min(grid.END, dropAt.min + 60))}
+                    </span>
+                  </div>
+                )}
+
+                {/* Due flags for what waits on you */}
+                {(dueMarks.get(day) ?? []).map((m) => (
+                  <div key={m.key} className="pointer-events-none absolute inset-x-0 z-[16]" style={{ top: yOf(rows, m.min) }}>
+                    <div className="border-t-2 border-dotted border-rose-500/60" />
+                    <span
+                      className="pointer-events-auto absolute -top-2.5 right-0.5 flex max-w-[calc(100%-4px)] items-center gap-0.5 rounded-full bg-rose-500 px-1.5 text-[9px] leading-4 font-black text-white shadow-sm"
+                      title={`${m.code} is due at ${fmtMin(m.min)} — ${m.title}`}
+                    >
+                      <Flag className="size-2.5 shrink-0" />
+                      {!slim && <span className="truncate">{m.code}</span>}
+                    </span>
+                  </div>
+                ))}
+
                 {/* Blocks */}
-                {placed.map(({ piece, lane, lanes }) => {
-                  const top = yOf(rows, piece.startMin)
-                  const h = Math.max(22, yOf(rows, piece.endMin) - top)
+                {placed.map(({ piece: item, lane, lanes }) => {
+                  const top = yOf(rows, item.startMin)
+                  const h = Math.max(22, yOf(rows, item.endMin) - top)
+                  const style = { top: top + 2, height: h - 4, left: `calc(${(lane / lanes) * 100}% + 3px)`, width: `calc(${100 / lanes}% - 6px)` }
+                  if (item.plan) {
+                    const plan = item.plan
+                    return (
+                      <PlanBlock
+                        key={item.key}
+                        plan={plan}
+                        info={planInfo?.get(planKey(plan.kind, plan.ref))}
+                        style={style}
+                        height={h - 4}
+                        active={openPlanId === plan._id}
+                        dragging={planDrag?.plan._id === plan._id && planDrag.moved}
+                        onGrab={(e) => beginPlanDrag(e, plan, 'move')}
+                        onStretch={(e) => beginPlanDrag(e, plan, 'resize')}
+                        onOpen={() => onOpenPlan?.(plan._id)}
+                        onRemove={() => onPlanRemove?.(plan)}
+                      />
+                    )
+                  }
+                  const piece = item.piece!
                   return (
                     <EventBlock
                       key={piece.key}
@@ -534,7 +759,7 @@ export function WeekGrid({
                       rows={rows}
                       own={!readOnly}
                       roomy={!tight}
-                      style={{ top: top + 2, height: h - 4, left: `calc(${(lane / lanes) * 100}% + 3px)`, width: `calc(${100 / lanes}% - 6px)` }}
+                      style={style}
                       height={h - 4}
                       active={openEventId === piece.event._id}
                       onOpen={() => !piece.event.busy && onOpenEvent(piece.event._id)}
@@ -554,6 +779,80 @@ export function WeekGrid({
           })}
         </div>
       </div>
+    </div>
+  )
+}
+
+// Your planned ticket work: the ticket's colour, dashed (it's a plan, not
+// a booking). Drag it to move it, drag the bottom edge to change its length,
+// × removes it. Grey with a tick once the ticket no longer waits on you.
+function PlanBlock({
+  plan,
+  info,
+  style,
+  height,
+  active,
+  dragging,
+  onGrab,
+  onStretch,
+  onOpen,
+  onRemove,
+}: {
+  plan: TicketPlan
+  info: TrayItem | undefined
+  style: React.CSSProperties
+  height: number
+  active: boolean
+  dragging: boolean
+  onGrab: (e: React.PointerEvent) => void
+  onStretch: (e: React.PointerEvent) => void
+  onOpen: () => void
+  onRemove: () => void
+}) {
+  const done = !info
+  const color = info?.color ?? '#94a3b8'
+  return (
+    <div
+      data-plan={plan._id}
+      role="button"
+      tabIndex={0}
+      onPointerDown={onGrab}
+      onKeyDown={(e) => e.key === 'Enter' && onOpen()}
+      title={`${plan.code} · ${plan.title} · ${fmtRange(plan.startMin, plan.endMin)}${done ? ' · no longer waiting on you' : ''} — drag to move, drag the bottom edge to change the length`}
+      className={cn(
+        'wc-plan group absolute z-[15] cursor-grab touch-none overflow-hidden rounded-xl border-2 border-dashed text-left select-none',
+        dragging && 'z-40 cursor-grabbing shadow-xl',
+        active && 'ring-2 ring-primary ring-offset-2 ring-offset-card',
+        done && 'opacity-75'
+      )}
+      style={{
+        ...style,
+        borderColor: color,
+        background: `repeating-linear-gradient(135deg, color-mix(in oklch, var(--card) 84%, ${color}) 0 7px, color-mix(in oklch, var(--card) 93%, ${color}) 7px 14px)`,
+      }}
+    >
+      <div className="flex h-full min-w-0 flex-col px-1.5 py-1">
+        <p className="flex min-w-0 items-center gap-1 text-[10.5px] leading-tight font-black text-foreground">
+          {done ? <CheckCircle2 className="size-3 shrink-0 text-emerald-600" /> : <Ticket className="size-3 shrink-0" style={{ color }} />}
+          <span className={cn('truncate', done && 'line-through')}>{plan.code}</span>
+        </p>
+        {height >= 34 && <p className="mt-0.5 truncate text-[11px] leading-tight font-semibold text-foreground/85">{plan.title}</p>}
+        {height >= 52 && <p className="mt-0.5 truncate text-[10px] text-muted-foreground tabular-nums">{fmtRange(plan.startMin, plan.endMin)}</p>}
+      </div>
+      <button
+        type="button"
+        aria-label="Remove from the calendar"
+        title="Remove from the calendar"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation()
+          onRemove()
+        }}
+        className="absolute top-0.5 right-0.5 hidden size-5 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow-sm group-hover:flex hover:text-rose-600"
+      >
+        <X className="size-3" />
+      </button>
+      <div onPointerDown={onStretch} className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize" aria-hidden />
     </div>
   )
 }

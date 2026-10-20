@@ -17,6 +17,11 @@ router.get('/summary', c.summary);
 router.get('/analysis', validate(v.analysis), c.analysis);
 // The Task Calendar — CEO/admin see every ticket, others the ones they raised or are on.
 router.get('/task-calendar', validate(v.taskCalendar), c.taskCalendarView);
+// Ticket work planned on the Weekly Calendar — each person's own.
+router.get('/plans', validate(v.planList), c.plans);
+router.post('/plans', validate(v.planCreate), c.planCreate);
+router.patch('/plans/:id', validate(v.planUpdate), c.planUpdate);
+router.delete('/plans/:id', validate(v.idParam), c.planRemove);
 
 // The content calendar's work, shown as tickets.
 router.get('/calendar', validate(v.calendarList), c.calendarList);

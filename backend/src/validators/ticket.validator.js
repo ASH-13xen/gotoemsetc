@@ -1,5 +1,5 @@
 const { z } = require('zod');
-const { TICKET_PIPELINE, TICKET_PRIORITY, TICKET_REPEAT } = require('../config/constants');
+const { TICKET_PIPELINE, TICKET_PRIORITY, TICKET_REPEAT, WEEKLY_GRID } = require('../config/constants');
 
 const id = z.string().regex(/^[a-f0-9]{24}$/i, 'Invalid id');
 const idParam = { params: z.object({ id }) };
@@ -94,6 +94,30 @@ const analysis = {
 // same way.
 const calendarDecision = { ...idParam, body: z.object({ note: z.string().trim().max(2000).optional() }) };
 
+// Planned ticket work on the Weekly Calendar (ticketPlan.service.js): whole
+// 5-minute steps inside the calendar's day, at least 15 minutes.
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid day');
+const minute = z.number().int().min(WEEKLY_GRID.START).max(WEEKLY_GRID.END).refine((m) => m % 5 === 0, 'Use 5-minute steps');
+const planTimes = (d, ctx) => {
+  if (d.startMin !== undefined && d.endMin !== undefined && d.endMin - d.startMin < 15) {
+    ctx.addIssue({ code: 'custom', path: ['endMin'], message: 'Plan at least 15 minutes' });
+  }
+};
+const planList = {
+  query: z
+    .object({ from: day, to: day })
+    .refine((q) => q.to >= q.from && Date.parse(q.to) - Date.parse(q.from) <= 62 * 86400000, { message: 'Pick a range of up to 62 days' }),
+};
+const planCreate = {
+  body: z
+    .object({ kind: z.enum(['ticket', 'calendar', 'stories']), ref: id, day, startMin: minute, endMin: minute })
+    .superRefine(planTimes),
+};
+const planUpdate = {
+  params: z.object({ id }),
+  body: z.object({ day: day.optional(), startMin: minute.optional(), endMin: minute.optional() }).superRefine(planTimes),
+};
+
 // The Task Calendar — a month (with its edge weeks) at most.
 const taskCalendar = {
   query: z
@@ -102,4 +126,7 @@ const taskCalendar = {
 };
 
 module.exports = {
+  planList,
+  planCreate,
+  planUpdate,
   stopRepeat: { params: z.object({ id }), body: z.object({ reason: z.string().trim().max(300).optional() }) }, idParam, taskCalendar, raise, list, calendarList, note, requiredNote, reason, edit, reassign, comment, link, analysis, calendarDecision };

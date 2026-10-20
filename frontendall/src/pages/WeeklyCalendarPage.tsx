@@ -1,4 +1,4 @@
-import { can } from '@/lib/access'
+import { can, featureOn } from '@/lib/access'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { createPortal } from 'react-dom'
@@ -34,6 +34,10 @@ import { EventPanel } from '@/components/weeklyCalendar/EventPanel'
 import { InvitesTray } from '@/components/weeklyCalendar/InvitesTray'
 import { FindTimeDialog } from '@/components/weeklyCalendar/FindTimeDialog'
 import { Avatar } from '@/components/weeklyCalendar/PeoplePicker'
+import { TicketTray, type PlanPayload } from '@/components/weeklyCalendar/TicketTray'
+import { PlanPanel } from '@/components/weeklyCalendar/PlanPanel'
+import { planKey, type PlanKind, type TicketPlan, type TrayItem } from '@/api/ticketPlans.api'
+import { useCreatePlan, useDeletePlan, useTicketPlans, useTicketTray, useUpdatePlan } from '@/hooks/useTicketPlans'
 import { EARLY_END, LATE_START, addDays, apiError, fmtDay, fmtRange, mondayOf, nowIst, weekLabel } from '@/components/weeklyCalendar/calendarUtils'
 import '@/components/weeklyCalendar/weeklyCalendar.css'
 
@@ -99,14 +103,33 @@ export default function WeeklyCalendarPage() {
   const [sections, setSections] = useState<Sections>(readSections)
   const [pdfBusy, setPdfBusy] = useState(false)
 
+  // ---- Tickets to plan: your own ticket work on your own week ----
+  const ticketsOn = featureOn(user, 'TASK_MANAGEMENT') && !viewingOther
+  const tray = useTicketTray(ticketsOn)
+  const plansQuery = useTicketPlans(weekStart, ticketsOn)
+  const plans = useMemo(() => (ticketsOn ? plansQuery.data ?? [] : []), [ticketsOn, plansQuery.data])
+  const trayItems = useMemo(() => tray.data ?? [], [tray.data])
+  const planInfo = useMemo(() => new Map(trayItems.map((i) => [planKey(i.kind, i._id), i])), [trayItems])
+  const plannedMin = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of plans) m.set(planKey(p.kind, p.ref), (m.get(planKey(p.kind, p.ref)) ?? 0) + p.endMin - p.startMin)
+    return m
+  }, [plans])
+  const canPlan = weekStart >= mondayOf(nowIst().day)
+  const [openPlanId, setOpenPlanId] = useState<string | null>(null)
+  const openPlan = plans.find((p) => p._id === openPlanId) ?? null
+  const createPlan = useCreatePlan()
+  const updatePlan = useUpdatePlan()
+  const deletePlan = useDeletePlan()
+
   // Open a folded stretch automatically when this week has something in it.
   const autoOpen = useMemo<Sections>(() => {
-    const evs = week?.events ?? []
+    const evs: { startMin: number; endMin: number }[] = [...(week?.events ?? []), ...plans]
     return {
       early: evs.some((e) => e.startMin < EARLY_END),
       late: evs.some((e) => e.endMin > LATE_START),
     }
-  }, [week])
+  }, [week, plans])
   const effectiveSections = { early: sections.early || autoOpen.early, late: sections.late || autoOpen.late }
 
   const toggleSection = (key: keyof Sections) => {
@@ -141,7 +164,57 @@ export default function WeeklyCalendarPage() {
   }
   const closePanels = () => {
     setCreating(null)
+    setOpenPlanId(null)
     setParam({ event: null })
+  }
+
+  // ---- Ticket work ----
+  const placePlan = (kind: PlanKind, ref: string, day: string, startMin: number) => {
+    const endMin = Math.min(week?.grid.END ?? 1230, startMin + 60)
+    createPlan
+      .mutateAsync({ kind, ref, day, startMin, endMin })
+      .then((plan) =>
+        toast.success(`Planned ${plan.code} · ${fmtDay(day)}, ${fmtRange(startMin, endMin)}`, {
+          description: 'Drag it to move it, or its bottom edge to change the length.',
+          action: { label: 'Undo', onClick: () => deletePlan.mutate(plan._id) },
+        })
+      )
+      .catch((err) => toast.error(apiError(err, 'Could not plan it')))
+  }
+  // "Plan" on a card (a phone, or no dragging): the next quarter hour today
+  // on this week, else 10 am on its Monday.
+  const planFromTray = (item: TrayItem) => {
+    const now = nowIst()
+    const grid = week?.grid
+    if (!grid) return
+    let day = weekStart
+    let start = 600
+    if (weekStart === mondayOf(now.day)) {
+      day = now.day
+      start = Math.max(grid.START, Math.ceil((now.min + 1) / 15) * 15)
+      if (start + 60 > grid.END) {
+        day = addDays(now.day, 1)
+        start = 600
+      }
+    }
+    if (mondayOf(day) !== weekStart) setParam({ week: mondayOf(day), event: null })
+    placePlan(item.kind, item._id, day, start)
+  }
+  const changePlan = (plan: TicketPlan, change: { day: string; startMin: number; endMin: number }) => updatePlan.mutate({ id: plan._id, ...change })
+  const removePlan = (plan: TicketPlan) => {
+    if (openPlanId === plan._id) setOpenPlanId(null)
+    deletePlan.mutate(plan._id, {
+      onSuccess: () =>
+        toast.success(`Removed ${plan.code} from your calendar`, {
+          action: { label: 'Undo', onClick: () => createPlan.mutate({ kind: plan.kind, ref: plan.ref, day: plan.day, startMin: plan.startMin, endMin: plan.endMin }) },
+        }),
+    })
+  }
+  const openPlanPanel = (id: string) => {
+    setCreating(null)
+    setSelections([])
+    setParam({ event: null })
+    setOpenPlanId(id)
   }
 
   // Duplicate: the create panel, filled in from the event, with the copy
@@ -176,7 +249,7 @@ export default function WeeklyCalendarPage() {
     })
     toast.info('Pick where the copy goes — drag on the calendar or change the time in the panel')
   }
-  const panelOpen = Boolean(creating || openEventId)
+  const panelOpen = Boolean(creating || openEventId || openPlan)
 
   // ---- Full screen: the week fills the whole window (over the sidebar and
   // top bar), and the browser goes full screen too where it allows it. The
@@ -217,7 +290,7 @@ export default function WeeklyCalendarPage() {
       const target = e.target as HTMLElement
       if (target.closest('input, textarea, select, [contenteditable], [role="dialog"]')) return
       if (e.key === 'Escape') {
-        if (creating || openEventId) closePanels()
+        if (creating || openEventId || openPlanId) closePanels()
         else if (selections.length) setSelections([])
         else if (fullScreen) toggleFullScreen()
       } else if (e.key.toLowerCase() === 'f' && !e.ctrlKey && !e.metaKey && !e.altKey) toggleFullScreen()
@@ -433,17 +506,26 @@ export default function WeeklyCalendarPage() {
           selections={selections}
           onSelectionsChange={(next) => {
             setSelections(next)
+            setOpenPlanId(null)
             if (openEventId) setParam({ event: null })
           }}
           openEventId={openEventId}
           onOpenEvent={(id) => {
             setCreating(null)
+            setOpenPlanId(null)
             setSelections([])
             setParam({ event: id })
           }}
           readOnly={viewingOther}
           direction={direction}
           fullScreen={fullScreen}
+          plans={ticketsOn ? plans : undefined}
+          planInfo={ticketsOn ? planInfo : undefined}
+          openPlanId={openPlanId}
+          onPlanDrop={ticketsOn && canPlan ? (day: string, min: number, p: PlanPayload) => placePlan(p.kind, p.ref, day, min) : undefined}
+          onPlanChange={changePlan}
+          onPlanRemove={removePlan}
+          onOpenPlan={openPlanPanel}
         />
       )}
 
@@ -463,6 +545,8 @@ export default function WeeklyCalendarPage() {
         </span>
       </div>
 
+      {ticketsOn && <TicketTray items={trayItems} loading={tray.isLoading} planned={plannedMin} canPlan={canPlan} onPlan={planFromTray} />}
+
       {/* Floating selection bar */}
       {hasSelection && (
         <div ref={barRef} className="fixed bottom-6 left-1/2 z-40 -translate-x-1/2">
@@ -479,7 +563,14 @@ export default function WeeklyCalendarPage() {
             <Button size="sm" variant="ghost" onClick={() => setSelections([])}>
               Clear
             </Button>
-            <Button size="sm" className="gap-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-md hover:opacity-95" onClick={() => setCreating({ invitees: [] })}>
+            <Button
+              size="sm"
+              className="gap-1.5 bg-gradient-to-r from-indigo-500 to-violet-500 text-white shadow-md hover:opacity-95"
+              onClick={() => {
+                setOpenPlanId(null)
+                setCreating({ invitees: [] })
+              }}
+            >
               Block time <ArrowRight className="size-3.5" />
             </Button>
           </div>
@@ -503,6 +594,17 @@ export default function WeeklyCalendarPage() {
         />
       )}
       {openEventId && !creating && <EventPanel eventId={openEventId} onClose={() => setParam({ event: null })} onDuplicate={duplicate} />}
+      {openPlan && !creating && !openEventId && week && (
+        <PlanPanel
+          plan={openPlan}
+          info={planInfo.get(planKey(openPlan.kind, openPlan.ref))}
+          days={week.days}
+          grid={week.grid}
+          onClose={() => setOpenPlanId(null)}
+          onChange={(change) => changePlan(openPlan, change)}
+          onRemove={() => removePlan(openPlan)}
+        />
+      )}
 
       {week && (
         <FindTimeDialog

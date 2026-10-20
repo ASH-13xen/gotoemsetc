@@ -330,6 +330,13 @@ async function loadViewable(user, id, chart) {
   return ticket;
 }
 
+// Its code and title, if this person may see it — for planning it on the
+// Weekly Calendar (ticketPlan.service.js).
+async function canViewTicket(user, id) {
+  const ticket = await loadViewable(user, id, await org.loadChart());
+  return { code: codeOf(ticket.number), title: ticket.title };
+}
+
 // ---- reading --------------------------------------------------------------------
 
 // Pipelines, colours, teams and who this person may raise tickets for.
@@ -1062,7 +1069,8 @@ module.exports = {
   ceoReview,
   analysis,
   sweepOverdue,
-  // for the calendar tickets, repeats and tests
+  // for the calendar tickets, repeats, planning and tests
+  canViewTicket,
   record,
   seesEveryone,
   actorsFor,

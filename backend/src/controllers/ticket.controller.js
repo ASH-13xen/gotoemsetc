@@ -1,6 +1,7 @@
 const asyncHandler = require('../utils/asyncHandler');
 const ticketService = require('../services/ticket.service');
 const ticketRepeatService = require('../services/ticketRepeat.service');
+const ticketPlanService = require('../services/ticketPlan.service');
 const calendarTickets = require('../services/calendarTickets.service');
 const taskCalendar = require('../services/taskCalendar.service');
 
@@ -90,6 +91,24 @@ const ceoReview = asyncHandler(async (req, res) => {
   res.json({ ticket });
 });
 
+// ---- planned ticket work on the Weekly Calendar (each person's own) ----
+
+const plans = asyncHandler(async (req, res) => {
+  res.json({ plans: await ticketPlanService.list(req.user, req.query) });
+});
+
+const planCreate = asyncHandler(async (req, res) => {
+  res.status(201).json({ plan: await ticketPlanService.create(req.user, req.body) });
+});
+
+const planUpdate = asyncHandler(async (req, res) => {
+  res.json({ plan: await ticketPlanService.update(req.user, req.params.id, req.body) });
+});
+
+const planRemove = asyncHandler(async (req, res) => {
+  res.json(await ticketPlanService.remove(req.user, req.params.id));
+});
+
 // ---- the Task Calendar ----
 
 const taskCalendarView = asyncHandler(async (req, res) => {
@@ -132,6 +151,10 @@ module.exports = {
   addLink,
   ceoReview,
   taskCalendarView,
+  plans,
+  planCreate,
+  planUpdate,
+  planRemove,
   calendarList,
   calendarItem,
   calendarStories,
