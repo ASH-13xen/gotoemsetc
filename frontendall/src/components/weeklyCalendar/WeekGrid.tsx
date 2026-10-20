@@ -34,7 +34,9 @@ import {
 
 const ROW_H = 48
 const FOLDED_H = 46
-const NARROW_AT = 640
+// One day at a time below this; slimmer days (smaller labels) below SLIM_AT.
+const NARROW_AT = 480
+const SLIM_AT = 640
 
 interface Row {
   start: number
@@ -166,11 +168,12 @@ export function WeekGrid({
     return () => ro.disconnect()
   }, [])
   const narrow = width < NARROW_AT
+  const slim = width < SLIM_AT
   const tight = width < 900
   const [focusDay, setFocusDay] = useState<string | null>(null)
   const shownDay = focusDay && week.days.includes(focusDay) ? focusDay : week.days.includes(now.day) ? now.day : week.days[0]
   const days = narrow ? [shownDay] : week.days
-  const gutter = narrow ? 52 : 64
+  const gutter = slim ? 52 : 64
   const columns = `${gutter}px repeat(${days.length}, minmax(0, 1fr))`
 
   useEffect(() => {
@@ -350,15 +353,17 @@ export function WeekGrid({
             const holiday = holidayByDay.get(day)
             return (
               <div key={day} className={cn('relative min-w-0 border-r border-border/60 px-1 py-2 text-center last:border-r-0', day < week.today && 'opacity-55')}>
-                <p className={cn('text-[11px] font-black tracking-[0.14em]', isToday ? 'text-primary' : 'text-muted-foreground')}>{dowShort(day)}</p>
+                <p className={cn('font-black', slim ? 'text-[10px] tracking-[0.08em]' : 'text-[11px] tracking-[0.14em]', isToday ? 'text-primary' : 'text-muted-foreground')}>
+                  {dowShort(day)}
+                </p>
                 <p
                   className={cn(
-                    'mx-auto mt-0.5 w-fit rounded-full px-2 py-0.5 font-bold tabular-nums',
-                    tight && !narrow ? 'text-xs' : 'text-sm',
+                    'mx-auto mt-0.5 w-fit rounded-full py-0.5 font-bold tabular-nums',
+                    slim ? 'px-1.5 text-[11px]' : tight ? 'px-2 text-xs' : 'px-2 text-sm',
                     isToday ? 'wc-today-pill text-white' : 'text-foreground'
                   )}
                 >
-                  {tight && !narrow ? ddmmyy(day).slice(0, 5) : ddmmyy(day)}
+                  {slim ? String(Number(day.slice(8))) : tight ? ddmmyy(day).slice(0, 5) : ddmmyy(day)}
                 </p>
                 <div className="mt-1 flex min-h-4 flex-wrap justify-center gap-1">
                   {holiday && (
@@ -391,7 +396,7 @@ export function WeekGrid({
                 <span className="flex items-baseline gap-0.5 text-[12px] leading-none font-bold whitespace-nowrap text-foreground tabular-nums">
                   {row.lunch && <Utensils className="size-2.5 shrink-0 self-center text-amber-600 dark:text-amber-300" />}
                   {fmtMin(row.start, false)}
-                  {!narrow && <span className="text-[9px] font-semibold text-muted-foreground">{row.start < 720 ? 'am' : 'pm'}</span>}
+                  {!slim && <span className="text-[9px] font-semibold text-muted-foreground">{row.start < 720 ? 'am' : 'pm'}</span>}
                 </span>
                 <span className="mt-0.5 flex items-center gap-0.5 text-[10px] whitespace-nowrap text-muted-foreground tabular-nums">
                   – {fmtMin(row.end, false)}
@@ -426,7 +431,7 @@ export function WeekGrid({
                 className="absolute right-0.5 z-20 -translate-y-1/2 rounded-full bg-rose-500 px-1 py-0.5 text-[9px] font-bold whitespace-nowrap text-white tabular-nums shadow"
                 style={{ top: yOf(rows, now.min) }}
               >
-                {fmtMin(now.min, !narrow)}
+                {fmtMin(now.min, !slim)}
               </span>
             )}
           </div>

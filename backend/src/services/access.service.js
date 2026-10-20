@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const OrgNode = require('../models/OrgNode');
-const { USER_ROLES } = require('../config/constants');
+const { USER_ROLES, TEAM_MEMBER_ROLE } = require('../config/constants');
 const { ACCESS, accessForRoles, ROLE_RANK, ROLE_LABEL } = require('../config/access');
 
 // ---------------------------------------------------------------------------
@@ -22,10 +22,11 @@ function invalidate() {
 }
 
 // From the chart: which roles each employee holds, and for each role, the
-// roles of the posts above it (for "Approved by …" visibility).
+// roles of the posts above it (for "Approved by …" visibility), and who
+// holds a team's Content Manager box.
 async function orgMap() {
   if (orgCache && orgCache.expires > Date.now()) return orgCache;
-  const nodes = await OrgNode.find({}).select('parent grantsRole assignees').lean();
+  const nodes = await OrgNode.find({}).select('parent grantsRole assignees teamRole').lean();
   const byId = new Map(nodes.map((n) => [idOf(n._id), n]));
 
   const rolesByEmployee = new Map();
@@ -51,7 +52,11 @@ async function orgMap() {
     above.set(node.grantsRole, set);
   }
 
-  orgCache = { rolesByEmployee, above, expires: Date.now() + TTL_MS };
+  const contentManagers = new Set(
+    nodes.filter((n) => n.teamRole === TEAM_MEMBER_ROLE.CONTENT_MANAGER).flatMap((n) => (n.assignees || []).map(idOf))
+  );
+
+  orgCache = { rolesByEmployee, above, contentManagers, expires: Date.now() + TTL_MS };
   return orgCache;
 }
 
@@ -71,15 +76,18 @@ async function resolveUser(userId) {
     const org = await orgMap();
     const fromPosts = employee ? [...(org.rolesByEmployee.get(idOf(employee._id)) || [])] : [];
     const roles = [...new Set([user.role, ...fromPosts])].filter((r) => r !== USER_ROLES.ADMIN || user.role === USER_ROLES.ADMIN);
+    const isContentManager = Boolean(employee && org.contentManagers.has(idOf(employee._id)));
+    // A coordinator, or a team's Content Manager, can give performance flags to anyone.
+    const flagGiver = Boolean(employee?.isCoordinator) || isContentManager;
     value = {
       id: idOf(user._id),
       username: user.username,
       role: user.role,
       roles,
       postRoles: fromPosts,
-      // A coordinator (Organisation chart) can give performance flags.
-      access: [...new Set([...accessForRoles(roles), ...(employee?.isCoordinator ? [ACCESS.PERFORMANCE_FLAGS_GIVE] : [])])],
+      access: [...new Set([...accessForRoles(roles), ...(flagGiver ? [ACCESS.PERFORMANCE_FLAGS_GIVE] : [])])],
       isCoordinator: Boolean(employee?.isCoordinator),
+      isContentManager,
       employeeLink: employee ? idOf(employee._id) : null,
       displayName: employee ? `${employee.firstName} ${employee.lastName || ''}`.trim() : user.username,
       permissions: user.permissions || [],

@@ -15,8 +15,8 @@ import { useFlagHistory, useFlagPeople, useFlagsGiven, useGiveFlag } from '@/hoo
 import type { FlagColor, FlagHistoryEntry } from '@/api/employees.api'
 
 // Performance flags. The CEO and admin see every flag ever recorded (with
-// who gave it); coordinators — marked on the Organisation chart — can give a
-// flag to anyone and see the ones they gave. Whoever receives a flag sees it
+// who gave it); coordinators — marked on the Organisation chart — and every
+// team's Content Manager can give a flag to anyone and see the ones they gave. Whoever receives a flag sees it
 // as an announcement (colour and note only). Milestone notifications (3 red;
 // 3/6/10 green) fire server-side — employee.service.js#notifyFlagMilestone.
 export default function PerformanceFlagsPage() {
@@ -34,7 +34,7 @@ export default function PerformanceFlagsPage() {
         description={
           seesAll
             ? 'Give a red or green flag, and the history of every flag across every employee.'
-            : 'As a coordinator you can give a red or green flag to anyone. The person sees it as an announcement — not who gave it.'
+            : 'You can give a red or green flag to anyone. The person sees it as an announcement — not who gave it.'
         }
       />
       <GiveFlagCard />

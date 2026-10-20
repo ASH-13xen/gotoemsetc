@@ -18,6 +18,8 @@ import {
   type SalaryBatch,
 } from '@/api/salaryApprovals.api'
 import { cn } from '@/lib/utils'
+import { AckButton, useAckScope } from '@/components/layout/ActionAck'
+import { ACTION_KEY } from '@/lib/actionKeys'
 
 // Salary slips waiting for the CEO or admin. Every employee is ticked to
 // start with; unticking someone holds their slip back. Approving mails each
@@ -42,15 +44,19 @@ function saveBlobAs(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-function MailReport({ batch }: { batch: SalaryBatch }) {
+// `acknowledgeable`: in the Action centre, where it can be acknowledged away.
+function MailReport({ batch, acknowledgeable = false }: { batch: SalaryBatch; acknowledgeable?: boolean }) {
   const notSent = batch.emailResults.filter((r) => r.status !== 'sent')
   const sheetFailed = batch.masterSheetEmail?.status === 'failed'
   if (notSent.length === 0 && !sheetFailed) return null
   return (
     <div className="rounded-xl border border-destructive/30 bg-destructive/[0.06] p-3 text-xs">
-      <p className="flex items-center gap-1.5 font-bold text-destructive">
-        <MailWarning className="size-3.5" /> {batch.periodLabel} — could not be mailed
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 font-bold text-destructive">
+          <MailWarning className="size-3.5" /> {batch.periodLabel} — could not be mailed
+        </p>
+        {acknowledgeable && <AckButton keys={[ACTION_KEY.salaryMail(batch._id)]} notice className="h-7" />}
+      </div>
       <ul className="mt-1.5 grid gap-0.5 text-foreground">
         {notSent.map((r) => (
           <li key={r.employeeName + (r.to ?? '')} className="capitalize">
@@ -226,6 +232,7 @@ function BatchRow({ batch }: { batch: SalaryBatch }) {
           <Button size="sm" variant="outline" onClick={() => setSendingBack(true)} disabled={busy}>
             <Undo2 className="size-3.5" /> Send back
           </Button>
+          <AckButton keys={[ACTION_KEY.salaryBatch(batch._id)]} />
         </div>
       )}
       {approve.isPending && (
@@ -294,19 +301,22 @@ function HeldSlips({ held }: { held: HeldSlip[] }) {
         <p className="flex items-center gap-1.5 text-sm font-black text-foreground">
           <PauseCircle className="size-4 text-amber-600" /> On hold · {held.length} salary slip{held.length === 1 ? '' : 's'}
         </p>
-        {held.length > 1 && (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={release.isPending}
-            onClick={() => {
-              setBusyId('all')
-              release.mutate(held.map((h) => h._id))
-            }}
-          >
-            {busyId === 'all' ? <Loader2 className="size-3.5 animate-spin" /> : <PlayCircle className="size-3.5" />} Release all
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {held.length > 1 && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={release.isPending}
+              onClick={() => {
+                setBusyId('all')
+                release.mutate(held.map((h) => h._id))
+              }}
+            >
+              {busyId === 'all' ? <Loader2 className="size-3.5 animate-spin" /> : <PlayCircle className="size-3.5" />} Release all
+            </Button>
+          )}
+          <AckButton keys={held.map((h) => ACTION_KEY.heldSlip(h._id))} />
+        </div>
       </div>
       <p className="mt-0.5 text-xs text-muted-foreground">Not mailed and not payable. Releasing mails the employee their slip and sends it to Finance.</p>
       <div className="mt-2 grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
@@ -340,12 +350,16 @@ export function SalaryApprovalCard() {
   const { user } = useAuth()
   const canApprove = can(user, 'payout_approval')
   const { data } = useQuery({ queryKey: KEY, queryFn: listSalaryBatches, enabled: canApprove, refetchInterval: 60_000 })
+  const { shows, notices } = useAckScope()
   if (!canApprove || !data) return null
+  const pending = data.pending.filter((b) => shows(ACTION_KEY.salaryBatch(b._id)))
   // Approved in the last two weeks with a mail that did not go out — kept
-  // in view so it isn't lost.
-  const withFailures = data.recent.filter((b) => b.emailResults.some((r) => r.status !== 'sent') || b.masterSheetEmail?.status === 'failed')
-  const held = data.held ?? []
-  if (data.pending.length === 0 && withFailures.length === 0 && held.length === 0) return null
+  // in view until acknowledged, so it isn't lost.
+  const withFailures = notices
+    ? data.recent.filter((b) => (b.emailResults.some((r) => r.status !== 'sent') || b.masterSheetEmail?.status === 'failed') && shows(ACTION_KEY.salaryMail(b._id)))
+    : []
+  const held = (data.held ?? []).filter((h) => shows(ACTION_KEY.heldSlip(h._id)))
+  if (pending.length === 0 && withFailures.length === 0 && held.length === 0) return null
 
   return (
     <div className="dashboard-card overflow-hidden rounded-2xl border border-primary/30 bg-card">
@@ -359,18 +373,18 @@ export function SalaryApprovalCard() {
             Untick anyone to hold their salary. Approving mails the ticked employees their own slip and sends Finance one zip of the slips with the master sheet.
           </p>
         </div>
-        {data.pending.length > 0 && <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-black text-primary-foreground">{data.pending.length}</span>}
+        {pending.length > 0 && <span className="rounded-full bg-primary px-2.5 py-0.5 text-xs font-black text-primary-foreground">{pending.length}</span>}
       </div>
       <div className="grid gap-3 p-4">
-        {data.pending.map((b) => (
+        {pending.map((b) => (
           <BatchRow key={b._id} batch={b} />
         ))}
         {held.length > 0 && <HeldSlips held={held} />}
-        {data.pending.length === 0 && withFailures.length > 0 && (
+        {pending.length === 0 && withFailures.length > 0 && (
           <p className="text-xs text-muted-foreground">Recently approved, with mails that did not go out:</p>
         )}
         {withFailures.map((b) => (
-          <MailReport key={b._id} batch={b} />
+          <MailReport key={b._id} batch={b} acknowledgeable />
         ))}
       </div>
     </div>

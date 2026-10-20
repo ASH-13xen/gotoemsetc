@@ -280,15 +280,16 @@ export default function WeeklyCalendarPage() {
       .catch((err) => toast.error(apiError(err, 'Could not copy the week')))
 
   const content = (
-    // On a wide screen the week makes room for the side panel instead of
-    // hiding the weekend under it.
+    // On a laptop or wider the week always makes room for the side panel
+    // (a fixed 440px) instead of hiding days under it — the days get narrower
+    // and their text smaller; on a phone or tablet the panel covers it.
     // Full screen covers the sidebar and top bar; side panels and dialogs still
     // open above it.
     <div
       className={cn(
         'wc-page min-h-full transition-[padding] duration-300',
         fullScreen ? 'fixed inset-0 z-50 overflow-y-auto p-4' : '',
-        panelOpen && (fullScreen ? 'min-[1120px]:pr-112' : 'min-[1400px]:pr-109')
+        panelOpen && (fullScreen ? 'lg:pr-112' : 'lg:pr-109')
       )}
       // The gradient on .wc-page would otherwise leave it see-through.
       style={fullScreen ? { backgroundColor: 'var(--background)' } : undefined}

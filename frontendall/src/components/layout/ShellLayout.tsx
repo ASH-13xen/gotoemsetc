@@ -87,7 +87,7 @@ export function ShellLayout({
     ...(can(user, "hrms") ? [{ to: "/hr", label: "HR Work", icon: ClipboardList }] : []),
     ...(can(user, "operations") ? [{ to: "/operations", label: "Operations", icon: Wrench }] : []),
     ...(can(user, "finance") ? [{ to: "/finance", label: "Finance", icon: Wallet }] : []),
-    // The CEO and admin (full history), and coordinators (give flags).
+    // The CEO and admin (full history); coordinators and Content Managers (give flags).
     ...(can(user, "performance_flags_give")
       ? [{ to: "/performance-flags", label: "Performance Flags", icon: Flag }]
       : []),

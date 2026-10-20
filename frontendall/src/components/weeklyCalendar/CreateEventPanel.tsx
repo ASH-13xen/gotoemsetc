@@ -229,13 +229,19 @@ export function CreateEventPanel({
         </>
       }
       title={
-        <input
+        <textarea
           autoFocus
+          rows={1}
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && (e.metaKey || e.ctrlKey) && submit()}
+          // One line of text that wraps as it grows — never scrolls sideways.
+          onChange={(e) => setTitle(e.target.value.replace(/\s*\n\s*/g, ' '))}
+          onKeyDown={(e) => {
+            if (e.key !== 'Enter') return
+            e.preventDefault()
+            if (e.metaKey || e.ctrlKey) submit()
+          }}
           placeholder={kind === 'personal' ? 'e.g. Doctor appointment' : 'e.g. ALPHA TEAM MEETING'}
-          className="w-full rounded-lg bg-transparent text-2xl font-black tracking-tight text-foreground outline-none placeholder:text-muted-foreground/40"
+          className="block w-full resize-none overflow-hidden rounded-lg bg-transparent text-2xl leading-tight font-black tracking-tight break-words text-foreground outline-none [field-sizing:content] placeholder:text-muted-foreground/40"
           aria-label="Title"
         />
       }

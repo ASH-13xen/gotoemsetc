@@ -9,6 +9,8 @@ import { useAuth } from '@/hooks/useAuth'
 import { useApproveOvertime, useCmApproveOvertime, useOvertimeQueue, useRejectOvertime } from '@/hooks/useOvertimeRequests'
 import type { OvertimeReviewItem } from '@/api/overtimeRequests.api'
 import { cn } from '@/lib/utils'
+import { AckButton, useAckScope } from '@/components/layout/ActionAck'
+import { ACTION_KEY } from '@/lib/actionKeys'
 
 // Overtime waiting on this person. A content manager passes their team's
 // overtime on to HR with a reason; HR gives the final approval, which is
@@ -45,6 +47,8 @@ function Figures({ request }: { request: OvertimeReviewItem }) {
     </div>
   )
 }
+
+const keyOf = (r: OvertimeReviewItem, mode: Mode) => (mode === 'contentManager' ? ACTION_KEY.overtimeCm(r._id) : ACTION_KEY.overtimeHr(r._id))
 
 function Row({ request, mode }: { request: OvertimeReviewItem; mode: Mode }) {
   const [minutes, setMinutes] = useState(String(request.suggestedMinutes || ''))
@@ -106,7 +110,10 @@ function Row({ request, mode }: { request: OvertimeReviewItem; mode: Mode }) {
       )}
 
       {request.isOwn ? (
-        <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">This is your own overtime — someone else has to decide it.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <p className="min-w-0 flex-1 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">This is your own overtime — someone else has to decide it.</p>
+          <AckButton keys={[keyOf(request, mode)]} />
+        </div>
       ) : (
         <div className="mt-3 grid gap-2">
           {!rejecting && (
@@ -151,7 +158,7 @@ function Row({ request, mode }: { request: OvertimeReviewItem; mode: Mode }) {
               </Button>
             </div>
           ) : (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button size="sm" className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700" onClick={onApprove} disabled={busy}>
                 {cmApprove.isPending || approve.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
                 {isCm ? 'Send to HR' : 'Approve'}
@@ -159,6 +166,7 @@ function Row({ request, mode }: { request: OvertimeReviewItem; mode: Mode }) {
               <Button size="sm" variant="outline" className="flex-1" onClick={() => setRejecting(true)} disabled={busy}>
                 <X className="size-3.5" /> Reject
               </Button>
+              <AckButton keys={[keyOf(request, mode)]} />
             </div>
           )}
         </div>
@@ -218,27 +226,31 @@ function Section({ title, hint, requests, mode }: { title: string; hint: string;
 export function OvertimeApprovalsCard() {
   const { user } = useAuth()
   const { data } = useOvertimeQueue(Boolean(user))
+  const { shows, notices } = useAckScope()
   if (!data) return null
-  const waitingOnCm = data.withContentManager.length
+  const forCm = data.contentManager.filter((r) => shows(keyOf(r, 'contentManager')))
+  const forHr = data.hr.filter((r) => shows(keyOf(r, 'hr')))
+  // Just for HR's information — shown with the open list only.
+  const waitingOnCm = notices ? data.withContentManager.length : 0
 
-  if (data.contentManager.length === 0 && data.hr.length === 0 && waitingOnCm === 0) return null
+  if (forCm.length === 0 && forHr.length === 0 && waitingOnCm === 0) return null
 
   return (
     <div className="dashboard-card grid gap-4">
-      {data.contentManager.length > 0 && (
+      {forCm.length > 0 && (
         <Section
           mode="contentManager"
           title="Overtime to review — your team"
           hint="Check the minutes, say what the overtime was for, and send it to HR. Nothing counts until HR approves."
-          requests={data.contentManager}
+          requests={forCm}
         />
       )}
-      {data.hr.length > 0 && (
+      {forHr.length > 0 && (
         <Section
           mode="hr"
           title="Overtime waiting for HR approval"
           hint="Approving adds the minutes to attendance — and so to the calendar and the salary slip."
-          requests={data.hr}
+          requests={forHr}
         />
       )}
       {data.isHr && waitingOnCm > 0 && (

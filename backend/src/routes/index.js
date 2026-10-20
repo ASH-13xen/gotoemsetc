@@ -47,6 +47,7 @@ const monthlyBillRoutes = require('./monthlyBill.routes');
 const reimbursementRoutes = require('./reimbursement.routes');
 const invoiceRoutes = require('./invoice.routes');
 const announcementRoutes = require('./announcement.routes');
+const actionCentreRoutes = require('./actionCentre.routes');
 
 const router = Router();
 
@@ -98,6 +99,8 @@ router.use('/task-events', taskEventRoutes);
 router.use('/employee-tasks', requireFeature('LEGACY_TASKS'), employeeTaskRoutes);
 // Task Management — tickets (see ticket.routes.js).
 router.use('/tickets', ticketRoutes);
+// The Action centre's per-person "Acknowledge" (frontendall ActionCentre.tsx).
+router.use('/action-centre', actionCentreRoutes);
 // Client Management System — the client registry itself stays on
 // /task-clients (shared with Task Management); this mount is the calendars,
 // scheduled content, and approval workflow built on top of it. Gated

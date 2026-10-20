@@ -11,6 +11,8 @@ import {
   type AttendanceModificationRequest,
 } from '@/api/attendanceRequests.api'
 import { MonthlyLeaveCountsNote } from './MonthlyLeaveCountsNote'
+import { AckButton, useAckScope } from '@/components/layout/ActionAck'
+import { ACTION_KEY } from '@/lib/actionKeys'
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' })
@@ -71,7 +73,7 @@ function RequestCard({ request }: { request: AttendanceModificationRequest }) {
       {request.monthlyCounts && <MonthlyLeaveCountsNote counts={request.monthlyCounts} />}
 
       {!rejecting ? (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={onApprove} disabled={approve.isPending} className="flex-1">
             <CheckCircle2 className="size-4" />
             Approve
@@ -80,6 +82,7 @@ function RequestCard({ request }: { request: AttendanceModificationRequest }) {
             <XCircle className="size-4" />
             Reject
           </Button>
+          <AckButton keys={[ACTION_KEY.leaveCm(request._id)]} />
         </div>
       ) : (
         <div className="grid gap-2">
@@ -106,11 +109,12 @@ function RequestCard({ request }: { request: AttendanceModificationRequest }) {
 
 // A content manager's review list — leave applications and modification
 // requests from their team in the Organisation chart, before they reach HR.
-// Lives in the Action centre (no longer a blocking pop-up); shows nothing
-// when there's nothing to review.
+// In the Action centre, and in the pop-up when something new arrives; shows
+// nothing when there's nothing to review.
 export function CmLeaveReviews() {
   const { data } = useMyPendingCmReviews()
-  const requests = data?.requests ?? []
+  const { shows } = useAckScope()
+  const requests = (data?.requests ?? []).filter((r) => shows(ACTION_KEY.leaveCm(r._id)))
 
   if (requests.length === 0) return null
 

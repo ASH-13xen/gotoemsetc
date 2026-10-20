@@ -9,6 +9,8 @@ import { can } from '@/lib/access'
 import { useCeoApproveReimbursement, useCeoRejectReimbursement, useReimbursementsAwaitingCeo } from '@/hooks/useReimbursements'
 import { CATEGORY_LABEL, fetchReimbursementReceipt, type ReimbursementForApproval } from '@/api/reimbursements.api'
 import { cn } from '@/lib/utils'
+import { AckButton, useAckScope } from '@/components/layout/ActionAck'
+import { ACTION_KEY } from '@/lib/actionKeys'
 
 // Reimbursement claims Finance has approved, waiting for the CEO's or
 // admin's final approval. Only after it is a claim payable — on the Monday
@@ -62,7 +64,10 @@ function Row({ claim }: { claim: ReimbursementForApproval }) {
       )}
 
       {claim.isOwn ? (
-        <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">This is your own claim — someone else has to decide it.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <p className="min-w-0 flex-1 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">This is your own claim — someone else has to decide it.</p>
+          <AckButton keys={[ACTION_KEY.reimbursement(claim._id)]} />
+        </div>
       ) : rejecting ? (
         <div className="mt-3 grid gap-2">
           <Textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} placeholder="Why is this rejected? (the employee will see it)" className="text-sm" />
@@ -86,7 +91,7 @@ function Row({ claim }: { claim: ReimbursementForApproval }) {
           </div>
         </div>
       ) : (
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           <Button
             size="sm"
             className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
@@ -103,6 +108,7 @@ function Row({ claim }: { claim: ReimbursementForApproval }) {
           <Button size="sm" variant="outline" className="flex-1" onClick={() => setRejecting(true)} disabled={busy}>
             <X className="size-3.5" /> Reject
           </Button>
+          <AckButton keys={[ACTION_KEY.reimbursement(claim._id)]} />
         </div>
       )}
     </div>
@@ -112,7 +118,9 @@ function Row({ claim }: { claim: ReimbursementForApproval }) {
 export function ReimbursementApprovalsCard() {
   const { user } = useAuth()
   const canApprove = can(user, 'payout_approval')
-  const { data: claims = [] } = useReimbursementsAwaitingCeo(canApprove)
+  const { data: allClaims = [] } = useReimbursementsAwaitingCeo(canApprove)
+  const { shows } = useAckScope()
+  const claims = allClaims.filter((c) => shows(ACTION_KEY.reimbursement(c._id)))
   const approve = useCeoApproveReimbursement()
   const [bulkBusy, setBulkBusy] = useState(false)
   if (!canApprove || claims.length === 0) return null

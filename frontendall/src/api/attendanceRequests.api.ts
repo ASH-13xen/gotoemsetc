@@ -67,6 +67,13 @@ export function isRangeEligible(status: LeaveApplicationStatus | undefined) {
   return status === 'W'
 }
 
+// Every pending request — HR, the CEO and admin get them all (the Action
+// centre picks out the ones at their stage).
+export async function listPendingAttendanceRequests(): Promise<AttendanceModificationRequest[]> {
+  const { data } = await apiClient.get<{ requests: AttendanceModificationRequest[] }>('/attendance-requests', { params: { status: 'pending' } })
+  return data.requests
+}
+
 export interface AttendanceModificationRequest {
   _id: string
   employee: { _id: string; firstName: string; lastName?: string } | string

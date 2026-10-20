@@ -18,6 +18,8 @@ import {
   sendBackFnf,
   type FnfSettlement,
 } from '@/api/fnf.api'
+import { AckButton, useAckScope } from '@/components/layout/ActionAck'
+import { ACTION_KEY } from '@/lib/actionKeys'
 
 // Full & final settlement on the dashboard. HR confirms the last working day
 // (which makes the final salary slip); the CEO/admin then approves the
@@ -97,6 +99,7 @@ function HrRow({ settlement }: { settlement: FnfSettlement }) {
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <DocButton settlement={settlement} />
+        <AckButton keys={[ACTION_KEY.fnfHr(settlement._id)]} />
         <Button
           size="sm"
           className="flex-1"
@@ -150,7 +153,10 @@ function ApprovalRow({ settlement }: { settlement: FnfSettlement }) {
         </p>
       </div>
       {settlement.isOwn ? (
-        <p className="mt-3 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">This is your own settlement — someone else has to approve it.</p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <p className="min-w-0 flex-1 rounded-lg bg-secondary px-3 py-2 text-xs text-muted-foreground">This is your own settlement — someone else has to approve it.</p>
+          <AckButton keys={[ACTION_KEY.fnfApproval(settlement._id)]} />
+        </div>
       ) : sendingBack ? (
         <div className="mt-3 grid gap-2">
           <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="What needs changing? (HR will see this)" className="text-sm" />
@@ -195,6 +201,7 @@ function ApprovalRow({ settlement }: { settlement: FnfSettlement }) {
           <Button size="sm" variant="outline" onClick={() => setSendingBack(true)} disabled={busy}>
             <Undo2 className="size-3.5" /> Send back
           </Button>
+          <AckButton keys={[ACTION_KEY.fnfApproval(settlement._id)]} />
         </div>
       )}
     </div>
@@ -205,8 +212,11 @@ export function FnfCards() {
   const { user } = useAuth()
   const isHr = can(user, 'hrms')
   const isApprover = can(user, 'payout_approval')
-  const { data: forHr = [] } = useQuery({ queryKey: [...KEY, 'hr'], queryFn: listFnfForHr, enabled: isHr, refetchInterval: 60_000 })
-  const { data: forApproval = [] } = useQuery({ queryKey: [...KEY, 'approvals'], queryFn: listFnfForApproval, enabled: isApprover, refetchInterval: 60_000 })
+  const { data: allForHr = [] } = useQuery({ queryKey: [...KEY, 'hr'], queryFn: listFnfForHr, enabled: isHr, refetchInterval: 60_000 })
+  const { data: allForApproval = [] } = useQuery({ queryKey: [...KEY, 'approvals'], queryFn: listFnfForApproval, enabled: isApprover, refetchInterval: 60_000 })
+  const { shows } = useAckScope()
+  const forHr = allForHr.filter((s) => shows(ACTION_KEY.fnfHr(s._id)))
+  const forApproval = allForApproval.filter((s) => shows(ACTION_KEY.fnfApproval(s._id)))
 
   return (
     <>

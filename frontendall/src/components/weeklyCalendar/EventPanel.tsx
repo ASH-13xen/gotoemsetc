@@ -455,7 +455,7 @@ function AgendaSection({ event, members, isPast, upcomingInSeries }: { event: Ca
             <div className="grid gap-1">
               {event.segments.map((s) => (
                 <div key={s._id} className="flex items-center gap-2.5 rounded-xl border border-border/70 bg-secondary/30 px-2.5 py-1.5">
-                  <span className="w-23 shrink-0 text-[11px] font-bold text-primary tabular-nums">{fmtRange(s.startMin, s.endMin)}</span>
+                  <span className="w-28 shrink-0 text-[11px] font-bold whitespace-nowrap text-primary tabular-nums">{fmtRange(s.startMin, s.endMin)}</span>
                   {(s.users ?? []).length > 0 && (
                     <span className="flex shrink-0 -space-x-1.5">
                       {(s.users ?? []).slice(0, 4).map((u) => (

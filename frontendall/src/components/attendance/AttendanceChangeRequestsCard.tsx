@@ -15,6 +15,8 @@ import {
   type AttendanceEditRequest,
   type EditRequestChange,
 } from '@/api/attendanceEditRequests.api'
+import { AckButton, useAckScope } from '@/components/layout/ActionAck'
+import { ACTION_KEY } from '@/lib/actionKeys'
 
 // HR can't change attendance more than 2 days old directly — those changes
 // land here, for the CEO and admin only. Whichever of them decides first
@@ -106,7 +108,7 @@ function RequestRow({ request }: { request: AttendanceEditRequest }) {
           </div>
         </div>
       ) : (
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
           <Button
             size="sm"
             className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
@@ -123,6 +125,7 @@ function RequestRow({ request }: { request: AttendanceEditRequest }) {
           <Button size="sm" variant="outline" className="flex-1" onClick={() => setRejecting(true)}>
             <X className="size-3.5" /> Reject
           </Button>
+          <AckButton keys={[ACTION_KEY.attendanceEdit(request._id)]} />
         </div>
       )}
     </div>
@@ -132,12 +135,14 @@ function RequestRow({ request }: { request: AttendanceEditRequest }) {
 export function AttendanceChangeRequestsCard() {
   const { user } = useAuth()
   const canDecide = can(user, 'attendance_final_approval')
-  const { data: requests = [] } = useQuery({
+  const { data: all = [] } = useQuery({
     queryKey: ['attendance-edit-requests', 'pending'],
     queryFn: () => listEditRequests('pending'),
     enabled: canDecide,
     refetchInterval: 60_000,
   })
+  const { shows } = useAckScope()
+  const requests = all.filter((r) => shows(ACTION_KEY.attendanceEdit(r._id)))
   const ref = useRef<HTMLDivElement>(null)
 
   useLayoutEffect(() => {

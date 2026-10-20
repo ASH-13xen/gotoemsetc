@@ -1,14 +1,15 @@
 import { toast } from 'sonner'
-import { UserMinus, UserPlus, X } from 'lucide-react'
+import { Check, UserMinus, UserPlus } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
 import { apiClient } from '@/api/client'
 import { cn } from '@/lib/utils'
+import { useAckScope } from '@/components/layout/ActionAck'
 
 // Whenever someone is onboarded or offboarded, the CEO and admin see it here
-// until they dismiss it. Only they are sent these, so for everyone else this
-// shows nothing.
+// until they acknowledge it. Only they are sent these, so for everyone else
+// this shows nothing.
 
 interface PeopleAlert {
   _id: string
@@ -35,10 +36,11 @@ export function PeopleChangeAlerts() {
       queryClient.invalidateQueries({ queryKey: KEY })
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
-    onError: () => toast.error('Could not dismiss'),
+    onError: () => toast.error('Could not acknowledge'),
   })
+  const { notices } = useAckScope()
 
-  if (alerts.length === 0) return null
+  if (!notices || alerts.length === 0) return null
 
   return (
     <div className="dashboard-card grid gap-2">
@@ -67,21 +69,21 @@ export function PeopleChangeAlerts() {
                 {a.message} · {new Date(a.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
               </p>
             </div>
-            <button
-              type="button"
-              aria-label="Dismiss"
+            <Button
+              size="sm"
+              variant="ghost"
               disabled={dismiss.isPending}
               onClick={() => dismiss.mutate([a._id])}
-              className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              className="h-8 shrink-0 gap-1 px-2.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
             >
-              <X className="size-4" />
-            </button>
+              <Check className="size-3.5" /> Acknowledge
+            </Button>
           </div>
         )
       })}
       {alerts.length > 1 && (
         <Button size="sm" variant="ghost" className="justify-self-end" disabled={dismiss.isPending} onClick={() => dismiss.mutate(alerts.map((a) => a._id))}>
-          Dismiss all
+          Acknowledge all
         </Button>
       )}
     </div>

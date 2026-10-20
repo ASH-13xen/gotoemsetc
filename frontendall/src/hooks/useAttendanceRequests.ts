@@ -48,6 +48,19 @@ export function useMyPendingCmReviews() {
   return useQuery({
     queryKey: PENDING_CM_REVIEWS_KEY,
     queryFn: () => attendanceRequestsApi.listMyPendingCmReviews(),
+    // New ones pop up during the day, not just on the next visit.
+    refetchInterval: 60_000,
+  })
+}
+
+// Every pending leave/modification request (HR, CEO and admin see them all)
+// — HR's and the CEO's sections of the Action centre filter it by stage.
+export function usePendingLeaveAll(enabled: boolean) {
+  return useQuery({
+    queryKey: ['attendance-requests', 'pending-all'],
+    queryFn: () => attendanceRequestsApi.listPendingAttendanceRequests(),
+    enabled,
+    refetchInterval: 60_000,
   })
 }
 

@@ -7,7 +7,6 @@ import {
   ArrowRight,
   Building2,
   Crown,
-  Info,
   KeyRound,
   Landmark,
   ShieldCheck,
@@ -22,7 +21,6 @@ import { cn } from '@/lib/utils'
 import { hasRole } from '@/lib/access'
 import type { StoredUser } from '@/lib/authStorage'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { DashboardCard, DashboardCardEmpty } from '@/components/dashboard/DashboardCard'
 import { useKeys } from '@/hooks/useKeys'
 import { KEY_LABEL } from '@/api/keys.api'
@@ -105,90 +103,6 @@ export function DashboardToggle({ views, value, onChange }: { views: DashboardVi
         })}
       </div>
     </div>
-  )
-}
-
-// ---- CEO: approvals waiting on the CEO ----
-
-interface PendingRequest {
-  _id: string
-  approvalStage: string
-  date: string
-  endDate: string
-  reason: string
-  employee: { firstName: string; lastName?: string } | string
-}
-
-export function CeoLeaveApprovalsCard() {
-  const { data, isLoading } = useQuery({
-    queryKey: ['attendance-requests', 'ceo-stage'],
-    queryFn: async () => (await apiClient.get<{ requests: PendingRequest[] }>('/attendance-requests', { params: { status: 'pending' } })).data.requests,
-    refetchInterval: 60_000,
-  })
-  const waiting = (data ?? []).filter((r) => r.approvalStage === 'ceo')
-  const name = (r: PendingRequest) => (typeof r.employee === 'string' ? r.employee : `${r.employee.firstName} ${r.employee.lastName ?? ''}`.trim().toLowerCase())
-  const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })
-
-  return (
-    <DashboardCard
-      icon={<Crown className="size-4" />}
-      title={`Leave waiting for the CEO${waiting.length ? ` · ${waiting.length}` : ''}`}
-      viewAllHref="/hr"
-      viewAllLabel="Open HR Work"
-      headerRight={
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              aria-label="What this card shows"
-              className="mr-auto flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-            >
-              <Info className="size-4" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-80 text-xs leading-relaxed text-muted-foreground">
-            <p className="text-sm font-bold text-foreground">What this card shows</p>
-            <p className="mt-2">
-              Leave requests that are waiting for the <b className="text-foreground">final approval</b> — the last step, after HR has
-              already approved them.
-            </p>
-            <ul className="mt-2 list-disc space-y-1.5 pl-4">
-              <li>
-                Only <b className="text-foreground">Unpaid Leave</b> comes here. It goes Content Manager → HR → CEO. Every other type
-                (Short Leave, Late, Half Day, Work From Home, Paid Leave) ends with HR and never appears on this card.
-              </li>
-              <li>Each row shows the employee, their reason and the dates. Up to six are listed; the number in the title is the total.</li>
-              <li>
-                Nothing is decided from this card. Click a row or <b className="text-foreground">Open HR Work</b> to approve or reject
-                it there.
-              </li>
-              <li>The CEO or the admin can give this approval — whoever does it first settles it. Nobody approves their own leave.</li>
-              <li>“Nothing waiting for your final approval” means no Unpaid Leave is at this step right now.</li>
-            </ul>
-          </PopoverContent>
-        </Popover>
-      }
-    >
-      {isLoading ? (
-        <Skeleton className="h-12 w-full rounded-xl" />
-      ) : waiting.length === 0 ? (
-        <DashboardCardEmpty icon={<Crown className="size-4" />} message="Nothing waiting for your final approval." />
-      ) : (
-        <div className="grid gap-2">
-          {waiting.slice(0, 6).map((r) => (
-            <Link key={r._id} to="/hr" className="flex items-center justify-between gap-3 rounded-xl bg-amber-500/8 p-3 transition-colors hover:bg-amber-500/15">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-foreground capitalize">{name(r)}</p>
-                <p className="truncate text-xs text-muted-foreground">{r.reason}</p>
-              </div>
-              <span className="shrink-0 text-xs font-bold text-amber-700 dark:text-amber-300">
-                {r.date.slice(0, 10) === r.endDate?.slice(0, 10) ? fmt(r.date) : `${fmt(r.date)} – ${fmt(r.endDate)}`}
-              </span>
-            </Link>
-          ))}
-        </div>
-      )}
-    </DashboardCard>
   )
 }
 
