@@ -34,7 +34,7 @@ import { EventPanel } from '@/components/weeklyCalendar/EventPanel'
 import { InvitesTray } from '@/components/weeklyCalendar/InvitesTray'
 import { FindTimeDialog } from '@/components/weeklyCalendar/FindTimeDialog'
 import { Avatar } from '@/components/weeklyCalendar/PeoplePicker'
-import { TicketTray, type PlanPayload } from '@/components/weeklyCalendar/TicketTray'
+import { TicketRail, TicketTray, type PlanPayload } from '@/components/weeklyCalendar/TicketTray'
 import { PlanPanel } from '@/components/weeklyCalendar/PlanPanel'
 import { planKey, type PlanKind, type TicketPlan, type TrayItem } from '@/api/ticketPlans.api'
 import { useCreatePlan, useDeletePlan, useTicketPlans, useTicketTray, useUpdatePlan } from '@/hooks/useTicketPlans'
@@ -117,6 +117,14 @@ export default function WeeklyCalendarPage() {
   }, [plans])
   const canPlan = weekStart >= mondayOf(nowIst().day)
   const [openPlanId, setOpenPlanId] = useState<string | null>(null)
+  // Wide enough for the tray to sit beside the week in full screen (not a phone).
+  const [wide, setWide] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)')
+    const onChange = () => setWide(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
   const openPlan = plans.find((p) => p._id === openPlanId) ?? null
   const createPlan = useCreatePlan()
   const updatePlan = useUpdatePlan()
@@ -494,40 +502,49 @@ export default function WeeklyCalendarPage() {
         </div>
       )}
 
-      {isLoading || !week ? (
-        <div className="flex h-[60vh] items-center justify-center rounded-3xl border border-border bg-card text-muted-foreground">
-          {isError ? <p className="text-sm">Could not load the calendar.</p> : <Loader2 className="size-6 animate-spin" />}
+      {/* In full screen the tray is a column beside the week, so a ticket and
+          the day it goes on are both in view. */}
+      <div className={cn(fullScreen && ticketsOn && wide && 'flex items-start gap-3')}>
+        {fullScreen && ticketsOn && wide && (
+          <TicketRail items={trayItems} loading={tray.isLoading} planned={plannedMin} canPlan={canPlan} onPlan={planFromTray} />
+        )}
+        <div className="min-w-0 flex-1">
+          {isLoading || !week ? (
+            <div className="flex h-[60vh] items-center justify-center rounded-3xl border border-border bg-card text-muted-foreground">
+              {isError ? <p className="text-sm">Could not load the calendar.</p> : <Loader2 className="size-6 animate-spin" />}
+            </div>
+          ) : (
+            <WeekGrid
+              week={week}
+              sections={effectiveSections}
+              onToggleSection={toggleSection}
+              selections={selections}
+              onSelectionsChange={(next) => {
+                setSelections(next)
+                setOpenPlanId(null)
+                if (openEventId) setParam({ event: null })
+              }}
+              openEventId={openEventId}
+              onOpenEvent={(id) => {
+                setCreating(null)
+                setOpenPlanId(null)
+                setSelections([])
+                setParam({ event: id })
+              }}
+              readOnly={viewingOther}
+              direction={direction}
+              fullScreen={fullScreen}
+              plans={ticketsOn ? plans : undefined}
+              planInfo={ticketsOn ? planInfo : undefined}
+              openPlanId={openPlanId}
+              onPlanDrop={ticketsOn && canPlan ? (day: string, min: number, p: PlanPayload) => placePlan(p.kind, p.ref, day, min) : undefined}
+              onPlanChange={changePlan}
+              onPlanRemove={removePlan}
+              onOpenPlan={openPlanPanel}
+            />
+          )}
         </div>
-      ) : (
-        <WeekGrid
-          week={week}
-          sections={effectiveSections}
-          onToggleSection={toggleSection}
-          selections={selections}
-          onSelectionsChange={(next) => {
-            setSelections(next)
-            setOpenPlanId(null)
-            if (openEventId) setParam({ event: null })
-          }}
-          openEventId={openEventId}
-          onOpenEvent={(id) => {
-            setCreating(null)
-            setOpenPlanId(null)
-            setSelections([])
-            setParam({ event: id })
-          }}
-          readOnly={viewingOther}
-          direction={direction}
-          fullScreen={fullScreen}
-          plans={ticketsOn ? plans : undefined}
-          planInfo={ticketsOn ? planInfo : undefined}
-          openPlanId={openPlanId}
-          onPlanDrop={ticketsOn && canPlan ? (day: string, min: number, p: PlanPayload) => placePlan(p.kind, p.ref, day, min) : undefined}
-          onPlanChange={changePlan}
-          onPlanRemove={removePlan}
-          onOpenPlan={openPlanPanel}
-        />
-      )}
+      </div>
 
       {/* Legend + tip */}
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
@@ -545,7 +562,7 @@ export default function WeeklyCalendarPage() {
         </span>
       </div>
 
-      {ticketsOn && <TicketTray items={trayItems} loading={tray.isLoading} planned={plannedMin} canPlan={canPlan} onPlan={planFromTray} />}
+      {ticketsOn && !(fullScreen && wide) && <TicketTray items={trayItems} loading={tray.isLoading} planned={plannedMin} canPlan={canPlan} onPlan={planFromTray} />}
 
       {/* Floating selection bar */}
       {hasSelection && (
