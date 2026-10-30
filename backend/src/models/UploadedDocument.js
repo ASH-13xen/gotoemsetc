@@ -1,9 +1,10 @@
 const { Schema, model } = require('mongoose');
 
-// Stored on local disk rather than Cloudinary, same reasoning as generated
-// documents/salary slips/client documents: PDFs delivered without our own
-// auth gate hit Cloudinary's raw-file delivery restriction. Served back
-// through an authenticated route instead of a direct URL.
+// Not on Cloudinary — PDFs delivered without our own auth gate hit its
+// raw-file delivery restriction — so served back through an authenticated
+// route instead of a direct URL. The file itself is kept here (`data`): the
+// server's own disk is wiped on every deploy, which lost the files of
+// documents uploaded before this (`filePath` is where those were).
 const uploadedDocumentSchema = new Schema(
   {
     employee: { type: Schema.Types.ObjectId, ref: 'Employee', required: true, index: true },
@@ -19,8 +20,14 @@ const uploadedDocumentSchema = new Schema(
     mimeType: String,
     sizeBytes: Number,
     filePath: { type: String, required: true },
+    data: { type: Buffer, select: false },
   },
   { timestamps: true }
 );
+
+// The file never goes out with the record.
+const withoutData = { transform: (_doc, ret) => { delete ret.data; return ret; } };
+uploadedDocumentSchema.set('toJSON', withoutData);
+uploadedDocumentSchema.set('toObject', withoutData);
 
 module.exports = model('UploadedDocument', uploadedDocumentSchema);

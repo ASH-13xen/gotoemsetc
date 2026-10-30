@@ -5,7 +5,7 @@ const salaryBatchService = require('../services/salaryBatch.service');
 const { SALARY_BATCH_KIND } = require('../config/constants');
 const ApiError = require('../utils/ApiError');
 const overtimeRequestService = require('../services/overtimeRequest.service');
-const localFileStorage = require('../services/localFileStorage.service');
+const slipPdf = require('../services/slipPdf.service');
 const logger = require('../utils/logger');
 
 const generate = asyncHandler(async (req, res) => {
@@ -31,8 +31,8 @@ const listForEmployee = asyncHandler(async (req, res) => {
 });
 
 const downloadFile = asyncHandler(async (req, res) => {
-  const { filePath, namespace } = await salarySlipService.getFilePath(req.params.id);
-  res.sendFile(localFileStorage.absolutePathFor(filePath, namespace));
+  const { data, filename } = await salarySlipService.getPdf(req.params.id);
+  slipPdf.send(res, data, filename);
 });
 
 // Self-service (frontendall dashboard) — see salarySlip.service.js for why
@@ -43,8 +43,8 @@ const listRecentMonths = asyncHandler(async (req, res) => {
 });
 
 const downloadOwnFile = asyncHandler(async (req, res) => {
-  const { filePath, namespace } = await salarySlipService.getOwnFilePath(req.params.id, req.params.slipId, req.user);
-  res.sendFile(localFileStorage.absolutePathFor(filePath, namespace));
+  const { data, filename } = await salarySlipService.getOwnPdf(req.params.id, req.params.slipId, req.user);
+  slipPdf.send(res, data, filename);
 });
 
 // HR Work bulk tool (frontendhr) — see salarySlip.service.js#generateBulkSlips
@@ -112,8 +112,8 @@ const listForFinance = asyncHandler(async (req, res) => {
 
 // Finance opening one of the month's approved slips.
 const downloadFinanceFile = asyncHandler(async (req, res) => {
-  const { filePath, namespace } = await salarySlipService.getApprovedFilePath(req.params.id);
-  res.sendFile(localFileStorage.absolutePathFor(filePath, namespace));
+  const { data, filename } = await salarySlipService.getApprovedPdf(req.params.id);
+  slipPdf.send(res, data, filename);
 });
 
 // Finance's own master sheet for the month — approved slips only.

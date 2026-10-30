@@ -1,4 +1,3 @@
-const fs = require('node:fs/promises');
 const ApiError = require('../utils/ApiError');
 const logger = require('../utils/logger');
 const env = require('../config/env');
@@ -6,8 +5,8 @@ const SalaryBatch = require('../models/SalaryBatch');
 const SalarySlip = require('../models/SalarySlip');
 const employeeRepository = require('../repositories/employee.repository');
 const userRepository = require('../repositories/user.repository');
-const localFileStorage = require('./localFileStorage.service');
 const salarySlipService = require('./salarySlip.service');
+const slipPdf = require('./slipPdf.service');
 const emailService = require('./email.service');
 const notificationService = require('./notification.service');
 const accessService = require('./access.service');
@@ -29,7 +28,6 @@ const { SALARY_BATCH_STATUS, SALARY_BATCH_KIND, SALARY_SLIP_APPROVAL, NOTIFICATI
 // still waiting, so nothing stale can be approved.
 
 const { PENDING, APPROVED, SENT_BACK, SUPERSEDED } = SALARY_BATCH_STATUS;
-const SLIP_NAMESPACE = 'salary-slips';
 // Resend allows two requests a second — leave room between mails.
 const MAIL_GAP_MS = 600;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -184,7 +182,7 @@ async function mailSlip(slip, label) {
   if (!to) return { ...result, status: 'no_address', error: 'No Company Mail ID on their record' };
   if (!env.resendConfigured) return { ...result, to, status: 'failed', error: 'Email is not set up on the server' };
   try {
-    const pdf = await fs.readFile(localFileStorage.absolutePathFor(slip.generatedFile.filePath, SLIP_NAMESPACE));
+    const pdf = await slipPdf.read(slip);
     await emailService.sendEmail({
       to,
       subject: `Your salary slip for ${label}`,

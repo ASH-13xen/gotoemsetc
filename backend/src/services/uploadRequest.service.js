@@ -8,6 +8,7 @@ const employeeRepository = require('../repositories/employee.repository');
 const uploadRequestRepository = require('../repositories/uploadRequest.repository');
 const uploadedDocumentRepository = require('../repositories/uploadedDocument.repository');
 const localFileStorage = require('./localFileStorage.service');
+const UploadedDocument = require('../models/UploadedDocument');
 const activityService = require('./activity.service');
 const emailService = require('./email.service');
 const env = require('../config/env');
@@ -164,6 +165,7 @@ async function attachDocuments(rawToken, code, files) {
       mimeType: file.mimetype,
       sizeBytes: file.size,
       filePath,
+      data: file.buffer,
     });
     saved.push(doc);
   }
@@ -231,6 +233,7 @@ async function adminUpload(employeeId, { docType, otherLabel }, file, { keepPrev
     mimeType: file.mimetype,
     sizeBytes: file.size,
     filePath,
+    data: file.buffer,
   });
 
   await activityService.log(employeeId, 'DOCUMENT_UPLOADED_BY_ADMIN', { docType, otherLabel });
@@ -238,10 +241,16 @@ async function adminUpload(employeeId, { docType, otherLabel }, file, { keepPrev
   return doc;
 }
 
-async function getUploadedFilePath(id) {
-  const doc = await uploadedDocumentRepository.findById(id);
+// The file: from the database; older uploads were only on the server's
+// disk, which is wiped on every deploy — one found nowhere has to be
+// uploaded again.
+async function getUploadedFile(id) {
+  const doc = await UploadedDocument.findById(id).select('+data');
   if (!doc) throw ApiError.notFound('Document not found');
-  return { filePath: doc.filePath, namespace: NAMESPACE, filename: doc.originalFilename };
+  let data = doc.data?.length ? doc.data : null;
+  if (!data && doc.filePath) data = await localFileStorage.readBuffer(doc.filePath, NAMESPACE).catch(() => null);
+  if (!data) throw ApiError.notFound('This file is no longer on the server — ask for it to be uploaded again');
+  return { data, filename: doc.originalFilename || 'document', mimeType: doc.mimeType || 'application/octet-stream' };
 }
 
 async function deleteUploadedDocument(id) {
@@ -260,7 +269,7 @@ module.exports = {
   getPublicStatus,
   attachDocuments,
   listUploadedForEmployee,
-  getUploadedFilePath,
+  getUploadedFile,
   deleteUploadedDocument,
   adminUpload,
 };

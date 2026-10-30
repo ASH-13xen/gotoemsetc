@@ -1,7 +1,6 @@
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const uploadRequestService = require('../services/uploadRequest.service');
-const localFileStorage = require('../services/localFileStorage.service');
 
 const listForEmployee = asyncHandler(async (req, res) => {
   const uploadedDocuments = await uploadRequestService.listUploadedForEmployee(req.params.id);
@@ -9,8 +8,10 @@ const listForEmployee = asyncHandler(async (req, res) => {
 });
 
 const downloadFile = asyncHandler(async (req, res) => {
-  const { filePath, namespace } = await uploadRequestService.getUploadedFilePath(req.params.id);
-  res.sendFile(localFileStorage.absolutePathFor(filePath, namespace));
+  const { data, filename, mimeType } = await uploadRequestService.getUploadedFile(req.params.id);
+  res.set('Content-Type', mimeType);
+  res.set('Content-Disposition', `inline; filename="${encodeURIComponent(filename)}"`);
+  res.send(data);
 });
 
 const remove = asyncHandler(async (req, res) => {

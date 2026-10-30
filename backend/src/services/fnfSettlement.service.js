@@ -1,4 +1,3 @@
-const fs = require('node:fs/promises');
 const ApiError = require('../utils/ApiError');
 const logger = require('../utils/logger');
 const env = require('../config/env');
@@ -8,7 +7,7 @@ const fnfSettlementRepository = require('../repositories/fnfSettlement.repositor
 const generatedDocumentRepository = require('../repositories/generatedDocument.repository');
 const employeeRepository = require('../repositories/employee.repository');
 const userRepository = require('../repositories/user.repository');
-const localFileStorage = require('./localFileStorage.service');
+const slipPdf = require('./slipPdf.service');
 const emailService = require('./email.service');
 const notificationService = require('./notification.service');
 const accessService = require('./access.service');
@@ -33,7 +32,6 @@ const { NOTIFICATION_TYPES, FNF_STAGE, SALARY_SLIP_APPROVAL } = require('../conf
 // as they always did.
 
 const { HR, CEO, FINANCE } = FNF_STAGE;
-const SLIP_NAMESPACE = 'salary-slips';
 const POPULATE = [
   { path: 'employee', select: 'firstName lastName employeeCode designation personalEmail endDate extraDetails status' },
   { path: 'salarySlip', select: 'startDate endDate netPayable approvalStatus paymentStatus generatedFile' },
@@ -191,10 +189,7 @@ async function mailFinance(settlement) {
     const attachments = [];
     const document = await generatedDocumentRepository.findByIdWithFile(settlement.generatedDocument);
     if (document?.pdf?.data) attachments.push({ filename: `Full and Final Settlement - ${name}.pdf`, content: document.pdf.data });
-    if (settlement.salarySlip?.generatedFile?.filePath) {
-      const pdf = await fs.readFile(localFileStorage.absolutePathFor(settlement.salarySlip.generatedFile.filePath, SLIP_NAMESPACE));
-      attachments.push({ filename: `Final Salary Slip - ${name}.pdf`, content: pdf });
-    }
+    if (settlement.salarySlip) attachments.push({ filename: `Final Salary Slip - ${name}.pdf`, content: await slipPdf.read(settlement.salarySlip) });
     await emailService.sendEmail({
       to,
       subject: `Full & final settlement approved — ${name}`,
@@ -228,10 +223,7 @@ async function mailEmployee(settlement) {
     const attachments = [];
     const document = await generatedDocumentRepository.findByIdWithFile(settlement.generatedDocument);
     if (document?.pdf?.data) attachments.push({ filename: `Full and Final Settlement - ${name}.pdf`, content: document.pdf.data });
-    if (settlement.salarySlip?.generatedFile?.filePath) {
-      const pdf = await fs.readFile(localFileStorage.absolutePathFor(settlement.salarySlip.generatedFile.filePath, SLIP_NAMESPACE));
-      attachments.push({ filename: `Final Salary Slip - ${name}.pdf`, content: pdf });
-    }
+    if (settlement.salarySlip) attachments.push({ filename: `Final Salary Slip - ${name}.pdf`, content: await slipPdf.read(settlement.salarySlip) });
     await emailService.sendEmail({
       to,
       subject: 'Your full & final settlement',
@@ -408,11 +400,11 @@ async function getDocumentFile(id, viewer) {
 }
 
 // The final salary slip — for HR, the CEO/admin and Finance.
-async function getSlipFilePath(id, viewer) {
+async function getSlipFile(id, viewer) {
   if (!can(viewer, ACCESS.HRMS) && !can(viewer, ACCESS.PAYOUT_APPROVAL) && !can(viewer, ACCESS.FINANCE)) throw ApiError.forbidden();
-  const settlement = await FnfSettlement.findById(id).populate('salarySlip', 'generatedFile');
-  if (!settlement?.salarySlip?.generatedFile?.filePath) throw ApiError.notFound('No final salary slip yet');
-  return localFileStorage.absolutePathFor(settlement.salarySlip.generatedFile.filePath, SLIP_NAMESPACE);
+  const settlement = await FnfSettlement.findById(id).populate({ path: 'salarySlip', select: 'startDate endDate' }).populate({ path: 'employee', select: 'firstName lastName' });
+  if (!settlement?.salarySlip) throw ApiError.notFound('No final salary slip yet');
+  return { data: await slipPdf.read(settlement.salarySlip), filename: `Final Salary Slip - ${nameOf(settlement.employee)}.pdf` };
 }
 
 // Finance's receipt — Finance, and the employee it was paid to.
@@ -434,6 +426,6 @@ module.exports = {
   listAll,
   markPaid,
   getDocumentFile,
-  getSlipFilePath,
+  getSlipFile,
   getReceipt,
 };

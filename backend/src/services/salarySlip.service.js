@@ -27,6 +27,7 @@ const { ACCESS, GRANTS } = require('../config/access');
 const accessService = require('./access.service');
 
 const NAMESPACE = 'salary-slips';
+const slipPdf = require('./slipPdf.service');
 // A slip counts once the CEO/admin has approved it — or if it predates
 // approvals altogether (no approvalStatus). See salaryBatch.service.js.
 const isApproved = (slip) => !slip.approvalStatus || slip.approvalStatus === SALARY_SLIP_APPROVAL.APPROVED;
@@ -296,6 +297,8 @@ async function generateSlip(employeeId, input, createdBy, actor) {
     netPayable: salary.netPayable,
     netPayableWords: salary.netPayableWords,
     generatedFile: { filePath },
+    // Kept in the database — the disk copy is gone after the next deploy.
+    pdfData: pdfBuffer,
     createdBy,
     createdAs: actor ? accessService.actingRole(actor, GRANTS[ACCESS.EMS_ALL]) : undefined,
     // Nothing goes to the employee or to Finance until the CEO/admin approves.
@@ -583,8 +586,15 @@ function buildBulkZip(slipIds, { month, year, approvedOnly = false } = {}) {
         const employeeName = `${slip.employee.firstName} ${slip.employee.lastName || ''}`.trim().replace(/[^\w\- ]/g, '') || 'employee';
         const employeeCode = slip.employee.employeeCode || slip.employee._id.toString().slice(-6);
         const entryName = `${employeeCode}_${employeeName}_${toDateStr(slip.startDate)}_${toDateStr(slip.endDate)}.pdf`;
-        const absolutePath = localFileStorage.absolutePathFor(slip.generatedFile.filePath, NAMESPACE);
-        archive.file(absolutePath, { name: entryName });
+        let pdf;
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          pdf = await slipPdf.read(slip);
+        } catch {
+          archive.append('The PDF for this salary slip is no longer on file - generate the slip again.\n', { name: entryName.replace(/\.pdf$/, ' - MISSING.txt') });
+          continue;
+        }
+        archive.append(pdf, { name: entryName });
       }
       if (month && year) {
         const sheet = await buildMasterSheet({ month, year }, { approvedOnly });
@@ -617,17 +627,19 @@ async function listForEmployee(employeeId, viewer) {
   return isSelf(viewer, employeeId) ? slips.filter(isApproved) : slips;
 }
 
-async function getFilePath(id) {
+const pdfOf = async (slip) => ({ data: await slipPdf.read(slip), filename: `Salary slip ${toDateStr(slip.startDate)} to ${toDateStr(slip.endDate)}.pdf` });
+
+async function getPdf(id) {
   const slip = await salarySlipRepository.findById(id);
   if (!slip) throw ApiError.notFound('Salary slip not found');
-  return { filePath: slip.generatedFile.filePath, namespace: NAMESPACE };
+  return pdfOf(slip);
 }
 
 // Finance only ever opens slips the CEO/admin has approved.
-async function getApprovedFilePath(id) {
+async function getApprovedPdf(id) {
   const slip = await salarySlipRepository.findById(id);
   if (!slip || !isApproved(slip)) throw ApiError.notFound('Salary slip not found');
-  return { filePath: slip.generatedFile.filePath, namespace: NAMESPACE };
+  return pdfOf(slip);
 }
 
 // Self-service view (frontendall dashboard): the employee never triggers a
@@ -676,12 +688,12 @@ async function listRecentMonthsForEmployee(employeeId) {
 // be self-or-permission gated from the URL alone — still double-checks the
 // looked-up slip actually belongs to :employeeId, since :slipId on its own
 // doesn't prove that.
-async function getOwnFilePath(employeeId, slipId, viewer) {
+async function getOwnPdf(employeeId, slipId, viewer) {
   const slip = await salarySlipRepository.findById(slipId);
   if (!slip || slip.employee.toString() !== employeeId || (isSelf(viewer, employeeId) && !isApproved(slip))) {
     throw ApiError.notFound('Salary slip not found');
   }
-  return { filePath: slip.generatedFile.filePath, namespace: NAMESPACE };
+  return pdfOf(slip);
 }
 
 // Same pattern as employeeTask.service.js#taskManagerFrom / meeting.service.js
@@ -802,7 +814,7 @@ async function getPaymentReceipt(id, viewer) {
 
 module.exports = {
   isApproved,
-  getApprovedFilePath,
+  getApprovedPdf,
   listPaidUnseen,
   markPaidSeen,
   getPaymentReceipt,
@@ -815,9 +827,9 @@ module.exports = {
   buildBulkZip,
   buildZipBuffer,
   listForEmployee,
-  getFilePath,
+  getPdf,
   listRecentMonthsForEmployee,
-  getOwnFilePath,
+  getOwnPdf,
   listDueForFinance,
   markSalaryPaid,
 };

@@ -1,5 +1,6 @@
 const asyncHandler = require('../utils/asyncHandler');
 const fnfSettlementService = require('../services/fnfSettlement.service');
+const slipPdf = require('../services/slipPdf.service');
 
 function audit(req, action, id, metadata) {
   req.auditContext = { action, resourceType: 'FnfSettlement', resourceId: id, metadata };
@@ -50,7 +51,8 @@ const downloadDocument = asyncHandler(async (req, res) => {
 });
 
 const downloadSlip = asyncHandler(async (req, res) => {
-  res.sendFile(await fnfSettlementService.getSlipFilePath(req.params.id, req.user));
+  const { data, filename } = await fnfSettlementService.getSlipFile(req.params.id, req.user);
+  slipPdf.send(res, data, filename);
 });
 
 const downloadReceipt = asyncHandler(async (req, res) => {
