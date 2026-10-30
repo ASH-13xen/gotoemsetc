@@ -17,7 +17,6 @@ const accessService = require('./access.service');
 const { can } = require('../utils/roles');
 const { ACCESS } = require('../config/access');
 const {
-  USER_ROLES,
   EMPLOYEE_STATUS,
   ATTENDANCE_STATUS,
   NOTIFICATION_TYPES,
@@ -213,10 +212,11 @@ function toPerson(user) {
   };
 }
 
-// Everyone who can hold a calendar: every active login. A bare "worker"
-// login with no employee record is a test account — it can use its own
-// calendar but isn't offered as someone to invite. Cached briefly: nearly
-// every request needs it and the roster changes rarely.
+// Everyone who can hold a calendar: every active login. Only real people —
+// an active employee — are offered as someone to invite, host with or look
+// at; a login with no employee behind it (admin, cfo, cto, a test "worker"…)
+// can use its own calendar but is never listed. Cached briefly: nearly every
+// request needs it and the roster changes rarely.
 const PEOPLE_TTL_MS = 60_000;
 let peopleCache = null;
 
@@ -231,10 +231,7 @@ function loadPeople() {
 }
 
 async function fetchPeople() {
-  // A role login (ceo, hr…) isn't offered as an invitee when a real person
-  // holds that post — invite the person instead.
   const org = await accessService.orgMap();
-  const heldRoles = new Set([...org.rolesByEmployee.values()].flatMap((roles) => [...roles]));
   const users = await User.find({ isActive: true })
     .populate('employeeLink', 'firstName lastName designation extraDetails status isDeleted')
     .lean();
@@ -243,7 +240,9 @@ async function fetchPeople() {
     const employee = user.employeeLink;
     if (employee && (employee.isDeleted || employee.status !== EMPLOYEE_STATUS.ACTIVE)) continue;
     const person = toPerson(user);
-    person.listed = employee ? true : user.role !== USER_ROLES.WORKER && !heldRoles.has(user.role);
+    person.listed = Boolean(employee);
+    // The Organisation chart posts they hold (CEO, HR…) — for the "Leadership & HR" group.
+    person.posts = employee ? [...(org.rolesByEmployee.get(idOf(employee._id)) || [])] : [];
     people.set(person._id, person);
   }
   return people;
@@ -267,7 +266,8 @@ async function listPeople() {
     }
   }
   if (contentManagers.size) groups.push({ key: 'role:content_manager', label: 'All Content Managers', userIds: [...contentManagers] });
-  const leadership = [...people.values()].filter((p) => ['ceo', 'cto', 'cfo', 'hr', 'admin', 'operations_manager', 'team_lead'].includes(p.role));
+  const LEADERSHIP = ['ceo', 'cto', 'cfo', 'hr', 'operations_manager', 'team_lead'];
+  const leadership = [...people.values()].filter((p) => p.listed && p.posts.some((r) => LEADERSHIP.includes(r)));
   if (leadership.length) groups.push({ key: 'role:leadership', label: 'Leadership & HR', userIds: leadership.map((p) => p._id) });
 
   return {
