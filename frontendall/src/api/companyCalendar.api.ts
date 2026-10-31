@@ -1,8 +1,9 @@
 import { apiClient } from './client'
 
-// The subset of ATTENDANCE_STATUS that means "not fully at their desk in
-// the normal way" — see attendance.service.js#listWhosOutForMonth.
-export type WhosOutStatus = 'O' | 'H' | 'SL' | 'W'
+// "Not fully at their desk in the normal way" — see
+// attendance.service.js#listWhosOutForMonth. 'leave' is any leave, paid or
+// unpaid (which one isn't shown).
+export type WhosOutStatus = 'leave' | 'H' | 'SL' | 'W'
 
 export interface WhosOutEntry {
   employee: { _id: string; firstName: string; lastName?: string }

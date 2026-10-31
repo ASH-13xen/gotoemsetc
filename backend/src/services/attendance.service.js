@@ -6,7 +6,8 @@ const userRepository = require('../repositories/user.repository');
 const activityService = require('./activity.service');
 const notificationService = require('./notification.service');
 const { dateKey, isOffDay, isSunday } = require('../utils/attendanceDays');
-const { ATTENDANCE_STATUS, USER_ROLES, NOTIFICATION_TYPES } = require('../config/constants');
+const { ATTENDANCE_STATUS, ATTENDANCE_REQUEST_STATUS, USER_ROLES, NOTIFICATION_TYPES } = require('../config/constants');
+const AttendanceModificationRequest = require('../models/AttendanceModificationRequest');
 const { computeEffectiveUnits } = require('../utils/attendancePenalties');
 const { isPastProbation } = require('../utils/probation');
 const { can, hasRole, isSelf } = require('../utils/roles');
@@ -366,20 +367,49 @@ const WHOS_OUT_STATUSES = [
   ATTENDANCE_STATUS.SHORT_LEAVE,
   ATTENDANCE_STATUS.WORK_FROM_HOME,
 ];
+// What the calendar is told: leave is just "leave" — paid or unpaid is
+// nobody else's business.
+const LEAVE = 'leave';
 
 async function listWhosOutForMonth({ month, year }) {
   const from = new Date(Date.UTC(year, month - 1, 1));
   const to = new Date(Date.UTC(year, month, 0));
-  const records = await attendanceRepository.listAllForRange(from, to);
-  return records
-    .filter((r) => r.employee && !r.employee.isDeleted)
-    .filter((r) => WHOS_OUT_STATUSES.includes(r.status) || r.earlyDeparture)
-    .map((r) => ({
-      employee: { _id: r.employee._id, firstName: r.employee.firstName, lastName: r.employee.lastName },
-      date: r.date,
-      status: WHOS_OUT_STATUSES.includes(r.status) ? r.status : null,
-      earlyDeparture: Boolean(r.earlyDeparture),
-    }));
+  const [records, unpaidLeave, holidays] = await Promise.all([
+    attendanceRepository.listAllForRange(from, to),
+    // Approved Unpaid Leave: its days are marked Absent, which is never
+    // shown — so they come from the leave itself.
+    AttendanceModificationRequest.find({
+      requestedMultiDayLeave: true,
+      status: ATTENDANCE_REQUEST_STATUS.RESOLVED,
+      date: { $lte: to },
+      endDate: { $gte: from },
+    })
+      .populate('employee', 'firstName lastName isDeleted')
+      .lean(),
+    holidayRepository.list({ from, to }),
+  ]);
+  const person = (e) => ({ _id: e._id, firstName: e.firstName, lastName: e.lastName });
+  const out = new Map(); // `${employee}|${day}` -> entry
+  for (const r of records) {
+    if (!r.employee || r.employee.isDeleted) continue;
+    if (!WHOS_OUT_STATUSES.includes(r.status) && !r.earlyDeparture) continue;
+    const status = r.status === ATTENDANCE_STATUS.PAID_LEAVE ? LEAVE : WHOS_OUT_STATUSES.includes(r.status) ? r.status : null;
+    out.set(`${r.employee._id}|${dateKey(r.date)}`, { employee: person(r.employee), date: r.date, status, earlyDeparture: Boolean(r.earlyDeparture) });
+  }
+  // Its working days only — Sundays and holidays show as such already.
+  const holidayKeys = new Set(holidays.filter((h) => h.type === 'holiday').map((h) => dateKey(h.date)));
+  for (const leave of unpaidLeave) {
+    if (!leave.employee || leave.employee.isDeleted) continue;
+    const last = new Date(Math.min((leave.endDate || leave.date).getTime(), to.getTime()));
+    for (let d = new Date(Math.max(leave.date.getTime(), from.getTime())); d <= last; d = new Date(d.getTime() + MS_PER_DAY)) {
+      if (isOffDay(d, holidayKeys)) continue;
+      const key = `${leave.employee._id}|${dateKey(d)}`;
+      const shown = out.get(key);
+      if (shown?.status) continue; // already out, with the status HR gave the day
+      out.set(key, { employee: person(leave.employee), date: d, status: LEAVE, earlyDeparture: Boolean(shown?.earlyDeparture) });
+    }
+  }
+  return [...out.values()];
 }
 
 module.exports = {

@@ -16,7 +16,7 @@ import { useWhosOut } from '@/hooks/useCompanyCalendar'
 import { STATUS_CONFIG } from '@/lib/attendanceStatusColors'
 import type { CompanyEvent, CompanyEventType } from '@/api/companyEvents.api'
 import type { HolidayType } from '@/api/holidays.api'
-import type { WhosOutEntry } from '@/api/companyCalendar.api'
+import type { WhosOutEntry, WhosOutStatus } from '@/api/companyCalendar.api'
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -64,9 +64,17 @@ function eventVisual(type: CompanyEventType) {
   }
 }
 
+// Who's out, as the calendar shows it — leave is just "On leave".
+const WHOS_OUT: Record<WhosOutStatus, { label: string; dot: string }> = {
+  leave: { label: 'On leave', dot: STATUS_CONFIG.O.dot },
+  H: { label: 'Half Day', dot: STATUS_CONFIG.H.dot },
+  SL: { label: 'Short Leave', dot: STATUS_CONFIG.SL.dot },
+  W: { label: 'Work From Home', dot: STATUS_CONFIG.W.dot },
+}
+
 function whosOutLabel(entry: WhosOutEntry) {
   const parts: string[] = []
-  if (entry.status) parts.push(STATUS_CONFIG[entry.status].label.split(' — ')[1])
+  if (entry.status) parts.push(WHOS_OUT[entry.status].label)
   if (entry.earlyDeparture) parts.push('Early Departure')
   return parts.join(' + ')
 }
@@ -296,7 +304,7 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
                               className={cn(
                                 compact ? 'size-1' : 'size-1.5',
                                 'rounded-full',
-                                entry.status ? STATUS_CONFIG[entry.status].dot : 'bg-rose-500'
+                                entry.status ? WHOS_OUT[entry.status].dot : 'bg-rose-500'
                               )}
                             />
                           ))}
@@ -385,7 +393,7 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
                             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Who's out</p>
                             {whosOut.map((entry, idx) => (
                               <div key={idx} className="flex items-center gap-1.5 text-xs">
-                                <span className={cn('size-2 rounded-full', entry.status ? STATUS_CONFIG[entry.status].dot : 'bg-rose-500')} />
+                                <span className={cn('size-2 rounded-full', entry.status ? WHOS_OUT[entry.status].dot : 'bg-rose-500')} />
                                 <span className="font-medium text-foreground">
                                   {entry.employee.firstName} {entry.employee.lastName}
                                 </span>
@@ -513,10 +521,10 @@ export function CompanyCalendarGrid({ compact = false }: { compact?: boolean } =
                 <Clock3 className="size-3 text-teal-600" />
                 SL Day
               </div>
-              {(['O', 'H', 'SL', 'W'] as const).map((key) => (
+              {(Object.keys(WHOS_OUT) as WhosOutStatus[]).map((key) => (
                 <div key={key} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className={cn('size-2.5 rounded-full', STATUS_CONFIG[key].dot)} />
-                  {STATUS_CONFIG[key].label}
+                  <span className={cn('size-2.5 rounded-full', WHOS_OUT[key].dot)} />
+                  {WHOS_OUT[key].label}
                 </div>
               ))}
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
