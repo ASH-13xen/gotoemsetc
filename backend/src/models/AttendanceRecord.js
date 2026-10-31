@@ -67,6 +67,9 @@ const attendanceRecordSchema = new Schema(
     // the exact sentence shown on the calendar and the slip. Cleared by any
     // later manual change to the day.
     autoPaidOffNote: { type: String, default: null },
+    // What an approved leave (or a Paid Off) had set on this day before it
+    // was declared a holiday — put back if the holiday is removed.
+    beforeHoliday: { type: Schema.Types.Mixed, default: undefined },
     // Legacy (own vs awarded paid leave, no longer used).
     paidLeaveAwarded: { type: Boolean, default: false },
     // The person who last changed this day by hand, and the role they acted

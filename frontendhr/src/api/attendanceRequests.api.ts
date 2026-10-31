@@ -3,7 +3,8 @@ import type { AttendanceStatus } from './attendance.api'
 
 export type AttendanceRequestStatus = 'pending' | 'resolved' | 'rejected' | 'revoked'
 export type AttendanceRequestApprovalStage = 'content_manager' | 'hr' | 'ceo'
-export type LeaveApplicationStatus = 'SL' | 'L' | 'H' | 'O' | 'W'
+// 'P' only comes from frontendems's correction form (a day that has happened).
+export type LeaveApplicationStatus = 'SL' | 'L' | 'H' | 'O' | 'W' | 'P'
 export type HalfDayPeriod = 'first_half' | 'second_half'
 
 export const LEAVE_APPLICATION_STATUS_LABEL: Record<LeaveApplicationStatus, string> = {
@@ -12,6 +13,7 @@ export const LEAVE_APPLICATION_STATUS_LABEL: Record<LeaveApplicationStatus, stri
   H: 'Half Day',
   O: 'Paid Leave',
   W: 'Work From Home',
+  P: 'Present (correction)',
 }
 
 export const HALF_DAY_PERIOD_LABEL: Record<HalfDayPeriod, string> = {
@@ -47,6 +49,24 @@ export function leaveApplicationLabel(request: {
   if (request.requestedMultiDayLeave) parts.push(UNPAID_LEAVE_LABEL)
   if (request.requestedEarlyDeparture) parts.push(SHORT_LEAVE_SECOND_HALF_LABEL)
   return parts.join(' + ')
+}
+
+// What approving a request marks on the day — always exactly what the
+// employee applied for; approvers don't choose it (attendanceRequest.service.js
+// #requestedUpdate). Null for an old free-text request, which has no type.
+export function approvalMarks(request: {
+  requestedStatus?: LeaveApplicationStatus
+  requestedHalfDayPeriod?: HalfDayPeriod
+  requestedEarlyDeparture?: boolean
+  requestedMultiDayLeave?: boolean
+}): string | null {
+  if (request.requestedMultiDayLeave) return "nothing — each day stays as the scans mark it (Absent if they don't come in)"
+  if (request.requestedEarlyDeparture) return `${SHORT_LEAVE_SECOND_HALF_LABEL} (early departure), and Present if the day has no status yet`
+  if (request.requestedStatus === 'H' && request.requestedHalfDayPeriod) {
+    return `Half Day — ${HALF_DAY_PERIOD_LABEL[request.requestedHalfDayPeriod]}`
+  }
+  if (request.requestedStatus) return LEAVE_APPLICATION_STATUS_LABEL[request.requestedStatus]
+  return null
 }
 
 // Month-to-date tally for the month of a request's date, counted the same

@@ -2,7 +2,8 @@ import { apiClient } from './client'
 
 export type AttendanceRequestStatus = 'pending' | 'resolved' | 'rejected' | 'revoked'
 export type AttendanceRequestApprovalStage = 'content_manager' | 'hr' | 'ceo'
-export type LeaveApplicationStatus = 'SL' | 'L' | 'H' | 'O' | 'W'
+// 'P' only comes from frontendems's correction form (a day that has happened).
+export type LeaveApplicationStatus = 'SL' | 'L' | 'H' | 'O' | 'W' | 'P'
 export type HalfDayPeriod = 'first_half' | 'second_half'
 
 export const LEAVE_APPLICATION_STATUS_LABEL: Record<LeaveApplicationStatus, string> = {
@@ -11,6 +12,7 @@ export const LEAVE_APPLICATION_STATUS_LABEL: Record<LeaveApplicationStatus, stri
   H: 'Half Day',
   O: 'Paid Leave',
   W: 'Work From Home',
+  P: 'Present (correction)',
 }
 
 export const HALF_DAY_PERIOD_LABEL: Record<HalfDayPeriod, string> = {

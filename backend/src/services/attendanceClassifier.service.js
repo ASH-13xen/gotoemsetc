@@ -1,6 +1,7 @@
 const employeeRepository = require('../repositories/employee.repository');
 const devicePunchRepository = require('../repositories/devicePunch.repository');
 const attendanceRepository = require('../repositories/attendance.repository');
+const AttendanceRecord = require('../models/AttendanceRecord');
 const holidayRepository = require('../repositories/holiday.repository');
 const notificationService = require('./notification.service');
 const userRepository = require('../repositories/user.repository');
@@ -214,6 +215,40 @@ async function offDayTypeForLabel(dateLabel) {
 // its overtime recomputed.
 async function applyHolidayForEmployee(employeeId, dateLabel) {
   const existing = await attendanceRepository.findForDate(employeeId, dateLabel);
+  // A holiday overrides leave approved for that day, and a Paid Off — it
+  // shouldn't use up the month's paid off, and the day is off anyway. What
+  // was there is kept, to put back if the holiday is removed. Overtime
+  // worked stays. Anything else a person set by hand is never touched.
+  if (existing && !existing.isAutoMarked && (existing.modifiedByRequest || existing.status === ATTENDANCE_STATUS.PAID_LEAVE)) {
+    if (existing.status === ATTENDANCE_STATUS.HOLIDAY) return existing;
+    await AttendanceRecord.updateOne(
+      { _id: existing._id },
+      {
+        $set: {
+          beforeHoliday: {
+            status: existing.status ?? null,
+            isLate: Boolean(existing.isLate),
+            earlyDeparture: Boolean(existing.earlyDeparture),
+            notes: existing.notes ?? null,
+            modifiedByRequest: Boolean(existing.modifiedByRequest),
+            markedBy: existing.markedBy ?? null,
+            markedAs: existing.markedAs ?? null,
+          },
+          status: ATTENDANCE_STATUS.HOLIDAY,
+          isLate: false,
+          earlyDeparture: false,
+          isAutoMarked: true,
+          isSettled: true,
+          modifiedByRequest: false,
+          markedBy: null,
+          markedAs: null,
+          autoPaidOffNote: null,
+        },
+        $unset: { notes: '' },
+      }
+    );
+    return AttendanceRecord.findById(existing._id);
+  }
   if (existing && !existing.isAutoMarked) return existing; // an admin already decided this day — never touch it
 
   const { start, end } = istDayBoundsUTC(dateLabel);
@@ -253,6 +288,19 @@ async function revertHolidayForAllEmployees(dateLabel) {
     // eslint-disable-next-line no-await-in-loop
     const existing = await attendanceRepository.findForDate(employee._id, dateLabel);
     if (existing && existing.isAutoMarked && existing.status === ATTENDANCE_STATUS.HOLIDAY) {
+      if (existing.beforeHoliday) {
+        // The holiday had overridden an approved leave / Paid Off — put it back.
+        const b = existing.beforeHoliday;
+        const set = { isLate: b.isLate, earlyDeparture: b.earlyDeparture, modifiedByRequest: b.modifiedByRequest, isAutoMarked: false, isSettled: true };
+        const unset = { beforeHoliday: '' };
+        for (const k of ['status', 'notes', 'markedBy', 'markedAs']) {
+          if (b[k] != null) set[k] = b[k];
+          else unset[k] = '';
+        }
+        // eslint-disable-next-line no-await-in-loop
+        await AttendanceRecord.updateOne({ _id: existing._id }, { $set: set, $unset: unset });
+        continue;
+      }
       // eslint-disable-next-line no-await-in-loop
       await attendanceRepository.deleteForDate(employee._id, dateLabel);
     }

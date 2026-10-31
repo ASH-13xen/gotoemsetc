@@ -30,6 +30,7 @@ import type { AttendanceModificationRequest } from '@/api/attendanceRequests.api
 import {
   HALF_DAY_PERIOD_LABEL,
   SHORT_LEAVE_SECOND_HALF_LABEL,
+  approvalMarks,
   leaveApplicationLabel,
 } from '@/api/attendanceRequests.api'
 import { MonthlyLeaveCountsNote } from '@/components/attendance/MonthlyLeaveCountsNote'
@@ -102,16 +103,22 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
   const forwardsToCeo = Boolean(request.requestedMultiDayLeave) && !isFinalApprover
   const appliedLabel = leaveApplicationLabel(request)
   const pendingUpdate = request.pendingAttendanceUpdate
+  // What approving marks — what they applied for, fixed when they applied.
+  // Only an old free-text request (no type) still has the controls below.
+  const marks = approvalMarks(request)
+  const isSpan = Boolean(request.endDate && request.endDate.slice(0, 10) !== request.date.slice(0, 10))
 
   const onApprove = () => {
     resolve.mutate(
-      {
-        id: request._id,
-        status: sundaysOnly || status === NO_STATUS ? undefined : (status as AttendanceStatus),
-        overtimeMinutes: overtimeMinutes.trim() ? Number(overtimeMinutes) : undefined,
-        isLate,
-        earlyDeparture,
-      },
+      marks !== null
+        ? { id: request._id }
+        : {
+            id: request._id,
+            status: sundaysOnly || status === NO_STATUS ? undefined : (status as AttendanceStatus),
+            overtimeMinutes: overtimeMinutes.trim() ? Number(overtimeMinutes) : undefined,
+            isLate,
+            earlyDeparture,
+          },
       {
         onSuccess: () =>
           toast.success(forwardsToCeo ? 'Approved — sent to the CEO for final approval' : 'Application approved'),
@@ -197,16 +204,23 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
           only the CEO (or admin) can give the final approval. */}
       {awaitingCeo && (
         <div className="grid gap-2 rounded-lg bg-secondary/40 p-3 text-xs">
-          <p className="text-muted-foreground">
-            Approved by HR. On final approval this will be applied to every day from {formatDate(request.date)} to{' '}
-            {formatDate(request.endDate)}:{' '}
-            <span className="font-medium text-foreground">
-              {pendingUpdate?.status ? STATUS_CONFIG[pendingUpdate.status].label : 'no status change'}
-              {pendingUpdate?.isLate ? ', Late' : ''}
-              {pendingUpdate?.earlyDeparture ? `, ${SHORT_LEAVE_SECOND_HALF_LABEL}` : ''}
-              {pendingUpdate?.overtimeMinutes ? `, ${pendingUpdate.overtimeMinutes} OT min` : ''}
-            </span>
-          </p>
+          {marks !== null ? (
+            <p className="text-muted-foreground">
+              Approved by HR. Final approval marks, from {formatDate(request.date)} to {formatDate(request.endDate)}:{' '}
+              <span className="font-medium text-foreground">{marks}</span>
+            </p>
+          ) : (
+            <p className="text-muted-foreground">
+              Approved by HR. On final approval this will be applied to every day from {formatDate(request.date)} to{' '}
+              {formatDate(request.endDate)}:{' '}
+              <span className="font-medium text-foreground">
+                {pendingUpdate?.status ? STATUS_CONFIG[pendingUpdate.status].label : 'no status change'}
+                {pendingUpdate?.isLate ? ', Late' : ''}
+                {pendingUpdate?.earlyDeparture ? `, ${SHORT_LEAVE_SECOND_HALF_LABEL}` : ''}
+                {pendingUpdate?.overtimeMinutes ? `, ${pendingUpdate.overtimeMinutes} OT min` : ''}
+              </span>
+            </p>
+          )}
           {isFinalApprover ? (
             !rejecting && (
               <div className="flex gap-2">
@@ -226,7 +240,29 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
         </div>
       )}
 
-      {request.status === 'pending' && request.approvalStage === 'hr' && request.endDate && request.endDate.slice(0, 10) !== request.date.slice(0, 10) && (
+      {request.status === 'pending' && request.approvalStage === 'hr' && !rejecting && marks !== null && (
+        <div className="grid gap-2 rounded-lg bg-secondary/40 p-3 text-xs">
+          <p className="text-muted-foreground">
+            Approving marks{isSpan ? ` every working day from ${formatDate(request.date)} to ${formatDate(request.endDate!)}` : ''}:{' '}
+            <span className="font-medium text-foreground">{marks}</span>
+            {isSpan && ' — Sundays and holidays in between stay as they are.'}
+          </p>
+          <p className="text-muted-foreground">That's what they applied for — it can only be approved or rejected, not changed.</p>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={onApprove} disabled={resolve.isPending}>
+              <CheckCircle2 className="size-4" />
+              {forwardsToCeo ? 'Approve & send to CEO' : 'Approve'}
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setRejecting(true)}>
+              <XCircle className="size-4" />
+              Reject
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* An old free-text request (no type) — the approver still says what to mark. */}
+      {request.status === 'pending' && request.approvalStage === 'hr' && marks === null && isSpan && (
         <p className="text-xs text-amber-600">
           Multi-day span — approving applies the chosen status to every day from {formatDate(request.date)} to{' '}
           {formatDate(request.endDate)}.
@@ -235,18 +271,18 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
         </p>
       )}
 
-      {request.status === 'pending' && request.approvalStage === 'hr' && !rejecting && sundaysOnly && (
+      {request.status === 'pending' && request.approvalStage === 'hr' && !rejecting && marks === null && sundaysOnly && (
         <p className="text-xs font-medium text-amber-700">Sundays can only have overtime — enter the minutes worked; no status.</p>
       )}
 
-      {request.status === 'pending' && request.approvalStage === 'hr' && !rejecting && request.requestedEarlyDeparture && (
+      {request.status === 'pending' && request.approvalStage === 'hr' && !rejecting && marks === null && request.requestedEarlyDeparture && (
         <p className="text-xs text-muted-foreground">
           An early departure already counts as one short leave, so Short Leave isn't offered as the status. Leave Status at
           "No change" — a day with no status yet is marked Present.
         </p>
       )}
 
-      {request.status === 'pending' && request.approvalStage === 'hr' && !rejecting && (
+      {request.status === 'pending' && request.approvalStage === 'hr' && !rejecting && marks === null && (
         <div className="flex flex-wrap items-end gap-2">
           <div className="grid gap-1">
             <label className="text-xs text-muted-foreground">Status</label>

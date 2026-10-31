@@ -34,7 +34,8 @@ const idOf = (v) => (v ? String(v._id || v) : null);
 const nameOf = (e) => (e ? `${e.firstName} ${e.lastName || ''}`.trim() : 'An employee');
 const dayOf = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
-const isLeave = (r) => Boolean(r.requestedStatus || r.requestedEarlyDeparture || r.requestedMultiDayLeave);
+// A correction to Present ('P') is a modification request, not a leave.
+const isLeave = (r) => Boolean((r.requestedStatus && r.requestedStatus !== 'P') || r.requestedEarlyDeparture || r.requestedMultiDayLeave);
 const kindOf = (r) => (isLeave(r) ? 'leave application' : 'attendance modification request');
 
 async function tellContentManagers(cmIds, { type, title, message, employee }) {

@@ -31,7 +31,8 @@ const create = {
       // requestedEarlyDeparture in practice (the frontend Type dropdown only
       // ever sends one), but nothing here enforces that — both being present
       // is harmless, requestedStatus just also gets stored alongside the flag.
-      requestedStatus: z.enum(LEAVE_APPLICATION_STATUSES).optional(),
+      // 'P' only from the correction form (a day that has happened) — see createRequest.
+      requestedStatus: z.enum([...LEAVE_APPLICATION_STATUSES, 'P']).optional(),
       requestedEarlyDeparture: z.boolean().optional(),
       // The "Multiple Days" type — a general, uncapped multi-day leave
       // request with no specific requestedStatus. See

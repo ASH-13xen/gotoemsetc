@@ -20,6 +20,8 @@ const { can, isSelf } = require('../utils/roles');
 const { ACCESS, GRANTS } = require('../config/access');
 const accessService = require('./access.service');
 const holidayRepository = require('../repositories/holiday.repository');
+const AttendanceModificationRequest = require('../models/AttendanceModificationRequest');
+const AttendanceRecord = require('../models/AttendanceRecord');
 const { dateKey, isOffDay } = require('../utils/attendanceDays');
 
 // Nobody approves, rejects or undoes their own leave or attendance request —
@@ -244,6 +246,29 @@ async function resolveApprovalStage(employeeId) {
 // the entire point of the structured flow, so future dates are only
 // rejected for the free-text case (neither field set). Both still share the
 // same 2-day backdating cutoff.
+// What a request asks for, applied exactly as asked: the type is chosen by
+// the employee when applying and nobody changes it afterwards. Unpaid Leave
+// changes nothing — the day stays the biometric's (Absent if they don't come).
+// Null for an old free-text request, which carries no type.
+const isTyped = (request) => Boolean(request.requestedStatus || request.requestedEarlyDeparture || request.requestedMultiDayLeave);
+function requestedUpdate(request) {
+  if (request.requestedMultiDayLeave) return undefined;
+  const update = {};
+  if (request.requestedStatus) update.status = request.requestedStatus;
+  if (request.requestedEarlyDeparture) update.earlyDeparture = true;
+  return Object.keys(update).length ? update : undefined;
+}
+
+// One active request per person per day: another request (pending or
+// approved) covering any of these days — rejected and revoked ones don't
+// count. `statuses` narrows which count.
+async function overlappingRequest(employeeId, from, to, { excludeId = null, statuses = [ATTENDANCE_REQUEST_STATUS.PENDING, ATTENDANCE_REQUEST_STATUS.RESOLVED] } = {}) {
+  const filter = { employee: employeeId, status: { $in: statuses }, date: { $lte: to }, $or: [{ endDate: { $gte: from } }, { endDate: null, date: { $gte: from } }] };
+  if (excludeId) filter._id = { $ne: excludeId };
+  return AttendanceModificationRequest.findOne(filter).sort({ date: 1 });
+}
+const dayText = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
 // Whether applying `update` to a day would change anything on it.
 function changesDay(update, existing) {
   if (update.status) return true;
@@ -296,18 +321,29 @@ async function createRequest(
     }
   }
 
-  const isLeaveApplication = Boolean(requestedStatus || requestedEarlyDeparture || requestedMultiDayLeave);
-  if (isLeaveApplication) {
-    const offDaysOnly = await offDaysOnlyMessage(normalizedDate, normalizedEndDate);
-    if (offDaysOnly) throw ApiError.badRequest(offDaysOnly);
+  // The employee says what the day should be — nobody picks it for them later.
+  if (!isTyped({ requestedStatus, requestedEarlyDeparture, requestedMultiDayLeave })) {
+    throw ApiError.badRequest('Choose what this day should be');
   }
+  // A correction to Present is worded as a correction, not a leave.
+  const isLeaveApplication = approvalRouting.isLeave({ requestedStatus, requestedEarlyDeparture, requestedMultiDayLeave });
+  const offDaysOnly = await offDaysOnlyMessage(normalizedDate, normalizedEndDate);
+  if (offDaysOnly) throw ApiError.badRequest(offDaysOnly);
   const today = todayUTCMidnight();
   if (!isLeaveApplication && normalizedDate.getTime() > today.getTime()) {
-    throw ApiError.badRequest('Cannot request a modification for a future date');
+    throw ApiError.badRequest('A correction to Present is only for a day that has already happened');
   }
   const ageDays = (today.getTime() - normalizedDate.getTime()) / MS_PER_DAY;
   if (ageDays > REQUEST_SUBMISSION_CUTOFF_DAYS) {
     throw ApiError.badRequest('Cannot request a modification for a date more than 2 days old');
+  }
+  // One request per day: one already waiting or approved for any of these
+  // days has to be rejected first.
+  const clash = await overlappingRequest(employeeId, normalizedDate, normalizedEndDate);
+  if (clash) {
+    const span = clash.endDate && clash.endDate.getTime() !== clash.date.getTime() ? `${dayText(clash.date)} – ${dayText(clash.endDate)}` : dayText(clash.date);
+    const state = clash.status === ATTENDANCE_REQUEST_STATUS.PENDING ? 'still waiting for a decision' : 'already approved';
+    throw ApiError.conflict(`You already have a request for ${span} (${state}) — only one request per day`);
   }
 
   if (requestedStatus === ATTENDANCE_STATUS.PAID_LEAVE) {
@@ -415,6 +451,10 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actor) {
     throw ApiError.conflict('This request is still awaiting content manager review');
   }
   await assertRouted(request);
+  // Only one request per day — if another is already approved for any of
+  // these days, this one can only be rejected.
+  const approvedClash = await overlappingRequest(request.employee, request.date, request.endDate || request.date, { excludeId: request._id, statuses: [ATTENDANCE_REQUEST_STATUS.RESOLVED] });
+  if (approvedClash) throw ApiError.conflict(`Another request for ${dayText(approvedClash.date)} is already approved — this one can only be rejected`);
 
   // Unpaid Leave goes CM -> HR -> CEO. HR's approval only forwards it, with
   // HR's chosen per-day change parked on the request; the CEO's approval is
@@ -426,6 +466,10 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actor) {
     if (!canGiveFinalApproval) throw ApiError.forbidden('Only the CEO can give the final approval for unpaid leave');
     attendanceUpdate = request.pendingAttendanceUpdate || undefined;
   }
+
+  // What was applied for is what's applied — whatever an approver sends.
+  // (Only an old free-text request, with no type, still takes the approver's choice.)
+  if (isTyped(request)) attendanceUpdate = requestedUpdate(request);
 
   // A Sunday (or holiday) takes overtime minutes only, never a status.
   if (attendanceUpdate?.status) {
@@ -570,6 +614,8 @@ async function approveAtContentManagerStage(id, actingUserId, actor) {
   if (request.approvalStage !== ATTENDANCE_REQUEST_APPROVAL_STAGE.CONTENT_MANAGER) {
     throw ApiError.conflict('This request is not awaiting content manager review');
   }
+  const approvedClash = await overlappingRequest(request.employee, request.date, request.endDate || request.date, { excludeId: request._id, statuses: [ATTENDANCE_REQUEST_STATUS.RESOLVED] });
+  if (approvedClash) throw ApiError.conflict(`Another request for ${dayText(approvedClash.date)} is already approved — this one can only be rejected`);
   if (!actor || !(await isEligibleContentManagerFor(request.employee, actor.employeeLink))) {
     throw ApiError.forbidden("Only the content manager of this person's team can approve this step");
   }
@@ -650,6 +696,17 @@ async function rejectRequest(id, resolvedByUserId, reason, actor) {
   return rejected;
 }
 
+// Closes a pending request that duplicates an already-approved one for the
+// same day(s) — rejected by the system (no person's name on it), with the
+// reason, and the employee is told.
+async function closeAsDuplicate(id, reason) {
+  const request = await attendanceRequestRepository.findById(id);
+  if (!request || request.status !== ATTENDANCE_REQUEST_STATUS.PENDING) return null;
+  const closed = await attendanceRequestRepository.reject(id, null, reason, 'system');
+  await tellApplicant(request, NOTIFICATION_TYPES.ATTENDANCE_REQUEST_DECIDED, `Your ${kindOf(request)} was not approved`, `Your ${kindOf(request)} for ${spanOf(request)} was closed: ${reason}`);
+  return closed;
+}
+
 // previousRecordSnapshot is an array of {date, snapshot} for any request
 // resolved after multi-day support was added — but requests resolved before
 // that (already sitting in the database as 'resolved', not yet revoked)
@@ -682,6 +739,15 @@ async function revokeRequest(id, revokedByUserId, actor) {
     const classifier = require('./attendanceClassifier.service');
     const today = todayUTCMidnight();
     for (const { date, snapshot } of entries) {
+      // A day a holiday has since taken over keeps its Holiday — the leave
+      // is only dropped from what would come back if the holiday is removed.
+      // eslint-disable-next-line no-await-in-loop
+      const current = await attendanceRepository.findForDate(request.employee, date);
+      if (current?.beforeHoliday?.modifiedByRequest) {
+        // eslint-disable-next-line no-await-in-loop
+        await AttendanceRecord.updateOne({ _id: current._id }, { $unset: { beforeHoliday: '' } });
+        continue;
+      }
       // eslint-disable-next-line no-await-in-loop
       await attendanceRepository.applySnapshot(request.employee, date, snapshot);
       // A day that had no record before goes back to the biometric: a past
@@ -734,4 +800,5 @@ module.exports = {
   isEligibleContentManagerFor,
   approveAtContentManagerStage,
   listPendingForContentManager,
+  closeAsDuplicate,
 };

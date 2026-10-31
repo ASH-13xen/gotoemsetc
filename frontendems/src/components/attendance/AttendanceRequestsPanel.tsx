@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils'
 import { useAttendanceRequests, useResolveAttendanceRequest } from '@/hooks/useAttendanceRequests'
 import { STATUS_CONFIG } from './statusConfig'
 import type { AttendanceStatus } from '@/api/attendance.api'
-import type { AttendanceModificationRequest } from '@/api/attendanceRequests.api'
+import type { AttendanceModificationRequest, RequestedStatus } from '@/api/attendanceRequests.api'
 
 const NO_STATUS = '__none__'
 
@@ -29,11 +29,13 @@ const REQUEST_STATUS_BADGE_VARIANT: Record<AttendanceModificationRequest['status
   revoked: 'destructive',
 }
 
-const LEAVE_TYPE_LABEL: Record<'SL' | 'L' | 'H' | 'O', string> = {
+const LEAVE_TYPE_LABEL: Record<RequestedStatus, string> = {
   SL: 'Short Leave',
   L: 'Late',
   H: 'Half Day',
   O: 'Paid Leave',
+  W: 'Work From Home',
+  P: 'Present (correction)',
 }
 
 const HALF_DAY_PERIOD_LABEL: Record<'first_half' | 'second_half', string> = {
@@ -63,14 +65,20 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
       ? request.employee
       : `${request.employee.firstName} ${request.employee.lastName ?? ''}`.trim()
 
+  // Approving marks what they applied for — fixed when they applied. Only an
+  // old free-text request (no type) still has the controls below.
+  const typed = Boolean(request.requestedStatus || request.requestedMultiDayLeave || request.requestedEarlyDeparture)
+
   const onResolve = () => {
     resolve.mutate(
-      {
-        id: request._id,
-        status: sundaysOnly || status === NO_STATUS ? undefined : (status as AttendanceStatus),
-        overtimeMinutes: overtimeMinutes.trim() ? Number(overtimeMinutes) : undefined,
-        isLate,
-      },
+      typed
+        ? { id: request._id }
+        : {
+            id: request._id,
+            status: sundaysOnly || status === NO_STATUS ? undefined : (status as AttendanceStatus),
+            overtimeMinutes: overtimeMinutes.trim() ? Number(overtimeMinutes) : undefined,
+            isLate,
+          },
       {
         onSuccess: () => toast.success('Request resolved'),
         onError: (err) =>
@@ -111,7 +119,21 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
           Approved by HR — waiting for the CEO's final approval in HR Work → Leave Applications.
         </p>
       )}
-      {request.status === 'pending' && request.approvalStage !== 'ceo' && (
+      {request.status === 'pending' && request.approvalStage === 'content_manager' && (
+        <p className="text-xs text-muted-foreground">Waiting for their content manager — it can be approved here once they pass it on.</p>
+      )}
+      {request.status === 'pending' && request.approvalStage === 'hr' && typed && (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs text-muted-foreground">
+            Approving marks what they applied for{request.requestedMultiDayLeave ? " — nothing; each day stays as the scans mark it" : ''}. It can't be changed here.
+          </p>
+          <Button size="sm" onClick={onResolve} disabled={resolve.isPending}>
+            <CheckCircle2 className="size-4" />
+            Approve
+          </Button>
+        </div>
+      )}
+      {request.status === 'pending' && request.approvalStage === 'hr' && !typed && (
         <div className="flex flex-wrap items-end gap-2">
           <div className="grid gap-1">
             <label className="text-xs text-muted-foreground">{sundaysOnly ? 'Status — Sundays can only have overtime' : 'Status'}</label>

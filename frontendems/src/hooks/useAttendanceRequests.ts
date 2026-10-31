@@ -15,7 +15,7 @@ export function useAttendanceRequests(status?: AttendanceRequestStatus) {
 export function useCreateAttendanceRequest() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (input: { date: string; reason: string }) => attendanceRequestsApi.createAttendanceRequest(input),
+    mutationFn: (input: attendanceRequestsApi.CreateAttendanceRequestInput) => attendanceRequestsApi.createAttendanceRequest(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: KEY }),
   })
 }

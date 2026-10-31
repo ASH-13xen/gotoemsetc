@@ -10,11 +10,12 @@ export interface AttendanceModificationRequest {
   // Inclusive end of a multi-day leave application (same as date otherwise).
   endDate?: string
   reason: string
-  // Only ever set by frontendall's structured "apply for leave" flow — a
-  // free-text request created here in frontendems never has this.
-  requestedStatus?: 'SL' | 'L' | 'H' | 'O'
+  // What they applied for — from frontendall's "apply for leave" or the
+  // correction form here ('P' = a correction to Present). Only requests made
+  // before every request had a type lack it.
+  requestedStatus?: RequestedStatus
   // Set only when requestedStatus is 'H' — which half of the day.
-  requestedHalfDayPeriod?: 'first_half' | 'second_half'
+  requestedHalfDayPeriod?: HalfDayPeriod
   // The "Multiple Days" type — a general, uncapped multi-day leave request
   // with no requestedStatus set at all.
   requestedMultiDayLeave?: boolean
@@ -31,10 +32,20 @@ export interface AttendanceModificationRequest {
   createdAt: string
 }
 
-export async function createAttendanceRequest(input: {
+export type RequestedStatus = 'SL' | 'L' | 'H' | 'O' | 'W' | 'P'
+export type HalfDayPeriod = 'first_half' | 'second_half'
+
+export interface CreateAttendanceRequestInput {
   date: string
   reason: string
-}): Promise<{ request: AttendanceModificationRequest }> {
+  requestedStatus?: RequestedStatus
+  requestedHalfDayPeriod?: HalfDayPeriod
+  requestedEarlyDeparture?: boolean
+}
+
+export async function createAttendanceRequest(
+  input: CreateAttendanceRequestInput
+): Promise<{ request: AttendanceModificationRequest }> {
   const { data } = await apiClient.post('/attendance-requests', input)
   return data
 }
