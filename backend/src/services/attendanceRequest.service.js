@@ -19,6 +19,8 @@ const { isPastProbation } = require('../utils/probation');
 const { can, isSelf } = require('../utils/roles');
 const { ACCESS, GRANTS } = require('../config/access');
 const accessService = require('./access.service');
+const holidayRepository = require('../repositories/holiday.repository');
+const { dateKey, isOffDay } = require('../utils/attendanceDays');
 
 // Nobody approves, rejects or undoes their own leave or attendance request —
 // it passes to the next person up (HR → CEO → admin).
@@ -242,6 +244,31 @@ async function resolveApprovalStage(employeeId) {
 // the entire point of the structured flow, so future dates are only
 // rejected for the free-text case (neither field set). Both still share the
 // same 2-day backdating cutoff.
+// Whether applying `update` to a day would change anything on it.
+function changesDay(update, existing) {
+  if (update.status) return true;
+  if (update.overtimeMinutes !== undefined && update.overtimeMinutes !== null && Number(update.overtimeMinutes) !== Number(existing?.overtimeMinutes || 0)) return true;
+  if (update.isLate !== undefined && Boolean(update.isLate) !== Boolean(existing?.isLate)) return true;
+  if (update.earlyDeparture !== undefined && Boolean(update.earlyDeparture) !== Boolean(existing?.earlyDeparture)) return true;
+  return false;
+}
+
+// Sundays (and company holidays) take no attendance status — time worked
+// on one is overtime only. Null when the span has a working day in it.
+async function offDaysOnlyMessage(from, to) {
+  const holidays = await holidayRepository.list({ from, to });
+  const holidayKeys = new Set(holidays.filter((h) => h.type === 'holiday').map((h) => dateKey(h.date)));
+  let anyHoliday = false;
+  for (let t = from.getTime(); t <= to.getTime(); t += MS_PER_DAY) {
+    const day = new Date(t);
+    if (!isOffDay(day, holidayKeys)) return null;
+    if (holidayKeys.has(dateKey(day))) anyHoliday = true;
+  }
+  return anyHoliday
+    ? 'Sundays and company holidays can only have overtime — apply for overtime instead'
+    : 'Sundays can only have overtime — apply for overtime instead';
+}
+
 async function createRequest(
   employeeId,
   { date, endDate, reason, requestedStatus, requestedEarlyDeparture, requestedHalfDayPeriod, requestedMultiDayLeave }
@@ -270,6 +297,10 @@ async function createRequest(
   }
 
   const isLeaveApplication = Boolean(requestedStatus || requestedEarlyDeparture || requestedMultiDayLeave);
+  if (isLeaveApplication) {
+    const offDaysOnly = await offDaysOnlyMessage(normalizedDate, normalizedEndDate);
+    if (offDaysOnly) throw ApiError.badRequest(offDaysOnly);
+  }
   const today = todayUTCMidnight();
   if (!isLeaveApplication && normalizedDate.getTime() > today.getTime()) {
     throw ApiError.badRequest('Cannot request a modification for a future date');
@@ -396,6 +427,18 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actor) {
     attendanceUpdate = request.pendingAttendanceUpdate || undefined;
   }
 
+  // A Sunday (or holiday) takes overtime minutes only, never a status.
+  if (attendanceUpdate?.status) {
+    const offDaysOnly = await offDaysOnlyMessage(request.date, request.endDate || request.date);
+    if (offDaysOnly) throw ApiError.badRequest(offDaysOnly.replace('apply for overtime instead', 'enter the minutes worked as overtime instead of a status'));
+  }
+
+  // An early departure already counts as one short leave — marking the day
+  // Short Leave as well would count it twice.
+  if (request.requestedEarlyDeparture && attendanceUpdate?.status === ATTENDANCE_STATUS.SHORT_LEAVE) {
+    throw ApiError.badRequest("An early departure already counts as a short leave — don't also mark the day Short Leave");
+  }
+
   // Approving as Paid Leave makes it the employee's own paid leave — one a
   // month, after probation. Extra paid days are awarded from the calendar.
   if (attendanceUpdate?.status === ATTENDANCE_STATUS.PAID_LEAVE) {
@@ -437,10 +480,29 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actor) {
       await attendanceService.assertStatusForOvertime(request.employee, date, attendanceUpdate);
     }
 
+    // A leave never lands on a Sunday or a company holiday — those keep
+    // what they have (Holiday, or nothing). Overtime worked on one still counts.
+    const holidays = await holidayRepository.list({ from: dates[0], to: dates[dates.length - 1] });
+    const holidayKeys = new Set(holidays.filter((h) => h.type === 'holiday').map((h) => dateKey(h.date)));
     previousRecordSnapshot = [];
     for (const date of dates) {
+      const offDay = isOffDay(date, holidayKeys);
+      if (offDay && !attendanceUpdate.overtimeMinutes) continue;
       // eslint-disable-next-line no-await-in-loop
       const existing = await attendanceRepository.findForDate(request.employee, date);
+      // An approved early departure on a day with no status yet (approved
+      // ahead of the day) is a day at work, leaving early — Present. The
+      // scans never fill in a day an approval has set, so leaving it blank
+      // would make it an unpaid day.
+      const dayUpdate =
+        request.requestedEarlyDeparture && !attendanceUpdate.status && !existing?.status
+          ? { ...attendanceUpdate, status: ATTENDANCE_STATUS.PRESENT }
+          : attendanceUpdate;
+      // An approval that changes nothing on this day (no status, no overtime,
+      // flags as they already are) leaves the day alone — it stays the
+      // biometric's: marked from the scans if they come, Absent if not.
+      // Otherwise "No change" would still lock the day as a blank record.
+      if (!changesDay(offDay ? { overtimeMinutes: attendanceUpdate.overtimeMinutes } : dayUpdate, existing)) continue;
       previousRecordSnapshot.push({
         date,
         snapshot: existing
@@ -457,7 +519,11 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actor) {
       await attendanceRepository.upsertForDate(
         request.employee,
         date,
-        { ...attendanceUpdate, markedBy: actor?.id, markedAs: canGiveFinalApproval ? asFinal(actor) : asHr(actor) },
+        {
+          ...(offDay ? { overtimeMinutes: attendanceUpdate.overtimeMinutes } : dayUpdate),
+          markedBy: actor?.id,
+          markedAs: canGiveFinalApproval ? asFinal(actor) : asHr(actor),
+        },
         false,
         false,
         true
@@ -466,7 +532,7 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actor) {
   }
 
   const resolved = await attendanceRequestRepository.resolve(id, resolvedByUserId, {
-    attendanceWasModified: Boolean(hasChange),
+    attendanceWasModified: Boolean(previousRecordSnapshot?.length),
     previousRecordSnapshot,
     resolvedAs: canGiveFinalApproval ? asFinal(actor) : asHr(actor),
   });
@@ -612,9 +678,17 @@ async function revokeRequest(id, revokedByUserId, actor) {
     for (const { date } of entries) {
       attendanceService.assertCanEditAttendanceDate(actor, date);
     }
+    // Required lazily: the classifier is a big module with its own graph.
+    const classifier = require('./attendanceClassifier.service');
+    const today = todayUTCMidnight();
     for (const { date, snapshot } of entries) {
       // eslint-disable-next-line no-await-in-loop
       await attendanceRepository.applySnapshot(request.employee, date, snapshot);
+      // A day that had no record before goes back to the biometric: a past
+      // day is worked out from its scans now (a holiday becomes Holiday);
+      // today and later days are marked by the scans as usual.
+      // eslint-disable-next-line no-await-in-loop
+      if (!snapshot && new Date(date).getTime() < today.getTime()) await classifier.settleDay(String(request.employee), new Date(date));
     }
   }
   return attendanceRequestRepository.revoke(id, revokedByUserId, can(actor, ACCESS.ATTENDANCE_FINAL_APPROVAL) ? asFinal(actor) : asHr(actor));

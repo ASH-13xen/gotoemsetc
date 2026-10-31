@@ -90,8 +90,9 @@ const attendanceModificationRequestSchema = new Schema(
     // before resolution overwrote them — null means no record existed yet
     // at that point. Captured only when attendanceWasModified is true. This
     // is what makes revoke non-destructive: it restores this snapshot (or,
-    // if null, explicitly unmarks the record via attendance.repository.js's
-    // applySnapshot) rather than ever deleting anything.
+    // if null, hands the day back to the biometric unmarked via
+    // attendance.repository.js's applySnapshot) rather than ever deleting
+    // anything.
     previousRecordSnapshot: { type: Schema.Types.Mixed, default: null },
     rejectionReason: { type: String, trim: true },
     revokedBy: { type: Schema.Types.ObjectId, ref: 'User' },

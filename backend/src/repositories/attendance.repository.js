@@ -89,9 +89,12 @@ function applySnapshot(employeeId, date, snapshot) {
   else unset.status = '';
   if (target.notes) set.notes = target.notes;
   else unset.notes = '';
+  // No record before the approval: back to an unmarked day the biometric
+  // still owns (scans and the nightly settle fill it in) — never a blank
+  // locked one, which would stay unpaid even on a day they came in.
   if (!snapshot) {
-    set.isAutoMarked = false;
-    set.isSettled = true;
+    set.isAutoMarked = true;
+    set.isSettled = false;
   }
   const update = { $set: set };
   if (Object.keys(unset).length > 0) update.$unset = unset;

@@ -46,6 +46,14 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
   // touching the dropdown still marks attendance — see the matching comment
   // in frontendhr's LeaveApplicationsPage.tsx.
   const [status, setStatus] = useState<string>(request.requestedStatus ?? NO_STATUS)
+  // Sundays take no attendance status — only overtime minutes.
+  const sundaysOnly = (() => {
+    const last = (request.endDate || request.date).slice(0, 10)
+    for (let t = Date.parse(`${request.date.slice(0, 10)}T00:00:00Z`); t <= Date.parse(`${last}T00:00:00Z`); t += 86_400_000) {
+      if (new Date(t).getUTCDay() !== 0) return false
+    }
+    return true
+  })()
   const [overtimeMinutes, setOvertimeMinutes] = useState('')
   const [isLate, setIsLate] = useState(false)
   const resolve = useResolveAttendanceRequest()
@@ -59,7 +67,7 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
     resolve.mutate(
       {
         id: request._id,
-        status: status === NO_STATUS ? undefined : (status as AttendanceStatus),
+        status: sundaysOnly || status === NO_STATUS ? undefined : (status as AttendanceStatus),
         overtimeMinutes: overtimeMinutes.trim() ? Number(overtimeMinutes) : undefined,
         isLate,
       },
@@ -106,9 +114,10 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
       {request.status === 'pending' && request.approvalStage !== 'ceo' && (
         <div className="flex flex-wrap items-end gap-2">
           <div className="grid gap-1">
-            <label className="text-xs text-muted-foreground">Status</label>
+            <label className="text-xs text-muted-foreground">{sundaysOnly ? 'Status — Sundays can only have overtime' : 'Status'}</label>
             <Select
-              value={status}
+              value={sundaysOnly ? NO_STATUS : status}
+              disabled={sundaysOnly}
               onValueChange={(value) => {
                 setStatus(value)
                 // The L status already means "arrived late" — leaving the
@@ -122,11 +131,15 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NO_STATUS}>— No change —</SelectItem>
-                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-                  <SelectItem key={key} value={key}>
-                    {cfg.code} — {cfg.label}
-                  </SelectItem>
-                ))}
+                {Object.entries(STATUS_CONFIG)
+                  // An early departure already counts as one short leave —
+                  // Short Leave as the day's status would count it twice.
+                  .filter(([key]) => !(request.requestedEarlyDeparture && key === 'SL'))
+                  .map(([key, cfg]) => (
+                    <SelectItem key={key} value={key}>
+                      {cfg.code} — {cfg.label}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

@@ -58,6 +58,14 @@ const REQUEST_STATUS_BADGE_VARIANT: Record<
   revoked: 'destructive',
 }
 
+function everyDayIsSunday(from: string, to?: string) {
+  const last = (to || from).slice(0, 10)
+  for (let t = Date.parse(`${from.slice(0, 10)}T00:00:00Z`); t <= Date.parse(`${last}T00:00:00Z`); t += 86_400_000) {
+    if (new Date(t).getUTCDay() !== 0) return false
+  }
+  return true
+}
+
 function RequestRow({ request }: { request: AttendanceModificationRequest }) {
   // Pre-filled with what the employee actually applied for (when there is
   // one) so clicking Approve without touching the dropdown still marks
@@ -71,6 +79,8 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
   const [overtimeMinutes, setOvertimeMinutes] = useState('')
   const [isLate, setIsLate] = useState(false)
   const [earlyDeparture, setEarlyDeparture] = useState(request.requestedEarlyDeparture ?? false)
+  // Sundays take no attendance status — only overtime minutes.
+  const sundaysOnly = everyDayIsSunday(request.date, request.endDate)
   const [rejecting, setRejecting] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const resolve = useResolveAttendanceRequest()
@@ -97,7 +107,7 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
     resolve.mutate(
       {
         id: request._id,
-        status: status === NO_STATUS ? undefined : (status as AttendanceStatus),
+        status: sundaysOnly || status === NO_STATUS ? undefined : (status as AttendanceStatus),
         overtimeMinutes: overtimeMinutes.trim() ? Number(overtimeMinutes) : undefined,
         isLate,
         earlyDeparture,
@@ -225,12 +235,24 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
         </p>
       )}
 
+      {request.status === 'pending' && request.approvalStage === 'hr' && !rejecting && sundaysOnly && (
+        <p className="text-xs font-medium text-amber-700">Sundays can only have overtime — enter the minutes worked; no status.</p>
+      )}
+
+      {request.status === 'pending' && request.approvalStage === 'hr' && !rejecting && request.requestedEarlyDeparture && (
+        <p className="text-xs text-muted-foreground">
+          An early departure already counts as one short leave, so Short Leave isn't offered as the status. Leave Status at
+          "No change" — a day with no status yet is marked Present.
+        </p>
+      )}
+
       {request.status === 'pending' && request.approvalStage === 'hr' && !rejecting && (
         <div className="flex flex-wrap items-end gap-2">
           <div className="grid gap-1">
             <label className="text-xs text-muted-foreground">Status</label>
             <Select
-              value={status}
+              value={sundaysOnly ? NO_STATUS : status}
+              disabled={sundaysOnly}
               onValueChange={(value) => {
                 setStatus(value)
                 if (value === 'L') setIsLate(false)
@@ -241,11 +263,15 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NO_STATUS}>— No change —</SelectItem>
-                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
-                  <SelectItem key={key} value={key}>
-                    {cfg.label}
-                  </SelectItem>
-                ))}
+                {Object.entries(STATUS_CONFIG)
+                  // An early departure already counts as one short leave —
+                  // Short Leave as the day's status would count it twice.
+                  .filter(([key]) => !(request.requestedEarlyDeparture && key === 'SL'))
+                  .map(([key, cfg]) => (
+                    <SelectItem key={key} value={key}>
+                      {cfg.label}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

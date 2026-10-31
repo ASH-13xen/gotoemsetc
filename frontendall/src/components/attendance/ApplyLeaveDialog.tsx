@@ -97,6 +97,15 @@ export function ApplyLeaveDialog() {
   // Only Work From Home and Unpaid Leave span more than one date — every
   // other type is a single date.
   const isRange = applyType === 'W' || isMultipleDays
+  // Sundays take no attendance status — only overtime.
+  const sundaysOnly = (() => {
+    const last = isRange ? endDate : date
+    if (!date || !last || last < date) return false
+    for (let t = Date.parse(`${date}T00:00:00Z`); t <= Date.parse(`${last}T00:00:00Z`); t += 86_400_000) {
+      if (new Date(t).getUTCDay() !== 0) return false
+    }
+    return true
+  })()
 
   // A date change can take Paid Leave away (e.g. into a month it's already
   // used in) — never leave a hidden option selected.
@@ -164,6 +173,10 @@ export function ApplyLeaveDialog() {
       toast.error('End date cannot be before the start date')
       return
     }
+    if (sundaysOnly) {
+      toast.error('Sundays can only have overtime — choose Overtime to record time worked on a Sunday')
+      return
+    }
 
     const payload = {
       date,
@@ -189,7 +202,8 @@ export function ApplyLeaveDialog() {
         setReason('')
         setHalfDayPeriod(undefined)
       },
-      onError: () => toast.error('Could not send your application'),
+      onError: (err) =>
+        toast.error((err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Could not send your application'),
     })
   }
 
@@ -329,6 +343,12 @@ export function ApplyLeaveDialog() {
                   onChange={(e) => onDateChange(e.target.value)}
                 />
               </div>
+            )}
+
+            {sundaysOnly && !isOvertime && (
+              <p className="rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-700">
+                Sundays can only have overtime — choose <b>Overtime</b> to record time worked on a Sunday.
+              </p>
             )}
 
             <div className="grid gap-1.5">
