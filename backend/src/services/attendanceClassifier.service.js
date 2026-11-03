@@ -328,6 +328,11 @@ async function applyHalfDayForEmployee(employeeId, dateLabel) {
   const existing = await attendanceRepository.findForDate(employeeId, dateLabel);
   if (existing && !existing.isAutoMarked) return existing;
 
+  // A day still to come has no scans to go by — working it out now would
+  // mark everyone Absent (and removing the day wouldn't undo that). It is
+  // applied on the day itself, by settleDay.
+  if (dateLabel.getTime() > istDateLabel(new Date()).getTime()) return existing ?? null;
+
   const { start, end } = istDayBoundsUTC(dateLabel);
   const punches = await devicePunchRepository.listForEmployeeOnDay(employeeId, start, end);
   const result = classifyPunches(punches, employee);
@@ -398,6 +403,11 @@ async function applySlDayForEmployee(employeeId, dateLabel) {
 
   const existing = await attendanceRepository.findForDate(employeeId, dateLabel);
   if (existing && !existing.isAutoMarked) return existing;
+
+  // A day still to come has no scans to go by — working it out now would
+  // mark everyone Absent (and removing the day wouldn't undo that). It is
+  // applied on the day itself, by settleDay.
+  if (dateLabel.getTime() > istDateLabel(new Date()).getTime()) return existing ?? null;
 
   const { start, end } = istDayBoundsUTC(dateLabel);
   const punches = await devicePunchRepository.listForEmployeeOnDay(employeeId, start, end);
@@ -539,10 +549,28 @@ async function handlePunchEvent(employeeId, timestamp) {
   }
 
   const existing = await attendanceRepository.findForDate(employeeId, dateLabel);
-  if (existing && !existing.isAutoMarked) return; // an admin already decided this day — never touch it
+  // An Absent from approved Unpaid Leave gives way if they come in after
+  // all: once the scans make a real day of it, the scans decide it.
+  const leaveAbsence = Boolean(existing && !existing.isAutoMarked && existing.modifiedByRequest && existing.status === ATTENDANCE_STATUS.ABSENT);
+  if (existing && !existing.isAutoMarked && !leaveAbsence) return; // an admin already decided this day — never touch it
 
   const { start, end } = istDayBoundsUTC(dateLabel);
   const punches = await devicePunchRepository.listForEmployeeOnDay(employeeId, start, end);
+
+  if (leaveAbsence) {
+    const result = classifyPunches(punches, employee);
+    if (result.outcome !== 'classified') return; // not a real day at work (yet) — the leave stands
+    await attendanceRepository.upsertForDate(
+      employeeId,
+      dateLabel,
+      { status: result.status, earlyDeparture: result.earlyDeparture, overtimeMinutes: result.overtimeMinutes },
+      false,
+      true,
+      false,
+      false
+    );
+    return;
+  }
 
   if (isSunday(dateLabel)) {
     const sundayResult = computeOffDayOvertime(punches);

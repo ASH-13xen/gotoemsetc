@@ -248,16 +248,29 @@ async function resolveApprovalStage(employeeId) {
 // same 2-day backdating cutoff.
 // What a request asks for, applied exactly as asked: the type is chosen by
 // the employee when applying and nobody changes it afterwards. Unpaid Leave
-// changes nothing — the day stays the biometric's (Absent if they don't come).
+// marks its working days Absent, so it shows ahead on their calendar — and
+// if they come in after all, the scans still decide that day
+// (attendanceClassifier.service.js#handlePunchEvent).
 // Null for an old free-text request, which carries no type.
 const isTyped = (request) => Boolean(request.requestedStatus || request.requestedEarlyDeparture || request.requestedMultiDayLeave);
 function requestedUpdate(request) {
-  if (request.requestedMultiDayLeave) return undefined;
+  if (request.requestedMultiDayLeave) return { status: ATTENDANCE_STATUS.ABSENT };
   const update = {};
   if (request.requestedStatus) update.status = request.requestedStatus;
   if (request.requestedEarlyDeparture) update.earlyDeparture = true;
   return Object.keys(update).length ? update : undefined;
 }
+
+// Days Unpaid Leave doesn't mark Absent: ones they worked after all, or
+// already have as a Paid Off.
+const KEPT_ON_UNPAID_LEAVE = [
+  ATTENDANCE_STATUS.PRESENT,
+  ATTENDANCE_STATUS.LATE,
+  ATTENDANCE_STATUS.SHORT_LEAVE,
+  ATTENDANCE_STATUS.HALF_DAY,
+  ATTENDANCE_STATUS.WORK_FROM_HOME,
+  ATTENDANCE_STATUS.PAID_LEAVE,
+];
 
 // One active request per person per day: another request (pending or
 // approved) covering any of these days — rejected and revoked ones don't
@@ -534,6 +547,7 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actor) {
       if (offDay && !attendanceUpdate.overtimeMinutes) continue;
       // eslint-disable-next-line no-await-in-loop
       const existing = await attendanceRepository.findForDate(request.employee, date);
+      if (request.requestedMultiDayLeave && KEPT_ON_UNPAID_LEAVE.includes(existing?.status)) continue;
       // An approved early departure on a day with no status yet (approved
       // ahead of the day) is a day at work, leaving early — Present. The
       // scans never fill in a day an approval has set, so leaving it blank

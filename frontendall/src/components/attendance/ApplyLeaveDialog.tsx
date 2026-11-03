@@ -416,7 +416,8 @@ export function ApplyLeaveDialog() {
               <p className="font-semibold text-foreground">{UNPAID_LEAVE_LABEL}</p>
               <p className="text-muted-foreground">
                 One or more days off without pay — pick a From and To date. Approved by your Content Manager (if
-                you have one), then HR, then the CEO.
+                you have one), then HR, then the CEO. Once approved, those days show as Absent (Sundays and
+                holidays stay as they are); if you come in on one after all, your scans count for that day.
               </p>
             </div>
             <div className="grid gap-1">

@@ -125,7 +125,7 @@ function RequestRow({ request }: { request: AttendanceModificationRequest }) {
       {request.status === 'pending' && request.approvalStage === 'hr' && typed && (
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-xs text-muted-foreground">
-            Approving marks what they applied for{request.requestedMultiDayLeave ? " — nothing; each day stays as the scans mark it" : ''}. It can't be changed here.
+            Approving marks what they applied for{request.requestedMultiDayLeave ? ' — Absent on each working day' : ''}. It can't be changed here.
           </p>
           <Button size="sm" onClick={onResolve} disabled={resolve.isPending}>
             <CheckCircle2 className="size-4" />

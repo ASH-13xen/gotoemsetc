@@ -377,7 +377,7 @@ async function listWhosOutForMonth({ month, year }) {
   const [records, unpaidLeave, holidays] = await Promise.all([
     attendanceRepository.listAllForRange(from, to),
     // Approved Unpaid Leave: its days are marked Absent, which is never
-    // shown — so they come from the leave itself.
+    // shown — so they come from the leave itself (not a day they came in).
     AttendanceModificationRequest.find({
       requestedMultiDayLeave: true,
       status: ATTENDANCE_REQUEST_STATUS.RESOLVED,
@@ -390,8 +390,10 @@ async function listWhosOutForMonth({ month, year }) {
   ]);
   const person = (e) => ({ _id: e._id, firstName: e.firstName, lastName: e.lastName });
   const out = new Map(); // `${employee}|${day}` -> entry
+  const worked = new Set(); // `${employee}|${day}` they came in on
   for (const r of records) {
     if (!r.employee || r.employee.isDeleted) continue;
+    if (r.status === ATTENDANCE_STATUS.PRESENT || r.status === ATTENDANCE_STATUS.LATE) worked.add(`${r.employee._id}|${dateKey(r.date)}`);
     if (!WHOS_OUT_STATUSES.includes(r.status) && !r.earlyDeparture) continue;
     const status = r.status === ATTENDANCE_STATUS.PAID_LEAVE ? LEAVE : WHOS_OUT_STATUSES.includes(r.status) ? r.status : null;
     out.set(`${r.employee._id}|${dateKey(r.date)}`, { employee: person(r.employee), date: r.date, status, earlyDeparture: Boolean(r.earlyDeparture) });
@@ -404,6 +406,7 @@ async function listWhosOutForMonth({ month, year }) {
     for (let d = new Date(Math.max(leave.date.getTime(), from.getTime())); d <= last; d = new Date(d.getTime() + MS_PER_DAY)) {
       if (isOffDay(d, holidayKeys)) continue;
       const key = `${leave.employee._id}|${dateKey(d)}`;
+      if (worked.has(key)) continue;
       const shown = out.get(key);
       if (shown?.status) continue; // already out, with the status HR gave the day
       out.set(key, { employee: person(leave.employee), date: d, status: LEAVE, earlyDeparture: Boolean(shown?.earlyDeparture) });

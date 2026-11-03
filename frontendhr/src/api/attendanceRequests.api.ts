@@ -60,7 +60,7 @@ export function approvalMarks(request: {
   requestedEarlyDeparture?: boolean
   requestedMultiDayLeave?: boolean
 }): string | null {
-  if (request.requestedMultiDayLeave) return "nothing — each day stays as the scans mark it (Absent if they don't come in)"
+  if (request.requestedMultiDayLeave) return 'Absent on each working day (if they come in after all, their scans decide that day)'
   if (request.requestedEarlyDeparture) return `${SHORT_LEAVE_SECOND_HALF_LABEL} (early departure), and Present if the day has no status yet`
   if (request.requestedStatus === 'H' && request.requestedHalfDayPeriod) {
     return `Half Day — ${HALF_DAY_PERIOD_LABEL[request.requestedHalfDayPeriod]}`
