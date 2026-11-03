@@ -9,7 +9,9 @@ const WeeklySeries = require('../models/WeeklySeries');
 const User = require('../models/User');
 const WorkTeam = require('../models/WorkTeam');
 const AttendanceRecord = require('../models/AttendanceRecord');
+const AttendanceModificationRequest = require('../models/AttendanceModificationRequest');
 const holidayRepository = require('../repositories/holiday.repository');
+const { dateKey, isOffDay } = require('../utils/attendanceDays');
 const notificationService = require('./notification.service');
 const emailService = require('./email.service');
 const ticketService = require('./ticket.service');
@@ -19,6 +21,7 @@ const { ACCESS } = require('../config/access');
 const {
   EMPLOYEE_STATUS,
   ATTENDANCE_STATUS,
+  ATTENDANCE_REQUEST_STATUS,
   NOTIFICATION_TYPES,
   WEEKLY_INVITE_STATUS,
   WEEKLY_NOTE_KIND,
@@ -312,9 +315,20 @@ function heldPieces(event, userId) {
   return a?.status === ACCEPTED ? piecesFor(event, userId) : [];
 }
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+// A day with one of these was worked — not a leave day, whatever was approved.
+const WORKED_STATUSES = [
+  ATTENDANCE_STATUS.PRESENT,
+  ATTENDANCE_STATUS.LATE,
+  ATTENDANCE_STATUS.SHORT_LEAVE,
+  ATTENDANCE_STATUS.HALF_DAY,
+  ATTENDANCE_STATUS.WORK_FROM_HOME,
+];
+
 // Every interval each user holds between two days (inclusive): events they
 // host or accepted (just their slice, if they have one), and whole days
-// they're on approved leave.
+// they're on approved leave (a Paid Off, or the working days of approved
+// Unpaid Leave).
 async function busyIntervals(userIds, fromDay, toDay, { excludeEventIds = [] } = {}) {
   const ids = [...new Set(userIds.map(idOf))];
   const out = new Map(ids.map((id) => [id, []]));
@@ -338,16 +352,49 @@ async function busyIntervals(userIds, fromDay, toDay, { excludeEventIds = [] } =
 
   if (users.length) {
     const userByEmployee = new Map(users.map((u) => [idOf(u.employeeLink), idOf(u._id)]));
-    const leave = await AttendanceRecord.find({
-      employee: { $in: users.map((u) => u.employeeLink) },
-      date: { $gte: new Date(`${fromDay}T00:00:00Z`), $lte: new Date(`${toDay}T00:00:00Z`) },
-      status: ATTENDANCE_STATUS.PAID_LEAVE,
-    })
-      .select('employee date')
-      .lean();
-    for (const record of leave) {
-      const userId = userByEmployee.get(idOf(record.employee));
-      out.get(userId)?.push({ kind: 'leave', day: record.date.toISOString().slice(0, 10), startMin: WEEKLY_GRID.START, endMin: WEEKLY_GRID.END });
+    const from = new Date(`${fromDay}T00:00:00Z`);
+    const to = new Date(`${toDay}T00:00:00Z`);
+    const employees = users.map((u) => u.employeeLink);
+    const [records, unpaidLeave, holidays] = await Promise.all([
+      AttendanceRecord.find({ employee: { $in: employees }, date: { $gte: from, $lte: to }, status: { $in: [ATTENDANCE_STATUS.PAID_LEAVE, ...WORKED_STATUSES] } })
+        .select('employee date status')
+        .lean(),
+      // Approved Unpaid Leave writes nothing on its days (the scans decide),
+      // so its days come from the leave itself — as on the company calendar.
+      AttendanceModificationRequest.find({
+        employee: { $in: employees },
+        requestedMultiDayLeave: true,
+        status: ATTENDANCE_REQUEST_STATUS.RESOLVED,
+        date: { $lte: to },
+        endDate: { $gte: from },
+      })
+        .select('employee date endDate')
+        .lean(),
+      holidayRepository.list({ from, to }),
+    ]);
+    const leaveDays = new Map(); // userId -> Set of days
+    const add = (employee, day) => {
+      const userId = userByEmployee.get(idOf(employee));
+      if (!leaveDays.has(userId)) leaveDays.set(userId, new Set());
+      leaveDays.get(userId).add(day);
+    };
+    const worked = new Set();
+    for (const record of records) {
+      if (record.status === ATTENDANCE_STATUS.PAID_LEAVE) add(record.employee, dateKey(record.date));
+      else worked.add(`${idOf(record.employee)}|${dateKey(record.date)}`);
+    }
+    // Its working days only, and not a day they came in after all.
+    const holidayKeys = new Set(holidays.filter((h) => h.type === 'holiday').map((h) => dateKey(h.date)));
+    for (const leave of unpaidLeave) {
+      const last = Math.min((leave.endDate || leave.date).getTime(), to.getTime());
+      for (let t = Math.max(leave.date.getTime(), from.getTime()); t <= last; t += MS_PER_DAY) {
+        const day = new Date(t);
+        if (isOffDay(day, holidayKeys) || worked.has(`${idOf(leave.employee)}|${dateKey(day)}`)) continue;
+        add(leave.employee, dateKey(day));
+      }
+    }
+    for (const [userId, days] of leaveDays) {
+      for (const day of days) out.get(userId)?.push({ kind: 'leave', day, startMin: WEEKLY_GRID.START, endMin: WEEKLY_GRID.END });
     }
   }
   return out;
