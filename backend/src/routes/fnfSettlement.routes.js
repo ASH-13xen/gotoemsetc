@@ -15,6 +15,15 @@ const router = Router();
 router.get('/hr', requireAccess(ACCESS.HRMS), fnfSettlementController.listForHr);
 router.post('/:id/last-day', requireAccess(ACCESS.HRMS), validate(fnfSettlementValidator.confirmLastDay), fnfSettlementController.confirmLastDay);
 
+// The employee's signed copy of the settlement document — HR or the CEO/admin, before approval.
+router.post(
+  '/:id/signed-document',
+  requireAccess(ACCESS.HRMS, ACCESS.PAYOUT_APPROVAL),
+  upload.single('file'),
+  validate(fnfSettlementValidator.byId),
+  fnfSettlementController.uploadSignedDocument
+);
+
 // The CEO/admin.
 router.get('/approvals', requireAccess(ACCESS.PAYOUT_APPROVAL), fnfSettlementController.listForApproval);
 router.post('/:id/approve', requireAccess(ACCESS.PAYOUT_APPROVAL), validate(fnfSettlementValidator.decide), fnfSettlementController.approve);
@@ -23,6 +32,7 @@ router.post('/:id/send-back', requireAccess(ACCESS.PAYOUT_APPROVAL), validate(fn
 // Files — each checks who is asking (HR, the CEO/admin, Finance; the
 // receipt also the employee).
 router.get('/:id/document', validate(fnfSettlementValidator.byId), fnfSettlementController.downloadDocument);
+router.get('/:id/signed-document', validate(fnfSettlementValidator.byId), fnfSettlementController.downloadSignedDocument);
 router.get('/:id/slip', validate(fnfSettlementValidator.byId), fnfSettlementController.downloadSlip);
 router.get('/:id/payment-receipt', validate(fnfSettlementValidator.byId), fnfSettlementController.downloadReceipt);
 

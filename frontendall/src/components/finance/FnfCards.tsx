@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Check, FileSignature, FileText, Loader2, Undo2, UserMinus } from 'lucide-react'
+import { Check, FileCheck2, FileSignature, FileText, Loader2, Undo2, Upload, UserMinus } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { Button } from '@/components/ui/button'
@@ -12,18 +12,21 @@ import {
   approveFnf,
   confirmFnfLastDay,
   fetchFnfDocument,
+  fetchFnfSignedDocument,
   fetchFnfSlip,
   listFnfForApproval,
   listFnfForHr,
   sendBackFnf,
+  uploadFnfSignedDocument,
   type FnfSettlement,
 } from '@/api/fnf.api'
 import { AckButton, useAckScope } from '@/components/layout/ActionAck'
 import { ACTION_KEY } from '@/lib/actionKeys'
 
 // Full & final settlement on the dashboard. HR confirms the last working day
-// (which makes the final salary slip); the CEO/admin then approves the
-// settlement and that slip together, which mails Finance and puts it in
+// (which makes the final salary slip); the employee's signed copy of the
+// settlement document is uploaded; the CEO/admin then approves the settlement
+// and that slip together, which mails Finance and the employee and puts it in
 // Finance → FnF. Each card shows nothing when there is nothing to do.
 
 const KEY = ['fnf-settlements']
@@ -71,6 +74,62 @@ function DocButton({ settlement }: { settlement: FnfSettlement }) {
   )
 }
 
+const needsSignedCopy = (s: FnfSettlement) => Boolean(s.signedDocumentRequired && !s.signedDocument?.uploadedAt)
+
+// The employee's signed copy, next to the generated document (from Yukta
+// Daga's settlement on): upload it, then open or replace it until approval.
+function SignedDocButton({ settlement }: { settlement: FnfSettlement }) {
+  const queryClient = useQueryClient()
+  const input = useRef<HTMLInputElement>(null)
+  const upload = useMutation({ mutationFn: (file: File) => uploadFnfSignedDocument(settlement._id, file) })
+  if (!settlement.signedDocumentRequired) return null
+
+  const pick = (file?: File) => {
+    if (!file) return
+    upload.mutate(file, {
+      onSuccess: () => {
+        toast.success('Signed settlement document uploaded')
+        queryClient.invalidateQueries({ queryKey: KEY })
+      },
+      onError: (err) => toast.error(apiMessage(err, 'Could not upload the signed document')),
+    })
+  }
+
+  return (
+    <>
+      <input
+        ref={input}
+        type="file"
+        accept="application/pdf,image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          pick(e.target.files?.[0])
+          e.target.value = ''
+        }}
+      />
+      {settlement.signedDocument?.uploadedAt ? (
+        <>
+          <Button
+            size="sm"
+            variant="outline"
+            className="border-emerald-500/40 text-emerald-700"
+            onClick={() => openBlob(() => fetchFnfSignedDocument(settlement._id), 'Could not open the signed document')}
+          >
+            <FileCheck2 className="size-3.5" /> Signed document
+          </Button>
+          <Button size="sm" variant="ghost" disabled={upload.isPending} onClick={() => input.current?.click()}>
+            {upload.isPending ? <Loader2 className="size-3.5 animate-spin" /> : 'Replace'}
+          </Button>
+        </>
+      ) : (
+        <Button size="sm" variant="outline" className="border-amber-500/50 text-amber-700" disabled={upload.isPending} onClick={() => input.current?.click()}>
+          {upload.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />} Upload signed document
+        </Button>
+      )}
+    </>
+  )
+}
+
 function HrRow({ settlement }: { settlement: FnfSettlement }) {
   const queryClient = useQueryClient()
   const [day, setDay] = useState((settlement.suggestedLastDay ?? '').slice(0, 10))
@@ -97,8 +156,14 @@ function HrRow({ settlement }: { settlement: FnfSettlement }) {
         </p>
         {future && <p className="text-[11px] font-semibold text-amber-700">This day has not come yet — confirm it once it has passed.</p>}
       </div>
+      {needsSignedCopy(settlement) && (
+        <p className="mt-2 text-[11px] text-amber-700">
+          Upload the settlement document signed by the employee — the final salary slip can't be approved and mailed without it.
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap gap-2">
         <DocButton settlement={settlement} />
+        <SignedDocButton settlement={settlement} />
         <AckButton keys={[ACTION_KEY.fnfHr(settlement._id)]} />
         <Button
           size="sm"
@@ -130,6 +195,7 @@ function ApprovalRow({ settlement }: { settlement: FnfSettlement }) {
   const approve = useMutation({ mutationFn: () => approveFnf(settlement._id), onSuccess: refresh })
   const sendBack = useMutation({ mutationFn: () => sendBackFnf(settlement._id, note.trim()), onSuccess: refresh })
   const busy = approve.isPending || sendBack.isPending
+  const waitingForSignature = needsSignedCopy(settlement)
 
   return (
     <div className="min-w-0 rounded-2xl border border-border bg-background p-4">
@@ -181,17 +247,23 @@ function ApprovalRow({ settlement }: { settlement: FnfSettlement }) {
         </div>
       ) : (
         <div className="mt-3 flex flex-wrap gap-2">
+          {waitingForSignature && (
+            <p className="w-full rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[11px] font-medium text-amber-700">
+              Waiting for the signed settlement document — upload it to approve. Approving mails it, with the final slip, to Finance and the employee.
+            </p>
+          )}
           <DocButton settlement={settlement} />
+          <SignedDocButton settlement={settlement} />
           <Button size="sm" variant="outline" onClick={() => openBlob(() => fetchFnfSlip(settlement._id), 'Could not open the final salary slip')}>
             <FileText className="size-3.5" /> Final salary slip
           </Button>
           <Button
             size="sm"
             className="flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
-            disabled={busy}
+            disabled={busy || waitingForSignature}
             onClick={() =>
               approve.mutate(undefined, {
-                onSuccess: () => toast.success('Approved — Finance has been mailed the settlement and the final slip'),
+                onSuccess: () => toast.success('Approved — Finance and the employee have been mailed the settlement and the final slip'),
                 onError: (err) => toast.error(apiMessage(err, 'Could not approve')),
               })
             }
@@ -223,7 +295,7 @@ export function FnfCards() {
       {isHr && forHr.length > 0 && (
         <Shell
           title="Full & final — confirm the last working day"
-          hint="A settlement document was generated. Confirm the last working day to make the final salary slip; it then goes to the CEO."
+          hint="A settlement document was generated. Confirm the last working day to make the final salary slip, and upload the copy the employee signed; it then goes to the CEO."
           count={forHr.length}
           icon={<UserMinus className="size-4" />}
           tone="border-rose-500/30"
@@ -236,7 +308,7 @@ export function FnfCards() {
       {isApprover && forApproval.length > 0 && (
         <Shell
           title="Full & final settlements waiting for your approval"
-          hint="Approving approves the final salary slip with it, mails Finance the settlement and the slip, and puts it in Finance → FnF."
+          hint="Approving approves the final salary slip with it, mails Finance and the employee the signed settlement and the slip, and puts it in Finance → FnF."
           count={forApproval.length}
           icon={<FileSignature className="size-4" />}
           tone="border-rose-500/30"

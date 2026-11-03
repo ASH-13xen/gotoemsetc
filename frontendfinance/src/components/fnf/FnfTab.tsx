@@ -14,7 +14,7 @@ import { downloadFnfFile } from '@/api/fnfSettlements.api'
 const rupees = (n: number) => `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const fmt = (iso: string) => new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 
-async function openFile(id: string, which: 'document' | 'slip' | 'payment-receipt', failed: string) {
+async function openFile(id: string, which: 'document' | 'signed-document' | 'slip' | 'payment-receipt', failed: string) {
   try {
     const url = URL.createObjectURL(await downloadFnfFile(id, which))
     window.open(url, '_blank')
@@ -74,6 +74,11 @@ export function FnfTab() {
               <Button size="sm" variant="outline" onClick={() => openFile(settlement._id, 'document', 'Could not open the settlement document')}>
                 Document
               </Button>
+              {settlement.signedDocument?.uploadedAt && (
+                <Button size="sm" variant="outline" onClick={() => openFile(settlement._id, 'signed-document', 'Could not open the signed document')}>
+                  Signed copy
+                </Button>
+              )}
               {hasSlip && (
                 <Button size="sm" variant="outline" onClick={() => openFile(settlement._id, 'slip', 'Could not open the final salary slip')}>
                   Final slip

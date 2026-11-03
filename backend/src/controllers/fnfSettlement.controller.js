@@ -50,6 +50,19 @@ const downloadDocument = asyncHandler(async (req, res) => {
   res.send(file.data);
 });
 
+const uploadSignedDocument = asyncHandler(async (req, res) => {
+  const settlement = await fnfSettlementService.uploadSignedDocument(req.params.id, req.file, req.user);
+  audit(req, 'fnfSettlement.uploadSignedDocument', req.params.id, { filename: req.file?.originalname });
+  res.json({ settlement });
+});
+
+const downloadSignedDocument = asyncHandler(async (req, res) => {
+  const file = await fnfSettlementService.getSignedDocumentFile(req.params.id, req.user);
+  res.set('Content-Type', file.contentType);
+  res.set('Content-Disposition', `inline; filename="${encodeURIComponent(file.filename)}"`);
+  res.send(file.data);
+});
+
 const downloadSlip = asyncHandler(async (req, res) => {
   const { data, filename } = await fnfSettlementService.getSlipFile(req.params.id, req.user);
   slipPdf.send(res, data, filename);
@@ -62,4 +75,17 @@ const downloadReceipt = asyncHandler(async (req, res) => {
   res.send(file.data);
 });
 
-module.exports = { list, listForHr, confirmLastDay, listForApproval, approve, sendBack, markPaid, downloadDocument, downloadSlip, downloadReceipt };
+module.exports = {
+  list,
+  listForHr,
+  confirmLastDay,
+  listForApproval,
+  approve,
+  sendBack,
+  markPaid,
+  uploadSignedDocument,
+  downloadDocument,
+  downloadSignedDocument,
+  downloadSlip,
+  downloadReceipt,
+};

@@ -17,6 +17,8 @@ export interface FnfSettlement {
   paidAt?: string
   transactionDetails?: TransactionDetails
   paymentReceiptFile?: { filename?: string }
+  // The employee's signed copy of the settlement document, when uploaded.
+  signedDocument?: { filename?: string; uploadedAt?: string } | null
 }
 
 export async function listFnfSettlements(): Promise<{ settlements: FnfSettlement[] }> {
@@ -36,7 +38,7 @@ export async function markFnfPaid(id: string, input: TransactionDetails, receipt
   return data
 }
 
-export async function downloadFnfFile(id: string, which: 'document' | 'slip' | 'payment-receipt'): Promise<Blob> {
+export async function downloadFnfFile(id: string, which: 'document' | 'signed-document' | 'slip' | 'payment-receipt'): Promise<Blob> {
   const { data } = await apiClient.get(`/fnf-settlements/${id}/${which}`, { responseType: 'blob' })
   return data
 }

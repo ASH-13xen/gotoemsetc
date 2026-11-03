@@ -18,6 +18,10 @@ export interface FnfSettlement {
   total: number
   companyEmail: string | null
   sendBackNote?: string
+  // From Yukta Daga's settlement on: the employee's signed copy must be
+  // uploaded before it can be approved (approving mails it).
+  signedDocumentRequired?: boolean
+  signedDocument?: { filename?: string; uploadedAt?: string } | null
   createdAt: string
   isOwn?: boolean
 }
@@ -49,6 +53,18 @@ export async function sendBackFnf(id: string, note: string) {
 
 export async function fetchFnfDocument(id: string): Promise<Blob> {
   const { data } = await apiClient.get(`/fnf-settlements/${id}/document`, { responseType: 'blob' })
+  return data
+}
+
+export async function uploadFnfSignedDocument(id: string, file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  const { data } = await apiClient.post<{ settlement: FnfSettlement }>(`/fnf-settlements/${id}/signed-document`, form)
+  return data.settlement
+}
+
+export async function fetchFnfSignedDocument(id: string): Promise<Blob> {
+  const { data } = await apiClient.get(`/fnf-settlements/${id}/signed-document`, { responseType: 'blob' })
   return data
 }
 

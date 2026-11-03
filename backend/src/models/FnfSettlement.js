@@ -40,6 +40,18 @@ const fnfSettlementSchema = new Schema(
     financeEmail: { to: String, status: String, error: String },
     // The employee's copy (settlement + final slip) on approval, to their personal mail.
     employeeEmail: { to: String, status: String, error: String },
+    // The settlement document signed by the employee, uploaded by HR or the
+    // CEO/admin. Required from Yukta Daga's settlement (3 Nov 2026) on:
+    // approving — which mails the final slip — waits for it, and every mail
+    // carries it instead of the unsigned document.
+    signedDocumentRequired: { type: Boolean, default: false },
+    signedDocument: {
+      data: { type: Buffer, select: false },
+      contentType: String,
+      filename: String,
+      uploadedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+      uploadedAt: Date,
+    },
 
     status: { type: String, enum: Object.values(PAYMENT_STATUS), default: PAYMENT_STATUS.DUE },
     paidAt: Date,

@@ -1,3 +1,4 @@
+const path = require('node:path');
 const ApiError = require('../utils/ApiError');
 const logger = require('../utils/logger');
 const env = require('../config/env');
@@ -22,8 +23,10 @@ const { NOTIFICATION_TYPES, FNF_STAGE, SALARY_SLIP_APPROVAL } = require('../conf
 //     -> HR confirms the last working day (pre-filled from the employee's
 //        record, else the document's separation date)
 //     -> the final salary slip is generated, up to that day
+//     -> the employee's signed copy of the document is uploaded (HR or the
+//        CEO/admin; required from Yukta Daga's settlement on)
 //     -> the CEO/admin approves the settlement and its slip together
-//        (or sends it back to HR with a note)
+//        (or sends it back to HR with a note) — the employee is mailed it
 //     -> Finance is mailed the document and the slip, and pays the total
 //        (final salary + the document's severance) with a receipt
 //     -> the receipt is mailed to the employee
@@ -64,6 +67,21 @@ function totals(settlement) {
   return { finalSalary, severance, total: Math.round((finalSalary + severance) * 100) / 100 };
 }
 
+// The settlement document for a mail: the employee's signed copy once it is
+// on file, else the generated one. Null if neither has a file.
+const EXTENSION = { 'application/pdf': '.pdf', 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' };
+async function documentAttachment(settlement) {
+  const name = nameOf(settlement.employee);
+  const withFile = await FnfSettlement.findById(settlement._id).select('+signedDocument.data');
+  const signed = withFile?.signedDocument;
+  if (signed?.data?.length) {
+    const extension = path.extname(signed.filename || '') || EXTENSION[signed.contentType] || '';
+    return { signed: true, filename: `Full and Final Settlement (signed) - ${name}${extension}`, content: signed.data };
+  }
+  const document = await generatedDocumentRepository.findByIdWithFile(settlement.generatedDocument);
+  return document?.pdf?.data ? { signed: false, filename: `Full and Final Settlement - ${name}.pdf`, content: document.pdf.data } : null;
+}
+
 function shape(settlement) {
   const plain = typeof settlement.toObject === 'function' ? settlement.toObject() : settlement;
   const employee = plain.employee || {};
@@ -89,6 +107,7 @@ async function createFromGeneratedDocument(generatedDocument, employeeId, rawSev
     amount: Number.isFinite(amount) ? amount : undefined,
     separationDate: parseDay(rawSeparationDate) || undefined,
     stage: HR,
+    signedDocumentRequired: true,
   });
   const [employee, hrUsers] = await Promise.all([employeeRepository.findById(String(employeeId)), userRepository.findHr()]);
   await notificationService.createForUsers(
@@ -187,8 +206,8 @@ async function mailFinance(settlement) {
     const name = nameOf(settlement.employee);
     const { finalSalary, severance, total } = totals(settlement);
     const attachments = [];
-    const document = await generatedDocumentRepository.findByIdWithFile(settlement.generatedDocument);
-    if (document?.pdf?.data) attachments.push({ filename: `Full and Final Settlement - ${name}.pdf`, content: document.pdf.data });
+    const document = await documentAttachment(settlement);
+    if (document) attachments.push({ filename: document.filename, content: document.content });
     if (settlement.salarySlip) attachments.push({ filename: `Final Salary Slip - ${name}.pdf`, content: await slipPdf.read(settlement.salarySlip) });
     await emailService.sendEmail({
       to,
@@ -197,7 +216,7 @@ async function mailFinance(settlement) {
 <p>The full &amp; final settlement for <strong>${name}</strong>${settlement.employee.employeeCode ? ` (${settlement.employee.employeeCode})` : ''} has been approved for payment.</p>
 <p><strong>Last working day:</strong> ${prettyDay(settlement.lastWorkingDay)}<br/>
 <strong>Final salary (slip attached):</strong> ${rupees(finalSalary)}<br/>
-<strong>Severance (settlement document attached):</strong> ${rupees(severance)}<br/>
+<strong>Severance (${document?.signed ? 'signed ' : ''}settlement document attached):</strong> ${rupees(severance)}<br/>
 <strong>Total to pay:</strong> ${rupees(total)}</p>
 <p>It is in the Finance tab under FnF, where the payment is marked paid with its receipt.</p>
 <p>Thanks,<br/>HR — ${env.companyName || 'GO-TO Friend'}</p>`,
@@ -221,14 +240,14 @@ async function mailEmployee(settlement) {
     const name = nameOf(settlement.employee);
     const { finalSalary, severance, total } = totals(settlement);
     const attachments = [];
-    const document = await generatedDocumentRepository.findByIdWithFile(settlement.generatedDocument);
-    if (document?.pdf?.data) attachments.push({ filename: `Full and Final Settlement - ${name}.pdf`, content: document.pdf.data });
+    const document = await documentAttachment(settlement);
+    if (document) attachments.push({ filename: document.filename, content: document.content });
     if (settlement.salarySlip) attachments.push({ filename: `Final Salary Slip - ${name}.pdf`, content: await slipPdf.read(settlement.salarySlip) });
     await emailService.sendEmail({
       to,
       subject: 'Your full & final settlement',
       html: `<p>Hi ${settlement.employee.firstName || name},</p>
-<p>Your full &amp; final settlement has been approved. The settlement document and your final salary slip are attached.</p>
+<p>Your full &amp; final settlement has been approved. The ${document?.signed ? 'signed ' : ''}settlement document and your final salary slip are attached.</p>
 <p><strong>Last working day:</strong> ${prettyDay(settlement.lastWorkingDay)}<br/>
 <strong>Final salary:</strong> ${rupees(finalSalary)}<br/>
 <strong>Severance:</strong> ${rupees(severance)}<br/>
@@ -252,6 +271,10 @@ async function approve(id, actor) {
   const settlement = await load(id);
   if (settlement.stage !== CEO) throw ApiError.conflict('This settlement is not waiting for approval');
   if (isSelf(actor, settlement.employee._id)) throw ApiError.forbidden('This is your own settlement — someone else has to approve it');
+  // Approving mails the final slip — not before the employee has signed the settlement.
+  if (settlement.signedDocumentRequired && !settlement.signedDocument?.uploadedAt) {
+    throw ApiError.conflict('Upload the signed settlement document first — approving mails it with the final salary slip');
+  }
   if (!settlement.salarySlip || settlement.salarySlip.approvalStatus !== SALARY_SLIP_APPROVAL.PENDING) {
     throw ApiError.conflict('The final salary slip was replaced — send this back to HR to make it again');
   }
@@ -360,9 +383,9 @@ async function markPaid(id, transactionDetails, actingUser, receipt) {
   }
 
   const fresh = await load(id);
-  const document = await generatedDocumentRepository.findByIdWithFile(fresh.generatedDocument);
+  const document = await documentAttachment(fresh);
   const attachments = [{ filename: receipt.originalname || 'payment-receipt', content: receipt.buffer }];
-  if (document?.pdf?.data) attachments.push({ filename: document.pdf.filename || 'fnf-settlement.pdf', content: document.pdf.data });
+  if (document) attachments.push({ filename: document.filename, content: document.content });
   const personal = fresh.employee?.personalEmail;
   if (personal) {
     await emailService
@@ -399,6 +422,33 @@ async function getDocumentFile(id, viewer) {
   return { data: document.pdf.data, contentType: 'application/pdf', filename: document.pdf.filename || 'fnf-settlement.pdf' };
 }
 
+// HR or the CEO/admin uploads the employee's signed copy of the settlement
+// document (a PDF or a photo) — any time before it is approved; a new one
+// replaces the old.
+async function uploadSignedDocument(id, file, actor) {
+  const settlement = await load(id);
+  if (settlement.stage !== HR && settlement.stage !== CEO) {
+    throw ApiError.conflict('The signed copy can only be added before the settlement is approved');
+  }
+  if (isSelf(actor, settlement.employee._id)) throw ApiError.forbidden('This is your own settlement — someone else has to handle it');
+  if (!file) throw ApiError.badRequest('Choose the signed settlement document (a PDF or a photo)');
+  await FnfSettlement.updateOne(
+    { _id: settlement._id },
+    { signedDocument: { data: file.buffer, contentType: file.mimetype, filename: file.originalname, uploadedBy: actor.id, uploadedAt: new Date() } }
+  );
+  return shape(await load(id));
+}
+
+// The signed copy — for HR, the CEO/admin and Finance.
+async function getSignedDocumentFile(id, viewer) {
+  if (!can(viewer, ACCESS.HRMS) && !can(viewer, ACCESS.PAYOUT_APPROVAL) && !can(viewer, ACCESS.FINANCE)) throw ApiError.forbidden();
+  const settlement = await FnfSettlement.findById(id).select('+signedDocument.data');
+  if (!settlement) throw ApiError.notFound('Full & final settlement not found');
+  if (!settlement.signedDocument?.data?.length) throw ApiError.notFound('No signed copy has been uploaded yet');
+  const { data, contentType, filename } = settlement.signedDocument;
+  return { data, contentType: contentType || 'application/pdf', filename: filename || 'fnf-settlement-signed.pdf' };
+}
+
 // The final salary slip — for HR, the CEO/admin and Finance.
 async function getSlipFile(id, viewer) {
   if (!can(viewer, ACCESS.HRMS) && !can(viewer, ACCESS.PAYOUT_APPROVAL) && !can(viewer, ACCESS.FINANCE)) throw ApiError.forbidden();
@@ -426,6 +476,8 @@ module.exports = {
   listAll,
   markPaid,
   getDocumentFile,
+  uploadSignedDocument,
+  getSignedDocumentFile,
   getSlipFile,
   getReceipt,
 };
