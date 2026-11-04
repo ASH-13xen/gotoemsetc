@@ -15,7 +15,7 @@ const accessService = require('./access.service');
 const { companyEmailOf } = require('../utils/companyEmail');
 const { can, isSelf } = require('../utils/roles');
 const { ACCESS, GRANTS } = require('../config/access');
-const { NOTIFICATION_TYPES, FNF_STAGE, SALARY_SLIP_APPROVAL } = require('../config/constants');
+const { NOTIFICATION_TYPES, FNF_STAGE, SALARY_SLIP_APPROVAL, PAYMENT_STATUS } = require('../config/constants');
 
 // Full & final settlement, from the document to the payment:
 //
@@ -147,21 +147,41 @@ async function confirmLastDay(id, { lastWorkingDay }, actor) {
     throw ApiError.badRequest('The last working day has not come yet — confirm it once it has passed, so the final slip covers every day');
   }
 
+  // From the start of that month (or the joining date) to the last day.
+  const monthStart = new Date(Date.UTC(lastDay.getUTCFullYear(), lastDay.getUTCMonth(), 1));
+  // A regular slip for these days is replaced by the final slip — unless it
+  // has already been paid, which the final slip would pay again.
+  const regular = await SalarySlip.find({
+    employee: settlement.employee._id,
+    fnfSettlement: null,
+    startDate: { $lte: lastDay },
+    endDate: { $gte: monthStart },
+    approvalStatus: { $nin: [SALARY_SLIP_APPROVAL.REJECTED, SALARY_SLIP_APPROVAL.SUPERSEDED] },
+  }).select('startDate endDate netPayable paymentStatus');
+  const paid = regular.find((s) => s.paymentStatus === PAYMENT_STATUS.PAID);
+  if (paid) {
+    throw ApiError.conflict(
+      `Their salary for ${prettyDay(paid.startDate)} – ${prettyDay(paid.endDate)} was already paid on a regular slip (${rupees(paid.netPayable)}) — the final slip would pay those days again. Sort it out with Finance first.`
+    );
+  }
+
   // The record keeps the last day (it decides the final slip — see
   // salaryCalculation.service.js#clipToEmployment).
   await employeeRepository.updateById(String(settlement.employee._id), { endDate: lastDay });
 
-  // From the start of that month (or the joining date) to the last day.
-  const monthStart = new Date(Date.UTC(lastDay.getUTCFullYear(), lastDay.getUTCMonth(), 1));
   // Required lazily: salarySlip.service is the bigger module and pulls in a lot.
   const salarySlipService = require('./salarySlip.service');
   const slip = await salarySlipService.generateSlip(
     String(settlement.employee._id),
     { startDate: dayStr(monthStart), endDate: dayStr(lastDay) },
     actor.id,
-    actor
+    actor,
+    { forFnf: true }
   );
   await SalarySlip.updateOne({ _id: slip._id }, { fnfSettlement: settlement._id });
+  if (regular.length) {
+    await SalarySlip.updateMany({ _id: { $in: regular.map((s) => s._id) } }, { approvalStatus: SALARY_SLIP_APPROVAL.SUPERSEDED });
+  }
   // An earlier final slip (from a send-back) no longer counts.
   if (settlement.salarySlip && String(settlement.salarySlip._id) !== String(slip._id)) {
     await SalarySlip.updateOne({ _id: settlement.salarySlip._id, approvalStatus: { $ne: SALARY_SLIP_APPROVAL.APPROVED } }, { approvalStatus: SALARY_SLIP_APPROVAL.SUPERSEDED });

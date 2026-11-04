@@ -11,6 +11,7 @@ const employeeRepository = require('../repositories/employee.repository');
 const salarySlipRepository = require('../repositories/salarySlip.repository');
 const AttendanceRecord = require('../models/AttendanceRecord');
 const SalarySlip = require('../models/SalarySlip');
+const FnfSettlement = require('../models/FnfSettlement');
 const userRepository = require('../repositories/user.repository');
 const localFileStorage = require('../services/localFileStorage.service');
 const emailService = require('./email.service');
@@ -19,7 +20,7 @@ const salaryCalculation = require('./salaryCalculation.service');
 const { fillTemplate, renderPdfFromHtml } = require('./htmlRender.service');
 const { dateKey } = require('../utils/attendanceDays');
 const { istMonthRange } = require('../utils/istDate');
-const { ATTENDANCE_STATUS, NOTIFICATION_TYPES, EMPLOYEE_STATUS, SALARY_SLIP_APPROVAL } = require('../config/constants');
+const { ATTENDANCE_STATUS, NOTIFICATION_TYPES, EMPLOYEE_STATUS, SALARY_SLIP_APPROVAL, FNF_STAGE, PAYMENT_STATUS } = require('../config/constants');
 const { companyEmailOf } = require('../utils/companyEmail');
 const { LATE_CAP, SL_CAP } = require('../utils/attendancePenalties');
 const { isSelf, can } = require('../utils/roles');
@@ -232,7 +233,8 @@ async function renderSlip(employee, startDate, endDate, manualInputs = {}) {
   return { summary, salary, pdfBuffer };
 }
 
-async function generateSlip(employeeId, input, createdBy, actor) {
+// `forFnf`: the full & final settlement making its final slip (fnfSettlement.service.js).
+async function generateSlip(employeeId, input, createdBy, actor, { forFnf = false } = {}) {
   if (isSelf(actor, employeeId)) throw ApiError.forbidden("You can't generate your own salary slip — someone else has to");
   const employee = await employeeRepository.findById(employeeId);
   if (!employee) throw ApiError.notFound('Employee not found');
@@ -250,6 +252,14 @@ async function generateSlip(employeeId, input, createdBy, actor) {
   }
   if (endDate.getTime() > Date.now()) {
     throw ApiError.badRequest('End date cannot be in the future');
+  }
+  // Their last month is paid with their full & final settlement — a slip
+  // here would pay those days twice.
+  if (!forFnf && (await fnfCoveredEmployees(startDate, endDate)).has(String(employee._id))) {
+    throw ApiError.conflict(
+      `${employee.firstName} ${employee.lastName || ''}`.trim() +
+        "'s salary up to their last working day is paid with their full & final settlement — the final slip is made there, not here"
+    );
   }
 
   const { summary, salary, pdfBuffer } = await renderSlip(employee, startDate, endDate, manualInputs);
@@ -385,15 +395,35 @@ async function listBulkCandidates({ month, year }, actor) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// Employees whose slip for this month was made as part of a full & final
-// settlement — they are not paid again with the month's slips.
+// Employees paid for some of these days with their full & final settlement:
+// it pays from the start of their last month to their last working day, from
+// the moment the settlement exists — not only once its final slip is made
+// (a regular slip made in between would pay those days twice). The last day
+// is the settlement's, else their record's, else the document's separation
+// date. Settlements from before this flow (no stage) paid the last month
+// with the month's slips, as usual.
 async function fnfCoveredEmployees(periodStart, periodEnd) {
-  const slips = await SalarySlip.find({
-    fnfSettlement: { $ne: null },
-    startDate: { $gte: periodStart, $lte: periodEnd },
-    approvalStatus: { $nin: [SALARY_SLIP_APPROVAL.REJECTED, SALARY_SLIP_APPROVAL.SUPERSEDED] },
-  }).select('employee');
-  return new Set(slips.map((s) => String(s.employee)));
+  const [settlements, slips] = await Promise.all([
+    FnfSettlement.find({ stage: { $in: Object.values(FNF_STAGE) } })
+      .select('employee lastWorkingDay separationDate')
+      .populate('employee', 'endDate'),
+    SalarySlip.find({
+      fnfSettlement: { $ne: null },
+      startDate: { $lte: periodEnd },
+      endDate: { $gte: periodStart },
+      approvalStatus: { $nin: [SALARY_SLIP_APPROVAL.REJECTED, SALARY_SLIP_APPROVAL.SUPERSEDED] },
+    }).select('employee'),
+  ]);
+  const covered = new Set(slips.map((s) => String(s.employee)));
+  for (const settlement of settlements) {
+    const lastDay = settlement.lastWorkingDay || settlement.employee?.endDate || settlement.separationDate;
+    if (!lastDay) continue;
+    const from = new Date(Date.UTC(lastDay.getUTCFullYear(), lastDay.getUTCMonth(), 1));
+    if (from.getTime() <= periodEnd.getTime() && lastDay.getTime() >= periodStart.getTime()) {
+      covered.add(String(settlement.employee?._id || settlement.employee));
+    }
+  }
+  return covered;
 }
 
 async function generateBulkSlips({ month, year, adjustments = {} }, createdBy, actor) {
@@ -712,7 +742,10 @@ function financeFrom() {
 // slip per employee within that bucket.
 async function listDueForFinance(year, month) {
   const { start, end } = istMonthRange(year, month);
-  const slips = await salarySlipRepository.listByStartDateMonth(start, end);
+  const [slips, fnfCovered] = await Promise.all([
+    salarySlipRepository.listByStartDateMonth(start, end),
+    fnfCoveredEmployees(new Date(Date.UTC(year, month - 1, 1)), new Date(Date.UTC(year, month, 0))),
+  ]);
 
   const latestByEmployee = new Map();
   for (const slip of slips) {
@@ -723,6 +756,8 @@ async function listDueForFinance(year, month) {
     if ((!isApproved(slip) && !held) || slip.fnfSettlement) continue;
     const employeeId = slip.employee?._id?.toString();
     if (!employeeId) continue;
+    // Their full & final pays these days — an unpaid regular slip is not paid as well.
+    if (fnfCovered.has(employeeId) && slip.paymentStatus !== PAYMENT_STATUS.PAID) continue;
     const existing = latestByEmployee.get(employeeId);
     if (!existing || slip.createdAt > existing.createdAt) {
       latestByEmployee.set(employeeId, slip);
@@ -813,6 +848,7 @@ async function getPaymentReceipt(id, viewer) {
 }
 
 module.exports = {
+  fnfCoveredEmployees,
   isApproved,
   getApprovedPdf,
   listPaidUnseen,
