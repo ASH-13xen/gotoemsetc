@@ -189,6 +189,7 @@ const mutableFields = {
   updatedIn12345: z.boolean().optional(),
   probationCompleted: z.boolean().optional(),
   excludeFromPayroll: z.boolean().optional(),
+  worksFromHome: z.boolean().optional(),
   maritalStatus: z.enum(['single', 'married']).nullable().optional(),
   anniversaryDate: z.coerce.date().nullable().optional(),
 

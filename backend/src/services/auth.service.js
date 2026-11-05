@@ -21,6 +21,7 @@ function toPublicUser(resolved) {
     employeeLink: resolved.employeeLink,
     permissions: resolved.permissions,
     isCoordinator: resolved.isCoordinator,
+    worksFromHome: resolved.worksFromHome,
     isContentManager: resolved.isContentManager,
     // Which whole sections are switched on (constants.js FEATURES).
     features: FEATURES,

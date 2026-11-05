@@ -17,6 +17,8 @@ export interface StoredUser {
   postRoles?: string[]
   access?: string[]
   displayName?: string
+  // Works from home by default — a working day with no scans is Work From Home.
+  worksFromHome?: boolean
   features?: { TASK_MANAGEMENT?: boolean; CLIENT_MANAGEMENT?: boolean }
 }
 

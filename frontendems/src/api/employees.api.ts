@@ -191,6 +191,10 @@ export interface Employee {
   updatedIn12345?: boolean
   probationCompleted?: boolean
   excludeFromPayroll?: boolean
+  // From worksFromHomeSince (the day it was ticked) on, a working day with no
+  // scans at all is Work From Home; any scan and it is marked from the scans.
+  worksFromHome?: boolean
+  worksFromHomeSince?: string | null
   // Every salary change after the first — each has a promotion letter and a
   // month it counts from (slips for earlier months keep the old amount).
   salaryHistory?: SalaryChange[]

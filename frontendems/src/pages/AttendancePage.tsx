@@ -110,9 +110,12 @@ export default function AttendancePage() {
                 <Card className="flex flex-wrap items-center justify-between gap-4 p-5">
                   <div>
                     <p className="text-xs text-muted-foreground">Viewing attendance for</p>
-                    <h2 className="text-lg font-semibold text-foreground">
-                      {selectedEmployee ? `${selectedEmployee.firstName} ${selectedEmployee.lastName}` : '…'}
-                    </h2>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg font-semibold text-foreground">
+                        {selectedEmployee ? `${selectedEmployee.firstName} ${selectedEmployee.lastName}` : '…'}
+                      </h2>
+                      {selectedEmployee?.worksFromHome && <Badge variant="outline">Works from home</Badge>}
+                    </div>
                   </div>
                   <Button variant="outline" size="sm" onClick={() => navigate(`/employees/${employeeId}`)}>
                     View profile
@@ -128,6 +131,12 @@ export default function AttendancePage() {
       ) : (
         employeeId && (
           <div className="space-y-6">
+            {selectedEmployee?.worksFromHome && (
+              <p className="rounded-xl bg-violet-500/10 px-4 py-3 text-sm text-violet-700">
+                You work from home: a working day with no scans is marked Work From Home. If you scan in, the day is marked from your
+                scans as usual. Apply for leave for any day you're off.
+              </p>
+            )}
             <AttendanceSummaryCard employeeId={employeeId} showViewFullButton={false} />
             <AttendanceCalendar employeeId={employeeId} />
           </div>

@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { CalendarPlus, Eye, Loader2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { useAuth } from '@/hooks/useAuth'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -97,6 +98,7 @@ export function ApplyLeaveDialog() {
   // Only Work From Home and Unpaid Leave span more than one date — every
   // other type is a single date.
   const isRange = applyType === 'W' || isMultipleDays
+  const { user } = useAuth()
   // Sundays take no attendance status — only overtime.
   const sundaysOnly = (() => {
     const last = isRange ? endDate : date
@@ -227,6 +229,12 @@ export function ApplyLeaveDialog() {
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
+            {user?.worksFromHome && (
+              <p className="rounded-lg bg-violet-500/10 px-3 py-2 text-xs font-medium text-violet-700">
+                You work from home by default — a working day with no scans is already marked Work From Home. Apply here only for a day
+                off, a half day or short leave, or overtime.
+              </p>
+            )}
             <div className="grid gap-1.5">
               <Label htmlFor="leaveType">Type</Label>
               <Select value={applyType} onValueChange={(v) => onApplyTypeChange(v as ApplyType)}>

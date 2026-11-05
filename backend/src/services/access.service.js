@@ -68,7 +68,7 @@ async function resolveUser(userId) {
 
   const user = await User.findById(userId)
     .select('username role permissions employeeLink isActive')
-    .populate('employeeLink', 'firstName lastName status isCoordinator')
+    .populate('employeeLink', 'firstName lastName status isCoordinator worksFromHome')
     .lean();
   let value = null;
   if (user && user.isActive) {
@@ -87,6 +87,7 @@ async function resolveUser(userId) {
       postRoles: fromPosts,
       access: [...new Set([...accessForRoles(roles), ...(flagGiver ? [ACCESS.PERFORMANCE_FLAGS_GIVE] : [])])],
       isCoordinator: Boolean(employee?.isCoordinator),
+      worksFromHome: Boolean(employee?.worksFromHome),
       isContentManager,
       employeeLink: employee ? idOf(employee._id) : null,
       displayName: employee ? `${employee.firstName} ${employee.lastName || ''}`.trim() : user.username,

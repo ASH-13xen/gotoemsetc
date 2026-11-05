@@ -265,6 +265,12 @@ const employeeSchema = new Schema(
     // founders, demo/test records) — see employee.repository.js
     // #listPayableForPeriod and salarySlip.service.js#generateSlip.
     excludeFromPayroll: { type: Boolean, default: false },
+    // Works from home by default, from worksFromHomeSince (the day it was
+    // ticked) on: a working day with no scans at all is Work From Home
+    // instead of Absent; any scan and the day is worked out from the scans as
+    // for everyone — see attendanceClassifier.service.js#worksFromHomeOn.
+    worksFromHome: { type: Boolean, default: false },
+    worksFromHomeSince: Date,
 
     status: {
       type: String,

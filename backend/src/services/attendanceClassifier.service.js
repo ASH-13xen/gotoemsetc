@@ -54,6 +54,14 @@ function istDateLabel(date) {
   return new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate()));
 }
 
+// "Works from home" (ticked on their record, from worksFromHomeSince on): a
+// working day with no scans at all is Work From Home instead of Absent. Any
+// scan, and the day is worked out from the scans as for everyone.
+function worksFromHomeOn(employee, dateLabel) {
+  if (!employee?.worksFromHome || !employee.worksFromHomeSince) return false;
+  return dateLabel.getTime() >= new Date(employee.worksFromHomeSince).getTime();
+}
+
 function parseTimeToMinutes(hhmm) {
   const [h, m] = String(hhmm || '09:30').split(':').map(Number);
   return h * 60 + m;
@@ -337,6 +345,18 @@ async function applyHalfDayForEmployee(employeeId, dateLabel) {
   const punches = await devicePunchRepository.listForEmployeeOnDay(employeeId, start, end);
   const result = classifyPunches(punches, employee);
 
+  if (punches.length === 0 && worksFromHomeOn(employee, dateLabel)) {
+    return attendanceRepository.upsertForDate(
+      employeeId,
+      dateLabel,
+      { status: ATTENDANCE_STATUS.WORK_FROM_HOME, earlyDeparture: false, overtimeMinutes: 0, isHalfDayBoost: false },
+      false,
+      true,
+      undefined,
+      true
+    );
+  }
+
   if (result.outcome === 'no-scan') {
     return attendanceRepository.upsertForDate(
       employeeId,
@@ -412,6 +432,18 @@ async function applySlDayForEmployee(employeeId, dateLabel) {
   const { start, end } = istDayBoundsUTC(dateLabel);
   const punches = await devicePunchRepository.listForEmployeeOnDay(employeeId, start, end);
   const result = classifyPunches(punches, employee);
+
+  if (punches.length === 0 && worksFromHomeOn(employee, dateLabel)) {
+    return attendanceRepository.upsertForDate(
+      employeeId,
+      dateLabel,
+      { status: ATTENDANCE_STATUS.WORK_FROM_HOME, earlyDeparture: false, overtimeMinutes: 0, isSlDayBoost: false },
+      false,
+      true,
+      undefined,
+      true
+    );
+  }
 
   if (result.outcome === 'no-scan') {
     return attendanceRepository.upsertForDate(
@@ -664,6 +696,20 @@ async function settleDay(employeeId, dateLabel) {
     }
     // 0/1 scan on a Sunday is unremarkable — no record, no notification,
     // unlike the weekday no-scan/single-scan anomaly cases below.
+    return;
+  }
+
+  // Works from home and no scans at all — a Work From Home day, nobody to alert.
+  if (punches.length === 0 && worksFromHomeOn(employee, dateLabel)) {
+    await attendanceRepository.upsertForDate(
+      employeeId,
+      dateLabel,
+      { status: ATTENDANCE_STATUS.WORK_FROM_HOME, earlyDeparture: false, overtimeMinutes: 0 },
+      false,
+      true,
+      undefined,
+      true
+    );
     return;
   }
 

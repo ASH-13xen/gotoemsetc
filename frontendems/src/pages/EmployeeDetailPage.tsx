@@ -158,6 +158,7 @@ export type FormValues = {
   updatedIn12345: boolean
   probationCompleted: boolean
   excludeFromPayroll: boolean
+  worksFromHome: boolean
   endDate: string
   reasonForLeaving: string
   removedFromGroupsAndReels: boolean
@@ -281,6 +282,7 @@ function toFormValues(employee: Employee): FormValues {
     updatedIn12345: employee.updatedIn12345 ?? false,
     probationCompleted: employee.probationCompleted ?? false,
     excludeFromPayroll: employee.excludeFromPayroll ?? false,
+    worksFromHome: employee.worksFromHome ?? false,
     endDate: toDateInputValue(employee.endDate),
     reasonForLeaving: employee.reasonForLeaving ?? '',
     removedFromGroupsAndReels: employee.removedFromGroupsAndReels ?? false,
@@ -756,6 +758,24 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                     <Input id="workingHoursEnd" type="time" {...register('workingHoursEnd')} />
                   </div>
                 </div>
+                <Controller
+                  control={control}
+                  name="worksFromHome"
+                  render={({ field }) => (
+                    <CheckboxRow
+                      label="Works from home — a working day with no scans is marked Work From Home (any scan, and the day is marked from the scans as usual)"
+                      checked={field.value}
+                      onChange={field.onChange}
+                    />
+                  )}
+                />
+                {employee.worksFromHome && employee.worksFromHomeSince && (
+                  <p className="-mt-2 text-xs text-muted-foreground">
+                    Since{' '}
+                    {new Date(employee.worksFromHomeSince).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}{' '}
+                    — earlier days keep what they have.
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-1.5">
                     <Label htmlFor="dateOfHiring" className="text-xs text-muted-foreground">Date of hiring</Label>

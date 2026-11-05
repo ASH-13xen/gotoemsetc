@@ -194,6 +194,7 @@ const SELF_LOCKED_FIELDS = [
   'salaryComponents',
   'payDate',
   'excludeFromPayroll',
+  'worksFromHome',
   'probationCompleted',
   'status',
   'endDate',
@@ -240,9 +241,19 @@ async function updateEmployee(id, data, actor) {
   }
   // Only a married person has an anniversary.
   if (payload.maritalStatus !== undefined && payload.maritalStatus !== 'married') payload.anniversaryDate = null;
+  // "Works from home" counts from the day it is ticked — earlier days keep
+  // what they have.
+  const worksFromHomeChanged = payload.worksFromHome !== undefined && Boolean(payload.worksFromHome) !== Boolean(existing.worksFromHome);
+  if (worksFromHomeChanged) payload.worksFromHomeSince = payload.worksFromHome ? istToday() : null;
   const employee = await employeeRepository.updateById(id, payload);
   if (!employee) throw ApiError.notFound('Employee not found');
   await activityService.log(employee._id, 'EMPLOYEE_UPDATED', { fields: Object.keys(payload) });
+  if (worksFromHomeChanged) {
+    await activityService.log(employee._id, payload.worksFromHome ? 'WORKS_FROM_HOME_ON' : 'WORKS_FROM_HOME_OFF', {
+      since: payload.worksFromHomeSince ? payload.worksFromHomeSince.toISOString().slice(0, 10) : null,
+      by: actor?.username,
+    });
+  }
   // Someone joining (becoming active) or leaving shows on the CEO's dashboard.
   if (employee.status !== existing.status) {
     if (employee.status === EMPLOYEE_STATUS.ACTIVE && existing.status !== EMPLOYEE_STATUS.OFFBOARDED) await alertLeadership(employee, 'onboarded', actor);
@@ -254,6 +265,12 @@ async function updateEmployee(id, data, actor) {
     await orgChartService.removeEmployeeEverywhere(employee._id);
   }
   return employee;
+}
+
+// Today's date in India, as the UTC-midnight day marker attendance uses.
+function istToday() {
+  const now = new Date(Date.now() + 330 * 60 * 1000);
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
 function assertNotOwnRecord(actor, id, what) {
