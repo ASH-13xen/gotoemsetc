@@ -13,6 +13,8 @@ export const ACTION_KEY = {
   leaveCeo: (id: string) => `leave-ceo:${id}`,
   overtimeCm: (id: string) => `ot-cm:${id}`,
   overtimeHr: (id: string) => `ot-hr:${id}`,
+  // A notice: a day whose scans didn't match the approved request.
+  attendanceMismatch: (id: string) => `att-mismatch:${id}`,
 }
 
 // Leave and overtime — what the pop-up shows.

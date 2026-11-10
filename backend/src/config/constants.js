@@ -151,6 +151,9 @@ module.exports = {
     // on by their content manager, or decided (approved/rejected) at any step.
     ATTENDANCE_REQUEST_FORWARDED: 'attendance_request_forwarded',
     ATTENDANCE_REQUEST_DECIDED: 'attendance_request_decided',
+    // The applicant's approved day was decided by their scans instead (see
+    // attendanceClassifier.service.js#checkRequestDay).
+    ATTENDANCE_REQUEST_SCANS: 'attendance_request_scans',
     // Fired whenever HR (not admin) manually marks/edits an attendance day —
     // carries HR's required reason, notified to admins for oversight. See
     // attendance.service.js#markAttendance.
@@ -797,6 +800,9 @@ module.exports = {
     REPEAT_STOPPED: 'repeat_stopped',
   },
   PAID_LEAVE_COMPENSATION_FROM: '2026-09-01',
+  // Days set by an approved request are checked against their scans from
+  // this day on (attendanceClassifier.service.js#checkRequestDay).
+  REQUEST_SCAN_CHECK_FROM: '2026-11-10',
 
   // ---------------------------------------------------------------------
   // Overtime approval (overtimeRequest.service.js). From this date a day's

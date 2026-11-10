@@ -70,6 +70,10 @@ const attendanceRecordSchema = new Schema(
     // What an approved leave (or a Paid Off) had set on this day before it
     // was declared a holiday — put back if the holiday is removed.
     beforeHoliday: { type: Schema.Types.Mixed, default: undefined },
+    // When a day set by an approved request was checked against its scans
+    // (attendanceClassifier.service.js#checkRequestDay) — once, at the end of
+    // the day, or again if a scan for it arrives late.
+    requestScanCheckedAt: Date,
     // Legacy (own vs awarded paid leave, no longer used).
     paidLeaveAwarded: { type: Boolean, default: false },
     // The person who last changed this day by hand, and the role they acted

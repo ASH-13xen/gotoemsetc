@@ -248,9 +248,9 @@ async function resolveApprovalStage(employeeId) {
 // same 2-day backdating cutoff.
 // What a request asks for, applied exactly as asked: the type is chosen by
 // the employee when applying and nobody changes it afterwards. Unpaid Leave
-// marks its working days Absent, so it shows ahead on their calendar — and
-// if they come in after all, the scans still decide that day
-// (attendanceClassifier.service.js#handlePunchEvent).
+// marks its working days Absent, so it shows ahead on their calendar. Each
+// day is then checked against its scans once it is over: if they came in,
+// the scans decide it (attendanceClassifier.service.js#checkRequestDay).
 // Null for an old free-text request, which carries no type.
 const isTyped = (request) => Boolean(request.requestedStatus || request.requestedEarlyDeparture || request.requestedMultiDayLeave);
 function requestedUpdate(request) {
@@ -601,6 +601,11 @@ async function resolveRequest(id, resolvedByUserId, attendanceUpdate, actor) {
     `Your ${kindOf(request)} was approved`,
     `Your ${kindOf(request)} for ${spanOf(request)} was approved by ${by}.`
   );
+  // Days already over are checked against their scans now; the rest at the
+  // end of each day. Required lazily, as in revokeRequest.
+  if (previousRecordSnapshot?.length) {
+    await require('./attendanceClassifier.service').checkRequestDays(request.employee, previousRecordSnapshot.map((s) => s.date));
+  }
   return resolved;
 }
 

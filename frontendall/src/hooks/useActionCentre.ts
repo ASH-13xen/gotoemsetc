@@ -3,6 +3,8 @@ import { apiClient } from '@/api/client'
 import { listSalaryBatches } from '@/api/salaryApprovals.api'
 import { listFnfForApproval, listFnfForHr } from '@/api/fnf.api'
 import { listEditRequests } from '@/api/attendanceEditRequests.api'
+import { listAttendanceMismatches } from '@/api/attendanceMismatches.api'
+import { MISMATCHES_KEY } from '@/components/attendance/AttendanceMismatchCard'
 import { useAuth } from '@/hooks/useAuth'
 import { useReimbursementsAwaitingCeo } from '@/hooks/useReimbursements'
 import { useOvertimeQueue } from '@/hooks/useOvertimeRequests'
@@ -47,6 +49,7 @@ export function useActionCentreCounts() {
   const overtime = useOvertimeQueue(Boolean(user))
   const cmReviews = useMyPendingCmReviews()
   const bills = usePendingBillReminders()
+  const mismatches = useQuery({ queryKey: MISMATCHES_KEY, queryFn: listAttendanceMismatches, enabled: hr || payout, refetchInterval: 60_000 })
 
   // Every decision-type item as its key, by section.
   const s = salary.data
@@ -85,6 +88,8 @@ export function useActionCentreCounts() {
     overtime: open(keys.overtime),
     leaveReviews: open(keys.leaveReviews),
     bills: bills.data?.reminders.length ?? 0,
+    // Notices — counted until acknowledged, then gone.
+    mismatches: (mismatches.data ?? []).filter((m) => !acked.has(ACTION_KEY.attendanceMismatch(m._id))).length,
   }
   const total = Object.values(counts).reduce((a, b) => a + b, 0)
   const all = Object.values(keys).flat()

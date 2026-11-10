@@ -2,11 +2,13 @@ const employeeRepository = require('../repositories/employee.repository');
 const devicePunchRepository = require('../repositories/devicePunch.repository');
 const attendanceRepository = require('../repositories/attendance.repository');
 const AttendanceRecord = require('../models/AttendanceRecord');
+const AttendanceModificationRequest = require('../models/AttendanceModificationRequest');
+const AttendanceMismatch = require('../models/AttendanceMismatch');
 const holidayRepository = require('../repositories/holiday.repository');
 const notificationService = require('./notification.service');
 const userRepository = require('../repositories/user.repository');
 const { dateKey, isSunday } = require('../utils/attendanceDays');
-const { ATTENDANCE_STATUS, NOTIFICATION_TYPES } = require('../config/constants');
+const { ATTENDANCE_STATUS, NOTIFICATION_TYPES, ATTENDANCE_REQUEST_STATUS, REQUEST_SCAN_CHECK_FROM } = require('../config/constants');
 const logger = require('../utils/logger');
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
@@ -581,28 +583,18 @@ async function handlePunchEvent(employeeId, timestamp) {
   }
 
   const existing = await attendanceRepository.findForDate(employeeId, dateLabel);
-  // An Absent from approved Unpaid Leave gives way if they come in after
-  // all: once the scans make a real day of it, the scans decide it.
-  const leaveAbsence = Boolean(existing && !existing.isAutoMarked && existing.modifiedByRequest && existing.status === ATTENDANCE_STATUS.ABSENT);
-  if (existing && !existing.isAutoMarked && !leaveAbsence) return; // an admin already decided this day — never touch it
+  if (existing && !existing.isAutoMarked) {
+    // A day an approved request set is checked against its scans once it is
+    // over (settleDay, tonight) — or now, for a scan arriving late for a day
+    // already past.
+    if (existing.modifiedByRequest && dateLabel.getTime() < istDateLabel(new Date()).getTime()) {
+      await checkRequestDay(employee, dateLabel, existing, { again: true });
+    }
+    return; // otherwise an admin already decided this day — never touch it
+  }
 
   const { start, end } = istDayBoundsUTC(dateLabel);
   const punches = await devicePunchRepository.listForEmployeeOnDay(employeeId, start, end);
-
-  if (leaveAbsence) {
-    const result = classifyPunches(punches, employee);
-    if (result.outcome !== 'classified') return; // not a real day at work (yet) — the leave stands
-    await attendanceRepository.upsertForDate(
-      employeeId,
-      dateLabel,
-      { status: result.status, earlyDeparture: result.earlyDeparture, overtimeMinutes: result.overtimeMinutes },
-      false,
-      true,
-      false,
-      false
-    );
-    return;
-  }
 
   if (isSunday(dateLabel)) {
     const sundayResult = computeOffDayOvertime(punches);
@@ -651,6 +643,175 @@ async function handlePunchEvent(employeeId, timestamp) {
   );
 }
 
+const STATUS_WORDS = {
+  P: 'Present',
+  L: 'Late',
+  SL: 'Short Leave',
+  H: 'Half Day',
+  W: 'Work From Home',
+  O: 'Paid Off',
+  A: 'Absent',
+  HL: 'Holiday',
+};
+const dayWords = (day) => (day?.status ? `${STATUS_WORDS[day.status] || day.status}${day.earlyDeparture ? ' with early departure' : ''}` : 'no status');
+const timeWords = (date) => new Date(date).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: 'numeric', minute: '2-digit', hour12: true });
+const prettyDay = (date) => new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+// What someone applied for, in words.
+function appliedWords(request) {
+  if (request.requestedMultiDayLeave) return 'Unpaid Leave';
+  if (request.requestedEarlyDeparture) return 'Short Leave (evening, leaving early)';
+  if (request.requestedStatus === ATTENDANCE_STATUS.SHORT_LEAVE) return 'Short Leave (morning)';
+  if (request.requestedStatus === ATTENDANCE_STATUS.HALF_DAY) {
+    return `Half Day (${request.requestedHalfDayPeriod === 'second_half' ? 'second' : 'first'} half)`;
+  }
+  return STATUS_WORDS[request.requestedStatus] || 'a change';
+}
+
+// A day set by an approved request, checked against that day's scans (from
+// REQUEST_SCAN_CHECK_FROM on). When the scans make a real day of it — any
+// classified day, or a first scan after 2pm — the scans decide it, whether
+// that is better or worse than what was approved. A part-day request (Short
+// Leave, leaving early, Late, Half Day) whose scans can't make a day of it —
+// none, one, or a pattern no rule fits — is Absent until HR or the CEO
+// decides. A full-day request (Work From Home, Paid Off, Unpaid Leave) with
+// no scans is as expected; with one scan or an odd pattern it is kept as
+// approved for them to check. The employee is told whenever their day
+// changes, and HR and the CEO see every case in the Action centre. A
+// correction to Present (or an older free-text request) exists to override
+// the scans and is left alone, as is a part-day request with no scans for
+// someone who works from home. Once per day, unless a scan for it arrives
+// late (`again`).
+async function checkRequestDay(employee, dateLabel, existing, { again = false } = {}) {
+  if (dateLabel.getTime() < new Date(`${REQUEST_SCAN_CHECK_FROM}T00:00:00.000Z`).getTime()) return;
+  if (!existing?.modifiedByRequest || existing.isAutoMarked) return;
+  if (existing.requestScanCheckedAt && !again) return;
+  const checked = () => AttendanceRecord.updateOne({ _id: existing._id }, { requestScanCheckedAt: new Date() });
+
+  const request = await AttendanceModificationRequest.findOne({
+    employee: employee._id,
+    status: ATTENDANCE_REQUEST_STATUS.RESOLVED,
+    date: { $lte: dateLabel },
+    $or: [{ endDate: { $gte: dateLabel } }, { endDate: null, date: dateLabel }],
+  }).sort({ resolvedAt: -1 });
+  const isCorrection =
+    !request ||
+    request.requestedStatus === ATTENDANCE_STATUS.PRESENT ||
+    !(request.requestedStatus || request.requestedEarlyDeparture || request.requestedMultiDayLeave);
+  if (isCorrection) return checked();
+
+  // A part-day request (Short Leave, leaving early, Late, Half Day) means
+  // they were to come in for the rest of the day.
+  const partDay =
+    Boolean(request.requestedEarlyDeparture) ||
+    [ATTENDANCE_STATUS.SHORT_LEAVE, ATTENDANCE_STATUS.LATE, ATTENDANCE_STATUS.HALF_DAY].includes(request.requestedStatus);
+
+  const { start, end } = istDayBoundsUTC(dateLabel);
+  const punches = await devicePunchRepository.listForEmployeeOnDay(employee._id, start, end);
+  const real = nonNightPunches(punches);
+  // No scans at all is what a leave looks like, and a normal day for someone
+  // who works from home — for anyone else on a part-day request it is a fault.
+  if (real.length === 0 && (!partDay || worksFromHomeOn(employee, dateLabel))) return checked();
+
+  const result = classifyPunches(punches, employee);
+  const valid = validPunches(punches);
+  let scanDay = null;
+  // A part-day request whose scans can't make a day of it (none, one, or a
+  // pattern no rule fits) is Absent until HR or the CEO decides.
+  let untilChecked = false;
+  let scans;
+  let yourScans;
+  if (result.outcome === 'classified') {
+    scanDay = { status: result.status, earlyDeparture: result.earlyDeparture, overtimeMinutes: result.overtimeMinutes };
+    const span = `${timeWords(valid[0].timestamp)} – ${timeWords(valid[valid.length - 1].timestamp)}`;
+    scans = `scans show ${span}`;
+    yourScans = `your scans show ${span}`;
+  } else if (result.outcome === 'late-absent') {
+    scanDay = { status: ATTENDANCE_STATUS.ABSENT, earlyDeparture: false, overtimeMinutes: 0 };
+    scans = `the first scan was at ${timeWords(real[0].timestamp)}, after 2 pm`;
+    yourScans = `your first scan was at ${timeWords(real[0].timestamp)}, after 2 pm`;
+  } else {
+    if (real.length === 0) scans = 'there are no scans for that day';
+    else if (real.length === 1) scans = `there was only one scan, at ${timeWords(real[0].timestamp)}`;
+    else scans = `the scans (${real.map((p) => timeWords(p.timestamp)).join(', ')}) fit no rule`;
+    yourScans = scans.replace(/^the scans/, 'your scans');
+    if (partDay) {
+      scanDay = { status: ATTENDANCE_STATUS.ABSENT, earlyDeparture: false, overtimeMinutes: 0 };
+      untilChecked = true;
+    }
+  }
+
+  const name = `${employee.firstName} ${employee.lastName || ''}`.trim();
+  const applied = appliedWords(request);
+  const before = { status: existing.status, earlyDeparture: Boolean(existing.earlyDeparture) };
+  const record = (fields) =>
+    AttendanceMismatch.findOneAndUpdate(
+      { employee: employee._id, date: dateLabel },
+      { $set: { request: request._id, applied, scans, before, ...fields } },
+      { upsert: true, returnDocument: 'after' }
+    );
+
+  if (!scanDay) {
+    await record({ outcome: 'unclear', after: before, message: `${name} — ${prettyDay(dateLabel)}: applied for ${applied}, but ${scans}. Kept as ${dayWords(before)} — please check.` });
+    return checked();
+  }
+  if (scanDay.status === before.status && Boolean(scanDay.earlyDeparture) === before.earlyDeparture) return checked();
+
+  // The scans decide the day — or, for a part-day request they can't make a
+  // day of, it is Absent until HR or the CEO decides (by setting the day by
+  // hand, which then stands).
+  const after = { status: scanDay.status, earlyDeparture: Boolean(scanDay.earlyDeparture) };
+  const day = prettyDay(dateLabel);
+  await attendanceRepository.upsertForDate(
+    employee._id,
+    dateLabel,
+    {
+      ...scanDay,
+      notes: untilChecked
+        ? `Applied for ${applied}, but ${scans} — marked Absent until HR or the CEO checks it.`
+        : `Applied for ${applied}, but ${scans} — marked ${dayWords(after)} by the scans.`,
+    },
+    false,
+    true,
+    false,
+    true
+  );
+  await AttendanceRecord.updateOne({ employee: employee._id, date: dateLabel }, { requestScanCheckedAt: new Date() });
+  await record(
+    untilChecked
+      ? { outcome: 'unclear', after, message: `${name} — ${day}: applied for ${applied}, but ${scans} — marked Absent until checked. Please check.` }
+      : { outcome: 'changed', after, message: `${name} — ${day}: applied for ${applied}, but ${scans} — marked ${dayWords(after)}.` }
+  );
+  const user = await userRepository.findByEmployeeId(employee._id);
+  if (user) {
+    await notificationService.createForUsers([user._id], {
+      type: NOTIFICATION_TYPES.ATTENDANCE_REQUEST_SCANS,
+      title: untilChecked ? `${day} is marked Absent for now` : `${day} is marked ${dayWords(after)}`,
+      message: untilChecked
+        ? `You applied for ${applied} on ${day}, but ${yourScans} — the day is marked Absent until HR reviews it.`
+        : `You applied for ${applied} on ${day}, but ${yourScans} — so the day is marked ${dayWords(after)} by the scans.`,
+      employee: employee._id,
+    });
+  }
+}
+
+// Checks the days of an approved request that are already over against
+// their scans (attendanceRequest.service.js#resolveRequest) — later days are
+// checked at the end of each day by settleDay.
+async function checkRequestDays(employeeId, dates) {
+  const employee = await employeeRepository.findById(String(employeeId));
+  if (!employee) return;
+  const today = istDateLabel(new Date());
+  for (const date of dates) {
+    const day = new Date(date);
+    if (day.getTime() >= today.getTime()) continue;
+    // eslint-disable-next-line no-await-in-loop
+    const existing = await attendanceRepository.findForDate(employee._id, day);
+    // eslint-disable-next-line no-await-in-loop
+    if (existing?.modifiedByRequest && !existing.isAutoMarked) await checkRequestDay(employee, day, existing);
+  }
+}
+
 // Finalizes a day: re-derives the result fresh (so it can never disagree
 // with what handlePunchEvent would have written) and either confirms the
 // classified record as settled, or fires the one-time anomaly notification
@@ -661,7 +822,11 @@ async function settleDay(employeeId, dateLabel) {
   if (!employee) return;
 
   const existing = await attendanceRepository.findForDate(employeeId, dateLabel);
-  if (existing && !existing.isAutoMarked) return;
+  if (existing && !existing.isAutoMarked) {
+    // A day set by an approved request is checked against its scans.
+    if (existing.modifiedByRequest) await checkRequestDay(employee, dateLabel, existing);
+    return;
+  }
   if (existing && existing.isSettled) return;
 
   const offDayType = await offDayTypeForLabel(dateLabel);
@@ -869,6 +1034,7 @@ module.exports = {
   scanCategories,
   handlePunchEvent,
   settleDay,
+  checkRequestDays,
   runNightlyBackstop,
   classifyPunches,
   computeOffDayOvertime,

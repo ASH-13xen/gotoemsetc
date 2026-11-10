@@ -10,6 +10,7 @@ import { FnfCards } from '@/components/finance/FnfCards'
 import { ReimbursementApprovalsCard } from '@/components/reimbursements/ReimbursementApprovalsCard'
 import { OvertimeApprovalsCard } from '@/components/attendance/OvertimeApprovalsCard'
 import { AttendanceChangeRequestsCard } from '@/components/attendance/AttendanceChangeRequestsCard'
+import { AttendanceMismatchCard } from '@/components/attendance/AttendanceMismatchCard'
 import { CmLeaveReviews } from '@/components/attendance/CmLeaveReviews'
 import { CeoLeaveQueue, HrLeaveQueue } from '@/components/attendance/LeaveStageQueues'
 import { BillReminders } from '@/components/finance/BillReminders'
@@ -86,6 +87,7 @@ export function ActionCentre() {
                 <FnfCards />
                 <ReimbursementApprovalsCard />
                 <AttendanceChangeRequestsCard />
+                <AttendanceMismatchCard />
                 <BillReminders />
               </div>
             </AckScope>
