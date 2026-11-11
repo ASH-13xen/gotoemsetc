@@ -142,17 +142,27 @@ function classifyPunches(punches, employee) {
   // First punch is before 2pm, so it survives the midday-dead-zone filter
   // too — valid.length is guaranteed >= 1 here.
   const valid = validPunches(punches);
-  if (valid.length === 1) return { outcome: 'single-scan' };
-
   const { graceCutoff, lateCutoff, shiftEnd, morningOtCutoff, eveningOtCutoff } = employeeBoundaries(employee);
   const arrivalMinutes = istMinutesOfDay(valid[0].timestamp);
-  const departureMinutes = istMinutesOfDay(valid[valid.length - 1].timestamp);
 
   let status;
   if (arrivalMinutes <= graceCutoff) status = ATTENDANCE_STATUS.PRESENT;
   else if (arrivalMinutes <= lateCutoff) status = ATTENDANCE_STATUS.LATE;
   else if (arrivalMinutes < HALF_DAY_ARRIVAL_START) status = ATTENDANCE_STATUS.SHORT_LEAVE;
   else status = ATTENDANCE_STATUS.HALF_DAY; // arrivalMinutes <= HALF_DAY_ARRIVAL_END, guaranteed by the 2pm gate above
+
+  // Leaving in the afternoon: the day's last scan falls from 2:00 to 4:29pm
+  // with nothing after it — they left in the second half, a Half Day. That
+  // window is otherwise ignored (lunch-break scans), and still is whenever a
+  // later scan follows. `arrivalStatus` is how they arrived, for a company
+  // Half Day / SL Day, which forgive by arrival.
+  const lastMinutes = Math.max(...early.map((p) => istMinutesOfDay(p.timestamp)));
+  if (lastMinutes >= MIDDAY_DEAD_ZONE_START && lastMinutes <= MIDDAY_DEAD_ZONE_END) {
+    return { outcome: 'classified', status: ATTENDANCE_STATUS.HALF_DAY, earlyDeparture: false, overtimeMinutes: 0, arrivalStatus: status, leftInAfternoon: true };
+  }
+
+  if (valid.length === 1) return { outcome: 'single-scan' };
+  const departureMinutes = istMinutesOfDay(valid[valid.length - 1].timestamp);
 
   // Morning overtime is independent of the arrival-side status above (an
   // early arrival is still worth crediting even on a day that separately
@@ -173,7 +183,7 @@ function classifyPunches(punches, employee) {
   // else: within [shiftEnd, eveningOtCutoff] — normal, no penalty, no overtime.
 
   if (!departureOk) return { outcome: 'unclassified' };
-  return { outcome: 'classified', status, earlyDeparture, overtimeMinutes: morningOt + eveningOt };
+  return { outcome: 'classified', status, earlyDeparture, overtimeMinutes: morningOt + eveningOt, arrivalStatus: status };
 }
 
 // Sundays and Holidays don't use the weekday arrival/departure windows at
@@ -387,7 +397,7 @@ async function applyHalfDayForEmployee(employeeId, dateLabel) {
   }
 
   if (result.outcome === 'classified') {
-    const withinGrace = result.status === ATTENDANCE_STATUS.PRESENT;
+    const withinGrace = (result.arrivalStatus || result.status) === ATTENDANCE_STATUS.PRESENT;
     return attendanceRepository.upsertForDate(
       employeeId,
       dateLabel,
@@ -475,7 +485,7 @@ async function applySlDayForEmployee(employeeId, dateLabel) {
   }
 
   if (result.outcome === 'classified') {
-    const forgiven = result.status !== ATTENDANCE_STATUS.HALF_DAY;
+    const forgiven = (result.arrivalStatus || result.status) !== ATTENDANCE_STATUS.HALF_DAY;
     return attendanceRepository.upsertForDate(
       employeeId,
       dateLabel,
@@ -714,7 +724,6 @@ async function checkRequestDay(employee, dateLabel, existing, { again = false } 
   if (real.length === 0 && (!partDay || worksFromHomeOn(employee, dateLabel))) return checked();
 
   const result = classifyPunches(punches, employee);
-  const valid = validPunches(punches);
   let scanDay = null;
   // A part-day request whose scans can't make a day of it (none, one, or a
   // pattern no rule fits) is Absent until HR or the CEO decides.
@@ -723,7 +732,7 @@ async function checkRequestDay(employee, dateLabel, existing, { again = false } 
   let yourScans;
   if (result.outcome === 'classified') {
     scanDay = { status: result.status, earlyDeparture: result.earlyDeparture, overtimeMinutes: result.overtimeMinutes };
-    const span = `${timeWords(valid[0].timestamp)} – ${timeWords(valid[valid.length - 1].timestamp)}`;
+    const span = `${timeWords(real[0].timestamp)} – ${timeWords(real[real.length - 1].timestamp)}`;
     scans = `scans show ${span}`;
     yourScans = `your scans show ${span}`;
   } else if (result.outcome === 'late-absent') {
@@ -1018,7 +1027,12 @@ function scanCategories(punches, employee) {
     categories.set(arrival._id.toString(), SCAN_CATEGORY.LATE);
   }
 
-  if (valid.length > 1) {
+  // Left in the afternoon (classifyPunches): the last scan, 2:00–4:29pm.
+  const last = early[early.length - 1];
+  const lastMinutes = istMinutesOfDay(last.timestamp);
+  if (last !== arrival && lastMinutes >= MIDDAY_DEAD_ZONE_START && lastMinutes <= MIDDAY_DEAD_ZONE_END) {
+    categories.set(last._id.toString(), SCAN_CATEGORY.HALF_DAY);
+  } else if (valid.length > 1) {
     const departure = valid[valid.length - 1];
     const departureMinutes = istMinutesOfDay(departure.timestamp);
     if (departureMinutes < MIDDAY_DEAD_ZONE_START) {
