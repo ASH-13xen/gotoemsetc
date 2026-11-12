@@ -12,6 +12,8 @@ import { cn } from '@/lib/utils'
 import { DEVICES_KEY } from './DeviceDialogs'
 import {
   FLAG_LABEL,
+  GENUINE_LABEL,
+  GENUINE_PARTS,
   GRADE_LABEL,
   ISSUE_LABEL,
   PARTS,
@@ -109,6 +111,20 @@ export function CheckView({ check, kind }: { check: DeviceCheck; kind: DeviceKin
           ) : null
         )}
       </div>
+      {Object.keys(check.genuine ?? {}).length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {GENUINE_PARTS.map((p) =>
+            check.genuine?.[p.key] ? (
+              <span
+                key={p.key}
+                className={cn('rounded px-1.5 py-0.5 text-[11px]', check.genuine[p.key] === 'unknown' ? 'bg-destructive/10 text-destructive' : 'bg-secondary text-muted-foreground')}
+              >
+                {p.label}: {GENUINE_LABEL[check.genuine[p.key]]}
+              </span>
+            ) : null
+          )}
+        </div>
+      )}
       {check.remarks && <p className="text-xs text-muted-foreground">“{check.remarks}”</p>}
       {(check.photos ?? []).length > 0 && (
         <div className="flex flex-wrap gap-2">

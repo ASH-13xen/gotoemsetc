@@ -14,6 +14,8 @@ import { listClients } from '@/api/clients.api'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import {
+  GENUINE_LABEL,
+  GENUINE_PARTS,
   GRADE_LABEL,
   ISSUE_LABEL,
   acceptDevice,
@@ -25,6 +27,7 @@ import {
   reportDeviceIssue,
   sendMonthlyCheck,
   type CheckInput,
+  type GenuineState,
   type Grade,
   type MyDevice,
   type MyDevices,
@@ -38,6 +41,7 @@ import {
 
 const KEY = ['my-devices']
 const fmt = (d?: string) => (d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '')
+const nextMonth = () => new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString('en-IN', { month: 'long' })
 const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`
 
 async function openFile(id: string) {
@@ -66,11 +70,13 @@ function CheckDialog({ device, apps, onClose }: { device: MyDevice; apps: MyDevi
     set({ apps: [...value.apps.filter((a) => a.key !== key), next] })
   }
   const phone = device.kind === 'phone' || device.kind === 'tablet'
+  const iphone = device.os === 'ios'
   const missing = [
     !value.grade && 'the overall condition',
     device.parts.some((p) => !value.parts[p.key]) && 'every part',
     value.storageFreeGb === undefined || value.storageFreeGb === '' ? 'the free storage' : null,
     device.securityItems.some((s) => value.security[s.key] === undefined) && 'every security setting',
+    iphone && GENUINE_PARTS.some((p) => !value.genuine?.[p.key]) && 'the Parts and Service History',
     photos.length < 2 && 'at least 2 photos (front and back)',
   ].filter(Boolean) as string[]
   const send = useMutation({
@@ -128,6 +134,31 @@ function CheckDialog({ device, apps, onClose }: { device: MyDevice; apps: MyDevi
               </div>
             ))}
           </div>
+          {iphone && (
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">Parts and Service History — Settings → General → About (a part never replaced is not listed)</Label>
+              {GENUINE_PARTS.map((part) => (
+                <div key={part.key} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-secondary/30 px-3 py-1.5">
+                  <span className="text-sm">{part.label}</span>
+                  <div className="flex gap-1">
+                    {(Object.keys(GENUINE_LABEL) as GenuineState[]).map((state) => (
+                      <button
+                        key={state}
+                        type="button"
+                        onClick={() => set({ genuine: { ...value.genuine, [part.key]: state } })}
+                        className={cn(
+                          'rounded-md px-2 py-0.5 text-[11px] font-semibold',
+                          value.genuine?.[part.key] === state ? (state === 'unknown' ? STATE_STYLE.damaged : STATE_STYLE.ok) : 'text-muted-foreground hover:bg-secondary'
+                        )}
+                      >
+                        {GENUINE_LABEL[state]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-3">
             <div className="grid gap-1.5">
               <Label className="text-xs text-muted-foreground">Storage total (GB)</Label>
@@ -143,7 +174,8 @@ function CheckDialog({ device, apps, onClose }: { device: MyDevice; apps: MyDevi
             </div>
           </div>
           <p className="-mt-3 text-[11px] text-muted-foreground">
-            iPhone: Settings → General → iPhone Storage, and Settings → Battery → Battery Health. Android: Settings → Storage, and Settings → Battery.
+            iPhone: Capacity and Available are in Settings → General → About; battery health is Settings → Battery → Battery Health (Maximum Capacity).
+            Android: Settings → Storage, and Settings → Battery.
           </p>
           <div className="grid gap-1.5">
             <Label className="text-xs text-muted-foreground">Security settings</Label>
@@ -460,9 +492,9 @@ function DeviceRow({ device, data, onCheck, onIssue }: { device: MyDevice; data:
   const c = device.monthCheck
   return (
     <div className="grid min-w-0 grid-cols-1 gap-2 rounded-xl bg-secondary/30 p-3">
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">
+          <p className="text-sm font-semibold break-words text-foreground">
             {device.code} · {deviceName(device)}
           </p>
           <p className="text-xs text-muted-foreground">
@@ -471,7 +503,9 @@ function DeviceRow({ device, data, onCheck, onIssue }: { device: MyDevice; data:
           </p>
         </div>
         <span className="shrink-0">
-        {!c || c.status === 'rejected' ? (
+        {!c && device.newThisMonth ? (
+          <Badge variant="secondary">First check in {nextMonth()}</Badge>
+        ) : !c || c.status === 'rejected' ? (
           device.checkOverdue ? (
             <Badge variant="destructive">Check overdue</Badge>
           ) : (
@@ -499,7 +533,7 @@ function DeviceRow({ device, data, onCheck, onIssue }: { device: MyDevice; data:
         </p>
       ))}
       <div className="flex flex-wrap gap-2">
-        {(!c || c.status === 'rejected') && (
+        {((!c && !device.newThisMonth) || c?.status === 'rejected') && (
           <Button size="sm" className="h-8" onClick={onCheck}>
             Do this month's check
           </Button>

@@ -19,6 +19,7 @@ import { STATUS_VARIANT } from '@/components/devices/DeviceRegister'
 import { CheckView, RunbookCard } from '@/components/devices/DeviceQueues'
 import {
   ACCOUNT_LABEL,
+  GENUINE_PARTS,
   GRADE_LABEL,
   ISSUE_LABEL,
   KIND_LABEL,
@@ -298,6 +299,10 @@ export default function DeviceDetailPage() {
             <Fact label="Colour" value={device.color} />
             <Fact label="IMEI" value={[device.imei1, device.imei2].filter(Boolean).join(' / ')} />
             <Fact label="Serial number" value={device.serialNumber} />
+            {device.modelNumber && <Fact label="Model number" value={device.modelNumber} />}
+            {device.meid && <Fact label="MEID" value={device.meid} />}
+            {device.iccid && <Fact label="ICCID (SIM card)" value={device.iccid} />}
+            {device.eid && <Fact label="EID (eSIM)" value={device.eid} />}
             <Fact label="Storage" value={device.storageGb ? `${device.storageGb} GB` : undefined} />
             <Fact label="SIM" value={[device.simProvider, device.simNumber].filter(Boolean).join(' · ')} />
             <Fact label="Bought" value={device.purchaseDate ? `${fmt(device.purchaseDate)}${device.vendor ? ` from ${device.vendor}` : ''}` : device.vendor} />
@@ -317,6 +322,11 @@ export default function DeviceDetailPage() {
           {(device.condition?.damaged?.length ?? 0) > 0 && (
             <p className="text-xs text-destructive">Damaged or missing: {device.condition!.damaged!.map((k) => partLabel(device.kind, k)).join(', ')}</p>
           )}
+          {(device.condition?.unknownParts?.length ?? 0) > 0 && (
+            <p className="text-xs text-destructive">
+              Not genuine ("Unknown part"): {device.condition!.unknownParts!.map((k) => GENUINE_PARTS.find((p) => p.key === k)?.label ?? k).join(', ')}
+            </p>
+          )}
           {(device.condition?.securityOff?.length ?? 0) > 0 && <p className="text-xs text-destructive">Security off: {device.condition!.securityOff!.map(securityLabel).join(', ')}</p>}
           {(device.condition?.appsMissing?.length ?? 0) > 0 && (
             <p className="text-xs text-amber-700">Not installed or signed in: {device.condition!.appsMissing!.map((k) => appLabel(apps, k)).join(', ')}</p>
@@ -327,7 +337,7 @@ export default function DeviceDetailPage() {
           {!accounts.length ? (
             <p className="text-xs text-muted-foreground">None recorded — add its Apple ID / Gmail under Devices → Accounts.</p>
           ) : (
-            <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5">
               {accounts.map((a) => (
                 <div key={a._id} className="flex items-center justify-between gap-2 rounded-lg bg-secondary/30 px-3 py-1.5 text-sm">
                   <span className="min-w-0 truncate">
@@ -469,7 +479,7 @@ export default function DeviceDetailPage() {
             {!footage.length ? (
               <p className="text-xs text-muted-foreground">None logged.</p>
             ) : (
-              <div className="grid gap-1.5">
+              <div className="grid grid-cols-1 gap-1.5">
                 {footage.map((f) => (
                   <div key={f._id} className="flex items-center justify-between gap-2 rounded-lg bg-secondary/30 px-3 py-1.5 text-sm">
                     <span className="min-w-0 truncate">

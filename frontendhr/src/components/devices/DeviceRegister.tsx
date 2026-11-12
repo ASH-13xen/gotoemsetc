@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, BatteryLow, HardDrive, Plus, Search, ShieldOff, Smartphone } from 'lucide-react'
+import { AlertCircle, AlertTriangle, BatteryLow, HardDrive, Plus, Search, ShieldOff, Smartphone } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { cn } from '@/lib/utils'
 import { DEVICES_KEY, DeviceFormDialog } from './DeviceDialogs'
 import {
+  GENUINE_PARTS,
   KIND_LABEL,
   STATUS_LABEL,
   appLabel,
@@ -42,6 +43,8 @@ export function DeviceFlags({ device, settings }: { device: Device; settings?: P
   const lowBattery = settings?.lowBatteryPct ?? 80
   const items: { icon: React.ReactNode; title: string }[] = []
   if (c?.damaged?.length) items.push({ icon: <AlertTriangle className="size-3.5 text-destructive" />, title: `Damaged: ${c.damaged.map((k) => partLabel(device.kind, k)).join(', ')}` })
+  if (c?.unknownParts?.length)
+    items.push({ icon: <AlertCircle className="size-3.5 text-destructive" />, title: `Unknown (non-genuine) part: ${c.unknownParts.map((k) => GENUINE_PARTS.find((p) => p.key === k)?.label ?? k).join(', ')}` })
   if (c?.securityOff?.length) items.push({ icon: <ShieldOff className="size-3.5 text-destructive" />, title: `Security off: ${c.securityOff.map(securityLabel).join(', ')}` })
   if (c?.storageFreePct != null && c.storageFreePct < lowStorage) items.push({ icon: <HardDrive className="size-3.5 text-amber-600" />, title: `${c.storageFreePct}% storage free` })
   if (c?.batteryHealth != null && c.batteryHealth < lowBattery) items.push({ icon: <BatteryLow className="size-3.5 text-amber-600" />, title: `Battery ${c.batteryHealth}%` })
@@ -177,6 +180,8 @@ export function RegisterTab({ summary }: { summary?: Summary }) {
                         <Badge variant="success">Verified</Badge>
                       ) : d.monthCheck === 'submitted' ? (
                         <Badge variant="warning">To verify</Badge>
+                      ) : d.newThisMonth ? (
+                        <Badge variant="outline">New — first check next month</Badge>
                       ) : d.checkOverdue ? (
                         <Badge variant="destructive">Overdue</Badge>
                       ) : (

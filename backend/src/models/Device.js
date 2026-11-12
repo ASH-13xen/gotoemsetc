@@ -12,11 +12,16 @@ const deviceSchema = new Schema(
     kind: { type: String, enum: Object.values(DEVICE_KIND), required: true },
     brand: { type: String, trim: true },
     model: { type: String, trim: true },
+    // As an iPhone shows them in Settings → General → About (Android: About phone).
+    modelNumber: { type: String, trim: true },
     os: { type: String, enum: [...DEVICE_OS, null], default: null },
     osVersion: { type: String, trim: true },
     color: { type: String, trim: true },
     imei1: { type: String, trim: true },
     imei2: { type: String, trim: true },
+    meid: { type: String, trim: true },
+    iccid: { type: String, trim: true }, // the SIM card's number
+    eid: { type: String, trim: true }, // the eSIM's number
     serialNumber: { type: String, trim: true },
     storageGb: Number,
     simNumber: { type: String, trim: true },
@@ -43,6 +48,7 @@ const deviceSchema = new Schema(
       damaged: [String], // part keys rated damaged or missing
       securityOff: [String], // security item keys not on
       appsMissing: [String], // required app keys not installed / logged in
+      unknownParts: [String], // iPhone parts shown as "Unknown Part"
       at: Date,
     },
     // Each app's state on this device, as last checked.

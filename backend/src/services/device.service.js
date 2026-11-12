@@ -30,6 +30,8 @@ const {
   GRADES,
   GRADE_LABEL,
   PART_STATES,
+  GENUINE_PARTS,
+  GENUINE_STATES,
   PARTS,
   securityItemsFor,
   DEFAULT_APPS,
@@ -114,6 +116,8 @@ function flagsFor(check, kind, settings) {
     if (required.some((k) => !byKey.get(k)?.installed || !byKey.get(k)?.loggedIn)) flags.push('apps_missing');
   }
   if (check.grade === 'D') flags.push('needs_repair');
+  const genuine = check.genuine instanceof Map ? Object.fromEntries(check.genuine) : check.genuine || {};
+  if (Object.values(genuine).includes('unknown')) flags.push('unknown_part');
   return flags;
 }
 
@@ -121,6 +125,7 @@ function flagsFor(check, kind, settings) {
 async function applyCheckToDevice(device, check, settings) {
   const parts = check.parts instanceof Map ? Object.fromEntries(check.parts) : check.parts || {};
   const security = check.security instanceof Map ? Object.fromEntries(check.security) : check.security || {};
+  const genuine = check.genuine instanceof Map ? Object.fromEntries(check.genuine) : check.genuine || {};
   const total = Number(check.storageTotalGb);
   const free = Number(check.storageFreeGb);
   const required = settings.apps.filter((a) => a.required).map((a) => a.key);
@@ -133,6 +138,7 @@ async function applyCheckToDevice(device, check, settings) {
     damaged: Object.entries(parts).filter(([, s]) => s === 'damaged' || s === 'missing').map(([k]) => k),
     securityOff: securityItemsFor(device.kind).filter((s) => security[s.key] === false).map((s) => s.key),
     appsMissing: device.kind === 'phone' || device.kind === 'tablet' ? required.filter((k) => !byKey.get(k)?.installed || !byKey.get(k)?.loggedIn) : [],
+    unknownParts: Object.entries(genuine).filter(([, s]) => s === 'unknown').map(([k]) => k),
     at: check.createdAt || new Date(),
   };
   if (check.apps?.length) device.apps = check.apps;
@@ -150,6 +156,14 @@ function checkFields(device, input = {}) {
   for (const item of securityItemsFor(device.kind)) {
     if (typeof input.security?.[item.key] === 'boolean') security[item.key] = input.security[item.key];
   }
+  // Only an iPhone shows which parts are genuine.
+  const genuine = {};
+  if (device.os === 'ios') {
+    for (const part of GENUINE_PARTS) {
+      const state = input.genuine?.[part.key];
+      if (GENUINE_STATES.includes(state)) genuine[part.key] = state;
+    }
+  }
   const apps = Array.isArray(input.apps)
     ? input.apps
         .filter((a) => a && typeof a.key === 'string')
@@ -162,6 +176,7 @@ function checkFields(device, input = {}) {
     storageFreeGb: num(input.storageFreeGb),
     batteryHealth: num(input.batteryHealth),
     security,
+    genuine,
     apps,
     galleryBackedUp: typeof input.galleryBackedUp === 'boolean' ? input.galleryBackedUp : undefined,
     remarks: input.remarks ? String(input.remarks).slice(0, 2000) : undefined,
@@ -211,6 +226,16 @@ async function accessoryStock() {
   return accessories.map((a) => ({ ...a, out: out.get(String(a._id)) || 0, inStock: Math.max(0, (a.totalQty || 0) - (out.get(String(a._id)) || 0)) }));
 }
 
+// A device handed over this month already had its condition recorded at
+// the handover: its first monthly check is next month's.
+async function handedOverThisMonth(devices) {
+  const ids = devices.map((d) => d.assignment).filter(Boolean);
+  if (!ids.length) return new Set();
+  const month = monthKey();
+  const active = await DeviceAssignment.find({ _id: { $in: ids } }).select('device assignedAt').lean();
+  return new Set(active.filter((a) => monthKey(a.assignedAt) === month).map((a) => String(a.device)));
+}
+
 // This month's check per device: the latest that isn't rejected.
 async function monthChecks(deviceIds) {
   const checks = await DeviceCheck.find({ device: { $in: deviceIds }, kind: CHECK_KIND.MONTHLY, month: monthKey(), status: { $ne: CHECK_STATUS.REJECTED } })
@@ -225,17 +250,19 @@ async function list({ status, kind, q } = {}) {
   if (kind) filter.kind = kind;
   if (q) {
     const re = new RegExp(String(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    filter.$or = [{ code: re }, { brand: re }, { model: re }, { imei1: re }, { imei2: re }, { serialNumber: re }, { simNumber: re }];
+    filter.$or = [{ code: re }, { brand: re }, { model: re }, { imei1: re }, { imei2: re }, { serialNumber: re }, { simNumber: re }, { modelNumber: re }, { iccid: re }, { eid: re }, { meid: re }];
   }
   const [devices, settings] = await Promise.all([Device.find(filter).populate(HOLDER_POPULATE).sort({ code: 1 }).lean(), getSettings()]);
-  const checks = await monthChecks(devices.map((d) => d._id));
+  const [checks, fresh] = await Promise.all([monthChecks(devices.map((d) => d._id)), handedOverThisMonth(devices)]);
   const pastDue = istDay() > settings.checkDueDay;
   return devices.map((d) => {
     const check = checks.get(String(d._id));
+    const newThisMonth = d.status === DEVICE_STATUS.ASSIGNED && fresh.has(String(d._id));
     return {
       ...d,
       monthCheck: check ? check.status : null,
-      checkOverdue: d.status === DEVICE_STATUS.ASSIGNED && !check && pastDue,
+      newThisMonth,
+      checkOverdue: d.status === DEVICE_STATUS.ASSIGNED && !check && !newThisMonth && pastDue,
     };
   });
 }
@@ -272,7 +299,7 @@ async function summary() {
   };
 }
 
-const EDITABLE = ['brand', 'model', 'os', 'osVersion', 'color', 'imei1', 'imei2', 'serialNumber', 'storageGb', 'simNumber', 'simProvider', 'purchaseDate', 'purchasePrice', 'recoveryValue', 'vendor', 'warrantyUntil', 'notes'];
+const EDITABLE = ['brand', 'model', 'modelNumber', 'os', 'osVersion', 'color', 'imei1', 'imei2', 'meid', 'iccid', 'eid', 'serialNumber', 'storageGb', 'simNumber', 'simProvider', 'purchaseDate', 'purchasePrice', 'recoveryValue', 'vendor', 'warrantyUntil', 'notes'];
 function editable(data) {
   const out = {};
   for (const key of EDITABLE) {
@@ -330,7 +357,7 @@ async function detail(id) {
     DeviceCheck.find({ device: id }).sort({ createdAt: -1 }).limit(60).populate('employee', 'firstName lastName').populate('by reviewedBy', 'username').lean(),
     DeviceIssue.find({ device: id }).sort({ createdAt: -1 }).populate('employee', 'firstName lastName').lean(),
     DeviceAccount.find({ devices: id }).lean(),
-    DeviceRunbook.find({ device: id }).sort({ createdAt: -1 }).lean(),
+    DeviceRunbook.find({ device: id }).sort({ createdAt: -1 }).populate('device', 'code brand model').populate('employee', 'firstName lastName').populate('startedBy steps.doneBy', 'username').lean(),
     FootageUpload.find({ device: id }).sort({ shootDate: -1 }).limit(30).populate('employee', 'firstName lastName').lean(),
     getSettings(),
   ]);
@@ -553,6 +580,9 @@ async function waiveRecovery(assignmentId, note, user) {
 
 // ---------------------------------------------------------------- paperwork
 
+const OS_LABEL = { android: 'Android', ios: 'iOS', windows: 'Windows', macos: 'macOS', other: 'Other' };
+const PART_STATE_LABEL = { ok: 'OK', worn: 'Worn', damaged: 'Damaged', missing: 'Missing' };
+
 async function documentData(assignment) {
   const [device, employee, check] = await Promise.all([
     Device.findById(assignment.device).lean(),
@@ -573,7 +603,7 @@ async function documentData(assignment) {
     deviceCode: device.code,
     deviceName: deviceName(device),
     deviceKind: device.kind,
-    os: [device.os, device.osVersion].filter(Boolean).join(' ') || '—',
+    os: [OS_LABEL[device.os] || device.os, device.osVersion].filter(Boolean).join(' ') || '—',
     imei: [device.imei1, device.imei2].filter(Boolean).join(' / ') || '—',
     serialNumber: device.serialNumber || '—',
     color: device.color || '—',
@@ -588,7 +618,7 @@ async function documentData(assignment) {
     accessories: assignment.accessories.length
       ? assignment.accessories.map((a) => ({ name: a.label, qty: String(a.qty), returned: String(a.returnedQty ?? 0) }))
       : [{ name: 'None', qty: '—', returned: '—' }],
-    parts: (PARTS[device.kind] || PARTS.other).map((p) => ({ label: p.label, state: parts[p.key] || '—' })),
+    parts: (PARTS[device.kind] || PARTS.other).map((p) => ({ label: p.label, state: PART_STATE_LABEL[parts[p.key]] || '—' })),
     security: securityItemsFor(device.kind).map((s) => ({ label: s.label, state: security[s.key] === true ? 'On' : security[s.key] === false ? 'OFF' : '—' })),
     accounts: accounts.length ? accounts.map((a) => ({ kind: ACCOUNT_KINDS[a.kind] || a.kind, identifier: a.identifier })) : [{ kind: 'None recorded', identifier: '—' }],
   };
@@ -814,6 +844,7 @@ async function mine(user) {
     devices: devices.map((d) => {
       const assignment = byId(assignments, '_id')(d.assignment);
       const check = checks.find((c) => String(c.device) === String(d._id));
+      const newThisMonth = Boolean(assignment && monthKey(assignment.assignedAt) === monthKey());
       return {
         ...d,
         parts: PARTS[d.kind] || PARTS.other,
@@ -825,7 +856,8 @@ async function mine(user) {
           accessories: assignment.accessories,
         },
         monthCheck: check ? { status: check.status, reviewNote: check.reviewNote, createdAt: check.createdAt } : null,
-        checkOverdue: !check && istDay() > settings.checkDueDay,
+        newThisMonth,
+        checkOverdue: !check && !newThisMonth && istDay() > settings.checkDueDay,
         openIssues: issues.filter((i) => String(i.device) === String(d._id)),
       };
     }),
@@ -914,7 +946,7 @@ async function sendMonthlyReminders(now = new Date()) {
   const day = istDay(now);
   if (day !== 1 && day !== settings.checkDueDay + 1) return 0;
   const devices = await list({ status: DEVICE_STATUS.ASSIGNED });
-  const targets = day === 1 ? devices : devices.filter((d) => !d.monthCheck);
+  const targets = devices.filter((d) => !d.newThisMonth && (day === 1 || !d.monthCheck));
   const byHolder = new Map();
   for (const d of targets) {
     if (!d.holder || d.holder.status !== EMPLOYEE_STATUS.ACTIVE) continue;

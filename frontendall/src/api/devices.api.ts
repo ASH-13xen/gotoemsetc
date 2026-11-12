@@ -20,6 +20,17 @@ export const ISSUE_LABEL: Record<string, string> = {
   other: 'Something else',
 }
 
+// iPhone: Settings → General → About → "Parts and Service History" lists a
+// replaced part as a genuine Apple part or an unknown part; a part never
+// replaced isn't listed.
+export type GenuineState = 'not_listed' | 'genuine' | 'unknown'
+export const GENUINE_PARTS: { key: string; label: string }[] = [
+  { key: 'display', label: 'Display' },
+  { key: 'battery', label: 'Battery' },
+  { key: 'camera', label: 'Camera' },
+]
+export const GENUINE_LABEL: Record<GenuineState, string> = { not_listed: 'Not listed', genuine: 'Genuine Apple part', unknown: 'Unknown part' }
+
 export interface AppState {
   key: string
   installed?: boolean
@@ -33,6 +44,7 @@ export interface CheckInput {
   storageFreeGb?: number | string
   batteryHealth?: number | string
   security: Record<string, boolean>
+  genuine?: Record<string, GenuineState>
   apps: AppState[]
   galleryBackedUp?: boolean
   remarks?: string
@@ -44,6 +56,7 @@ export interface MyDevice {
   kind: 'phone' | 'laptop' | 'tablet' | 'other'
   brand?: string
   model?: string
+  os?: string | null
   storageGb?: number
   simNumber?: string
   parts: { key: string; label: string }[]
@@ -51,6 +64,8 @@ export interface MyDevice {
   assignment?: { _id: string; assignedAt: string; acceptedAt?: string; accessories: { label: string; qty: number }[] } | null
   monthCheck: { status: 'submitted' | 'verified' | 'rejected'; reviewNote?: string; createdAt: string } | null
   checkOverdue: boolean
+  // Handed over this month: the first monthly check is next month's.
+  newThisMonth?: boolean
   openIssues: { _id: string; category: string; description?: string; createdAt: string }[]
 }
 

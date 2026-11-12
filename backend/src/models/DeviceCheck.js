@@ -27,6 +27,8 @@ const deviceCheckSchema = new Schema(
     storageFreeGb: Number,
     batteryHealth: Number, // %
     security: { type: Map, of: Boolean, default: {} }, // security item key -> on?
+    // iPhone "Parts and Service History": part key -> not_listed | genuine | unknown
+    genuine: { type: Map, of: String, default: {} },
     apps: [{ _id: false, key: String, installed: Boolean, loggedIn: Boolean, account: String }],
     galleryBackedUp: Boolean,
     photos: [{ type: Schema.Types.ObjectId, ref: 'DeviceFile' }],

@@ -24,6 +24,7 @@ export const FLAG_LABEL: Record<string, string> = {
   security_off: 'Security off',
   apps_missing: 'Apps missing',
   needs_repair: 'Needs repair',
+  unknown_part: 'Non-genuine part',
 }
 
 // The same lists as backend utils/deviceCatalog.js.
@@ -63,6 +64,17 @@ export const SECURITY_ITEMS: { key: string; label: string; kinds: DeviceKind[] }
   { key: 'photosBackup', label: 'Google Photos backing up to the company account', kinds: ['phone', 'tablet'] },
 ]
 export const securityItemsFor = (kind: DeviceKind) => SECURITY_ITEMS.filter((s) => s.kinds.includes(kind))
+
+// iPhone: Settings → General → About → "Parts and Service History" lists a
+// replaced part as a genuine Apple part or an unknown part; a part never
+// replaced isn't listed.
+export type GenuineState = 'not_listed' | 'genuine' | 'unknown'
+export const GENUINE_PARTS: { key: string; label: string }[] = [
+  { key: 'display', label: 'Display' },
+  { key: 'battery', label: 'Battery' },
+  { key: 'camera', label: 'Camera' },
+]
+export const GENUINE_LABEL: Record<GenuineState, string> = { not_listed: 'Not listed', genuine: 'Genuine Apple part', unknown: 'Unknown part' }
 
 // Short names for a device's condition lists (which keep the keys).
 const SECURITY_SHORT: Record<string, string> = {
@@ -142,11 +154,15 @@ export interface Device {
   kind: DeviceKind
   brand?: string
   model?: string
+  modelNumber?: string
   os?: string | null
   osVersion?: string
   color?: string
   imei1?: string
   imei2?: string
+  meid?: string
+  iccid?: string
+  eid?: string
   serialNumber?: string
   storageGb?: number
   simNumber?: string
@@ -167,10 +183,13 @@ export interface Device {
     damaged?: string[]
     securityOff?: string[]
     appsMissing?: string[]
+    unknownParts?: string[]
     at?: string
   }
   apps?: AppState[]
   monthCheck?: 'submitted' | 'verified' | null
+  // Handed over this month: the handover check covers it, the first monthly check is next month's.
+  newThisMonth?: boolean
   checkOverdue?: boolean
   createdAt: string
 }
@@ -183,6 +202,7 @@ export interface CheckInput {
   storageFreeGb?: number | string
   batteryHealth?: number | string
   security: Record<string, boolean>
+  genuine?: Record<string, GenuineState>
   apps: AppState[]
   galleryBackedUp?: boolean
   remarks?: string
@@ -204,6 +224,7 @@ export interface DeviceCheck {
   storageFreeGb?: number
   batteryHealth?: number
   security?: Record<string, boolean>
+  genuine?: Record<string, GenuineState>
   apps?: AppState[]
   galleryBackedUp?: boolean
   photos?: string[]

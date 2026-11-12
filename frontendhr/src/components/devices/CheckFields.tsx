@@ -3,7 +3,19 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { GRADE_LABEL, PARTS, securityItemsFor, type CheckInput, type DeviceKind, type Grade, type PartState, type Settings } from '@/api/devices.api'
+import {
+  GENUINE_LABEL,
+  GENUINE_PARTS,
+  GRADE_LABEL,
+  PARTS,
+  securityItemsFor,
+  type CheckInput,
+  type DeviceKind,
+  type GenuineState,
+  type Grade,
+  type PartState,
+  type Settings,
+} from '@/api/devices.api'
 
 // One device check — overall grade, each part, storage, battery, the security
 // settings, the apps, gallery backup, photos. Used at handover, at return and
@@ -24,6 +36,7 @@ const STATE_STYLE: Record<PartState, string> = {
 
 export function CheckFields({
   kind,
+  os,
   apps,
   value,
   onChange,
@@ -31,6 +44,7 @@ export function CheckFields({
   onPhotos,
 }: {
   kind: DeviceKind
+  os?: string | null
   apps: Settings['apps']
   value: CheckInput
   onChange: (next: CheckInput) => void
@@ -92,6 +106,32 @@ export function CheckFields({
         </div>
       </div>
 
+      {os === 'ios' && (
+        <div className="grid gap-1.5">
+          <Label className="text-xs text-muted-foreground">Parts and Service History — Settings → General → About (a part never replaced is not listed)</Label>
+          {GENUINE_PARTS.map((part) => (
+            <div key={part.key} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-secondary/30 px-3 py-1.5">
+              <span className="text-sm">{part.label}</span>
+              <div className="flex gap-1">
+                {(Object.keys(GENUINE_LABEL) as GenuineState[]).map((state) => (
+                  <button
+                    key={state}
+                    type="button"
+                    onClick={() => set({ genuine: { ...value.genuine, [part.key]: state } })}
+                    className={cn(
+                      'rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 ring-transparent',
+                      value.genuine?.[part.key] === state ? (state === 'unknown' ? STATE_STYLE.damaged : STATE_STYLE.ok) : 'text-muted-foreground hover:bg-secondary'
+                    )}
+                  >
+                    {GENUINE_LABEL[state]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-3">
         <div className="grid gap-1.5">
           <Label className="text-xs text-muted-foreground">Storage total (GB)</Label>
@@ -105,6 +145,10 @@ export function CheckFields({
           <Label className="text-xs text-muted-foreground">Battery health (%)</Label>
           <Input type="number" min="0" max="100" value={value.batteryHealth ?? ''} onChange={(e) => set({ batteryHealth: e.target.value })} />
         </div>
+        <p className="col-span-3 -mt-1 text-[11px] text-muted-foreground">
+          iPhone: Capacity and Available are in Settings → General → About; battery health is Settings → Battery → Battery Health (Maximum Capacity). Android:
+          Settings → Storage, and Settings → Battery.
+        </p>
       </div>
 
       <div className="grid gap-1.5">

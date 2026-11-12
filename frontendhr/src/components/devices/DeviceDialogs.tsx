@@ -40,13 +40,17 @@ function Field({ label, children, className }: { label: string; children: ReactN
 
 const DEVICE_FIELDS: { key: keyof Device; label: string; type?: string; span?: boolean }[] = [
   { key: 'brand', label: 'Brand' },
-  { key: 'model', label: 'Model' },
+  { key: 'model', label: 'Model name' },
+  { key: 'modelNumber', label: 'Model number' },
   { key: 'osVersion', label: 'OS version' },
   { key: 'color', label: 'Colour' },
-  { key: 'imei1', label: 'IMEI 1' },
-  { key: 'imei2', label: 'IMEI 2' },
+  { key: 'storageGb', label: 'Capacity (GB)', type: 'number' },
   { key: 'serialNumber', label: 'Serial number' },
-  { key: 'storageGb', label: 'Storage (GB)', type: 'number' },
+  { key: 'imei1', label: 'IMEI' },
+  { key: 'imei2', label: 'IMEI 2' },
+  { key: 'meid', label: 'MEID' },
+  { key: 'iccid', label: 'ICCID (SIM card)' },
+  { key: 'eid', label: 'EID (eSIM)' },
   { key: 'simNumber', label: 'SIM number' },
   { key: 'simProvider', label: 'SIM provider' },
   { key: 'purchaseDate', label: 'Bought on', type: 'date' },
@@ -86,7 +90,7 @@ export function DeviceFormDialog({ open, onOpenChange, device }: { open: boolean
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{device ? `Edit ${device.code}` : 'Add a device'}</DialogTitle>
-          <DialogDescription>It gets a code (PH-001, LT-001…) — write it on a sticker on the device.</DialogDescription>
+          <DialogDescription>It gets a code (PH-001, LT-001…) — write it on a sticker on the device. Copy the details from the device: iPhone, Settings → General → About; Android, Settings → About phone (or dial *#06# for the IMEI).</DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Kind">
@@ -205,7 +209,7 @@ export function AssignDialog({ open, onOpenChange, device }: { open: boolean; on
               </div>
             </Field>
           )}
-          <CheckFields kind={device.kind} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
+          <CheckFields kind={device.kind} os={device.os} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
         </div>
         <DialogFooter>
           <Button onClick={() => assign.mutate()} disabled={!employeeId || !check.grade || assign.isPending}>
@@ -270,7 +274,7 @@ export function ReturnDialog({ open, onOpenChange, device, assignment }: { open:
               </div>
             </Field>
           )}
-          <CheckFields kind={device.kind} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
+          <CheckFields kind={device.kind} os={device.os} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
           <Field label="Note">
             <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
           </Field>
@@ -352,7 +356,7 @@ export function HrCheckDialog({ open, onOpenChange, device }: { open: boolean; o
           <DialogTitle>Check {device.code}</DialogTitle>
           <DialogDescription>Recorded as verified by you.</DialogDescription>
         </DialogHeader>
-        <CheckFields kind={device.kind} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
+        <CheckFields kind={device.kind} os={device.os} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
         <DialogFooter>
           <Button onClick={() => save.mutate()} disabled={!check.grade || save.isPending}>
             {save.isPending && <Loader2 className="size-4 animate-spin" />}

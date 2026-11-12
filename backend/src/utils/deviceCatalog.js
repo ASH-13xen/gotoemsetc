@@ -18,6 +18,16 @@ const GRADE_LABEL = { A: 'Like new', B: 'Minor wear', C: 'Visible damage', D: 'N
 
 // Each part is rated ok / worn / damaged (a guard or cover can also be missing).
 const PART_STATES = ['ok', 'worn', 'damaged', 'missing'];
+
+// iPhone: Settings → General → About → "Parts and Service History" lists a
+// replaced part as "Genuine Apple Part" or "Unknown Part"; a part never
+// replaced is not listed at all.
+const GENUINE_PARTS = [
+  { key: 'display', label: 'Display' },
+  { key: 'battery', label: 'Battery' },
+  { key: 'camera', label: 'Camera' },
+];
+const GENUINE_STATES = ['not_listed', 'genuine', 'unknown'];
 const PARTS = {
   phone: [
     { key: 'screen', label: 'Screen' },
@@ -128,6 +138,8 @@ module.exports = {
   GRADE_LABEL,
   PART_STATES,
   PARTS,
+  GENUINE_PARTS,
+  GENUINE_STATES,
   SECURITY_ITEMS,
   securityItemsFor,
   DEFAULT_APPS,

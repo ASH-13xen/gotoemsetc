@@ -159,7 +159,7 @@ async function employeeAccess(employeeId) {
   const [devices, accounts, runbooks] = await Promise.all([
     Device.find({ holder: employee._id, status: DEVICE_STATUS.ASSIGNED }).select('code kind brand model').lean(),
     DeviceAccount.find({ employee: employee._id }).select('kind identifier').lean(),
-    DeviceRunbook.find({ employee: employee._id, kind: 'revoke' }).sort({ createdAt: -1 }).limit(5).lean(),
+    DeviceRunbook.find({ employee: employee._id, kind: 'revoke' }).sort({ createdAt: -1 }).limit(5).populate('device', 'code brand model').populate('employee', 'firstName lastName').populate('startedBy steps.doneBy', 'username').lean(),
   ]);
   return {
     employee: { _id: employee._id, name: nameOf(employee), designation: employee.designation, status: employee.status, companyEmail: companyEmailOf(employee) },
