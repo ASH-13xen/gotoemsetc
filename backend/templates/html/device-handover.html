@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Device Handover Agreement</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Calibri, Arial, sans-serif; color: #1a1a1a; font-size: 11pt; line-height: 1.45; margin: 0; padding: 0; }
+  .header { display: flex; justify-content: flex-end; margin-bottom: 2pt; }
+  .logo-header { height: 72pt; width: auto; }
+  h2 { font-size: 16pt; color: #4a86e8; text-align: center; margin: 0 0 12pt; text-decoration: underline; }
+  h3 { font-size: 11.5pt; margin: 12pt 0 5pt; }
+  p { margin: 0 0 6pt; }
+  ul { margin: 0 0 8pt; padding-left: 16pt; }
+  li { margin-bottom: 3pt; }
+  table { width: 100%; border-collapse: collapse; margin: 6pt 0 10pt; font-size: 9.5pt; }
+  table td, table th { border: 1px solid #333; padding: 4pt 6pt; text-align: left; vertical-align: top; }
+  th { background: #eef3fd; }
+  .header-fields td { border: none; padding: 1pt 0; font-weight: 700; }
+  .two-col td { width: 25%; }
+  .signatures { margin-top: 26pt; width: 100%; }
+  .signatures td { border: none; width: 50%; padding-top: 30pt; }
+  .line { border-top: 1px solid #333; padding-top: 3pt; display: block; width: 85%; }
+  .small { font-size: 9pt; color: #444; }
+</style>
+</head>
+<body>
+<div class="header"><img src="assets/logo.png" class="logo-header" alt="GO-TO Friend" /></div>
+<h2>Company Device Handover Agreement</h2>
+
+<table class="header-fields">
+  <tr><td>Employee: {employeeName} ({employeeCode})</td><td>Designation: {designation}</td></tr>
+  <tr><td>Department: {department}</td><td>Date of issue: {issueDate}</td></tr>
+</table>
+
+<h3>1. The device</h3>
+<table class="two-col">
+  <tr><th>Device code</th><td>{deviceCode}</td><th>Device</th><td>{deviceName}</td></tr>
+  <tr><th>IMEI</th><td>{imei}</td><th>Serial number</th><td>{serialNumber}</td></tr>
+  <tr><th>OS</th><td>{os}</td><th>Colour</th><td>{color}</td></tr>
+  <tr><th>Storage</th><td>{storage}</td><th>Recovery value</th><td>{recoveryValue}</td></tr>
+  <tr><th>SIM provider</th><td>{simProvider}</td><th>SIM number</th><td>{simNumber}</td></tr>
+</table>
+
+<h3>2. Accessories handed over</h3>
+<table>
+  <tr><th>Accessory</th><th style="width:18%">Quantity</th></tr>
+  {#accessories}<tr><td>{name}</td><td>{qty}</td></tr>{/accessories}
+</table>
+
+<h3>3. Condition at handover</h3>
+<table class="two-col">
+  <tr><th>Overall</th><td>{grade}</td><th>Storage</th><td>{storageFree}</td></tr>
+  <tr><th>Battery health</th><td>{battery}</td><th>Remarks</th><td>{remarks}</td></tr>
+</table>
+<table>
+  <tr><th>Part</th><th style="width:22%">Condition</th></tr>
+  {#parts}<tr><td>{label}</td><td>{state}</td></tr>{/parts}
+</table>
+<table>
+  <tr><th>Security setting</th><th style="width:16%">Status</th></tr>
+  {#security}<tr><td>{label}</td><td>{state}</td></tr>{/security}
+</table>
+
+<h3>4. Company accounts on this device</h3>
+<table>
+  <tr><th style="width:35%">Account</th><th>Email / number / handle</th></tr>
+  {#accounts}<tr><td>{kind}</td><td>{identifier}</td></tr>{/accounts}
+</table>
+<p class="small">These accounts, the SIM and number, and everything on the device belong to {companyName}.</p>
+
+<h3>5. Terms of use</h3>
+<ul>
+  <li><strong>Company use only.</strong> The device is provided for company work. It stays signed in to the company accounts listed above.</li>
+  <li><strong>Security stays on.</strong> The employee will not turn off, remove or bypass the screen lock, Find My Device / Find My, theft protection, 2-step verification or the company accounts, and will not add their own account as the device's owner account.</li>
+  <li><strong>Monthly check.</strong> Every month the employee confirms the device's condition, storage, battery and settings in the EMS ("My devices") for HR to verify, and keeps footage and photos backed up to the company Google Drive / Google Photos.</li>
+  <li><strong>Care.</strong> The employee keeps the device in its cover with its screen guard, away from water and extreme heat, and is its custodian at all times — including when someone else uses or damages it.</li>
+  <li><strong>Loss or theft.</strong> Any loss, theft or damage is reported to HR immediately, and in any case within 24 hours, so the device can be locked and its accounts secured.</li>
+</ul>
+
+<h3>6. Liability, return and recovery</h3>
+<ul>
+  <li><strong>Normal wear and tear</strong> is the company's. Damage from negligence or misuse is repaired or replaced at the employee's cost.</li>
+  <li><strong>Return.</strong> The device and every accessory above are returned in person on request, and in any case by the last working day. Their condition is checked and a return receipt is signed.</li>
+  <li><strong>Not returned or lost.</strong> If the device is lost while with the employee, or not returned when they leave, its recovery value ({recoveryValue}) and the value of any missing accessory may be recovered, including from the full &amp; final settlement, subject to applicable law. The final settlement is not processed until every company device is returned or accounted for.</li>
+  <li><strong>SIM.</strong> The SIM and number remain the company's; porting it, or moving the SIM to a personal device, is not allowed.</li>
+</ul>
+
+<p>I confirm that I have received the device and accessories above in the condition described, and I agree to these terms.</p>
+
+<table class="signatures">
+  <tr>
+    <td><span class="line">Employee: {employeeName}</span><span class="small">Signature and date</span></td>
+    <td><span class="line">For {companyName}</span><span class="small">Signature and date</span></td>
+  </tr>
+</table>
+</body>
+</html>

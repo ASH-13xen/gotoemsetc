@@ -14,6 +14,7 @@ import { AttendanceMismatchCard } from '@/components/attendance/AttendanceMismat
 import { CmLeaveReviews } from '@/components/attendance/CmLeaveReviews'
 import { CeoLeaveQueue, HrLeaveQueue } from '@/components/attendance/LeaveStageQueues'
 import { BillReminders } from '@/components/finance/BillReminders'
+import { DevicesActionCard } from '@/components/devices/DevicesActionCard'
 import { AckScope } from './ActionAck'
 import { LeaveOvertimePopup } from './LeaveOvertimePopup'
 import { cn } from '@/lib/utils'
@@ -88,6 +89,7 @@ export function ActionCentre() {
                 <ReimbursementApprovalsCard />
                 <AttendanceChangeRequestsCard />
                 <AttendanceMismatchCard />
+                <DevicesActionCard />
                 <BillReminders />
               </div>
             </AckScope>
@@ -116,6 +118,7 @@ export function ActionCentre() {
                     <FnfCards />
                     <ReimbursementApprovalsCard />
                     <AttendanceChangeRequestsCard />
+                    <DevicesActionCard />
                   </div>
                 </AckScope>
               )}

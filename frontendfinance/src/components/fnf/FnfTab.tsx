@@ -64,11 +64,19 @@ export function FnfTab() {
                 {settlement.employee.employeeCode ? `${settlement.employee.employeeCode} · ` : ''}
                 {settlement.lastWorkingDay ? `Last working day ${fmt(settlement.lastWorkingDay)} · ` : ''}
                 {hasSlip
-                  ? `Final salary ${rupees(settlement.finalSalary)} + severance ${rupees(settlement.severance)} = ${rupees(settlement.total)}`
+                  ? `Final salary ${rupees(settlement.finalSalary)} + severance ${rupees(settlement.severance)}${
+                      settlement.deviceRecoveryAmount ? ` − company device recovery ${rupees(settlement.deviceRecoveryAmount)}` : ''
+                    } = ${rupees(settlement.total)}`
                   : settlement.amount != null
                     ? rupees(settlement.amount)
                     : 'Amount not on file'}
               </p>
+              {(settlement.deviceRecovery?.items ?? []).length > 0 && (
+                <p className="mt-1 text-[11px] text-muted-foreground">Device recovery: {settlement.deviceRecovery!.items.map((i) => i.label).join('; ')}</p>
+              )}
+              {(settlement.owedByEmployee ?? 0) > 0 && (
+                <p className="mt-1 text-[11px] font-semibold text-destructive">Nothing to pay — they owe the company {rupees(settlement.owedByEmployee!)}.</p>
+              )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" variant="outline" onClick={() => openFile(settlement._id, 'document', 'Could not open the settlement document')}>

@@ -27,6 +27,7 @@ import { ComplaintReviewModal } from '@/components/complaints/ComplaintReviewMod
 import { MyComplaintsCard } from '@/components/complaints/MyComplaintsCard'
 import { ClaimReimbursementDialog } from '@/components/reimbursements/ClaimReimbursementDialog'
 import { MyReimbursementsCard } from '@/components/reimbursements/MyReimbursementsCard'
+import { MyDevicesCard } from '@/components/devices/MyDevicesCard'
 import { KeysDialog } from '@/components/keys/KeysDialog'
 import { OrgChartTeaser } from '@/components/orgChart/OrgChartTeaser'
 import { SalaryPaidModal } from '@/components/finance/SalaryPaidModal'
@@ -232,6 +233,7 @@ export default function DashboardPage() {
           <div className="space-y-3">
             <SectionLabel>Your work</SectionLabel>
             <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+              <MyDevicesCard />
               <MyOvertimeCard />
               <MyUploadRequestsCard />
               <MyReimbursementsCard />

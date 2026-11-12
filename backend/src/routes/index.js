@@ -27,6 +27,7 @@ const overtimeRequestRoutes = require('./overtimeRequest.routes');
 const notificationRoutes = require('./notification.routes');
 const eventRoutes = require('./event.routes');
 const devicePunchRoutes = require('./devicePunch.routes');
+const deviceRoutes = require('./device.routes');
 const attendanceRequestRoutes = require('./attendanceRequest.routes');
 const workTeamRoutes = require('./workTeam.routes');
 const taskClientRoutes = require('./taskClient.routes');
@@ -38,7 +39,6 @@ const cmsRoutes = require('./cms.routes');
 const salesChatRoutes = require('./salesChat.routes');
 const attendanceWarningRoutes = require('./attendanceWarning.routes');
 const attendanceOverviewRoutes = require('./attendanceOverview.routes');
-const inventoryReportRoutes = require('./inventoryReport.routes');
 const complaintRoutes = require('./complaint.routes');
 const keyHolderRoutes = require('./keyHolder.routes');
 const meetingRoutes = require('./meeting.routes');
@@ -85,6 +85,8 @@ router.use('/notifications', notificationRoutes);
 // Event Management — admin, CEO and HR.
 router.use('/events', requireAccess(ACCESS.EVENTS), eventRoutes);
 router.use('/device-punches', devicePunchRoutes);
+// HR Work → Devices (company phones, laptops…); a holder's own devices under /devices/mine.
+router.use('/devices', deviceRoutes);
 router.use('/attendance-requests', attendanceRequestRoutes);
 // Task Management. Every employee needs access here; admin/HR-only vs.
 // self-service capability differences are branched per-route inside each
@@ -121,8 +123,6 @@ router.use('/attendance-warnings', attendanceWarningRoutes);
 // attendance endpoint that isn't nested under /employees/:id, since it's
 // never scoped to one employee.
 router.use('/attendance', requireHrWorkAccess(), attendanceOverviewRoutes);
-// HR Work's inventory column-picker report (frontendhr).
-router.use('/inventory-report', requireHrWorkAccess(), inventoryReportRoutes);
 // Operations — Complaint Register. Every employee can file/browse/review
 // their own; list-everyone and mark-completed are Operations-only
 // (admin/ceo/operations_manager, explicitly NOT hr), gated per-route inside

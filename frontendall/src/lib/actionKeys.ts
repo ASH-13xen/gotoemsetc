@@ -15,6 +15,9 @@ export const ACTION_KEY = {
   overtimeHr: (id: string) => `ot-hr:${id}`,
   // A notice: a day whose scans didn't match the approved request.
   attendanceMismatch: (id: string) => `att-mismatch:${id}`,
+  // HR Work → Devices: a check to verify, a problem, a lost phone… (section
+  // as in the backend's device action items).
+  device: (section: string, id: string) => `dev-${section}:${id}`,
 }
 
 // Leave and overtime — what the pop-up shows.

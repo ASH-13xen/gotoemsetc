@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { CalendarRange, ClipboardList, FileStack, HardDrive, Inbox, Timer } from 'lucide-react'
+import { CalendarRange, ClipboardList, FileStack, Inbox, Smartphone, Timer } from 'lucide-react'
 
 import { PageHeader } from '@/components/layout/PageHeader'
 import { QuickActions, QuickActionItem } from '@/components/layout/QuickActions'
@@ -13,7 +13,7 @@ export default function HrWorkPage() {
       <PageHeader
         eyebrow="HRMS"
         title="HR Work"
-        description="Attendance review, payroll, documents, and inventory — the admin/HR/CEO-only toolkit."
+        description="Attendance review, payroll, documents, and company devices — the admin/HR/CEO-only toolkit."
       />
 
       <QuickActions>
@@ -57,10 +57,10 @@ export default function HrWorkPage() {
           onClick={() => navigate('/documents/overview')}
         />
         <QuickActionItem
-          icon={<HardDrive className="size-4" />}
-          label="Inventory details"
-          description="Column-picker report"
-          onClick={() => navigate('/inventory')}
+          icon={<Smartphone className="size-4" />}
+          label="Devices"
+          description="Phones, checks, accounts, access"
+          onClick={() => navigate('/devices')}
         />
       </QuickActions>
     </div>

@@ -13,6 +13,10 @@ export interface FnfSettlement {
   salarySlip?: { _id: string; startDate: string; endDate: string; netPayable: number } | null
   finalSalary: number
   severance: number
+  // A company device lost, or an accessory not returned — it comes off.
+  deviceRecovery?: { amount: number; items: { assignment: string; label: string; amount: number }[] } | null
+  deviceRecoveryAmount?: number
+  owedByEmployee?: number
   total: number
   paidAt?: string
   transactionDetails?: TransactionDetails

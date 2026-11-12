@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Check, FileCheck2, FileSignature, FileText, Loader2, Undo2, Upload, UserMinus } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -135,6 +136,7 @@ function HrRow({ settlement }: { settlement: FnfSettlement }) {
   const [day, setDay] = useState((settlement.suggestedLastDay ?? '').slice(0, 10))
   const confirm = useMutation({ mutationFn: () => confirmFnfLastDay(settlement._id, day) })
   const future = Boolean(day) && day > todayKey()
+  const held = settlement.devicesHeld ?? []
 
   return (
     <div className="min-w-0 rounded-2xl border border-border bg-background p-4">
@@ -161,6 +163,16 @@ function HrRow({ settlement }: { settlement: FnfSettlement }) {
           Upload the settlement document signed by the employee — the final salary slip can't be approved and mailed without it.
         </p>
       )}
+      {held.length > 0 && (
+        <p className="mt-2 rounded-lg bg-destructive/10 px-2.5 py-1.5 text-[11px] font-medium text-destructive">
+          Still holds {held.map((d) => `${d.code}${d.brand || d.model ? ` (${[d.brand, d.model].filter(Boolean).join(' ')})` : ''}`).join(', ')} — take it back, or
+          mark it lost, in{' '}
+          <Link to="/hr/devices" className="underline">
+            HR Work → Devices
+          </Link>{' '}
+          first. A lost device's value comes off the settlement.
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap gap-2">
         <DocButton settlement={settlement} />
         <SignedDocButton settlement={settlement} />
@@ -168,7 +180,7 @@ function HrRow({ settlement }: { settlement: FnfSettlement }) {
         <Button
           size="sm"
           className="flex-1"
-          disabled={!day || future || confirm.isPending}
+          disabled={!day || future || held.length > 0 || confirm.isPending}
           onClick={() =>
             confirm.mutate(undefined, {
               onSuccess: () => {
@@ -217,6 +229,18 @@ function ApprovalRow({ settlement }: { settlement: FnfSettlement }) {
           <span className="text-muted-foreground">Severance (settlement document)</span>
           <span className="tabular-nums text-foreground">{rupees(settlement.severance)}</span>
         </p>
+        {(settlement.deviceRecovery?.items ?? []).map((i) => (
+          <p key={i.assignment} className="flex justify-between gap-2">
+            <span className="text-muted-foreground">Less company device: {i.label}</span>
+            <span className="tabular-nums text-destructive">−{rupees(i.amount)}</span>
+          </p>
+        ))}
+        {(settlement.owedByEmployee ?? 0) > 0 && (
+          <p className="flex justify-between gap-2 font-semibold text-destructive">
+            <span>They owe the company</span>
+            <span className="tabular-nums">{rupees(settlement.owedByEmployee!)}</span>
+          </p>
+        )}
       </div>
       {settlement.isOwn ? (
         <div className="mt-3 flex flex-wrap items-center gap-2">

@@ -16,6 +16,14 @@ export interface FnfSettlement {
   finalSalary: number
   severance: number
   total: number
+  // Company devices: what they still hold (HR can't confirm until each is
+  // returned or marked lost), and what comes off for a lost device or an
+  // accessory not returned. When that is more than they're owed, the rest is
+  // owedByEmployee.
+  devicesHeld?: { _id: string; code: string; kind: string; brand?: string; model?: string }[]
+  deviceRecovery?: { amount: number; items: { assignment: string; label: string; amount: number }[] } | null
+  deviceRecoveryAmount?: number
+  owedByEmployee?: number
   companyEmail: string | null
   sendBackNote?: string
   // From Yukta Daga's settlement on: the employee's signed copy must be

@@ -11,78 +11,15 @@ const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const { can, isSelf } = require('../utils/roles');
 const { ACCESS } = require('../config/access');
-const { NOTIFICATION_TYPES, INVENTORY_ITEM_CATEGORY, EMPLOYEE_STATUS } = require('../config/constants');
+const { NOTIFICATION_TYPES, EMPLOYEE_STATUS } = require('../config/constants');
 
 async function listEmployees(params) {
   return employeeRepository.list(params);
 }
 
-// One-time, lazy carry-forward into the newer categorized inventory system:
-// an employee's existing single Mobile/Laptop (the old `inventory` object)
-// becomes their first Office Phone / Office Laptop item the first time
-// their record is read after this feature shipped. Never touches
-// `inventory` itself (still the source the Hardware Consent Form reads),
-// and never runs again once inventoryItems has at least one entry — so a
-// later Personal Phone/Laptop the employee adds by hand is never
-// overwritten or duplicated.
-function synthesizeLegacyInventoryItems(inventory) {
-  if (!inventory) return [];
-  const items = [];
-  if (inventory.hasMobile) {
-    items.push({
-      category: INVENTORY_ITEM_CATEGORY.OFFICE_PHONE,
-      deviceName: inventory.deviceName,
-      serialNumber: inventory.imeiOrSerialNumber,
-      color: inventory.deviceColor,
-      condition: inventory.deviceCondition,
-      password: inventory.password,
-      theftProtection: inventory.theftProtection,
-      findMyDevice: inventory.findMyDevice,
-      thumbOrFace: inventory.thumbOrFace,
-      simProvider: inventory.simProvider,
-      simPhoneNumber: inventory.simPhoneNumber,
-      screenGuard: inventory.screenGuard,
-      backCover: inventory.backCover,
-      powerAdapter: inventory.powerAdapter,
-      cable: inventory.cable,
-      mobileOS: inventory.mobileOS || undefined,
-      appleId: inventory.appleId,
-      whatsappTwoFactor: inventory.whatsappTwoFactor,
-      whatsappTwoFactorBackupMail: inventory.whatsappTwoFactorBackupMail,
-      whatsappTwoFactorPin: inventory.whatsappTwoFactorPin,
-      whatsappNameUpdated: inventory.whatsappNameUpdated,
-      whatsappProfiling: inventory.whatsappProfiling,
-      whatsappBackupInEmployeeMail: inventory.whatsappBackupInEmployeeMail,
-      galleryBackupInEmployeeMail: inventory.galleryBackupInEmployeeMail,
-      trueCallerUpdated: inventory.trueCallerUpdated,
-    });
-  }
-  if (inventory.hasLaptop) {
-    items.push({
-      category: INVENTORY_ITEM_CATEGORY.OFFICE_LAPTOP,
-      deviceName: inventory.laptopDeviceName,
-      serialNumber: inventory.laptopSerialNumber,
-      color: inventory.laptopColor,
-      condition: inventory.laptopCondition,
-      password: inventory.laptopPassword,
-      theftProtection: inventory.laptopTheftProtection,
-      findMyDevice: inventory.laptopFindMyDevice,
-      thumbOrFace: inventory.laptopThumbOrFace,
-      mouse: inventory.laptopMouse,
-    });
-  }
-  return items;
-}
-
 async function getEmployee(id) {
   const employee = await employeeRepository.findById(id);
   if (!employee) throw ApiError.notFound('Employee not found');
-  if ((employee.inventoryItems ?? []).length === 0) {
-    const migrated = synthesizeLegacyInventoryItems(employee.inventory);
-    if (migrated.length > 0) {
-      return employeeRepository.updateById(id, { inventoryItems: migrated });
-    }
-  }
   return employee;
 }
 
@@ -455,7 +392,6 @@ module.exports = {
   listFlagPeople,
   getFlagsGivenBy,
   getFlagHistory,
-  synthesizeLegacyInventoryItems,
   listAnniversaries,
   completeProbation,
   changeSalary,

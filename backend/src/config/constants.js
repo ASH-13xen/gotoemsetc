@@ -154,6 +154,15 @@ module.exports = {
     // The applicant's approved day was decided by their scans instead (see
     // attendanceClassifier.service.js#checkRequestDay).
     ATTENDANCE_REQUEST_SCANS: 'attendance_request_scans',
+    // HR Work → Devices (services/device.service.js): a device handed over to
+    // someone, the monthly check due / sent / reviewed, a problem reported
+    // and resolved.
+    DEVICE_ASSIGNED: 'device_assigned',
+    DEVICE_CHECK_DUE: 'device_check_due',
+    DEVICE_CHECK_SUBMITTED: 'device_check_submitted',
+    DEVICE_CHECK_REVIEWED: 'device_check_reviewed',
+    DEVICE_ISSUE_REPORTED: 'device_issue_reported',
+    DEVICE_ISSUE_RESOLVED: 'device_issue_resolved',
     // Fired whenever HR (not admin) manually marks/edits an attendance day —
     // carries HR's required reason, notified to admins for oversight. See
     // attendance.service.js#markAttendance.

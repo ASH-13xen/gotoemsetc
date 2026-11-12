@@ -54,17 +54,28 @@ const parseDay = (value) => {
   return Number.isNaN(d.getTime()) ? null : new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 };
 
+// The device recovery line of a mail, when there is one.
+function recoveryLine(settlement, amount, label) {
+  if (!amount) return '';
+  const what = (settlement.deviceRecovery?.items || []).map((i) => i.label).join('; ');
+  return `<strong>${label}:</strong> ${rupees(amount)}${what ? ` (${what})` : ''}<br/>`;
+}
+
 function financeFrom() {
   const match = /<([^>]+)>/.exec(env.resend.fromEmail || '');
   const address = match ? match[1] : env.resend.fromEmail;
   return `Finance <${address}>`;
 }
 
-// The settlement's money: the final salary slip plus the document's severance.
+// The settlement's money: the final salary slip plus the document's
+// severance, less anything recovered for company devices.
 function totals(settlement) {
   const finalSalary = settlement.salarySlip?.netPayable || 0;
   const severance = Number(settlement.amount) || 0;
-  return { finalSalary, severance, total: Math.round((finalSalary + severance) * 100) / 100 };
+  const deviceRecoveryAmount = Number(settlement.deviceRecovery?.amount) || 0;
+  const net = Math.round((finalSalary + severance - deviceRecoveryAmount) * 100) / 100;
+  // Never below nothing: what the settlement can't cover is still owed by them.
+  return { finalSalary, severance, deviceRecoveryAmount, total: Math.max(0, net), owedByEmployee: Math.max(0, -net) };
 }
 
 // The settlement document for a mail: the employee's signed copy once it is
@@ -129,10 +140,12 @@ async function load(id) {
   return settlement;
 }
 
-// HR's queue (also the CEO's/admin's, who sit above HR).
+// HR's queue (also the CEO's/admin's, who sit above HR) — with any company
+// device the leaver still holds, which has to come back first.
 async function listForHr() {
   const list = await FnfSettlement.find({ stage: HR }).sort({ createdAt: 1 }).populate(POPULATE);
-  return list.map(shape);
+  const deviceService = require('./device.service');
+  return Promise.all(list.map(async (s) => ({ ...shape(s), devicesHeld: s.employee ? await deviceService.heldBy(s.employee._id) : [] })));
 }
 
 // HR confirms the last working day; the final salary slip is generated up to
@@ -146,6 +159,16 @@ async function confirmLastDay(id, { lastWorkingDay }, actor) {
   if (lastDay.getTime() > todayUTC().getTime()) {
     throw ApiError.badRequest('The last working day has not come yet — confirm it once it has passed, so the final slip covers every day');
   }
+  // Every company device comes back (or is marked lost) first; what is owed
+  // for lost ones and missing accessories is taken off the settlement.
+  // Required lazily: device.service is its own module graph.
+  const deviceService = require('./device.service');
+  const held = await deviceService.heldBy(settlement.employee._id);
+  if (held.length) {
+    const it = held.length === 1 ? 'it' : 'them';
+    throw ApiError.conflict(`They still hold ${held.map((d) => d.code).join(', ')} — return ${it} (or mark ${it} lost) in HR Work → Devices first`);
+  }
+  const recovery = await deviceService.recoveryFor(settlement.employee._id);
 
   // From the start of that month (or the joining date) to the last day.
   const monthStart = new Date(Date.UTC(lastDay.getUTCFullYear(), lastDay.getUTCMonth(), 1));
@@ -189,6 +212,7 @@ async function confirmLastDay(id, { lastWorkingDay }, actor) {
 
   settlement.lastWorkingDay = lastDay;
   settlement.salarySlip = slip._id;
+  settlement.deviceRecovery = recovery;
   settlement.stage = CEO;
   settlement.hrConfirmedBy = actor.id;
   settlement.hrConfirmedAs = accessService.actingRole(actor, GRANTS[ACCESS.HRMS]);
@@ -224,7 +248,7 @@ async function mailFinance(settlement) {
   if (!env.resendConfigured) return { to, status: 'failed', error: 'Email is not set up on the server' };
   try {
     const name = nameOf(settlement.employee);
-    const { finalSalary, severance, total } = totals(settlement);
+    const { finalSalary, severance, deviceRecoveryAmount: deviceRecovery, total } = totals(settlement);
     const attachments = [];
     const document = await documentAttachment(settlement);
     if (document) attachments.push({ filename: document.filename, content: document.content });
@@ -237,7 +261,7 @@ async function mailFinance(settlement) {
 <p><strong>Last working day:</strong> ${prettyDay(settlement.lastWorkingDay)}<br/>
 <strong>Final salary (slip attached):</strong> ${rupees(finalSalary)}<br/>
 <strong>Severance (${document?.signed ? 'signed ' : ''}settlement document attached):</strong> ${rupees(severance)}<br/>
-<strong>Total to pay:</strong> ${rupees(total)}</p>
+${recoveryLine(settlement, deviceRecovery, 'Less device recovery')}<strong>Total to pay:</strong> ${rupees(total)}</p>
 <p>It is in the Finance tab under FnF, where the payment is marked paid with its receipt.</p>
 <p>Thanks,<br/>HR — ${env.companyName || 'GO-TO Friend'}</p>`,
       text: `Full & final settlement approved for ${name}. Last working day ${prettyDay(settlement.lastWorkingDay)}. Final salary ${rupees(finalSalary)} + severance ${rupees(severance)} = ${rupees(total)}.`,
@@ -258,7 +282,7 @@ async function mailEmployee(settlement) {
   if (!env.resendConfigured) return { to, status: 'failed', error: 'Email is not set up on the server' };
   try {
     const name = nameOf(settlement.employee);
-    const { finalSalary, severance, total } = totals(settlement);
+    const { finalSalary, severance, deviceRecoveryAmount: deviceRecovery, total } = totals(settlement);
     const attachments = [];
     const document = await documentAttachment(settlement);
     if (document) attachments.push({ filename: document.filename, content: document.content });
@@ -271,7 +295,7 @@ async function mailEmployee(settlement) {
 <p><strong>Last working day:</strong> ${prettyDay(settlement.lastWorkingDay)}<br/>
 <strong>Final salary:</strong> ${rupees(finalSalary)}<br/>
 <strong>Severance:</strong> ${rupees(severance)}<br/>
-<strong>Total:</strong> ${rupees(total)}</p>
+${recoveryLine(settlement, deviceRecovery, 'Less company device recovery')}<strong>Total:</strong> ${rupees(total)}</p>
 <p>You will get a separate mail with the receipt once it is paid.</p>
 <p>Thanks,<br/>HR — ${env.companyName || 'GO-TO Friend'}</p>`,
       text: `Your full & final settlement has been approved: final salary ${rupees(finalSalary)} + severance ${rupees(severance)} = ${rupees(total)}. The documents are attached.`,
@@ -310,6 +334,10 @@ async function approve(id, actor) {
     { _id: settlement.salarySlip._id },
     { approvalStatus: SALARY_SLIP_APPROVAL.APPROVED, approvedBy: actor.id, approvedAs: decidedAs, approvedAt: new Date() }
   );
+  // Device recovery taken here is recovered — not again elsewhere.
+  if (settlement.deviceRecovery?.items?.length) {
+    await require('./device.service').markRecoverySettled(settlement.deviceRecovery.items.map((i) => i.assignment), settlement._id);
+  }
 
   settlement.financeEmail = await mailFinance(settlement);
   settlement.employeeEmail = await mailEmployee(settlement);
@@ -368,11 +396,11 @@ async function listAll() {
 
 function fnfPaidEmailHtml(settlement, transactionDetails) {
   const employeeName = nameOf(settlement.employee);
-  const { finalSalary, severance, total } = totals(settlement);
+  const { finalSalary, severance, deviceRecoveryAmount: deviceRecovery, total } = totals(settlement);
   const hasSlip = Boolean(settlement.salarySlip);
   return `<p>Hi ${employeeName},</p>
 <p>Your Full &amp; Final settlement has been paid. The payment receipt and the settlement document are attached.</p>
-<p>${hasSlip ? `<strong>Final salary:</strong> ${rupees(finalSalary)}<br/><strong>Severance:</strong> ${rupees(severance)}<br/>` : ''}<strong>Amount paid:</strong> ${rupees(hasSlip ? total : settlement.amount)}<br/>
+<p>${hasSlip ? `<strong>Final salary:</strong> ${rupees(finalSalary)}<br/><strong>Severance:</strong> ${rupees(severance)}<br/>${recoveryLine(settlement, deviceRecovery, 'Less company device recovery')}` : ''}<strong>Amount paid:</strong> ${rupees(hasSlip ? total : settlement.amount)}<br/>
 <strong>Payment mode:</strong> ${transactionDetails.mode || '—'}<br/>
 <strong>Reference number:</strong> ${transactionDetails.referenceNumber || '—'}<br/>
 <strong>Paid on:</strong> ${transactionDetails.paidOn ? new Date(transactionDetails.paidOn).toLocaleDateString('en-IN', { dateStyle: 'medium' }) : '—'}</p>

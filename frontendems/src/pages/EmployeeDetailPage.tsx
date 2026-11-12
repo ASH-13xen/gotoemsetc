@@ -34,7 +34,6 @@ import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummary
 import { AttendanceCalendar } from '@/components/attendance/AttendanceCalendar'
 import { NotInformedWarningsCard } from '@/components/attendance/NotInformedWarningsCard'
 import { PendingWarningsModal } from '@/components/attendance/PendingWarningsModal'
-import { InventoryItemsManager } from '@/components/employees/InventoryItemsManager'
 import { OffboardDialog, type OffboardDetails } from '@/components/employees/OffboardDialog'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
@@ -57,57 +56,7 @@ import {
   type Employee,
   type EmployeeStatus,
   type EmploymentType,
-  type Inventory,
-  type InventoryItem,
-  type MobileOS,
 } from '@/api/employees.api'
-
-type InventoryForm = {
-  deviceName: string
-  imeiOrSerialNumber: string
-  deviceColor: string
-  simProvider: string
-  simPhoneNumber: string
-  screenGuard: boolean
-  backCover: boolean
-  powerAdapter: boolean
-  cable: boolean
-
-  hasMobile: boolean
-  mobileOS: MobileOS
-  deviceCondition: string
-  whatsappTwoFactor: boolean
-  whatsappTwoFactorBackupMail: string
-  whatsappTwoFactorPin: string
-  whatsappNameUpdated: boolean
-  whatsappProfiling: boolean
-  whatsappBackupInEmployeeMail: boolean
-  galleryBackupInEmployeeMail: boolean
-  trueCallerUpdated: boolean
-  theftProtection: boolean
-  findMyDevice: boolean
-  appleId: string
-  password: string
-  thumbOrFace: boolean
-
-  hasLaptop: boolean
-  laptopDeviceName: string
-  laptopSerialNumber: string
-  laptopColor: string
-  laptopCondition: string
-  laptopTheftProtection: boolean
-  laptopFindMyDevice: boolean
-  laptopPassword: string
-  laptopThumbOrFace: boolean
-  laptopMouse: boolean
-
-  consentFormLink: string
-  gotofriendLoggedIn: boolean
-  employeeMailLoggedIn: boolean
-  clientMailLoggedIn: boolean
-  goToDataTransfer: boolean
-  podcastDataTransfer: boolean
-}
 
 type AddressForm = {
   line1: string
@@ -164,8 +113,6 @@ export type FormValues = {
   removedFromGroupsAndReels: boolean
   mailDeactivated: boolean
   extraDetails: { key: string; value: string }[]
-  inventory: InventoryForm
-  inventoryItems: InventoryItem[]
 }
 
 const NO_MANAGER = '__none__'
@@ -190,55 +137,6 @@ function toAddressForm(address: Address | undefined): AddressForm {
 
 function addressesEqual(a: AddressForm, b: AddressForm): boolean {
   return a.line1 === b.line1 && a.line2 === b.line2 && a.city === b.city && a.state === b.state && a.pincode === b.pincode && a.country === b.country
-}
-
-function toInventoryForm(inventory: Inventory | undefined): InventoryForm {
-  return {
-    deviceName: inventory?.deviceName ?? '',
-    imeiOrSerialNumber: inventory?.imeiOrSerialNumber ?? '',
-    deviceColor: inventory?.deviceColor ?? '',
-    simProvider: inventory?.simProvider ?? '',
-    simPhoneNumber: inventory?.simPhoneNumber ?? '',
-    screenGuard: inventory?.screenGuard ?? false,
-    backCover: inventory?.backCover ?? false,
-    powerAdapter: inventory?.powerAdapter ?? false,
-    cable: inventory?.cable ?? false,
-
-    hasMobile: inventory?.hasMobile ?? false,
-    mobileOS: inventory?.mobileOS ?? '',
-    deviceCondition: inventory?.deviceCondition ?? '',
-    whatsappTwoFactor: inventory?.whatsappTwoFactor ?? false,
-    whatsappTwoFactorBackupMail: inventory?.whatsappTwoFactorBackupMail ?? '',
-    whatsappTwoFactorPin: inventory?.whatsappTwoFactorPin ?? '',
-    whatsappNameUpdated: inventory?.whatsappNameUpdated ?? false,
-    whatsappProfiling: inventory?.whatsappProfiling ?? false,
-    whatsappBackupInEmployeeMail: inventory?.whatsappBackupInEmployeeMail ?? false,
-    galleryBackupInEmployeeMail: inventory?.galleryBackupInEmployeeMail ?? false,
-    trueCallerUpdated: inventory?.trueCallerUpdated ?? false,
-    theftProtection: inventory?.theftProtection ?? false,
-    findMyDevice: inventory?.findMyDevice ?? false,
-    appleId: inventory?.appleId ?? '',
-    password: inventory?.password ?? '',
-    thumbOrFace: inventory?.thumbOrFace ?? false,
-
-    hasLaptop: inventory?.hasLaptop ?? false,
-    laptopDeviceName: inventory?.laptopDeviceName ?? '',
-    laptopSerialNumber: inventory?.laptopSerialNumber ?? '',
-    laptopColor: inventory?.laptopColor ?? '',
-    laptopCondition: inventory?.laptopCondition ?? '',
-    laptopTheftProtection: inventory?.laptopTheftProtection ?? false,
-    laptopFindMyDevice: inventory?.laptopFindMyDevice ?? false,
-    laptopPassword: inventory?.laptopPassword ?? '',
-    laptopThumbOrFace: inventory?.laptopThumbOrFace ?? false,
-    laptopMouse: inventory?.laptopMouse ?? false,
-
-    consentFormLink: inventory?.consentFormLink ?? '',
-    gotofriendLoggedIn: inventory?.gotofriendLoggedIn ?? false,
-    employeeMailLoggedIn: inventory?.employeeMailLoggedIn ?? false,
-    clientMailLoggedIn: inventory?.clientMailLoggedIn ?? false,
-    goToDataTransfer: inventory?.goToDataTransfer ?? false,
-    podcastDataTransfer: inventory?.podcastDataTransfer ?? false,
-  }
 }
 
 function toFormValues(employee: Employee): FormValues {
@@ -288,8 +186,6 @@ function toFormValues(employee: Employee): FormValues {
     removedFromGroupsAndReels: employee.removedFromGroupsAndReels ?? false,
     mailDeactivated: employee.mailDeactivated ?? false,
     extraDetails: (employee.extraDetails ?? []).map((d) => ({ key: d.key, value: d.value ?? '' })),
-    inventory: toInventoryForm(employee.inventory),
-    inventoryItems: employee.inventoryItems ?? [],
   }
 }
 
@@ -978,274 +874,6 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                 )}
               />
             </div>
-          </Card>
-
-          {/* Inventory — company-issued hardware/SIM/security checklist. The
-              first grid + first checkbox row below (deviceName through cable)
-              are the original fields and auto-fill the Hardware Consent
-              Form's Equipment Inventory section — everything past "Has
-              mobile" / "Has laptop" is new and only appears once that
-              device's checkbox is ticked. */}
-          <Card className="gap-6 p-6">
-            <div className="grid gap-1">
-              <SectionTitle>Inventory (legacy)</SectionTitle>
-              <p className="text-xs text-muted-foreground">
-                This single mobile/laptop record feeds the Hardware Consent Form and stays here unchanged — for
-                everything else, use Inventory items below.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor="inventory.deviceName" className="text-xs text-muted-foreground">Mobile/laptop name</Label>
-                <Input id="inventory.deviceName" {...register('inventory.deviceName')} />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="inventory.imeiOrSerialNumber" className="text-xs text-muted-foreground">Mobile IMEI num / laptop serial num</Label>
-                <Input id="inventory.imeiOrSerialNumber" {...register('inventory.imeiOrSerialNumber')} />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="inventory.deviceColor" className="text-xs text-muted-foreground">Mobile/laptop color</Label>
-                <Input id="inventory.deviceColor" {...register('inventory.deviceColor')} />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="inventory.simProvider" className="text-xs text-muted-foreground">SIM provider</Label>
-                <Input id="inventory.simProvider" {...register('inventory.simProvider')} />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="inventory.simPhoneNumber" className="text-xs text-muted-foreground">Phone number</Label>
-                <Input id="inventory.simPhoneNumber" {...register('inventory.simPhoneNumber')} />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <Controller
-                control={control}
-                name="inventory.screenGuard"
-                render={({ field }) => <CheckboxRow label="Screen guard" checked={field.value} onChange={field.onChange} />}
-              />
-              <Controller
-                control={control}
-                name="inventory.backCover"
-                render={({ field }) => <CheckboxRow label="Back cover" checked={field.value} onChange={field.onChange} />}
-              />
-              <Controller
-                control={control}
-                name="inventory.powerAdapter"
-                render={({ field }) => <CheckboxRow label="Power adapter" checked={field.value} onChange={field.onChange} />}
-              />
-              <Controller
-                control={control}
-                name="inventory.cable"
-                render={({ field }) => <CheckboxRow label="Cable" checked={field.value} onChange={field.onChange} />}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 border-t border-border pt-5 md:grid-cols-2">
-              <Controller
-                control={control}
-                name="inventory.hasMobile"
-                render={({ field }) => <CheckboxRow label="Has a company mobile" checked={field.value} onChange={field.onChange} />}
-              />
-              <Controller
-                control={control}
-                name="inventory.hasLaptop"
-                render={({ field }) => <CheckboxRow label="Has a company laptop" checked={field.value} onChange={field.onChange} />}
-              />
-            </div>
-
-            {watch('inventory.hasMobile') && (
-              <div className="grid gap-4 rounded-xl border border-border bg-secondary/20 p-4">
-                <p className="text-xs font-semibold text-muted-foreground">Mobile</p>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="grid gap-1.5">
-                    <Label className="text-xs text-muted-foreground">Operating system</Label>
-                    <Controller
-                      control={control}
-                      name="inventory.mobileOS"
-                      render={({ field }) => (
-                        <Select value={field.value} onValueChange={(v) => field.onChange(v as MobileOS)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="android">Android</SelectItem>
-                            <SelectItem value="ios">iOS</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="inventory.deviceCondition" className="text-xs text-muted-foreground">Condition</Label>
-                    <Input id="inventory.deviceCondition" {...register('inventory.deviceCondition')} />
-                  </div>
-                  {watch('inventory.mobileOS') === 'ios' && (
-                    <div className="grid gap-1.5">
-                      <Label htmlFor="inventory.appleId" className="text-xs text-muted-foreground">Apple ID</Label>
-                      <Input id="inventory.appleId" {...register('inventory.appleId')} />
-                    </div>
-                  )}
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="inventory.password" className="text-xs text-muted-foreground">Password</Label>
-                    <Input id="inventory.password" className="normal-case" {...register('inventory.password')} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <Controller
-                    control={control}
-                    name="inventory.whatsappTwoFactor"
-                    render={({ field }) => <CheckboxRow label="WhatsApp 2-factor enabled" checked={field.value} onChange={field.onChange} />}
-                  />
-                  {watch('inventory.whatsappTwoFactor') && (
-                    <>
-                      <div className="grid gap-1.5">
-                        <Label htmlFor="inventory.whatsappTwoFactorBackupMail" className="text-xs text-muted-foreground">W/A 2FA backup mail</Label>
-                        <Input id="inventory.whatsappTwoFactorBackupMail" {...register('inventory.whatsappTwoFactorBackupMail')} />
-                      </div>
-                      <div className="grid gap-1.5">
-                        <Label htmlFor="inventory.whatsappTwoFactorPin" className="text-xs text-muted-foreground">W/A 2FA PIN</Label>
-                        <Input id="inventory.whatsappTwoFactorPin" className="normal-case" {...register('inventory.whatsappTwoFactorPin')} />
-                      </div>
-                    </>
-                  )}
-                  <Controller
-                    control={control}
-                    name="inventory.whatsappNameUpdated"
-                    render={({ field }) => <CheckboxRow label="W/A name updated" checked={field.value} onChange={field.onChange} />}
-                  />
-                  <Controller
-                    control={control}
-                    name="inventory.whatsappProfiling"
-                    render={({ field }) => <CheckboxRow label="W/A profiling done" checked={field.value} onChange={field.onChange} />}
-                  />
-                  <Controller
-                    control={control}
-                    name="inventory.whatsappBackupInEmployeeMail"
-                    render={({ field }) => <CheckboxRow label="W/A backup in employee mail" checked={field.value} onChange={field.onChange} />}
-                  />
-                  <Controller
-                    control={control}
-                    name="inventory.galleryBackupInEmployeeMail"
-                    render={({ field }) => <CheckboxRow label="Gallery backup in employee mail" checked={field.value} onChange={field.onChange} />}
-                  />
-                  <Controller
-                    control={control}
-                    name="inventory.trueCallerUpdated"
-                    render={({ field }) => <CheckboxRow label="True Caller updated" checked={field.value} onChange={field.onChange} />}
-                  />
-                  <Controller
-                    control={control}
-                    name="inventory.theftProtection"
-                    render={({ field }) => <CheckboxRow label="Theft protection enabled" checked={field.value} onChange={field.onChange} />}
-                  />
-                  <Controller
-                    control={control}
-                    name="inventory.findMyDevice"
-                    render={({ field }) => <CheckboxRow label="Find my device enabled" checked={field.value} onChange={field.onChange} />}
-                  />
-                  <Controller
-                    control={control}
-                    name="inventory.thumbOrFace"
-                    render={({ field }) => <CheckboxRow label="Thumb / face unlock set up" checked={field.value} onChange={field.onChange} />}
-                  />
-                </div>
-              </div>
-            )}
-
-            {watch('inventory.hasLaptop') && (
-              <div className="grid gap-4 rounded-xl border border-border bg-secondary/20 p-4">
-                <p className="text-xs font-semibold text-muted-foreground">Laptop</p>
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="inventory.laptopDeviceName" className="text-xs text-muted-foreground">Laptop name</Label>
-                    <Input id="inventory.laptopDeviceName" {...register('inventory.laptopDeviceName')} />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="inventory.laptopSerialNumber" className="text-xs text-muted-foreground">Serial number</Label>
-                    <Input id="inventory.laptopSerialNumber" {...register('inventory.laptopSerialNumber')} />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="inventory.laptopColor" className="text-xs text-muted-foreground">Color</Label>
-                    <Input id="inventory.laptopColor" {...register('inventory.laptopColor')} />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="inventory.laptopCondition" className="text-xs text-muted-foreground">Condition</Label>
-                    <Input id="inventory.laptopCondition" {...register('inventory.laptopCondition')} />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="inventory.laptopPassword" className="text-xs text-muted-foreground">Password</Label>
-                    <Input id="inventory.laptopPassword" className="normal-case" {...register('inventory.laptopPassword')} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <Controller
-                    control={control}
-                    name="inventory.laptopTheftProtection"
-                    render={({ field }) => <CheckboxRow label="Theft protection enabled" checked={field.value} onChange={field.onChange} />}
-                  />
-                  <Controller
-                    control={control}
-                    name="inventory.laptopFindMyDevice"
-                    render={({ field }) => <CheckboxRow label="Find my device enabled" checked={field.value} onChange={field.onChange} />}
-                  />
-                  <Controller
-                    control={control}
-                    name="inventory.laptopThumbOrFace"
-                    render={({ field }) => <CheckboxRow label="Thumb / face unlock set up" checked={field.value} onChange={field.onChange} />}
-                  />
-                  <Controller
-                    control={control}
-                    name="inventory.laptopMouse"
-                    render={({ field }) => <CheckboxRow label="Mouse issued" checked={field.value} onChange={field.onChange} />}
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="grid gap-4 border-t border-border pt-5">
-              <p className="text-xs font-semibold text-muted-foreground">General</p>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="inventory.consentFormLink" className="text-xs text-muted-foreground">Consent form link</Label>
-                  <Input id="inventory.consentFormLink" className="normal-case" {...register('inventory.consentFormLink')} />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <Controller
-                  control={control}
-                  name="inventory.gotofriendLoggedIn"
-                  render={({ field }) => <CheckboxRow label="Gotofriend12345 logged in" checked={field.value} onChange={field.onChange} />}
-                />
-                <Controller
-                  control={control}
-                  name="inventory.employeeMailLoggedIn"
-                  render={({ field }) => <CheckboxRow label="Employee mail logged in" checked={field.value} onChange={field.onChange} />}
-                />
-                <Controller
-                  control={control}
-                  name="inventory.clientMailLoggedIn"
-                  render={({ field }) => <CheckboxRow label="Client mail logged in" checked={field.value} onChange={field.onChange} />}
-                />
-                <Controller
-                  control={control}
-                  name="inventory.goToDataTransfer"
-                  render={({ field }) => <CheckboxRow label="GO-TO data transfer done" checked={field.value} onChange={field.onChange} />}
-                />
-                <Controller
-                  control={control}
-                  name="inventory.podcastDataTransfer"
-                  render={({ field }) => <CheckboxRow label="Podcast data transfer done" checked={field.value} onChange={field.onChange} />}
-                />
-              </div>
-            </div>
-          </Card>
-
-          {/* Categorized inventory — Office/Personal Phone, Office/Personal
-              Laptop, any number of items. Separate card from the legacy
-              section above, which stays untouched for the consent form. */}
-          <Card className="gap-6 p-6">
-            <SectionTitle>Inventory items</SectionTitle>
-            <InventoryItemsManager control={control} register={register} disabled={!canEditDetails} />
           </Card>
 
           {/* Offboarding — only meaningful once status is set to Offboarded */}

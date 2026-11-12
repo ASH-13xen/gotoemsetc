@@ -27,6 +27,12 @@ const fnfSettlementSchema = new Schema(
     // from before this flow (they go straight to Finance).
     stage: { type: String, enum: [...Object.values(FNF_STAGE), null], default: null, index: true },
     lastWorkingDay: Date,
+    // Lost devices / accessories not returned (HR Work → Devices), taken off
+    // the total — worked out when HR confirms the last day.
+    deviceRecovery: {
+      amount: { type: Number, default: 0 },
+      items: [{ _id: false, assignment: { type: Schema.Types.ObjectId, ref: 'DeviceAssignment' }, label: String, amount: Number }],
+    },
     // The final salary slip, up to the last working day.
     salarySlip: { type: Schema.Types.ObjectId, ref: 'SalarySlip' },
     hrConfirmedBy: { type: Schema.Types.ObjectId, ref: 'User' },

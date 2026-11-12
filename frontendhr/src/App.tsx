@@ -12,7 +12,8 @@ import OvertimeRequestsPage from '@/pages/OvertimeRequestsPage'
 import SalarySlipsBulkPage from '@/pages/SalarySlipsBulkPage'
 import AttendanceOverviewPage from '@/pages/AttendanceOverviewPage'
 import DocumentsOverviewPage from '@/pages/DocumentsOverviewPage'
-import InventoryReportPage from '@/pages/InventoryReportPage'
+import DevicesPage from '@/pages/DevicesPage'
+import DeviceDetailPage from '@/pages/DeviceDetailPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -97,11 +98,21 @@ export default function App({ basename }: AppProps = {}) {
               }
             />
             <Route
-              path="/inventory"
+              path="/devices"
               element={
                 <RequireAuth>
                   <RequireHrAccess>
-                    <InventoryReportPage />
+                    <DevicesPage />
+                  </RequireHrAccess>
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/devices/:id"
+              element={
+                <RequireAuth>
+                  <RequireHrAccess>
+                    <DeviceDetailPage />
                   </RequireHrAccess>
                 </RequireAuth>
               }

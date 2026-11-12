@@ -14,6 +14,7 @@ import { useActionAcks } from '@/hooks/useActionAcks'
 import { isHrPerson } from '@/components/attendance/LeaveStageQueues'
 import { ACTION_KEY, POPS_UP } from '@/lib/actionKeys'
 import { can } from '@/lib/access'
+import { useDeviceActionItems } from '@/components/devices/DevicesActionCard'
 
 // Everything waiting on this person, counted for the Action centre button.
 // Each count uses the same query (key and fetcher) as the card that shows
@@ -50,6 +51,7 @@ export function useActionCentreCounts() {
   const cmReviews = useMyPendingCmReviews()
   const bills = usePendingBillReminders()
   const mismatches = useQuery({ queryKey: MISMATCHES_KEY, queryFn: listAttendanceMismatches, enabled: hr || payout, refetchInterval: 60_000 })
+  const devices = useDeviceActionItems()
 
   // Every decision-type item as its key, by section.
   const s = salary.data
@@ -71,6 +73,11 @@ export function useActionCentreCounts() {
       ...(overtime.data?.hr ?? []).map((r) => ACTION_KEY.overtimeHr(r._id)),
     ],
     leaveReviews: (cmReviews.data?.requests ?? []).map((r) => ACTION_KEY.leaveCm(r._id)),
+    devices: hr
+      ? (['unreturned', 'runbooks', 'checksToVerify', 'issues'] as const).flatMap((section) =>
+          (devices.data?.[section] ?? []).map((i) => ACTION_KEY.device(section, i.id))
+        )
+      : [],
   }
   const open = (list: string[]) => list.filter((k) => !acked.has(k)).length
   const mailFailures = (s?.recent ?? []).filter(
@@ -87,9 +94,14 @@ export function useActionCentreCounts() {
     hrLeave: open(keys.hrLeave),
     overtime: open(keys.overtime),
     leaveReviews: open(keys.leaveReviews),
+    devices: open(keys.devices),
     bills: bills.data?.reminders.length ?? 0,
     // Notices — counted until acknowledged, then gone.
     mismatches: (mismatches.data ?? []).filter((m) => !acked.has(ACTION_KEY.attendanceMismatch(m._id))).length,
+    deviceNotices: hr
+      ? (['checksOverdue', 'unsigned'] as const).flatMap((section) => (devices.data?.[section] ?? []).map((i) => ACTION_KEY.device(section, i.id))).filter((k) => !acked.has(k))
+          .length
+      : 0,
   }
   const total = Object.values(counts).reduce((a, b) => a + b, 0)
   const all = Object.values(keys).flat()
