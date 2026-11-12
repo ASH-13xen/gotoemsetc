@@ -598,7 +598,14 @@ export function SettingsTab() {
   }, [settings])
   const save = useMutation({
     mutationFn: () =>
-      devicesApi.saveSettings({ apps: draft!.apps, brand: draft!.brand, checkDueDay: draft!.checkDueDay, lowStoragePct: draft!.lowStoragePct, lowBatteryPct: draft!.lowBatteryPct }),
+      devicesApi.saveSettings({
+        apps: draft!.apps,
+        brand: draft!.brand,
+        checkDueDay: draft!.checkDueDay,
+        lowStoragePct: draft!.lowStoragePct,
+        lowBatteryPct: draft!.lowBatteryPct,
+        locationAccount: draft!.locationAccount ?? '',
+      }),
     onSuccess: () => {
       toast.success('Settings saved')
       queryClient.invalidateQueries({ queryKey: DEVICES_KEY })
@@ -679,6 +686,18 @@ export function SettingsTab() {
       </Card>
 
       <Card className="gap-3 p-4">
+        <p className="text-sm font-semibold">Location</p>
+        <div className="grid gap-1.5 sm:max-w-md">
+          <Label className="text-xs text-muted-foreground">Company Google account every phone shares its location with</Label>
+          <Input placeholder="e.g. location@yourcompany.com" value={draft.locationAccount ?? ''} onChange={(e) => setDraft({ ...draft, locationAccount: e.target.value })} />
+        </div>
+        <p className="text-xs text-muted-foreground">
+          On each phone: Google Maps → profile picture → Location sharing → New share → "Until you turn this off" → this account. Then open Google Maps signed in
+          to this account → Location sharing to see every phone, and mark each one verified on its page.
+        </p>
+      </Card>
+
+      <Card className="gap-3 p-4">
         <p className="text-sm font-semibold">Monthly check</p>
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="grid gap-1.5">
@@ -711,9 +730,20 @@ const GUIDES: { title: string; steps: string[] }[] = [
     steps: [
       'Add it here first (it gets its code — stick the code on the back) with its IMEI (dial *#06#) and serial number.',
       'Android: sign in with its own company Gmail. iPhone: its own company Apple ID — never a person’s. Record the account under Accounts, with 2-step codes going to a company number.',
-      'Turn on the screen lock, Find My Device / Find My, and theft protection (Android: Settings → Google → Theft protection; iPhone: Settings → Face ID & Passcode → Stolen Device Protection).',
+      'Turn on the screen lock and theft protection (Android: Settings → Google → Theft protection; iPhone: Settings → Face ID & Passcode → Stolen Device Protection).',
+      'Location: turn on Find My Device / Find My, and share the location from Google Maps with the company account (guide below). Then mark it "I saw it on the map" on its page.',
       'Install every app in the list (Settings tab) and sign each in to the company account; set up the WhatsApp Business profile from the brand kit; update the Truecaller name.',
       'Then hand it over from its page — the handover check, the accessories, and print the agreement for signing.',
+    ],
+  },
+  {
+    title: 'Turning on location sharing (Android and iPhone)',
+    steps: [
+      'Install Google Maps and sign in to the phone\'s company Google account.',
+      'Android: Settings → Location on, and Settings → Apps → Google Maps → Permissions → Location → "Allow all the time", Use precise location on.',
+      'iPhone: Settings → Privacy & Security → Location Services on → Google Maps → "Always", Precise Location on. Also Settings → [name] → Find My → Find My iPhone on.',
+      'In Google Maps: profile picture → Location sharing → New share → "Until you turn this off" → choose the company location account (Devices → Settings).',
+      'On a laptop or desktop, open Google Maps signed in to that account → Location sharing: the phone appears with its live location. Mark it "I saw it on the map" on the device\'s page.',
     ],
   },
   {

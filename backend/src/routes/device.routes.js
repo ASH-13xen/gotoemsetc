@@ -71,6 +71,7 @@ router.post(
     res.status(201).json({ issue });
   })
 );
+router.get('/mine/drives', asyncHandler(async (req, res) => res.json({ drives: await deviceService.shootDrives() })));
 router.post(
   '/mine/footage',
   asyncHandler(async (req, res) => {
@@ -171,6 +172,16 @@ router.post('/issues/:id/resolve', hr, validate(id), asyncHandler(async (req, re
 router.get('/footage', hr, asyncHandler(async (req, res) => res.json({ uploads: await deviceService.listFootage(req.query) })));
 router.post('/footage', hr, asyncHandler(async (req, res) => res.status(201).json({ upload: await deviceService.logFootage(req.body, req.user, { byHolder: false }) })));
 router.patch('/footage/:id', hr, validate(id), asyncHandler(async (req, res) => res.json({ upload: await deviceService.setFootageCleared(req.params.id, req.body.clearedFromPhone) })));
+router.post(
+  '/footage/:id/verify',
+  hr,
+  validate(id),
+  asyncHandler(async (req, res) => {
+    const upload_ = await deviceService.verifyFootage(req.params.id, req.body.verified !== false, req.user);
+    audit(req, 'device.verifyFootage', req.params.id, { verified: req.body.verified !== false });
+    res.json({ upload: upload_ });
+  })
+);
 
 router.get('/runbooks', hr, asyncHandler(async (req, res) => res.json({ runbooks: await deviceAccess.listRunbooks(req.query) })));
 router.post(
@@ -272,6 +283,16 @@ router.post(
     const runbook = await deviceService.markLost(req.params.id, req.body, req.user);
     audit(req, 'device.lost', req.params.id, { note: req.body.note });
     res.status(201).json({ runbook });
+  })
+);
+router.post(
+  '/:id/location-verified',
+  hr,
+  validate(id),
+  asyncHandler(async (req, res) => {
+    const device = await deviceService.verifyLocation(req.params.id, req.body, req.user);
+    audit(req, 'device.verifyLocation', req.params.id);
+    res.json({ device });
   })
 );
 router.post('/:id/found', hr, validate(id), asyncHandler(async (req, res) => res.json({ device: await deviceService.markFound(req.params.id, req.user) })));

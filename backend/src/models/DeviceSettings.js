@@ -26,6 +26,12 @@ const deviceSettingsSchema = new Schema(
       logo: { type: Schema.Types.ObjectId, ref: 'DeviceFile', default: null },
       brochure: { type: Schema.Types.ObjectId, ref: 'DeviceFile', default: null },
     },
+    // The company Google account every phone shares its location with (Google
+    // Maps → Location sharing) — HR sees all the phones on its map.
+    locationAccount: { type: String, trim: true },
+    // Default apps already offered, so a new default is added once to an
+    // existing list while one HR removed stays removed.
+    appDefaultsSeen: [String],
     accessTemplates: [
       {
         _id: false,

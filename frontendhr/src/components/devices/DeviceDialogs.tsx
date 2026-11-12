@@ -209,7 +209,7 @@ export function AssignDialog({ open, onOpenChange, device }: { open: boolean; on
               </div>
             </Field>
           )}
-          <CheckFields kind={device.kind} os={device.os} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
+          <CheckFields kind={device.kind} os={device.os} locationAccount={settings?.locationAccount} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
         </div>
         <DialogFooter>
           <Button onClick={() => assign.mutate()} disabled={!employeeId || !check.grade || assign.isPending}>
@@ -274,7 +274,7 @@ export function ReturnDialog({ open, onOpenChange, device, assignment }: { open:
               </div>
             </Field>
           )}
-          <CheckFields kind={device.kind} os={device.os} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
+          <CheckFields kind={device.kind} os={device.os} locationAccount={settings?.locationAccount} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
           <Field label="Note">
             <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
           </Field>
@@ -356,7 +356,7 @@ export function HrCheckDialog({ open, onOpenChange, device }: { open: boolean; o
           <DialogTitle>Check {device.code}</DialogTitle>
           <DialogDescription>Recorded as verified by you.</DialogDescription>
         </DialogHeader>
-        <CheckFields kind={device.kind} os={device.os} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
+        <CheckFields kind={device.kind} os={device.os} locationAccount={settings?.locationAccount} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
         <DialogFooter>
           <Button onClick={() => save.mutate()} disabled={!check.grade || save.isPending}>
             {save.isPending && <Loader2 className="size-4 animate-spin" />}

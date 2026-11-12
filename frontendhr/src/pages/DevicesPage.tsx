@@ -31,6 +31,7 @@ export default function DevicesPage() {
     verify: summary?.checksToVerify,
     issues: summary?.openIssues,
     runbooks: summary?.openRunbooks,
+    footage: summary?.footageToVerify,
   }
 
   return (

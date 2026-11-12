@@ -34,6 +34,7 @@ const {
   GENUINE_STATES,
   PARTS,
   securityItemsFor,
+  locationItemsFor,
   DEFAULT_APPS,
   ISSUE_CATEGORIES,
   ACCOUNT_KINDS,
@@ -65,7 +66,16 @@ const HOLDER_POPULATE = { path: 'holder', select: 'firstName lastName employeeCo
 
 async function getSettings() {
   let settings = await DeviceSettings.findOne({ key: 'main' });
-  if (!settings) settings = await DeviceSettings.create({ key: 'main', apps: DEFAULT_APPS });
+  if (!settings) return DeviceSettings.create({ key: 'main', apps: DEFAULT_APPS, appDefaultsSeen: DEFAULT_APPS.map((a) => a.key) });
+  // A default app added since (e.g. Google Contacts) joins the list once.
+  const seen = new Set(settings.appDefaultsSeen?.length ? settings.appDefaultsSeen : settings.apps.map((a) => a.key));
+  const fresh = DEFAULT_APPS.filter((a) => !seen.has(a.key));
+  if (fresh.length || !settings.appDefaultsSeen?.length) {
+    const have = new Set(settings.apps.map((a) => a.key));
+    for (const app of fresh) if (!have.has(app.key)) settings.apps.push(app);
+    settings.appDefaultsSeen = [...new Set([...seen, ...DEFAULT_APPS.map((a) => a.key)])];
+    await settings.save();
+  }
   return settings;
 }
 
@@ -110,6 +120,8 @@ function flagsFor(check, kind, settings) {
   if (Object.values(parts).some((s) => s === 'damaged' || s === 'missing')) flags.push('damaged');
   const security = check.security instanceof Map ? Object.fromEntries(check.security) : check.security || {};
   if (securityItemsFor(kind).some((s) => security[s.key] === false)) flags.push('security_off');
+  const location = check.location instanceof Map ? Object.fromEntries(check.location) : check.location || {};
+  if (locationItemsFor(kind).some((s) => location[s.key] === false)) flags.push('location_off');
   if (kind === 'phone' || kind === 'tablet') {
     const required = settings.apps.filter((a) => a.required).map((a) => a.key);
     const byKey = new Map((check.apps || []).map((a) => [a.key, a]));
@@ -126,6 +138,7 @@ async function applyCheckToDevice(device, check, settings) {
   const parts = check.parts instanceof Map ? Object.fromEntries(check.parts) : check.parts || {};
   const security = check.security instanceof Map ? Object.fromEntries(check.security) : check.security || {};
   const genuine = check.genuine instanceof Map ? Object.fromEntries(check.genuine) : check.genuine || {};
+  const location = check.location instanceof Map ? Object.fromEntries(check.location) : check.location || {};
   const total = Number(check.storageTotalGb);
   const free = Number(check.storageFreeGb);
   const required = settings.apps.filter((a) => a.required).map((a) => a.key);
@@ -139,6 +152,7 @@ async function applyCheckToDevice(device, check, settings) {
     securityOff: securityItemsFor(device.kind).filter((s) => security[s.key] === false).map((s) => s.key),
     appsMissing: device.kind === 'phone' || device.kind === 'tablet' ? required.filter((k) => !byKey.get(k)?.installed || !byKey.get(k)?.loggedIn) : [],
     unknownParts: Object.entries(genuine).filter(([, s]) => s === 'unknown').map(([k]) => k),
+    locationOff: locationItemsFor(device.kind).filter((s) => location[s.key] === false).map((s) => s.key),
     at: check.createdAt || new Date(),
   };
   if (check.apps?.length) device.apps = check.apps;
@@ -155,6 +169,10 @@ function checkFields(device, input = {}) {
   const security = {};
   for (const item of securityItemsFor(device.kind)) {
     if (typeof input.security?.[item.key] === 'boolean') security[item.key] = input.security[item.key];
+  }
+  const location = {};
+  for (const item of locationItemsFor(device.kind)) {
+    if (typeof input.location?.[item.key] === 'boolean') location[item.key] = input.location[item.key];
   }
   // Only an iPhone shows which parts are genuine.
   const genuine = {};
@@ -176,6 +194,7 @@ function checkFields(device, input = {}) {
     storageFreeGb: num(input.storageFreeGb),
     batteryHealth: num(input.batteryHealth),
     security,
+    location,
     genuine,
     apps,
     galleryBackedUp: typeof input.galleryBackedUp === 'boolean' ? input.galleryBackedUp : undefined,
@@ -268,7 +287,7 @@ async function list({ status, kind, q } = {}) {
 }
 
 async function summary() {
-  const [byStatus, byKind, stock, toVerify, openIssues, openRunbooks, all] = await Promise.all([
+  const [byStatus, byKind, stock, toVerify, openIssues, openRunbooks, all, footageToVerify] = await Promise.all([
     Device.aggregate([{ $group: { _id: '$status', n: { $sum: 1 } } }]),
     Device.aggregate([{ $match: { status: { $ne: DEVICE_STATUS.RETIRED } } }, { $group: { _id: { kind: '$kind', status: '$status' }, n: { $sum: 1 } } }]),
     accessoryStock(),
@@ -276,6 +295,7 @@ async function summary() {
     DeviceIssue.countDocuments({ status: 'open' }),
     DeviceRunbook.countDocuments({ status: 'open' }),
     list({ status: DEVICE_STATUS.ASSIGNED }),
+    FootageUpload.countDocuments({ verifiedAt: null }),
   ]);
   const counts = Object.fromEntries(Object.values(DEVICE_STATUS).map((s) => [s, 0]));
   for (const row of byStatus) counts[row._id] = row.n;
@@ -292,6 +312,7 @@ async function summary() {
     kinds,
     accessories: stock,
     checksToVerify: toVerify,
+    footageToVerify,
     checksOverdue: all.filter((d) => d.checkOverdue).length,
     openIssues,
     openRunbooks,
@@ -346,7 +367,7 @@ async function loadDevice(id) {
 }
 
 async function detail(id) {
-  const device = await Device.findById(id).populate(HOLDER_POPULATE).lean();
+  const device = await Device.findById(id).populate(HOLDER_POPULATE).populate('locationVerified.by', 'username').lean();
   if (!device) throw ApiError.notFound('Device not found');
   const [assignments, checks, issues, accounts, runbooks, footage, settings] = await Promise.all([
     DeviceAssignment.find({ device: id })
@@ -358,7 +379,7 @@ async function detail(id) {
     DeviceIssue.find({ device: id }).sort({ createdAt: -1 }).populate('employee', 'firstName lastName').lean(),
     DeviceAccount.find({ devices: id }).lean(),
     DeviceRunbook.find({ device: id }).sort({ createdAt: -1 }).populate('device', 'code brand model').populate('employee', 'firstName lastName').populate('startedBy steps.doneBy', 'username').lean(),
-    FootageUpload.find({ device: id }).sort({ shootDate: -1 }).limit(30).populate('employee', 'firstName lastName').lean(),
+    FootageUpload.find({ device: id }).sort({ createdAt: -1 }).limit(30).populate(FOOTAGE_POPULATE).lean(),
     getSettings(),
   ]);
   return { device, assignments, checks, issues, accounts, runbooks, footage, apps: settings.apps };
@@ -371,7 +392,14 @@ function handoverSteps(device, employee) {
   const steps = [
     { key: 'company_mail', label: `Add ${employee.firstName}'s company mail${mail ? ` (${mail})` : ''}` },
     { key: 'apps', label: 'Every required app installed and signed in to the company accounts' },
-    { key: 'security', label: 'Screen lock, Find My and theft protection on — on the company account' },
+    { key: 'security', label: 'Screen lock and theft protection on — on the company account' },
+    {
+      key: 'location',
+      label:
+        device.kind === 'phone' || device.kind === 'tablet'
+          ? 'Location: Find My on, and Google Maps location sharing with the company account (then verify it on the map)'
+          : 'Location: Find My on, signed in to the company account',
+    },
   ];
   if (device.kind === 'phone') {
     steps.push({ key: 'whatsapp_profile', label: 'WhatsApp Business profile from the brand kit (name, bio, logo, brochure)' });
@@ -592,6 +620,7 @@ async function documentData(assignment) {
   const accounts = await DeviceAccount.find({ devices: device._id }).lean();
   const parts = check?.parts || {};
   const security = check?.security || {};
+  const location = check?.location || {};
   return {
     companyName: env.companyName || 'GO-TO Friend Pvt. Ltd.',
     employeeName: nameOf(employee),
@@ -619,7 +648,10 @@ async function documentData(assignment) {
       ? assignment.accessories.map((a) => ({ name: a.label, qty: String(a.qty), returned: String(a.returnedQty ?? 0) }))
       : [{ name: 'None', qty: '—', returned: '—' }],
     parts: (PARTS[device.kind] || PARTS.other).map((p) => ({ label: p.label, state: PART_STATE_LABEL[parts[p.key]] || '—' })),
-    security: securityItemsFor(device.kind).map((s) => ({ label: s.label, state: security[s.key] === true ? 'On' : security[s.key] === false ? 'OFF' : '—' })),
+    security: [
+      ...securityItemsFor(device.kind).map((s) => ({ label: s.label, state: security[s.key] === true ? 'On' : security[s.key] === false ? 'OFF' : '—' })),
+      ...locationItemsFor(device.kind).map((s) => ({ label: s.label, state: location[s.key] === true ? 'On' : location[s.key] === false ? 'OFF' : '—' })),
+    ],
     accounts: accounts.length ? accounts.map((a) => ({ kind: ACCOUNT_KINDS[a.kind] || a.kind, identifier: a.identifier })) : [{ kind: 'None recorded', identifier: '—' }],
   };
 }
@@ -690,7 +722,7 @@ async function listChecks({ status, device } = {}) {
     .lean();
 }
 
-async function reviewCheck(id, { ok, note }, user) {
+async function reviewCheck(id, { ok, note, locationSeen }, user) {
   const check = await DeviceCheck.findById(id).populate('device', 'code brand model');
   if (!check) throw ApiError.notFound('Check not found');
   if (check.status !== CHECK_STATUS.SUBMITTED) throw ApiError.conflict('This check was already reviewed');
@@ -699,6 +731,7 @@ async function reviewCheck(id, { ok, note }, user) {
   check.reviewedAt = new Date();
   check.reviewNote = note || undefined;
   await check.save();
+  if (ok && locationSeen) await verifyLocation(check.device._id, { note: 'Seen on the map when verifying the monthly check' }, user);
   const holderUser = check.employee ? await userRepository.findByEmployeeId(check.employee) : null;
   if (holderUser) {
     await notificationService.createForUsers([holderUser._id], {
@@ -767,15 +800,38 @@ async function resolveIssue(id, { resolution }, user) {
 
 // ---------------------------------------------------------------- footage
 
+// The company Google accounts whose Drive footage can go to — for the upload
+// form (names and emails only).
+async function shootDrives() {
+  return DeviceAccount.find({ kind: 'google' }).select('label identifier').sort({ identifier: 1 }).lean();
+}
+
+const FOOTAGE_POPULATE = [
+  { path: 'device', select: 'code brand model' },
+  { path: 'employee', select: 'firstName lastName' },
+  { path: 'uploadedBy', select: 'firstName lastName' },
+  { path: 'client', select: 'name' },
+  { path: 'driveAccount', select: 'label identifier' },
+  { path: 'verifiedBy', select: 'username' },
+];
+
 async function logFootage(input, user, { byHolder }) {
   if (!input.driveLink || !/^https?:\/\//i.test(input.driveLink)) throw ApiError.badRequest('Paste the Google Drive link of the uploaded footage');
   const device = input.device ? await loadDevice(input.device) : null;
   if (byHolder && device && !isSelf(user, device.holder)) throw ApiError.forbidden('This device is not with you');
-  return FootageUpload.create({
+  const drive = input.driveAccount ? await DeviceAccount.findOne({ _id: input.driveAccount, kind: 'google' }).select('label identifier').lean() : null;
+  if (input.driveAccount && !drive) throw ApiError.badRequest('Choose the Google Drive from the list');
+  const uploader = input.uploadedBy ? await Employee.findById(input.uploadedBy).select('_id').lean() : null;
+  if (input.uploadedBy && !uploader) throw ApiError.badRequest('Choose who uploaded it from the list');
+  const logger = byHolder ? user.employeeLink : device?.holder || null;
+  const upload = await FootageUpload.create({
     device: device?._id || null,
-    employee: byHolder ? user.employeeLink : device?.holder || null,
+    employee: logger,
+    uploadedBy: uploader?._id || logger,
+    driveAccount: drive?._id || null,
+    driveName: drive ? drive.identifier : undefined,
     loggedBy: user.id,
-    shootDate: input.shootDate ? new Date(input.shootDate) : new Date(),
+    shootDate: input.shootDate ? new Date(input.shootDate) : null,
     client: input.client || null,
     clientName: input.clientName || undefined,
     driveLink: input.driveLink,
@@ -784,16 +840,32 @@ async function logFootage(input, user, { byHolder }) {
     clearedFromPhone: Boolean(input.clearedFromPhone),
     note: input.note || undefined,
   });
+  return upload;
 }
 
-async function listFootage({ device } = {}) {
-  return FootageUpload.find(device ? { device } : {})
-    .sort({ shootDate: -1, createdAt: -1 })
-    .limit(200)
-    .populate('device', 'code brand model')
-    .populate('employee', 'firstName lastName')
-    .populate('client', 'name')
-    .lean();
+async function listFootage({ device, toVerify } = {}) {
+  const filter = {};
+  if (device) filter.device = device;
+  if (toVerify === 'true' || toVerify === true) filter.verifiedAt = null;
+  return FootageUpload.find(filter).sort({ createdAt: -1 }).limit(300).populate(FOOTAGE_POPULATE).lean();
+}
+
+// HR opened the Drive link and the footage is there (or takes that back).
+async function verifyFootage(id, verified, user) {
+  const upload = await FootageUpload.findById(id);
+  if (!upload) throw ApiError.notFound('Upload not found');
+  upload.verifiedAt = verified ? new Date() : null;
+  upload.verifiedBy = verified ? user.id : null;
+  await upload.save();
+  return upload;
+}
+
+// HR saw the device on the map — Google Maps location sharing or Find My.
+async function verifyLocation(id, { note } = {}, user) {
+  const device = await loadDevice(id);
+  device.locationVerified = { at: new Date(), by: user.id, note: note ? String(note).slice(0, 300) : undefined };
+  await device.save();
+  return device;
 }
 
 async function setFootageCleared(id, cleared) {
@@ -833,7 +905,7 @@ async function mine(user) {
     DeviceAssignment.find({ _id: { $in: devices.map((d) => d.assignment) } }).lean(),
     DeviceCheck.find({ device: { $in: ids }, kind: CHECK_KIND.MONTHLY, month: monthKey() }).sort({ createdAt: -1 }).lean(),
     DeviceIssue.find({ device: { $in: ids }, status: 'open' }).sort({ createdAt: -1 }).lean(),
-    FootageUpload.find({ employee: user.employeeLink }).sort({ shootDate: -1 }).limit(10).populate('client', 'name').lean(),
+    FootageUpload.find({ $or: [{ employee: user.employeeLink }, { uploadedBy: user.employeeLink }] }).sort({ createdAt: -1 }).limit(50).populate(FOOTAGE_POPULATE).lean(),
   ]);
   const byId = (list, key) => (id) => list.find((x) => String(x[key]) === String(id));
   return {
@@ -841,6 +913,7 @@ async function mine(user) {
     month: monthKey(),
     apps: settings.apps,
     brand: settings.brand,
+    locationAccount: settings.locationAccount || null,
     devices: devices.map((d) => {
       const assignment = byId(assignments, '_id')(d.assignment);
       const check = checks.find((c) => String(c.device) === String(d._id));
@@ -849,6 +922,7 @@ async function mine(user) {
         ...d,
         parts: PARTS[d.kind] || PARTS.other,
         securityItems: securityItemsFor(d.kind),
+        locationItems: locationItemsFor(d.kind),
         assignment: assignment && {
           _id: assignment._id,
           assignedAt: assignment.assignedAt,
@@ -881,7 +955,7 @@ async function accept(assignmentId, user) {
 // Each item's id is what the Action centre's Acknowledge remembers: a
 // missing check is per device per month, a leaver's device per handover.
 async function actionItems() {
-  const [assigned, toVerify, issues, runbooks, unsigned] = await Promise.all([
+  const [assigned, toVerify, issues, runbooks, unsigned, uploads] = await Promise.all([
     list({ status: DEVICE_STATUS.ASSIGNED }),
     listChecks({ status: CHECK_STATUS.SUBMITTED }),
     listIssues({ status: 'open' }),
@@ -890,6 +964,7 @@ async function actionItems() {
       .populate('device', 'code brand model')
       .populate('employee', 'firstName lastName')
       .lean(),
+    FootageUpload.find({ verifiedAt: null }).sort({ createdAt: 1 }).limit(50).populate(FOOTAGE_POPULATE).lean(),
   ]);
   const leavers = assigned.filter((d) => d.holder && d.holder.status === EMPLOYEE_STATUS.OFFBOARDED);
   const label = (d) => `${d.code} ${deviceName(d)}`.trim();
@@ -903,6 +978,10 @@ async function actionItems() {
       text: `${r.kind === 'lost' ? `Lost: ${r.device?.code || 'device'}` : `Revoke access: ${nameOf(r.employee)}`} — ${r.steps.filter((s) => s.done).length} of ${r.steps.length} steps done`,
     })),
     unsigned: unsigned.map((a) => ({ id: a._id, text: `${label(a.device)} — ${nameOf(a.employee)}'s handover agreement isn't signed yet` })),
+    footageToVerify: uploads.map((u) => ({
+      id: u._id,
+      text: `${nameOf(u.uploadedBy || u.employee)} uploaded ${u.client?.name || u.clientName || 'shoot footage'}${u.driveName ? ` to ${u.driveName}` : ''} — open the link and verify it`,
+    })),
   };
 }
 
@@ -1001,6 +1080,9 @@ module.exports = {
   logFootage,
   listFootage,
   setFootageCleared,
+  verifyFootage,
+  verifyLocation,
+  shootDrives,
   accessoryStock,
   createAccessory,
   updateAccessory,

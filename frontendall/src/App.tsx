@@ -18,6 +18,7 @@ import CompanyCalendarPage from '@/pages/CompanyCalendarPage'
 import WeeklyCalendarPage from '@/pages/WeeklyCalendarPage'
 import TaskCalendarPage from '@/pages/TaskCalendarPage'
 import CalendarInvitePage from '@/pages/CalendarInvitePage'
+import MyDevicesPage from '@/pages/MyDevicesPage'
 import { ShellLayout } from '@/components/layout/ShellLayout'
 import { ensureRemoteStyles } from '@/lib/remoteStyles'
 
@@ -72,6 +73,16 @@ export default function App() {
                   <RequireAuth>
                     <ShellLayout section="Dashboard">
                       <DashboardPage />
+                    </ShellLayout>
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/my-devices"
+                element={
+                  <RequireAuth>
+                    <ShellLayout section="My devices">
+                      <MyDevicesPage />
                     </ShellLayout>
                   </RequireAuth>
                 }

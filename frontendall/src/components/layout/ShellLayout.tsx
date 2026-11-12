@@ -1,21 +1,22 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard,
-  Users,
-  Ticket,
-  CalendarRange,
-  CalendarDays,
   Briefcase,
-  ShieldAlert,
-  LogOut,
-  Menu,
+  CalendarDays,
+  CalendarRange,
   ChevronLeft,
   ClipboardList,
-  Wrench,
-  Wallet,
   Flag,
+  LayoutDashboard,
+  LogOut,
+  Menu,
   Network,
+  ShieldAlert,
+  Smartphone,
+  Ticket,
+  Users,
+  Wallet,
+  Wrench,
   X,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -73,6 +74,8 @@ export function ShellLayout({
     { to: "/ems", label: "EMS", icon: Users },
     // Everyone plans their week here — meetings, events, blocked time.
     { to: "/calendar", label: "Weekly Calendar", icon: CalendarDays },
+    // Everyone with an employee record: their company devices and shoot uploads.
+    ...(user?.employeeLink ? [{ to: "/my-devices", label: "My devices", icon: Smartphone }] : []),
     // Task Management, as tickets. Hidden while switched off (backend
     // constants.js FEATURES).
     ...(featureOn(user, "TASK_MANAGEMENT")

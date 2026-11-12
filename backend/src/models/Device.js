@@ -49,7 +49,14 @@ const deviceSchema = new Schema(
       securityOff: [String], // security item keys not on
       appsMissing: [String], // required app keys not installed / logged in
       unknownParts: [String], // iPhone parts shown as "Unknown Part"
+      locationOff: [String], // location item keys not on
       at: Date,
+    },
+    // HR saw the device on the map (Google Maps location sharing / Find My).
+    locationVerified: {
+      at: Date,
+      by: { type: Schema.Types.ObjectId, ref: 'User' },
+      note: { type: String, trim: true },
     },
     // Each app's state on this device, as last checked.
     apps: [{ _id: false, key: String, installed: Boolean, loggedIn: Boolean, account: String }],

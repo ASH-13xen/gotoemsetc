@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { BookOpen, Camera, CloudUpload, Loader2, Palette, Smartphone } from 'lucide-react'
+import { Camera, Loader2, Smartphone } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DashboardCard } from '@/components/dashboard/DashboardCard'
 import { listClients } from '@/api/clients.api'
+import { listOpenEmployeeDirectory } from '@/api/employees.api'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import {
@@ -26,6 +27,7 @@ import {
   myDevices,
   reportDeviceIssue,
   sendMonthlyCheck,
+  shootDrives,
   type CheckInput,
   type GenuineState,
   type Grade,
@@ -39,7 +41,7 @@ import {
 // it is on the company Drive, and the brand kit for the WhatsApp profile.
 // Shows nothing for someone with no company device.
 
-const KEY = ['my-devices']
+export const KEY = ['my-devices']
 const fmt = (d?: string) => (d ? new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '')
 const nextMonth = () => new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString('en-IN', { month: 'long' })
 const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th'}`
@@ -58,7 +60,17 @@ const STATE_STYLE: Record<PartState, string> = {
   missing: 'bg-zinc-500/15 text-zinc-700',
 }
 
-function CheckDialog({ device, apps, onClose }: { device: MyDevice; apps: MyDevices['apps']; onClose: () => void }) {
+export function CheckDialog({
+  device,
+  apps,
+  locationAccount,
+  onClose,
+}: {
+  device: MyDevice
+  apps: MyDevices['apps']
+  locationAccount?: string | null
+  onClose: () => void
+}) {
   const queryClient = useQueryClient()
   const [value, setValue] = useState<CheckInput>({ parts: {}, security: {}, apps: [], storageTotalGb: device.storageGb ?? '' })
   const [photos, setPhotos] = useState<File[]>([])
@@ -76,6 +88,7 @@ function CheckDialog({ device, apps, onClose }: { device: MyDevice; apps: MyDevi
     device.parts.some((p) => !value.parts[p.key]) && 'every part',
     value.storageFreeGb === undefined || value.storageFreeGb === '' ? 'the free storage' : null,
     device.securityItems.some((s) => value.security[s.key] === undefined) && 'every security setting',
+    device.locationItems?.some((s) => value.location?.[s.key] === undefined) && 'every location setting',
     iphone && GENUINE_PARTS.some((p) => !value.genuine?.[p.key]) && 'the Parts and Service History',
     photos.length < 2 && 'at least 2 photos (front and back)',
   ].filter(Boolean) as string[]
@@ -200,6 +213,36 @@ function CheckDialog({ device, apps, onClose }: { device: MyDevice; apps: MyDevi
               </div>
             ))}
           </div>
+          {(device.locationItems?.length ?? 0) > 0 && (
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">Location — so the company can see where the device is</Label>
+              {device.locationItems.map((item) => (
+                <div key={item.key} className="flex items-center justify-between gap-3 rounded-lg bg-secondary/30 px-3 py-1.5">
+                  <span className="text-sm">{item.label}</span>
+                  <div className="flex shrink-0 gap-1">
+                    {[true, false].map((on) => (
+                      <button
+                        key={String(on)}
+                        type="button"
+                        onClick={() => set({ location: { ...value.location, [item.key]: on } })}
+                        className={cn(
+                          'rounded-md px-2 py-0.5 text-[11px] font-semibold',
+                          value.location?.[item.key] === on ? (on ? STATE_STYLE.ok : STATE_STYLE.damaged) : 'text-muted-foreground hover:bg-secondary'
+                        )}
+                      >
+                        {on ? 'On' : 'Off'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {locationAccount && (
+                <p className="text-[11px] text-muted-foreground">
+                  Share the location from Google Maps → profile picture → Location sharing → "Until you turn this off" → {locationAccount}.
+                </p>
+              )}
+            </div>
+          )}
           {phone && (
             <div className="grid gap-1.5">
               <Label className="text-xs text-muted-foreground">Apps — installed, and signed in to the company account</Label>
@@ -260,7 +303,7 @@ function CheckDialog({ device, apps, onClose }: { device: MyDevice; apps: MyDevi
   )
 }
 
-function IssueDialog({ device, onClose }: { device: MyDevice; onClose: () => void }) {
+export function IssueDialog({ device, onClose }: { device: MyDevice; onClose: () => void }) {
   const queryClient = useQueryClient()
   const [category, setCategory] = useState('storage')
   const [description, setDescription] = useState('')
@@ -306,61 +349,117 @@ function IssueDialog({ device, onClose }: { device: MyDevice; onClose: () => voi
   )
 }
 
-function FootageDialog({ devices, onClose }: { devices: MyDevice[]; onClose: () => void }) {
+// Logging a shoot upload: which company Drive it went to, the link, who
+// uploaded it (them by default), and the shoot. The time it's logged is saved
+// automatically; HR then opens the link and verifies it.
+export function FootageDialog({ devices, onClose }: { devices: MyDevice[]; onClose: () => void }) {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
   const { data: clients = [] } = useQuery({ queryKey: ['task-clients'], queryFn: listClients, retry: false })
+  const { data: drives = [] } = useQuery({ queryKey: ['shoot-drives'], queryFn: shootDrives })
+  const { data: people = [] } = useQuery({ queryKey: ['employee-directory'], queryFn: listOpenEmployeeDirectory })
+  const NONE = '__none__'
   const [form, setForm] = useState({
-    device: devices[0]?._id ?? '',
-    shootDate: new Date().toISOString().slice(0, 10),
+    device: devices.find((d) => d.kind === 'phone')?._id ?? devices[0]?._id ?? NONE,
+    driveAccount: '',
+    driveLink: '',
+    uploadedBy: user?.employeeLink ?? '',
+    shootDate: '',
     client: '',
     clientName: '',
-    driveLink: '',
     files: '',
     sizeGb: '',
     clearedFromPhone: false,
-    note: '',
   })
+  const set = (k: string, v: unknown) => setForm((f) => ({ ...f, [k]: v }))
   const send = useMutation({
-    mutationFn: () => logFootage({ ...form, client: form.client || undefined, clientName: form.client ? undefined : form.clientName || undefined }),
+    mutationFn: () =>
+      logFootage({
+        device: form.device === NONE ? undefined : form.device,
+        driveAccount: form.driveAccount || undefined,
+        driveLink: form.driveLink,
+        uploadedBy: form.uploadedBy || undefined,
+        shootDate: form.shootDate || undefined,
+        client: form.client || undefined,
+        clientName: form.client ? undefined : form.clientName || undefined,
+        files: form.files,
+        sizeGb: form.sizeGb,
+        clearedFromPhone: form.clearedFromPhone,
+      }),
     onSuccess: () => {
-      toast.success('Logged')
+      toast.success('Logged — HR will verify it')
       queryClient.invalidateQueries({ queryKey: KEY })
       onClose()
     },
     onError: (err) => toast.error(apiMessage(err, 'Could not log')),
   })
-  const set = (k: string, v: unknown) => setForm((f) => ({ ...f, [k]: v }))
+  const needsDrive = drives.length > 0 && !form.driveAccount
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Log a shoot upload</DialogTitle>
           <DialogDescription>
-            Upload the footage to the company Drive first (Drive app → + → Upload), then paste the folder link here. Only clear it from the phone once it's
-            logged.
+            Upload the footage to the company Google Drive first (Drive app → + → Upload), then log it here. It's saved with today's date and time; HR then
+            opens the link and verifies it.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
-          {devices.length > 1 && (
-            <div className="grid gap-1.5">
-              <Label className="text-xs text-muted-foreground">Shot on</Label>
-              <Select value={form.device} onValueChange={(v) => set('device', v)}>
+          <div className="grid gap-1.5 sm:col-span-2">
+            <Label className="text-xs text-muted-foreground">Which Google Drive</Label>
+            {drives.length ? (
+              <Select value={form.driveAccount} onValueChange={(v) => set('driveAccount', v)}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Choose the Drive it went to" />
                 </SelectTrigger>
                 <SelectContent>
-                  {devices.map((d) => (
+                  {drives.map((d) => (
                     <SelectItem key={d._id} value={d._id}>
-                      {d.code} · {deviceName(d)}
+                      {d.identifier}
+                      {d.label ? ` · ${d.label}` : ''}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          )}
+            ) : (
+              <p className="text-xs text-muted-foreground">HR hasn't added the company Drives yet — paste the link below.</p>
+            )}
+          </div>
+          <div className="grid gap-1.5 sm:col-span-2">
+            <Label className="text-xs text-muted-foreground">Drive link (the folder with the footage)</Label>
+            <Input placeholder="https://drive.google.com/…" value={form.driveLink} onChange={(e) => set('driveLink', e.target.value)} />
+          </div>
           <div className="grid gap-1.5">
-            <Label className="text-xs text-muted-foreground">Shoot date</Label>
-            <Input type="date" value={form.shootDate} onChange={(e) => set('shootDate', e.target.value)} />
+            <Label className="text-xs text-muted-foreground">Uploaded by</Label>
+            <Select value={form.uploadedBy} onValueChange={(v) => set('uploadedBy', v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Who uploaded it" />
+              </SelectTrigger>
+              <SelectContent>
+                {people.map((p) => (
+                  <SelectItem key={p._id} value={p._id}>
+                    {`${p.firstName} ${p.lastName ?? ''}`.trim()}
+                    {p._id === user?.employeeLink ? ' (me)' : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label className="text-xs text-muted-foreground">Shot on</Label>
+            <Select value={form.device} onValueChange={(v) => set('device', v)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {devices.map((d) => (
+                  <SelectItem key={d._id} value={d._id}>
+                    {d.code} · {deviceName(d)}
+                  </SelectItem>
+                ))}
+                <SelectItem value={NONE}>Not a company device</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="grid gap-1.5">
             <Label className="text-xs text-muted-foreground">Client</Label>
@@ -381,9 +480,9 @@ function FootageDialog({ devices, onClose }: { devices: MyDevice[]; onClose: () 
             ) : null}
             {!form.client && <Input placeholder="Client / shoot name" value={form.clientName} onChange={(e) => set('clientName', e.target.value)} />}
           </div>
-          <div className="grid gap-1.5 sm:col-span-2">
-            <Label className="text-xs text-muted-foreground">Google Drive link</Label>
-            <Input placeholder="https://drive.google.com/…" value={form.driveLink} onChange={(e) => set('driveLink', e.target.value)} />
+          <div className="grid gap-1.5">
+            <Label className="text-xs text-muted-foreground">Shoot date (optional)</Label>
+            <Input type="date" value={form.shootDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => set('shootDate', e.target.value)} />
           </div>
           <div className="grid gap-1.5">
             <Label className="text-xs text-muted-foreground">Files (optional)</Label>
@@ -398,8 +497,9 @@ function FootageDialog({ devices, onClose }: { devices: MyDevice[]; onClose: () 
             I've checked it opens on Drive and cleared it from the phone
           </label>
         </div>
-        <DialogFooter>
-          <Button onClick={() => send.mutate()} disabled={!form.driveLink || send.isPending}>
+        <DialogFooter className="items-center">
+          {needsDrive && <p className="mr-auto text-xs text-muted-foreground">Choose which Drive it went to.</p>}
+          <Button onClick={() => send.mutate()} disabled={!form.driveLink || needsDrive || send.isPending}>
             {send.isPending && <Loader2 className="size-4 animate-spin" />}
             Log it
           </Button>
@@ -409,7 +509,7 @@ function FootageDialog({ devices, onClose }: { devices: MyDevice[]; onClose: () 
   )
 }
 
-function BrandDialog({ brand, onClose }: { brand: MyDevices['brand']; onClose: () => void }) {
+export function BrandDialog({ brand, onClose }: { brand: MyDevices['brand']; onClose: () => void }) {
   const row = (label: string, value?: string) =>
     value ? (
       <div className="rounded-lg bg-secondary/30 px-3 py-2">
@@ -456,7 +556,7 @@ function BrandDialog({ brand, onClose }: { brand: MyDevices['brand']; onClose: (
   )
 }
 
-const HELP: { title: string; steps: string[] }[] = [
+export const HELP: { title: string; steps: string[] }[] = [
   {
     title: 'Storage is full',
     steps: [
@@ -479,7 +579,7 @@ const HELP: { title: string; steps: string[] }[] = [
   },
 ]
 
-function DeviceRow({ device, data, onCheck, onIssue }: { device: MyDevice; data: MyDevices; onCheck: () => void; onIssue: () => void }) {
+export function DeviceRow({ device, data, onCheck, onIssue }: { device: MyDevice; data: MyDevices; onCheck: () => void; onIssue: () => void }) {
   const queryClient = useQueryClient()
   const accept = useMutation({
     mutationFn: () => acceptDevice(device.assignment!._id),
@@ -546,67 +646,54 @@ function DeviceRow({ device, data, onCheck, onIssue }: { device: MyDevice; data:
   )
 }
 
+export function HelpDialog({ onClose }: { onClose: () => void }) {
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>Phone help</DialogTitle>
+          <DialogDescription>The usual problems, and what to do.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          {HELP.map((h) => (
+            <div key={h.title}>
+              <p className="text-sm font-semibold">{h.title}</p>
+              <ol className="list-decimal space-y-0.5 pl-5 text-sm text-foreground/85">
+                {h.steps.map((s) => (
+                  <li key={s}>{s}</li>
+                ))}
+              </ol>
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// On the dashboard: the devices and what they need now. Everything else —
+// details, shoot uploads, brand kit — is on the My devices page.
 export function MyDevicesCard() {
   const { user } = useAuth()
   const { data } = useQuery({ queryKey: KEY, queryFn: myDevices, enabled: Boolean(user?.employeeLink), refetchInterval: 5 * 60_000 })
-  const [dialog, setDialog] = useState<{ kind: 'check' | 'issue'; device: MyDevice } | { kind: 'footage' | 'brand' | 'help' } | null>(null)
+  const [dialog, setDialog] = useState<{ kind: 'check' | 'issue'; device: MyDevice } | null>(null)
   if (!data?.devices.length) return null
-  const phones = data.devices.filter((d) => d.kind === 'phone' || d.kind === 'tablet')
 
   return (
-    <DashboardCard icon={<Smartphone className="size-4" />} title="My company devices">
+    <DashboardCard icon={<Smartphone className="size-4" />} title="My company devices" viewAllHref="/my-devices" viewAllLabel="Open">
       <div className="mt-4 grid grid-cols-1 gap-2">
         {data.devices.map((d) => (
           <DeviceRow key={d._id} device={d} data={data} onCheck={() => setDialog({ kind: 'check', device: d })} onIssue={() => setDialog({ kind: 'issue', device: d })} />
         ))}
         {data.footage.length > 0 && (
           <p className="text-xs text-muted-foreground">
-            Last upload: {fmt(data.footage[0].shootDate)} · {data.footage[0].client?.name ?? data.footage[0].clientName ?? ''}
-            {data.footage.some((f) => !f.clearedFromPhone) && ' · some footage is still on the phone'}
+            Last upload logged {fmt(data.footage[0].createdAt)}
+            {data.footage.some((f) => !f.verifiedAt) ? ' · waiting for HR to verify' : ' · verified'}
           </p>
         )}
-        <div className="mt-1 flex flex-wrap gap-1">
-          {phones.length > 0 && (
-            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setDialog({ kind: 'footage' })}>
-              <CloudUpload className="size-3.5" /> Log a shoot upload
-            </Button>
-          )}
-          {phones.length > 0 && (
-            <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setDialog({ kind: 'brand' })}>
-              <Palette className="size-3.5" /> Brand kit
-            </Button>
-          )}
-          <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setDialog({ kind: 'help' })}>
-            <BookOpen className="size-3.5" /> Help
-          </Button>
-        </div>
       </div>
-      {dialog?.kind === 'check' && <CheckDialog device={dialog.device} apps={data.apps} onClose={() => setDialog(null)} />}
+      {dialog?.kind === 'check' && <CheckDialog device={dialog.device} apps={data.apps} locationAccount={data.locationAccount} onClose={() => setDialog(null)} />}
       {dialog?.kind === 'issue' && <IssueDialog device={dialog.device} onClose={() => setDialog(null)} />}
-      {dialog?.kind === 'footage' && <FootageDialog devices={phones} onClose={() => setDialog(null)} />}
-      {dialog?.kind === 'brand' && <BrandDialog brand={data.brand} onClose={() => setDialog(null)} />}
-      {dialog?.kind === 'help' && (
-        <Dialog open onOpenChange={(v) => !v && setDialog(null)}>
-          <DialogContent className="sm:max-w-xl">
-            <DialogHeader>
-              <DialogTitle>Phone help</DialogTitle>
-              <DialogDescription>The usual problems, and what to do.</DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-3">
-              {HELP.map((h) => (
-                <div key={h.title}>
-                  <p className="text-sm font-semibold">{h.title}</p>
-                  <ol className="list-decimal space-y-0.5 pl-5 text-sm text-foreground/85">
-                    {h.steps.map((s) => (
-                      <li key={s}>{s}</li>
-                    ))}
-                  </ol>
-                </div>
-              ))}
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
     </DashboardCard>
   )
 }

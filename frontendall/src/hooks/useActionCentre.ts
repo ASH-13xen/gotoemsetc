@@ -74,7 +74,7 @@ export function useActionCentreCounts() {
     ],
     leaveReviews: (cmReviews.data?.requests ?? []).map((r) => ACTION_KEY.leaveCm(r._id)),
     devices: hr
-      ? (['unreturned', 'runbooks', 'checksToVerify', 'issues'] as const).flatMap((section) =>
+      ? (['unreturned', 'runbooks', 'checksToVerify', 'issues', 'footageToVerify'] as const).flatMap((section) =>
           (devices.data?.[section] ?? []).map((i) => ACTION_KEY.device(section, i.id))
         )
       : [],

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { AlertCircle, AlertTriangle, BatteryLow, HardDrive, Plus, Search, ShieldOff, Smartphone } from 'lucide-react'
+import { AlertCircle, AlertTriangle, BatteryLow, HardDrive, MapPin, MapPinOff, Plus, Search, ShieldOff, Smartphone } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -18,6 +18,7 @@ import {
   appLabel,
   deviceName,
   devicesApi,
+  locationLabel,
   partLabel,
   personName,
   securityLabel,
@@ -43,6 +44,9 @@ export function DeviceFlags({ device, settings }: { device: Device; settings?: P
   const lowBattery = settings?.lowBatteryPct ?? 80
   const items: { icon: React.ReactNode; title: string }[] = []
   if (c?.damaged?.length) items.push({ icon: <AlertTriangle className="size-3.5 text-destructive" />, title: `Damaged: ${c.damaged.map((k) => partLabel(device.kind, k)).join(', ')}` })
+  if (c?.locationOff?.length) items.push({ icon: <MapPinOff className="size-3.5 text-destructive" />, title: `Location off: ${c.locationOff.map(locationLabel).join(', ')}` })
+  else if (device.status === 'assigned' && (!device.locationVerified?.at || Date.now() - new Date(device.locationVerified.at).getTime() > 35 * 86400000))
+    items.push({ icon: <MapPin className="size-3.5 text-amber-600" />, title: 'Location not verified on the map in the last month' })
   if (c?.unknownParts?.length)
     items.push({ icon: <AlertCircle className="size-3.5 text-destructive" />, title: `Unknown (non-genuine) part: ${c.unknownParts.map((k) => GENUINE_PARTS.find((p) => p.key === k)?.label ?? k).join(', ')}` })
   if (c?.securityOff?.length) items.push({ icon: <ShieldOff className="size-3.5 text-destructive" />, title: `Security off: ${c.securityOff.map(securityLabel).join(', ')}` })

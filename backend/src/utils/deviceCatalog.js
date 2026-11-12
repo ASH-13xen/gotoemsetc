@@ -55,7 +55,6 @@ PARTS.other = [{ key: 'body', label: 'Body' }];
 // The settings that make a lost device recoverable and its accounts safe.
 const SECURITY_ITEMS = [
   { key: 'screenLock', label: 'Screen lock on (PIN plus fingerprint or face)', kinds: ['phone', 'tablet', 'laptop'] },
-  { key: 'findMy', label: 'Find My Device / Find My iPhone on, signed in to the company account', kinds: ['phone', 'tablet', 'laptop'] },
   { key: 'theftProtection', label: 'Theft protection on (Android Theft Protection / iPhone Stolen Device Protection)', kinds: ['phone', 'tablet'] },
   { key: 'accountTwoFactor', label: '2-step verification on the company Google / Apple account, codes to a company number', kinds: ['phone', 'tablet', 'laptop'] },
   { key: 'whatsappTwoStep', label: 'WhatsApp two-step verification PIN set', kinds: ['phone'] },
@@ -63,6 +62,16 @@ const SECURITY_ITEMS = [
   { key: 'contactsSync', label: 'Contacts syncing with the company Gmail (on iPhone: Gmail is the default contacts account)', kinds: ['phone'] },
   { key: 'photosBackup', label: 'Google Photos backing up to the company account', kinds: ['phone', 'tablet'] },
 ];
+// Where the device is: the phone's own Find My, and its live location shared
+// from Google Maps with the company account — HR then sees every phone on the
+// map and marks its location verified (device.service.js#verifyLocation).
+const LOCATION_ITEMS = [
+  { key: 'findMy', label: 'Find My (iPhone) / Find My Device (Android) on, signed in to the company account', kinds: ['phone', 'tablet', 'laptop'] },
+  { key: 'mapsSharing', label: 'Google Maps location sharing on — shared with the company account, "Until you turn this off"', kinds: ['phone', 'tablet'] },
+  { key: 'locationAlways', label: 'Location on, Google Maps allowed "Always" / "All the time" with precise location', kinds: ['phone', 'tablet'] },
+];
+const locationItemsFor = (kind) => LOCATION_ITEMS.filter((i) => i.kinds.includes(kind));
+
 const securityItemsFor = (kind) => SECURITY_ITEMS.filter((s) => s.kinds.includes(kind));
 
 // What a company phone carries unless HR changes the list (Settings).
@@ -77,6 +86,8 @@ const DEFAULT_APPS = [
   { key: 'google_drive', label: 'Google Drive', required: true },
   { key: 'gmail', label: 'Gmail', required: true },
   { key: 'truecaller', label: 'Truecaller', required: true },
+  { key: 'google_contacts', label: 'Google Contacts', required: true },
+  { key: 'google_maps', label: 'Google Maps (location sharing)', required: true },
 ];
 
 const ISSUE_CATEGORIES = {
@@ -118,7 +129,7 @@ const ACCESSORY_KINDS = { charger: 'Charger', cable: 'Cable', cover: 'Back cover
 // The steps a lost device's runbook walks through, in order.
 const LOST_STEPS = [
   { key: 'lock', label: 'Lock the device', detail: 'Find My Device (android.com/find) or Find My (icloud.com/find): mark as lost / secure the device, with a message and a company number on the lock screen.' },
-  { key: 'locate', label: 'Try to locate it', detail: 'Note the last location shown, and when it was seen.' },
+  { key: 'locate', label: 'Try to locate it', detail: 'Google Maps → Location sharing on the company account, or android.com/find / icloud.com/find. Note the last location shown, and when it was seen.' },
   { key: 'sim', label: 'Block the SIM', detail: "Call the carrier with the number and ask for a block; ask for a replacement SIM on the same number." },
   { key: 'passwords', label: 'Change the passwords of every account on it', detail: 'Each account listed below — and sign the lost device out (Google: Security → Your devices; Apple ID: Devices; WhatsApp: Linked devices).' },
   { key: 'police', label: 'File a police complaint with the IMEI', detail: "Upload the complaint copy here. With the IMEI, the government CEIR portal can block the phone on every network." },
@@ -142,6 +153,8 @@ module.exports = {
   GENUINE_STATES,
   SECURITY_ITEMS,
   securityItemsFor,
+  LOCATION_ITEMS,
+  locationItemsFor,
   DEFAULT_APPS,
   ISSUE_CATEGORIES,
   ACCOUNT_KINDS,

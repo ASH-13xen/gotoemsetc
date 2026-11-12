@@ -18,6 +18,7 @@ import {
   ISSUE_LABEL,
   PARTS,
   apiMessage,
+  locationItemsFor,
   deviceName,
   devicesApi,
   personName,
@@ -111,6 +112,15 @@ export function CheckView({ check, kind }: { check: DeviceCheck; kind: DeviceKin
           ) : null
         )}
       </div>
+      <div className="flex flex-wrap gap-1">
+        {locationItemsFor(kind).map((s) =>
+          check.location?.[s.key] === false ? (
+            <span key={s.key} className="rounded bg-destructive/10 px-1.5 py-0.5 text-[11px] text-destructive">
+              LOCATION OFF: {s.short}
+            </span>
+          ) : null
+        )}
+      </div>
       {Object.keys(check.genuine ?? {}).length > 0 && (
         <div className="flex flex-wrap gap-1">
           {GENUINE_PARTS.map((p) =>
@@ -143,8 +153,9 @@ export function VerifyTab() {
   const queryClient = useQueryClient()
   const { data: checks, isLoading } = useQuery({ queryKey: [...DEVICES_KEY, 'checks', 'submitted'], queryFn: () => devicesApi.checks({ status: 'submitted' }) })
   const [notes, setNotes] = useState<Record<string, string>>({})
+  const [seen, setSeen] = useState<Record<string, boolean>>({})
   const review = useMutation({
-    mutationFn: ({ id, ok }: { id: string; ok: boolean }) => devicesApi.reviewCheck(id, ok, notes[id]),
+    mutationFn: ({ id, ok }: { id: string; ok: boolean }) => devicesApi.reviewCheck(id, ok, notes[id], seen[id]),
     onSuccess: (_d, v) => {
       toast.success(v.ok ? 'Verified' : 'Sent back to them to do again')
       queryClient.invalidateQueries({ queryKey: DEVICES_KEY })
@@ -183,6 +194,10 @@ export function VerifyTab() {
                 value={notes[c._id] ?? ''}
                 onChange={(e) => setNotes((n) => ({ ...n, [c._id]: e.target.value }))}
               />
+              <label className="flex items-center gap-1.5 text-xs" title="Google Maps → Location sharing on the company account, or android.com/find / icloud.com/find">
+                <input type="checkbox" className="accent-primary" checked={Boolean(seen[c._id])} onChange={(e) => setSeen((s) => ({ ...s, [c._id]: e.target.checked }))} />
+                I saw it on the map
+              </label>
               <Button size="sm" onClick={() => review.mutate({ id: c._id, ok: true })} disabled={review.isPending}>
                 <Check className="size-3.5" /> Verify
               </Button>
@@ -374,43 +389,107 @@ export function RunbooksTab() {
 
 export function FootageTab() {
   const queryClient = useQueryClient()
-  const { data: uploads, isLoading } = useQuery({ queryKey: [...DEVICES_KEY, 'footage'], queryFn: devicesApi.footage })
+  const [toVerify, setToVerify] = useState(true)
+  const { data: uploads, isLoading } = useQuery({ queryKey: [...DEVICES_KEY, 'footage', toVerify], queryFn: () => devicesApi.footage(toVerify) })
+  const refresh = () => queryClient.invalidateQueries({ queryKey: DEVICES_KEY })
   const cleared = useMutation({
     mutationFn: ({ id, value }: { id: string; value: boolean }) => devicesApi.setFootageCleared(id, value),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [...DEVICES_KEY, 'footage'] }),
+    onSuccess: refresh,
   })
-  if (isLoading) return <Skeleton className="h-32 w-full" />
+  const verify = useMutation({
+    mutationFn: ({ id, value }: { id: string; value: boolean }) => devicesApi.verifyFootage(id, value),
+    onSuccess: (_d, v) => {
+      if (v.value) toast.success('Verified')
+      refresh()
+    },
+    onError: (err) => toast.error(apiMessage(err, 'Could not save')),
+  })
   return (
     <Card className="gap-3 p-4">
-      <p className="text-xs text-muted-foreground">
-        Each shoot's footage goes straight from the phone to the company Google Drive (the Drive app, on Wi-Fi), and is logged here by whoever shot it — from
-        "My devices" on their dashboard. Clear it from the phone only once it is here.
-      </p>
-      {!uploads?.length ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">No uploads logged yet.</p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="max-w-3xl text-xs text-muted-foreground">
+          Footage goes from the phone straight to a company Google Drive, and is logged from "My devices" — by whoever logs it, naming who uploaded it. Open the
+          link, check the footage is there, and press Verify.
+        </p>
+        <div className="flex gap-1">
+          <Button size="sm" variant={toVerify ? 'default' : 'outline'} onClick={() => setToVerify(true)}>
+            To verify
+          </Button>
+          <Button size="sm" variant={!toVerify ? 'default' : 'outline'} onClick={() => setToVerify(false)}>
+            All uploads
+          </Button>
+        </div>
+      </div>
+      {isLoading ? (
+        <Skeleton className="h-32 w-full" />
+      ) : !uploads?.length ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">{toVerify ? 'Nothing waiting — every upload is verified.' : 'No uploads logged yet.'}</p>
       ) : (
-        <div className="grid gap-1.5">
-          {uploads.map((u) => (
-            <div key={u._id} className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-secondary/30 px-3 py-2 text-sm">
-              <span className="font-medium">{fmt(u.shootDate)}</span>
-              <span>{u.client?.name ?? u.clientName ?? '—'}</span>
-              <span className="text-muted-foreground">
-                {personName(u.employee)}
-                {u.device ? ` · ${u.device.code}` : ''}
-              </span>
-              <span className="text-muted-foreground">
-                {u.files ? `${u.files} files` : ''}
-                {u.sizeGb ? ` · ${u.sizeGb} GB` : ''}
-              </span>
-              <a className="flex items-center gap-1 text-primary hover:underline" href={u.driveLink} target="_blank" rel="noreferrer">
-                Drive <ExternalLink className="size-3" />
-              </a>
-              <label className="ml-auto flex items-center gap-1 text-xs">
-                <input type="checkbox" className="accent-primary" checked={Boolean(u.clearedFromPhone)} onChange={(e) => cleared.mutate({ id: u._id, value: e.target.checked })} />
-                Cleared from the phone
-              </label>
-            </div>
-          ))}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                <th className="py-2 pr-3 font-normal">Logged</th>
+                <th className="pr-3 font-normal">Shoot</th>
+                <th className="pr-3 font-normal">Uploaded by</th>
+                <th className="pr-3 font-normal">Drive</th>
+                <th className="pr-3 font-normal">Files</th>
+                <th className="pr-3 font-normal">On the phone</th>
+                <th className="font-normal">Verified</th>
+              </tr>
+            </thead>
+            <tbody>
+              {uploads.map((u) => (
+                <tr key={u._id} className="border-b border-border/60 align-top">
+                  <td className="py-2 pr-3 text-xs whitespace-nowrap">
+                    {fmtTime(u.createdAt)}
+                    <p className="text-muted-foreground">by {personName(u.employee)}</p>
+                  </td>
+                  <td className="pr-3">
+                    <p>{u.client?.name ?? u.clientName ?? '—'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {u.shootDate ? `Shot ${fmt(u.shootDate)}` : 'Shoot date not given'}
+                      {u.device ? ` · ${u.device.code}` : ' · not a company device'}
+                    </p>
+                  </td>
+                  <td className="pr-3">{personName(u.uploadedBy ?? u.employee)}</td>
+                  <td className="pr-3">
+                    <p className="text-xs">{u.driveAccount?.identifier ?? u.driveName ?? '—'}</p>
+                    <a className="flex items-center gap-1 text-xs text-primary hover:underline" href={u.driveLink} target="_blank" rel="noreferrer">
+                      Open the link <ExternalLink className="size-3" />
+                    </a>
+                  </td>
+                  <td className="pr-3 text-xs whitespace-nowrap">
+                    {u.files ? `${u.files} files` : '—'}
+                    {u.sizeGb ? ` · ${u.sizeGb} GB` : ''}
+                  </td>
+                  <td className="pr-3">
+                    <label className="flex items-center gap-1 text-xs whitespace-nowrap">
+                      <input type="checkbox" className="accent-primary" checked={Boolean(u.clearedFromPhone)} onChange={(e) => cleared.mutate({ id: u._id, value: e.target.checked })} />
+                      Cleared
+                    </label>
+                  </td>
+                  <td className="whitespace-nowrap">
+                    {u.verifiedAt ? (
+                      <div className="flex items-center gap-2">
+                        <Badge variant="success">Verified</Badge>
+                        <span className="text-[11px] text-muted-foreground">
+                          {u.verifiedBy?.username} · {fmt(u.verifiedAt)}
+                        </span>
+                        <button type="button" className="text-[11px] text-muted-foreground hover:underline" onClick={() => verify.mutate({ id: u._id, value: false })}>
+                          Undo
+                        </button>
+                      </div>
+                    ) : (
+                      <Button size="sm" className="h-7" onClick={() => verify.mutate({ id: u._id, value: true })} disabled={verify.isPending}>
+                        <Check className="size-3.5" /> Verify
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </Card>

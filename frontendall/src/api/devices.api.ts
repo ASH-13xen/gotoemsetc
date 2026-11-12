@@ -44,6 +44,7 @@ export interface CheckInput {
   storageFreeGb?: number | string
   batteryHealth?: number | string
   security: Record<string, boolean>
+  location?: Record<string, boolean>
   genuine?: Record<string, GenuineState>
   apps: AppState[]
   galleryBackedUp?: boolean
@@ -56,11 +57,19 @@ export interface MyDevice {
   kind: 'phone' | 'laptop' | 'tablet' | 'other'
   brand?: string
   model?: string
+  modelNumber?: string
   os?: string | null
+  osVersion?: string
+  color?: string
+  imei1?: string
+  imei2?: string
+  serialNumber?: string
   storageGb?: number
   simNumber?: string
+  simProvider?: string
   parts: { key: string; label: string }[]
   securityItems: { key: string; label: string }[]
+  locationItems: { key: string; label: string }[]
   assignment?: { _id: string; assignedAt: string; acceptedAt?: string; accessories: { label: string; qty: number }[] } | null
   monthCheck: { status: 'submitted' | 'verified' | 'rejected'; reviewNote?: string; createdAt: string } | null
   checkOverdue: boolean
@@ -74,8 +83,30 @@ export interface MyDevices {
   month: string
   apps: { key: string; label: string; required: boolean }[]
   brand: { whatsappName?: string; bio?: string; website?: string; address?: string; logo?: string | null; brochure?: string | null }
+  // The company Google account every phone shares its location with.
+  locationAccount?: string | null
   devices: MyDevice[]
-  footage: { _id: string; shootDate: string; client?: { name: string } | null; clientName?: string; driveLink: string; clearedFromPhone?: boolean }[]
+  footage: MyUpload[]
+}
+
+// A shoot upload logged by this person, or credited to them.
+export interface MyUpload {
+  _id: string
+  createdAt: string
+  shootDate?: string | null
+  device?: { _id: string; code: string; brand?: string; model?: string } | null
+  employee?: { _id: string; firstName: string; lastName?: string } | null
+  uploadedBy?: { _id: string; firstName: string; lastName?: string } | null
+  client?: { name: string } | null
+  clientName?: string
+  driveAccount?: { _id: string; label?: string; identifier: string } | null
+  driveName?: string
+  driveLink: string
+  files?: number
+  sizeGb?: number
+  clearedFromPhone?: boolean
+  verifiedAt?: string | null
+  verifiedBy?: { username: string } | null
 }
 
 export interface DeviceActionItems {
@@ -85,6 +116,7 @@ export interface DeviceActionItems {
   issues: { id: string; text: string }[]
   runbooks: { id: string; text: string }[]
   unsigned: { id: string; text: string }[]
+  footageToVerify: { id: string; text: string }[]
 }
 
 export const deviceName = (d: { brand?: string; model?: string; code?: string }) => [d.brand, d.model].filter(Boolean).join(' ') || d.code || ''
@@ -99,9 +131,13 @@ export async function sendMonthlyCheck(deviceId: string, input: CheckInput, phot
 }
 export const reportDeviceIssue = async (deviceId: string, input: { category: string; description?: string }) =>
   (await apiClient.post(`/devices/mine/${deviceId}/issues`, input)).data
+// The company Google Drives footage can go to (from HR's Accounts register).
+export const shootDrives = async () => (await apiClient.get<{ drives: { _id: string; label?: string; identifier: string }[] }>('/devices/mine/drives')).data.drives
 export const logFootage = async (input: {
   device?: string
-  shootDate: string
+  shootDate?: string
+  driveAccount?: string
+  uploadedBy?: string
   client?: string
   clientName?: string
   driveLink: string

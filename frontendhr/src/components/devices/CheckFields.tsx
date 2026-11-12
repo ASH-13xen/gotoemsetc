@@ -8,6 +8,7 @@ import {
   GENUINE_PARTS,
   GRADE_LABEL,
   PARTS,
+  locationItemsFor,
   securityItemsFor,
   type CheckInput,
   type DeviceKind,
@@ -37,6 +38,7 @@ const STATE_STYLE: Record<PartState, string> = {
 export function CheckFields({
   kind,
   os,
+  locationAccount,
   apps,
   value,
   onChange,
@@ -45,6 +47,7 @@ export function CheckFields({
 }: {
   kind: DeviceKind
   os?: string | null
+  locationAccount?: string
   apps: Settings['apps']
   value: CheckInput
   onChange: (next: CheckInput) => void
@@ -165,6 +168,32 @@ export function CheckFields({
                   className={cn(
                     'rounded-md px-2 py-0.5 text-[11px] font-semibold',
                     value.security[item.key] === on ? (on ? STATE_STYLE.ok : STATE_STYLE.damaged) : 'text-muted-foreground hover:bg-secondary'
+                  )}
+                >
+                  {on ? 'On' : 'Off'}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-1.5">
+        <Label className="text-xs text-muted-foreground">
+          Location — so the company can see where it is{locationAccount ? ` (location shared with ${locationAccount})` : ''}
+        </Label>
+        {locationItemsFor(kind).map((item) => (
+          <div key={item.key} className="flex items-center justify-between gap-3 rounded-lg bg-secondary/30 px-3 py-1.5">
+            <span className="text-sm">{item.label}</span>
+            <div className="flex shrink-0 gap-1">
+              {[true, false].map((on) => (
+                <button
+                  key={String(on)}
+                  type="button"
+                  onClick={() => set({ location: { ...value.location, [item.key]: on } })}
+                  className={cn(
+                    'rounded-md px-2 py-0.5 text-[11px] font-semibold',
+                    value.location?.[item.key] === on ? (on ? STATE_STYLE.ok : STATE_STYLE.damaged) : 'text-muted-foreground hover:bg-secondary'
                   )}
                 >
                   {on ? 'On' : 'Off'}

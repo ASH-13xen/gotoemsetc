@@ -25,6 +25,7 @@ export const FLAG_LABEL: Record<string, string> = {
   apps_missing: 'Apps missing',
   needs_repair: 'Needs repair',
   unknown_part: 'Non-genuine part',
+  location_off: 'Location off',
 }
 
 // The same lists as backend utils/deviceCatalog.js.
@@ -55,7 +56,6 @@ PARTS.tablet = PARTS.phone
 
 export const SECURITY_ITEMS: { key: string; label: string; kinds: DeviceKind[] }[] = [
   { key: 'screenLock', label: 'Screen lock on (PIN plus fingerprint or face)', kinds: ['phone', 'tablet', 'laptop'] },
-  { key: 'findMy', label: 'Find My Device / Find My iPhone on, signed in to the company account', kinds: ['phone', 'tablet', 'laptop'] },
   { key: 'theftProtection', label: 'Theft protection on (Android Theft Protection / iPhone Stolen Device Protection)', kinds: ['phone', 'tablet'] },
   { key: 'accountTwoFactor', label: '2-step verification on the company Google / Apple account, codes to a company number', kinds: ['phone', 'tablet', 'laptop'] },
   { key: 'whatsappTwoStep', label: 'WhatsApp two-step verification PIN set', kinds: ['phone'] },
@@ -79,7 +79,6 @@ export const GENUINE_LABEL: Record<GenuineState, string> = { not_listed: 'Not li
 // Short names for a device's condition lists (which keep the keys).
 const SECURITY_SHORT: Record<string, string> = {
   screenLock: 'Screen lock',
-  findMy: 'Find My',
   theftProtection: 'Theft protection',
   accountTwoFactor: 'Account 2-step',
   whatsappTwoStep: 'WhatsApp two-step PIN',
@@ -87,6 +86,17 @@ const SECURITY_SHORT: Record<string, string> = {
   contactsSync: 'Contacts sync',
   photosBackup: 'Photos backup',
 }
+// Where the device is (backend utils/deviceCatalog.js LOCATION_ITEMS): its
+// own Find My, and its live location shared from Google Maps with the company
+// account, which HR then verifies on the map.
+export const LOCATION_ITEMS: { key: string; label: string; short: string; kinds: DeviceKind[] }[] = [
+  { key: 'findMy', label: 'Find My (iPhone) / Find My Device (Android) on, signed in to the company account', short: 'Find My', kinds: ['phone', 'tablet', 'laptop'] },
+  { key: 'mapsSharing', label: 'Google Maps location sharing on — shared with the company account, "Until you turn this off"', short: 'Maps location sharing', kinds: ['phone', 'tablet'] },
+  { key: 'locationAlways', label: 'Location on, Google Maps allowed "Always" / "All the time" with precise location', short: 'Location always on', kinds: ['phone', 'tablet'] },
+]
+export const locationItemsFor = (kind: DeviceKind) => LOCATION_ITEMS.filter((i) => i.kinds.includes(kind))
+export const locationLabel = (key: string) => LOCATION_ITEMS.find((i) => i.key === key)?.short ?? key
+
 export const partLabel = (kind: DeviceKind, key: string) => PARTS[kind]?.find((p) => p.key === key)?.label ?? key
 export const securityLabel = (key: string) => SECURITY_SHORT[key] ?? key
 export const appLabel = (apps: { key: string; label: string }[] | undefined, key: string) => apps?.find((a) => a.key === key)?.label ?? key
@@ -184,7 +194,14 @@ export interface Device {
     securityOff?: string[]
     appsMissing?: string[]
     unknownParts?: string[]
+    locationOff?: string[]
     at?: string
+  }
+  // HR saw it on the map (Google Maps location sharing / Find My).
+  locationVerified?: {
+    at?: string
+    by?: { username: string } | string
+    note?: string
   }
   apps?: AppState[]
   monthCheck?: 'submitted' | 'verified' | null
@@ -202,6 +219,7 @@ export interface CheckInput {
   storageFreeGb?: number | string
   batteryHealth?: number | string
   security: Record<string, boolean>
+  location?: Record<string, boolean>
   genuine?: Record<string, GenuineState>
   apps: AppState[]
   galleryBackedUp?: boolean
@@ -224,6 +242,7 @@ export interface DeviceCheck {
   storageFreeGb?: number
   batteryHealth?: number
   security?: Record<string, boolean>
+  location?: Record<string, boolean>
   genuine?: Record<string, GenuineState>
   apps?: AppState[]
   galleryBackedUp?: boolean
@@ -324,9 +343,17 @@ export interface Runbook {
 
 export interface Footage {
   _id: string
-  device?: { _id: string; code: string } | null
+  device?: { _id: string; code: string; brand?: string; model?: string } | null
+  // Who logged it, and who uploaded it (a colleague, or themselves).
   employee?: PersonRef | null
-  shootDate: string
+  uploadedBy?: PersonRef | null
+  // createdAt is when it was logged; the shoot's own date is optional.
+  createdAt: string
+  shootDate?: string | null
+  driveAccount?: { _id: string; label?: string; identifier: string } | null
+  driveName?: string
+  verifiedAt?: string | null
+  verifiedBy?: { username: string } | null
   client?: { name: string } | null
   clientName?: string
   driveLink: string
@@ -348,6 +375,8 @@ export interface Settings {
   checkDueDay: number
   lowStoragePct: number
   lowBatteryPct: number
+  // The company Google account every phone shares its location with.
+  locationAccount?: string
 }
 
 export interface Summary {
@@ -360,6 +389,7 @@ export interface Summary {
   openIssues: number
   openRunbooks: number
   flagged: number
+  footageToVerify: number
 }
 
 export interface AccessItem {
@@ -431,7 +461,9 @@ export const devicesApi = {
   file: async (id: string) => (await apiClient.get(`/devices/files/${id}`, { responseType: 'blob' })).data as Blob,
 
   checks: async (params: { status?: string; device?: string } = {}) => (await apiClient.get<{ checks: DeviceCheck[] }>('/devices/checks', { params })).data.checks,
-  reviewCheck: async (id: string, ok: boolean, note?: string) => (await apiClient.post(`/devices/checks/${id}/review`, { ok, note })).data,
+  reviewCheck: async (id: string, ok: boolean, note?: string, locationSeen?: boolean) =>
+    (await apiClient.post(`/devices/checks/${id}/review`, { ok, note, locationSeen })).data,
+  verifyLocation: async (id: string, note?: string) => (await apiClient.post(`/devices/${id}/location-verified`, { note })).data,
   issues: async (status?: string) => (await apiClient.get<{ issues: Issue[] }>('/devices/issues', { params: { status } })).data.issues,
   resolveIssue: async (id: string, resolution: string) => (await apiClient.post(`/devices/issues/${id}/resolve`, { resolution })).data,
 
@@ -470,7 +502,8 @@ export const devicesApi = {
     return (await apiClient.post(`/devices/runbooks/${runbookId}/steps/${stepId}`, form)).data
   },
 
-  footage: async () => (await apiClient.get<{ uploads: Footage[] }>('/devices/footage')).data.uploads,
+  footage: async (toVerify?: boolean) => (await apiClient.get<{ uploads: Footage[] }>('/devices/footage', { params: toVerify ? { toVerify: true } : {} })).data.uploads,
+  verifyFootage: async (id: string, verified: boolean) => (await apiClient.post(`/devices/footage/${id}/verify`, { verified })).data,
   setFootageCleared: async (id: string, clearedFromPhone: boolean) => (await apiClient.patch(`/devices/footage/${id}`, { clearedFromPhone })).data,
 
   employees: async () =>

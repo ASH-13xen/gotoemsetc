@@ -18,6 +18,7 @@ const SECTIONS: { key: keyof DeviceActionItems; title: string; tab: string; noti
   { key: 'runbooks', title: 'Lost devices and revoked access', tab: 'runbooks', notice: false },
   { key: 'checksToVerify', title: 'Monthly checks to verify', tab: 'verify', notice: false },
   { key: 'issues', title: 'Problems reported', tab: 'issues', notice: false },
+  { key: 'footageToVerify', title: 'Shoot uploads to verify', tab: 'footage', notice: false },
   { key: 'checksOverdue', title: "This month's check not sent", tab: '', notice: true },
   { key: 'unsigned', title: 'Handover agreement not signed', tab: '', notice: true },
 ]
@@ -51,7 +52,7 @@ export function DevicesActionCard() {
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-black text-foreground">Company devices</p>
-          <p className="text-xs text-muted-foreground">Checks, problems, lost phones and revoked access — handled in HR Work → Devices.</p>
+          <p className="text-xs text-muted-foreground">Checks, problems, shoot uploads, lost phones and revoked access — handled in HR Work → Devices.</p>
         </div>
         <span className="rounded-full bg-violet-600 px-2.5 py-0.5 text-xs font-black text-white">{total}</span>
       </div>

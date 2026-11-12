@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { AssignDialog, DEVICES_KEY, DeviceFormDialog, HrCheckDialog, LostDialog, ReturnDialog } from '@/components/devices/DeviceDialogs'
 import { STATUS_VARIANT } from '@/components/devices/DeviceRegister'
 import { CheckView, RunbookCard } from '@/components/devices/DeviceQueues'
+import { CheckChanges, CheckHistory, checkChanges, timeline } from '@/components/devices/CheckHistory'
 import {
   ACCOUNT_LABEL,
   GENUINE_PARTS,
@@ -28,6 +29,7 @@ import {
   appLabel,
   deviceName,
   devicesApi,
+  locationLabel,
   openBlob,
   partLabel,
   personName,
@@ -206,6 +208,11 @@ export default function DeviceDetailPage() {
   if (error || !data) return <p className="py-16 text-center text-sm text-muted-foreground">{apiMessage(error, 'Device not found')}</p>
 
   const { device, assignments, checks, issues, accounts, runbooks, footage, apps } = data
+  // Each check's changes from the one before it (a check sent back is skipped).
+  const changesOf = new Map<string, ReturnType<typeof checkChanges>>()
+  timeline(checks).forEach((c, i, list) => {
+    if (i > 0) changesOf.set(c._id, checkChanges(list[i - 1], c, device.kind, device.os, apps))
+  })
   const active = assignments.find((a) => a.status === 'active')
   const past = assignments.filter((a) => a.status !== 'active')
   const appState = new Map((device.apps ?? []).map((a) => [a.key, a]))
@@ -322,6 +329,9 @@ export default function DeviceDetailPage() {
           {(device.condition?.damaged?.length ?? 0) > 0 && (
             <p className="text-xs text-destructive">Damaged or missing: {device.condition!.damaged!.map((k) => partLabel(device.kind, k)).join(', ')}</p>
           )}
+          {(device.condition?.locationOff?.length ?? 0) > 0 && (
+            <p className="text-xs text-destructive">Location off: {device.condition!.locationOff!.map(locationLabel).join(', ')}</p>
+          )}
           {(device.condition?.unknownParts?.length ?? 0) > 0 && (
             <p className="text-xs text-destructive">
               Not genuine ("Unknown part"): {device.condition!.unknownParts!.map((k) => GENUINE_PARTS.find((p) => p.key === k)?.label ?? k).join(', ')}
@@ -416,6 +426,44 @@ export default function DeviceDetailPage() {
         </Section>
       )}
 
+      <Section
+        title="Location"
+        action={
+          s !== 'retired' && s !== 'lost' ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                const note = window.prompt('You saw this device on the map (Google Maps → Location sharing, or Find My)? Where was it? (optional)')
+                if (note !== null) act.mutate(() => devicesApi.verifyLocation(device._id, note))
+              }}
+            >
+              I saw it on the map
+            </Button>
+          ) : undefined
+        }
+      >
+        <p className="text-sm">
+          {device.locationVerified?.at ? (
+            <>
+              Verified {fmt(device.locationVerified.at)}
+              {typeof device.locationVerified.by === 'object' && device.locationVerified.by ? ` by ${device.locationVerified.by.username}` : ''}
+              {device.locationVerified.note ? <span className="text-muted-foreground"> — {device.locationVerified.note}</span> : null}
+            </>
+          ) : (
+            <span className="text-muted-foreground">Not verified yet.</span>
+          )}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Open Google Maps signed in to the company account → Location sharing (or android.com/find / icloud.com/find), find {device.code}, and press "I saw it on the
+          map". Verifying a monthly check can do the same.
+        </p>
+      </Section>
+
+      <Section title="Check history">
+        <CheckHistory checks={checks} kind={device.kind} os={device.os} apps={apps} />
+      </Section>
+
       {runbooks.map((r) => (
         <RunbookCard key={r._id} runbook={r} />
       ))}
@@ -435,6 +483,11 @@ export default function DeviceDetailPage() {
                       {fmt(c.createdAt)} · {c.byHolder ? personName(c.employee) : c.by?.username}
                     </span>
                     <span className="ml-auto flex gap-1">
+                      {changesOf.get(c._id) && changesOf.get(c._id)!.length > 0 && (
+                        <Badge variant="outline">
+                          {changesOf.get(c._id)!.length} change{changesOf.get(c._id)!.length === 1 ? '' : 's'}
+                        </Badge>
+                      )}
                       {c.grade && <Badge variant="outline">{c.grade}</Badge>}
                       {c.status === 'submitted' ? <Badge variant="warning">To verify</Badge> : c.status === 'rejected' ? <Badge variant="destructive">Sent back</Badge> : <Badge variant="success">Verified</Badge>}
                     </span>
@@ -443,6 +496,12 @@ export default function DeviceDetailPage() {
                     <div className="border-t border-border px-3 py-2">
                       <CheckView check={c} kind={device.kind} />
                       {c.reviewNote && <p className="mt-1 text-xs text-muted-foreground">HR: {c.reviewNote}</p>}
+                      {changesOf.has(c._id) && (
+                        <div className="mt-2 border-t border-border pt-2">
+                          <p className="mb-1 text-xs font-semibold">Since the check before</p>
+                          <CheckChanges changes={changesOf.get(c._id)!} />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -483,9 +542,10 @@ export default function DeviceDetailPage() {
                 {footage.map((f) => (
                   <div key={f._id} className="flex items-center justify-between gap-2 rounded-lg bg-secondary/30 px-3 py-1.5 text-sm">
                     <span className="min-w-0 truncate">
-                      {fmt(f.shootDate)} · {f.client?.name ?? f.clientName ?? '—'}
+                      {fmt(f.shootDate ?? f.createdAt)} · {f.client?.name ?? f.clientName ?? '—'}
                     </span>
                     <span className="flex shrink-0 items-center gap-2">
+                      {f.verifiedAt ? <Badge variant="success">Verified</Badge> : <Badge variant="warning">To verify</Badge>}
                       {f.clearedFromPhone ? <Badge variant="success">Cleared</Badge> : <Badge variant="outline">Still on phone</Badge>}
                       <a href={f.driveLink} target="_blank" rel="noreferrer" className="text-primary">
                         <ExternalLink className="size-3.5" />

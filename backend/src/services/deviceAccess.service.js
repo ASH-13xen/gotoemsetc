@@ -104,6 +104,7 @@ async function updateSettings(data) {
   if (data.brand) {
     for (const key of ['whatsappName', 'bio', 'website', 'address']) if (data.brand[key] !== undefined) settings.brand[key] = data.brand[key];
   }
+  if (data.locationAccount !== undefined) settings.locationAccount = String(data.locationAccount || '').trim() || undefined;
   for (const key of ['checkDueDay', 'lowStoragePct', 'lowBatteryPct']) if (data[key] !== undefined && data[key] !== '') settings[key] = Number(data[key]);
   if (Array.isArray(data.accessTemplates)) {
     settings.accessTemplates = data.accessTemplates
