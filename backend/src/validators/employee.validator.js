@@ -190,7 +190,10 @@ const mutableFields = {
   personalPhoneAdded: z.boolean().optional(),
   assetAccessAdded: z.boolean().optional(),
   updatedIn12345: z.boolean().optional(),
+  canvaAccessGiven: z.boolean().optional(),
+  addedToReelsInstagram: z.boolean().optional(),
   probationCompleted: z.boolean().optional(),
+  probationCompletedAt: z.coerce.date().nullable().optional(),
   excludeFromPayroll: z.boolean().optional(),
   worksFromHome: z.boolean().optional(),
   maritalStatus: z.enum(['single', 'married']).nullable().optional(),
@@ -259,6 +262,8 @@ const create = {
     personalPhoneAdded: true,
     assetAccessAdded: true,
     updatedIn12345: true,
+    canvaAccessGiven: true,
+    addedToReelsInstagram: true,
     probationCompleted: true,
     excludeFromPayroll: true,
   }).superRefine(assertWorkingHoursSane),
@@ -272,7 +277,17 @@ const update = {
 const getOrDelete = { ...idParam };
 
 // multipart, with the letter as `letter` — see employee.service.js.
-const completeProbation = { ...idParam };
+// multipart: the letter as `letter`, and the day probation was completed
+// (YYYY-MM-DD, today when left out).
+const completeProbation = {
+  ...idParam,
+  body: z.object({
+    completedOn: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, 'Choose the day probation was completed')
+      .optional(),
+  }).default({}),
+};
 const changeSalary = {
   ...idParam,
   body: z

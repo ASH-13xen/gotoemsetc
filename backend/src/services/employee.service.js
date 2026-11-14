@@ -133,6 +133,7 @@ const SELF_LOCKED_FIELDS = [
   'excludeFromPayroll',
   'worksFromHome',
   'probationCompleted',
+  'probationCompletedAt',
   'status',
   'endDate',
   'dateOfJoining',
@@ -216,16 +217,21 @@ function assertNotOwnRecord(actor, id, what) {
 
 // Marks probation completed — only with a letter, which is kept in the
 // employee's documents.
-async function completeProbation(id, file, actor) {
+async function completeProbation(id, file, actor, { completedOn } = {}) {
   const existing = await employeeRepository.findById(id);
   if (!existing) throw ApiError.notFound('Employee not found');
   assertNotOwnRecord(actor, id, 'probation');
   if (existing.probationCompleted) throw ApiError.conflict('Probation is already marked as completed');
   if (!file) throw ApiError.badRequest('Attach the letter to mark probation as completed');
+  // The day it was completed (today unless another day is chosen) — not a
+  // day still to come.
+  const completedAt = completedOn ? new Date(`${completedOn}T00:00:00.000Z`) : istToday();
+  if (Number.isNaN(completedAt.getTime())) throw ApiError.badRequest('Choose the day probation was completed');
+  if (completedAt > istToday()) throw ApiError.badRequest("Probation can't be completed on a day still to come");
 
   const letter = await uploadRequestService.adminUpload(id, { docType: 'probation_letter' }, file, { keepPrevious: true });
-  const employee = await employeeRepository.updateById(id, { probationCompleted: true });
-  await activityService.log(id, 'PROBATION_COMPLETED', { letter: letter._id });
+  const employee = await employeeRepository.updateById(id, { probationCompleted: true, probationCompletedAt: completedAt });
+  await activityService.log(id, 'PROBATION_COMPLETED', { letter: letter._id, on: completedAt.toISOString().slice(0, 10) });
   return employee;
 }
 

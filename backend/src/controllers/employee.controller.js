@@ -21,7 +21,7 @@ const anniversaries = asyncHandler(async (req, res) => {
 });
 
 const completeProbation = asyncHandler(async (req, res) => {
-  const employee = await employeeService.completeProbation(req.params.id, req.file, req.user);
+  const employee = await employeeService.completeProbation(req.params.id, req.file, req.user, req.body);
   req.auditContext = { action: 'employee.completeProbation', resourceType: 'Employee', resourceId: employee._id };
   res.json({ employee: shapeForRole('Employee', employee, req.user) });
 });

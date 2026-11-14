@@ -49,7 +49,7 @@ export function useUpdateEmployee(id: string) {
 export function useCompleteProbation(id: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (letter: File) => employeesApi.completeProbation(id, letter),
+    mutationFn: ({ letter, completedOn }: { letter: File; completedOn?: string }) => employeesApi.completeProbation(id, letter, completedOn),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY })
       queryClient.invalidateQueries({ queryKey: ['uploadedDocuments', id] })

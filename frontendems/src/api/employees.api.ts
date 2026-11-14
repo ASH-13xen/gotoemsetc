@@ -89,7 +89,11 @@ export interface Employee {
   personalPhoneAdded?: boolean
   assetAccessAdded?: boolean
   updatedIn12345?: boolean
+  canvaAccessGiven?: boolean
+  addedToReelsInstagram?: boolean
   probationCompleted?: boolean
+  // The day probation was completed (set with the letter; HR can correct it).
+  probationCompletedAt?: string | null
   excludeFromPayroll?: boolean
   // From worksFromHomeSince (the day it was ticked) on, a working day with no
   // scans at all is Work From Home; any scan and it is marked from the scans.
@@ -184,9 +188,10 @@ export async function updateEmployee(
 
 // Probation can only be marked completed with a letter attached; it is kept
 // in the employee's documents.
-export async function completeProbation(id: string, letter: File): Promise<{ employee: Employee }> {
+export async function completeProbation(id: string, letter: File, completedOn?: string): Promise<{ employee: Employee }> {
   const formData = new FormData()
   formData.append('letter', letter)
+  if (completedOn) formData.append('completedOn', completedOn)
   const { data } = await apiClient.post(`/employees/${id}/complete-probation`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })

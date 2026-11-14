@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Controller, useFieldArray, useForm, type Path } from 'react-hook-form'
+import { Controller, useForm, type Path } from 'react-hook-form'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { FileText, FileUp, KeyRound, Loader2, Plus, Save, Send, Trash2, Wallet } from 'lucide-react'
+import { FileText, FileUp, KeyRound, Loader2, Save, Send, Wallet } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -81,26 +81,22 @@ type FormValues = {
   companyEmailPassword: string
   ctcAnnual: string
   monthlyPay: string
-  panNumber: string
-  aadharNumber: string
   bankName: string
   bankAccountNumber: string
   bankIFSC: string
   payDate: string
-  biometricVerificationAdded: boolean
   companyLoginAdded: boolean
-  officePhoneAdded: boolean
   personalPhoneAdded: boolean
-  assetAccessAdded: boolean
-  updatedIn12345: boolean
+  canvaAccessGiven: boolean
+  addedToReelsInstagram: boolean
   probationCompleted: boolean
+  probationCompletedAt: string
   excludeFromPayroll: boolean
   worksFromHome: boolean
   endDate: string
   reasonForLeaving: string
   removedFromGroupsAndReels: boolean
   mailDeactivated: boolean
-  extraDetails: { key: string; value: string }[]
 }
 
 type SectionKey =
@@ -191,26 +187,22 @@ function toFormValues(employee: Employee): FormValues {
     companyEmailPassword: employee.companyEmailPassword || fallback.companyEmailPassword || '',
     ctcAnnual: employee.ctcAnnual != null ? String(employee.ctcAnnual) : '',
     monthlyPay: employee.monthlyPay != null ? String(employee.monthlyPay) : '',
-    panNumber: employee.panNumber ?? '',
-    aadharNumber: employee.aadharNumber ?? '',
     bankName: employee.bankName ?? '',
     bankAccountNumber: employee.bankAccountNumber ?? '',
     bankIFSC: employee.bankIFSC ?? '',
     payDate: employee.payDate != null ? String(employee.payDate) : '',
-    biometricVerificationAdded: employee.biometricVerificationAdded ?? false,
     companyLoginAdded: employee.companyLoginAdded ?? false,
-    officePhoneAdded: employee.officePhoneAdded ?? false,
     personalPhoneAdded: employee.personalPhoneAdded ?? false,
-    assetAccessAdded: employee.assetAccessAdded ?? false,
-    updatedIn12345: employee.updatedIn12345 ?? false,
+    canvaAccessGiven: employee.canvaAccessGiven ?? false,
+    addedToReelsInstagram: employee.addedToReelsInstagram ?? false,
     probationCompleted: employee.probationCompleted ?? false,
+    probationCompletedAt: toDateInputValue(employee.probationCompletedAt ?? undefined),
     excludeFromPayroll: employee.excludeFromPayroll ?? false,
     worksFromHome: employee.worksFromHome ?? false,
     endDate: toDateInputValue(employee.endDate),
     reasonForLeaving: employee.reasonForLeaving ?? '',
     removedFromGroupsAndReels: employee.removedFromGroupsAndReels ?? false,
     mailDeactivated: employee.mailDeactivated ?? false,
-    extraDetails: (employee.extraDetails ?? []).map((d) => ({ key: d.key, value: d.value ?? '' })),
   }
 }
 
@@ -235,8 +227,6 @@ const REQUIRED: Required[] = [
   { name: 'bloodGroup', label: 'Blood group', section: 'personal' },
   { name: 'maritalStatus', label: 'Marital status', section: 'personal' },
   { name: 'anniversaryDate', label: 'Anniversary date', section: 'personal', when: (v) => v.maritalStatus === 'married' },
-  { name: 'panNumber', label: 'PAN number', section: 'personal', admin: true },
-  { name: 'aadharNumber', label: 'Aadhar number', section: 'personal', admin: true },
   { name: 'designation', label: 'Designation', section: 'employment', when: (v) => !v.designationNode },
   { name: 'department', label: 'Department', section: 'employment' },
   { name: 'workLocation', label: 'Work location', section: 'employment' },
@@ -244,6 +234,7 @@ const REQUIRED: Required[] = [
   { name: 'workingHoursEnd', label: 'Shift end', section: 'employment' },
   { name: 'dateOfHiring', label: 'Date of hiring', section: 'employment' },
   { name: 'dateOfJoining', label: 'Date of joining', section: 'employment' },
+  { name: 'probationCompletedAt', label: 'Probation completed on', section: 'employment', when: (v) => v.probationCompleted },
   { name: 'companyEmail', label: 'Company mail ID', section: 'employment' },
   { name: 'companyEmailPassword', label: 'Company mail password', section: 'employment', admin: true },
   { name: 'monthlyPay', label: 'Monthly pay', section: 'employment', admin: true },
@@ -305,6 +296,9 @@ function ResumeLinks({ employee }: { employee: Employee }) {
   )
 }
 
+// A day (YYYY-MM-DD) as it was in India — today by default.
+const istDay = (at: string | number = Date.now()) => new Date(new Date(at).getTime() + 330 * 60 * 1000).toISOString().slice(0, 10)
+
 const fmtDay = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—')
 
 export default function EmployeeDetailPage() {
@@ -342,6 +336,9 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   const isOwnRecord = user?.employeeLink === employeeId
   const { data: uploadedDocsData } = useUploadedDocuments(employeeId, { enabled: canRequestDocs })
   const photoDoc = uploadedDocsData?.uploadedDocuments.find((d) => d.docType === 'photo')
+  // The letter that completed probation (newest first) — offers its day when
+  // the completion date wasn't recorded.
+  const probationLetter = uploadedDocsData?.uploadedDocuments.find((d) => d.docType === 'probation_letter')
   const updateEmployee = useUpdateEmployee(employeeId)
   const completeProbation = useCompleteProbation(employeeId)
   const promote = usePromote(employeeId)
@@ -352,6 +349,8 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   const myLatest = isOwnRecord && !canGenerateDocs ? [...latestByDocument(mySignatures).values()] : []
   const toSign = myLatest.filter((x) => x.status === 'sent' || x.status === 'viewed').length
   const [probationOpen, setProbationOpen] = useState(false)
+  // The day probation was completed, asked for with the letter.
+  const [probationOn, setProbationOn] = useState(() => istDay())
   // Uploading a document straight onto this employee (the admin only).
   const [uploadOpen, setUploadOpen] = useState(false)
   const directUpload = canUploadDirectly(user)
@@ -367,7 +366,6 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   const fallbacks = useMemo(() => extraFallbacks(employee), [employee])
   const { register, handleSubmit, control, watch, setValue, getValues, reset, resetField, formState } = useForm<FormValues>({ defaultValues: initial })
   const { isDirty, dirtyFields } = formState
-  const extraDetails = useFieldArray({ control, name: 'extraDetails' })
   const [sameInitial, setSameInitial] = useState(() => addressesEqual(initial.permanentAddress, initial.localAddress))
   const [sameAsPermanent, setSameAsPermanent] = useState(sameInitial)
   const dirty = isDirty || sameAsPermanent !== sameInitial
@@ -391,6 +389,11 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
 
   const values = watch()
   const permanentAddress = values.permanentAddress
+  // "Same as permanent": the local address follows the permanent one as it's typed.
+  const permanentKey = JSON.stringify(permanentAddress ?? {})
+  useEffect(() => {
+    if (sameAsPermanent) setValue('localAddress', JSON.parse(permanentKey))
+  }, [sameAsPermanent, permanentKey, setValue])
   const status = values.status
   const missing = missingOf(values, sameAsPermanent, isAdmin)
   const missingIn = (s: SectionKey) => (canEditDetails ? missing.filter((m) => m.section === s).length : 0)
@@ -422,6 +425,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         case 'dateOfJoining':
         case 'dateOfHiring':
         case 'endDate':
+        case 'probationCompletedAt':
           if (raw) out[k] = raw
           break
         case 'maritalStatus':
@@ -432,9 +436,6 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
           break
         case 'localAddress':
           out.localAddress = sameAsPermanent ? v.permanentAddress : v.localAddress
-          break
-        case 'extraDetails':
-          out.extraDetails = v.extraDetails.filter((d) => d.key.trim().length > 0)
           break
         default:
           out[k] = raw
@@ -519,14 +520,18 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   }
 
   const onConfirmProbation = (letter: File) => {
-    completeProbation.mutate(letter, {
-      onSuccess: () => {
-        resetField('probationCompleted', { defaultValue: true })
-        setProbationOpen(false)
-        toast.success('Probation completed — the letter is saved in documents')
-      },
-      onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not complete probation')),
-    })
+    completeProbation.mutate(
+      { letter, completedOn: probationOn },
+      {
+        onSuccess: () => {
+          resetField('probationCompleted', { defaultValue: true })
+          resetField('probationCompletedAt', { defaultValue: probationOn })
+          setProbationOpen(false)
+          toast.success('Probation completed — the letter is saved in documents')
+        },
+        onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not complete probation')),
+      }
+    )
   }
 
   // Confirming the off-boarding modal saves straight away — status plus the
@@ -563,6 +568,19 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
     else setValue('monthlyPay', String(Math.round((n / 12) * 100) / 100), { shouldDirty: true })
   }
 
+  // The local address: the same boxes as the permanent one. "Same as
+  // permanent" shows the permanent address in them, read-only.
+  const localProps = (part: keyof AddressForm) => ({
+    ...register(`localAddress.${part}`),
+    placeholder: { line1: 'Address line 1', line2: 'Address line 2', city: 'City', state: 'State', pincode: 'Pincode', country: 'Country' }[part],
+    readOnly: sameAsPermanent,
+    className: cn(
+      part !== 'pincode' && 'uppercase',
+      sameAsPermanent && 'cursor-default focus-visible:border-transparent focus-visible:bg-secondary/60 focus-visible:ring-0',
+      part !== 'line2' && bad(`localAddress.${part}`)
+    ),
+  })
+
   const text = (name: Path<FormValues>, label: string, opts: { upper?: boolean; type?: string; placeholder?: string } = {}) => (
     <div className="grid gap-1.5">
       <Label htmlFor={name} className="text-xs text-muted-foreground">
@@ -583,8 +601,15 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         description={`Attach the letter confirming ${employee.firstName}'s probation is over. Probation is only marked completed with it.`}
         confirmLabel="Attach & complete probation"
         isPending={completeProbation.isPending}
+        canConfirm={/^\d{4}-\d{2}-\d{2}$/.test(probationOn) && probationOn <= istDay()}
         onConfirm={onConfirmProbation}
-      />
+      >
+        <div className="grid gap-1.5">
+          <Label htmlFor="probationCompletedOn">Completed on</Label>
+          <Input id="probationCompletedOn" type="date" max={istDay()} value={probationOn} onChange={(e) => setProbationOn(e.target.value)} />
+          <p className="text-xs text-muted-foreground">Shown in Employment details as the probation completion date.</p>
+        </div>
+      </LetterDialog>
       <LetterDialog
         open={Boolean(promotion)}
         onOpenChange={(open) => !open && setPromotion(null)}
@@ -735,8 +760,6 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
             />
           </div>
           {values.maritalStatus === 'married' && text('anniversaryDate', 'Anniversary date', { type: 'date' })}
-          {isAdmin && text('panNumber', 'PAN number', { upper: true })}
-          {isAdmin && text('aadharNumber', 'Aadhar number')}
         </fieldset>
         {(canRequestDocs || (employee.resumes?.length ?? 0) > 0) && (
           <div className="mt-4">
@@ -805,6 +828,29 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
               <div className="flex h-10 items-center rounded-md border border-dashed border-border bg-secondary/30 px-3 text-sm text-foreground" title="Set when a promotion letter is attached — nobody can edit it">
                 {employee.lastPromotionAt ? fmtDay(employee.lastPromotionAt) : 'No promotion yet'}
               </div>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="probationCompletedAt" className="text-xs text-muted-foreground">
+                Probation completed on
+              </Label>
+              {values.probationCompleted && canEditDetails ? (
+                <>
+                  <Input id="probationCompletedAt" type="date" max={istDay()} className={bad('probationCompletedAt')} {...register('probationCompletedAt')} />
+                  {!values.probationCompletedAt && probationLetter && (
+                    <button
+                      type="button"
+                      className="justify-self-start text-xs font-medium text-primary hover:underline"
+                      onClick={() => setValue('probationCompletedAt', istDay(probationLetter.createdAt), { shouldDirty: true })}
+                    >
+                      The letter was attached on {fmtDay(istDay(probationLetter.createdAt))} — use that day
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div className="flex h-10 items-center rounded-md border border-dashed border-border bg-secondary/30 px-3 text-sm text-foreground">
+                  {!values.probationCompleted ? 'Not completed yet' : values.probationCompletedAt ? fmtDay(values.probationCompletedAt) : 'Day not recorded'}
+                </div>
+              )}
             </div>
             <div className="grid gap-1.5">
               <Label className="text-xs text-muted-foreground">Employment type</Label>
@@ -898,8 +944,12 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
               <CheckboxRow
                 label="Probation completed"
                 checked={field.value}
-                // Ticking it asks for the letter; unticking is a plain correction.
-                onChange={(checked) => (checked ? setProbationOpen(true) : field.onChange(false))}
+                // Ticking it asks for the letter (and the day); unticking is a plain correction.
+                onChange={(checked) => {
+                  if (!checked) return field.onChange(false)
+                  setProbationOn(istDay())
+                  setProbationOpen(true)
+                }}
                 info="Needs the letter confirming probation is over (it's saved in their documents). Completing probation unlocks the one paid leave a month."
               />
             )}
@@ -975,9 +1025,10 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {(
               [
-                ['biometricVerificationAdded', 'Biometric verification added'],
                 ['companyLoginAdded', 'Gotofriend12345 log in?'],
                 ['personalPhoneAdded', 'GO-TO personal number added'],
+                ['canvaAccessGiven', 'Canva access given?'],
+                ['addedToReelsInstagram', 'Added to GO-TO reels on Instagram'],
               ] as const
             ).map(([name, label]) => (
               <Controller key={name} control={control} name={name} render={({ field }) => <CheckboxRow label={label} checked={field.value} onChange={field.onChange} />} />
@@ -1010,7 +1061,9 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
       <Section title="Address" open={sections.isOpen('address')} onToggle={() => sections.toggle('address')} badge={<MissingBadge count={missingIn('address')} />}>
         <fieldset disabled={!canEditDetails} className="grid grid-cols-1 gap-6 md:grid-cols-2">
           <div className="grid content-start gap-3">
-            <p className="text-sm font-semibold text-foreground">Permanent address</p>
+            <div className="flex min-h-6 items-center">
+              <p className="text-sm font-semibold text-foreground">Permanent address</p>
+            </div>
             <Textarea {...register('permanentAddress.line1')} placeholder="Address line 1" className={cn('uppercase', bad('permanentAddress.line1'))} />
             <Input {...register('permanentAddress.line2')} placeholder="Address line 2" className="uppercase" />
             <div className="grid grid-cols-2 gap-3">
@@ -1023,23 +1076,23 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
             </div>
           </div>
           <div className="grid content-start gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-h-6 flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-foreground">Local address</p>
               <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-muted-foreground">
                 <input type="checkbox" checked={sameAsPermanent} onChange={(e) => onToggleSameAsPermanent(e.target.checked)} className="size-4 accent-primary" />
                 Same as permanent
               </label>
             </div>
-            {(['line1', 'line2', 'city', 'state', 'pincode', 'country'] as const).map((part) => {
-              const props = {
-                ...register(`localAddress.${part}`),
-                placeholder: { line1: 'Address line 1', line2: 'Address line 2', city: 'City', state: 'State', pincode: 'Pincode', country: 'Country' }[part],
-                disabled: sameAsPermanent || !canEditDetails,
-                value: sameAsPermanent ? permanentAddress?.[part] : undefined,
-                className: cn(part !== 'pincode' && 'uppercase', 'disabled:opacity-50', part !== 'line2' && bad(`localAddress.${part}`)),
-              }
-              return part === 'line1' ? <Textarea key={part} {...props} /> : <Input key={part} {...props} />
-            })}
+            <Textarea {...localProps('line1')} />
+            <Input {...localProps('line2')} />
+            <div className="grid grid-cols-2 gap-3">
+              <Input {...localProps('city')} />
+              <Input {...localProps('state')} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Input {...localProps('pincode')} />
+              <Input {...localProps('country')} />
+            </div>
           </div>
         </fieldset>
       </Section>
@@ -1106,30 +1159,10 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         </Section>
       )}
 
-      {/* ---- Extra details — freeform key/value pairs */}
+      {/* ---- Extra details — kept for later; nothing is shown in it for now
+          (what was stored there stays in the record, untouched). */}
       <Section title="Extra details" open={sections.isOpen('extra')} onToggle={() => sections.toggle('extra')}>
-        <fieldset disabled={!canEditDetails} className="grid gap-3">
-          {extraDetails.fields.length === 0 && <p className="text-sm text-muted-foreground">No extra details yet. Add anything that doesn't have its own field.</p>}
-          {extraDetails.fields.map((field, index) => {
-            // A password reads back in its real case (see extraDetailsCrypto.js).
-            const isPasswordKey = /password/i.test(values.extraDetails?.[index]?.key || '')
-            return (
-              <div key={field.id} className="flex items-center gap-3">
-                <Input placeholder="Key" {...register(`extraDetails.${index}.key` as const)} className="flex-1 font-mono" />
-                <Input placeholder="Value" {...register(`extraDetails.${index}.value` as const)} className={cn('flex-1 font-mono', isPasswordKey && 'normal-case')} />
-                <Button type="button" variant="ghost" size="icon" onClick={() => extraDetails.remove(index)} className="shrink-0 text-muted-foreground hover:text-destructive">
-                  <Trash2 className="size-4" />
-                </Button>
-              </div>
-            )
-          })}
-          {canEditDetails && (
-            <Button type="button" variant="outline" className="justify-self-start" onClick={() => extraDetails.append({ key: '', value: '' })}>
-              <Plus className="size-4" />
-              Add variable
-            </Button>
-          )}
-        </fieldset>
+        <p className="text-sm text-muted-foreground">Nothing here for now.</p>
       </Section>
 
       {/* ---- Attendance */}

@@ -247,9 +247,15 @@ const employeeSchema = new Schema(
     personalPhoneAdded: { type: Boolean, default: false },
     assetAccessAdded: { type: Boolean, default: false },
     updatedIn12345: { type: Boolean, default: false },
+    canvaAccessGiven: { type: Boolean, default: false },
+    addedToReelsInstagram: { type: Boolean, default: false },
     // Ticked by HR when the employee's probation is over — the only thing
     // that decides it (utils/probation.js). Unlocks the monthly paid off.
     probationCompleted: { type: Boolean, default: false },
+    // The day probation was completed — set when the letter is attached (the
+    // day chosen there); HR can correct it, and fill it in for anyone whose
+    // probation was completed before the date was kept.
+    probationCompletedAt: { type: Date, default: null },
     // Every salary change after the first — each needs a promotion letter
     // (kept in the employee's documents) and takes effect from a month, so
     // slips for earlier months keep the amount that applied then. See
