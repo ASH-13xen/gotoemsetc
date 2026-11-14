@@ -138,19 +138,9 @@ async function attachDocuments(rawToken, code, files) {
 
   const saved = [];
   for (const file of validFiles) {
-    // A re-upload of a doc type that's already on file is a replace, not an
-    // addition — destroy the prior version(s) so this never leaves an
-    // orphaned file on disk or a duplicate row in the employee's document
-    // list (see uploadedDocument.repository.js#findByEmployeeAndDocType).
-    // eslint-disable-next-line no-await-in-loop
-    const previous = await uploadedDocumentRepository.findByEmployeeAndDocType(uploadRequest.employee, file.fieldname);
-    for (const prior of previous) {
-      // eslint-disable-next-line no-await-in-loop
-      await localFileStorage.deleteFile(prior.filePath, NAMESPACE);
-      // eslint-disable-next-line no-await-in-loop
-      await uploadedDocumentRepository.deleteById(prior._id);
-    }
-
+    // A re-upload of a doc type already on file is added beside the earlier
+    // one — uploads never delete anything; the newest shows first, and an old
+    // copy is removed only on purpose (the bin in the employee's documents).
     const relativePath = path.join(
       String(uploadRequest.employee),
       `${file.fieldname}-${Date.now()}-${Math.round(Math.random() * 1e6)}-${file.originalname}`

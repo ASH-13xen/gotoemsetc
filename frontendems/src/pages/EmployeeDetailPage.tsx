@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Controller, useFieldArray, useForm, type Path } from 'react-hook-form'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { FileText, KeyRound, Loader2, Plus, Save, Send, Trash2, Wallet } from 'lucide-react'
+import { FileText, FileUp, KeyRound, Loader2, Plus, Save, Send, Trash2, Wallet } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,7 +34,8 @@ import { CheckboxRow, MissingBadge, SecretInput, Section, useOpenSections } from
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { extractApiErrorMessage } from '@/lib/errors'
-import { hasAnyPermission, hasPermission, isAdminLike } from '@/lib/permissions'
+import { hasAnyPermission, hasPermission, isAdmin as canUploadDirectly, isAdminLike } from '@/lib/permissions'
+import { DocsOfType, UploadDocumentDialog } from '@/components/employees/ProfileDocuments'
 import { can } from '@/lib/access'
 import { useCompleteProbation, useEmployee, usePromote, useUpdateEmployee } from '@/hooks/useEmployees'
 import { LetterDialog } from '@/components/employees/LetterDialog'
@@ -283,6 +284,27 @@ function boxLabel(node: OrgNode, byId: Map<string, OrgNode>): string {
   return where ? `${node.title} — ${where}` : node.title
 }
 
+// The CV / resume files kept from recruitment (people hired through the pipeline).
+function ResumeLinks({ employee }: { employee: Employee }) {
+  if (!employee.resumes?.length) return null
+  return (
+    <div className="flex flex-wrap gap-2">
+      {employee.resumes.map((resume, i) => (
+        <a
+          key={i}
+          href={resume.url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex h-8 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-secondary/60"
+        >
+          <FileText className="size-3.5" />
+          {resume.originalFilename || `Resume ${i + 1}`} · from recruitment
+        </a>
+      ))}
+    </div>
+  )
+}
+
 const fmtDay = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—')
 
 export default function EmployeeDetailPage() {
@@ -330,6 +352,9 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   const myLatest = isOwnRecord && !canGenerateDocs ? [...latestByDocument(mySignatures).values()] : []
   const toSign = myLatest.filter((x) => x.status === 'sent' || x.status === 'viewed').length
   const [probationOpen, setProbationOpen] = useState(false)
+  // Uploading a document straight onto this employee (the admin only).
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const directUpload = canUploadDirectly(user)
   // A promotion — a new designation, or a change to a salary already set —
   // waits here for the letter and the month it counts from, then the rest saves.
   const [promotion, setPromotion] = useState<{ values: FormValues; draft: boolean; toNode?: string; monthlyPay?: number; ctcAnnual?: number } | null>(null)
@@ -651,7 +676,9 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         {canViewSalary && (
           <GenerateSalarySlipDialog employeeId={employeeId} employeeName={fullName} trigger={<QuickActionItem icon={<Wallet className="size-4" />} label="Generate salary slip" description="Payroll" />} />
         )}
+        {directUpload && <QuickActionItem icon={<FileUp className="size-4" />} label="Upload documents" description="Attach directly" onClick={() => setUploadOpen(true)} />}
       </QuickActions>
+      {uploadOpen && <UploadDocumentDialog employeeId={employeeId} employeeName={fullName} open onOpenChange={setUploadOpen} />}
 
       {/* ---- Personal details */}
       <Section title="Personal details" open={sections.isOpen('personal')} onToggle={() => sections.toggle('personal')} badge={<MissingBadge count={missingIn('personal')} />}>
@@ -711,6 +738,26 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
           {isAdmin && text('panNumber', 'PAN number', { upper: true })}
           {isAdmin && text('aadharNumber', 'Aadhar number')}
         </fieldset>
+        {(canRequestDocs || (employee.resumes?.length ?? 0) > 0) && (
+          <div className="mt-4">
+            {canRequestDocs ? (
+              <DocsOfType
+                employeeId={employeeId}
+                employeeName={fullName}
+                title="CV / Resume"
+                docTypes={['resume']}
+                match={/\b(cv|resume|résumé|curriculum)\b/i}
+                canUpload={directUpload}
+                extra={<ResumeLinks employee={employee} />}
+              />
+            ) : (
+              <div className="grid gap-2 rounded-xl border border-border bg-secondary/20 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">CV / Resume</p>
+                <ResumeLinks employee={employee} />
+              </div>
+            )}
+          </div>
+        )}
       </Section>
 
       {/* ---- Employment details */}
@@ -844,6 +891,20 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
             )}
           />
 
+          <Controller
+            control={control}
+            name="probationCompleted"
+            render={({ field }) => (
+              <CheckboxRow
+                label="Probation completed"
+                checked={field.value}
+                // Ticking it asks for the letter; unticking is a plain correction.
+                onChange={(checked) => (checked ? setProbationOpen(true) : field.onChange(false))}
+                info="Needs the letter confirming probation is over (it's saved in their documents). Completing probation unlocks the one paid leave a month."
+              />
+            )}
+          />
+
           {isAdmin && (
             <div className="grid gap-4 rounded-xl border border-border bg-secondary/20 p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Salary</p>
@@ -916,27 +977,11 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
               [
                 ['biometricVerificationAdded', 'Biometric verification added'],
                 ['companyLoginAdded', 'Gotofriend12345 log in?'],
-                ['officePhoneAdded', 'Goto office phone number added?'],
-                ['personalPhoneAdded', 'Goto personal phone number added?'],
-                ['assetAccessAdded', 'Access of asset (mails + grps) added?'],
-                ['updatedIn12345', 'Updated in 12345?'],
+                ['personalPhoneAdded', 'GO-TO personal number added'],
               ] as const
             ).map(([name, label]) => (
               <Controller key={name} control={control} name={name} render={({ field }) => <CheckboxRow label={label} checked={field.value} onChange={field.onChange} />} />
             ))}
-            <Controller
-              control={control}
-              name="probationCompleted"
-              render={({ field }) => (
-                <CheckboxRow
-                  label="Probation completed"
-                  checked={field.value}
-                  // Ticking it asks for the letter; unticking is a plain correction.
-                  onChange={(checked) => (checked ? setProbationOpen(true) : field.onChange(false))}
-                  info="Needs the letter confirming probation is over (it's saved in their documents). Completing probation unlocks the one paid leave a month."
-                />
-              )}
-            />
           </div>
         </fieldset>
       </Section>
@@ -1007,6 +1052,11 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
             {text('bankAccountNumber', 'Bank A/C number')}
             {text('bankIFSC', 'IFSC code', { upper: true })}
           </fieldset>
+          {canRequestDocs && (
+            <div className="mt-4">
+              <DocsOfType employeeId={employeeId} employeeName={fullName} title="Passbook / Cancelled cheque" docTypes={['passbook_cancelled_cheque']} match={/\b(passbook|cheque|check)\b/i} canUpload={directUpload} />
+            </div>
+          )}
         </Section>
       )}
 

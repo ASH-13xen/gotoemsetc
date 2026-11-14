@@ -22,7 +22,9 @@ const remove = asyncHandler(async (req, res) => {
 const adminUpload = asyncHandler(async (req, res) => {
   if (!req.file) throw ApiError.badRequest('No file included in the upload.');
   const { docType, otherLabel } = req.body;
-  const document = await uploadRequestService.adminUpload(req.params.id, { docType, otherLabel }, req.file);
+  // An earlier file of the same kind is kept (never deleted by an upload) —
+  // the newest shows first; an old one is removed only on purpose.
+  const document = await uploadRequestService.adminUpload(req.params.id, { docType, otherLabel }, req.file, { keepPrevious: true });
   res.status(201).json({ document });
 });
 

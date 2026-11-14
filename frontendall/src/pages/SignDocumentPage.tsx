@@ -4,9 +4,8 @@ import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, Download, ExternalLink, FileSignature, Loader2, Mail, ShieldCheck, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
 import { SignaturePad } from '@/components/esign/SignaturePad'
-import { apiMessage, declineDocument, fetchSignFile, getSignView, requestSignCode, signDocument, verifySignCode } from '@/api/esign.api'
+import { apiMessage, fetchSignFile, getSignView, requestSignCode, signDocument, verifySignCode } from '@/api/esign.api'
 
 const fmt = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : ''
@@ -41,8 +40,6 @@ export default function SignDocumentPage() {
   const [name, setName] = useState('')
   const [signature, setSignature] = useState<string | null>(null)
   const [consent, setConsent] = useState(false)
-  const [declining, setDeclining] = useState(false)
-  const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [done, setDone] = useState<null | { kind: 'signed'; code: string; verifyUrl: string } | { kind: 'declined' }>(null)
@@ -213,8 +210,6 @@ export default function SignDocumentPage() {
       {/* signing */}
       {session && !signedAlready && !closed && (
         <Card className="grid gap-4">
-          {!declining ? (
-            <>
               <p className="font-bold">Sign it</p>
               <div className="grid gap-1.5">
                 <label className="text-sm font-semibold" htmlFor="esign-name">
@@ -222,7 +217,7 @@ export default function SignDocumentPage() {
                 </label>
                 <Input id="esign-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="As on your documents" maxLength={120} />
               </div>
-              <SignaturePad onChange={setSignature} typedName={name} />
+              <SignaturePad onChange={setSignature} />
               <label className="flex cursor-pointer items-start gap-3 rounded-xl bg-slate-50 p-3 text-sm ring-1 ring-slate-200">
                 <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 size-4 accent-indigo-600" />
                 <span>{view.consent}</span>
@@ -242,38 +237,10 @@ export default function SignDocumentPage() {
                   {busy ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
                   Sign the document
                 </Button>
-                <button type="button" className="text-sm font-semibold text-slate-500 underline" onClick={() => setDeclining(true)}>
-                  I don't want to sign it
-                </button>
               </div>
               <p className="text-xs text-slate-500">
                 Signing records your name, signature, the time, and your device and network address, with a fingerprint of the document — all on a certificate page added to the signed copy.
               </p>
-            </>
-          ) : (
-            <>
-              <p className="font-bold">Not signing</p>
-              <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Tell HR why — e.g. a detail in it is wrong" rows={3} />
-              <div className="flex gap-2">
-                <Button
-                  variant="destructive"
-                  disabled={busy || !reason.trim()}
-                  onClick={() =>
-                    run(async () => {
-                      await declineDocument(token, { session, reason: reason.trim() })
-                      setDone({ kind: 'declined' })
-                      void refetch()
-                    }, 'Could not send that')
-                  }
-                >
-                  Send to HR
-                </Button>
-                <Button variant="outline" onClick={() => setDeclining(false)}>
-                  Back
-                </Button>
-              </div>
-            </>
-          )}
         </Card>
       )}
 

@@ -2,6 +2,7 @@ module.exports = [
   { key: 'aadhar', label: 'Aadhar Card' },
   { key: 'pan', label: 'PAN Card' },
   { key: 'photo', label: 'Passport Photo' },
+  { key: 'resume', label: 'CV / Resume' },
   { key: 'passbook_cancelled_cheque', label: 'Passbook / Cancelled Cheque' },
   { key: 'marksheet_10th', label: '10th Marksheet' },
   { key: 'marksheet_12th', label: '12th Marksheet' },
