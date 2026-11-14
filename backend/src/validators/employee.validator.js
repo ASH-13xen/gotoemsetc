@@ -145,6 +145,7 @@ const mutableFields = {
   lastName: z.string().optional(),
   personalEmail: z.string().email().optional().or(z.literal('')),
   phone: z.string().optional(),
+  emergencyContact: z.string().trim().max(40).optional(),
   instagramId: z.string().optional(),
   permanentAddress: addressSchema.optional(),
   localAddress: addressSchema.optional(),
@@ -165,6 +166,8 @@ const mutableFields = {
   reportingManager: z.string().optional(),
   manager: z.string().min(1).optional().nullable(),
   workLocation: z.string().optional(),
+  companyEmail: z.string().trim().email('Enter the company mail ID').optional().or(z.literal('')),
+  companyEmailPassword: z.string().max(200).optional(),
   workingHoursStart: timeStringSchema.optional(),
   workingHoursEnd: timeStringSchema.optional(),
   ctcAnnual: z.coerce.number().optional(),
@@ -304,4 +307,20 @@ const removeFlag = {
   params: z.object({ id: z.string().min(1), flagId: z.string().min(1) }),
 };
 
-module.exports = { create, update, getOrDelete, list, addFlag, removeFlag, completeProbation, changeSalary };
+// A promotion: a new salary and/or designation (a box in the Organisation
+// chart), with the letter (multipart field `letter`).
+const objectIdLike = z.string().regex(/^[a-f0-9]{24}$/i);
+const promote = {
+  ...idParam,
+  body: z
+    .object({
+      monthlyPay: z.coerce.number().min(0).optional(),
+      ctcAnnual: z.coerce.number().min(0).optional(),
+      effectiveFrom: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Choose the month it counts from'),
+      toNode: objectIdLike.optional(),
+      fromNode: objectIdLike.optional(),
+    })
+    .refine((d) => d.monthlyPay !== undefined || d.ctcAnnual !== undefined || d.toNode, { message: 'Choose a new salary or designation' }),
+};
+
+module.exports = { create, update, getOrDelete, list, addFlag, removeFlag, completeProbation, changeSalary, promote };

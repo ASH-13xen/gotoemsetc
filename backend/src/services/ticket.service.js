@@ -378,7 +378,9 @@ async function toView(user, ticket, chart, { withRecord = false } = {}) {
     }
   }
   if (withRecord) {
-    const events = await TicketEvent.find({ ticket: ticket._id }).sort({ at: 1, _id: 1 }).lean();
+    // Hours confirmed on a step: the CEO and admin see everyone's, anyone else only their own.
+    const showsHours = (e) => e.type !== EV.HOURS || seesEveryone(user) || (e.byUser && idOf(e.byUser) === idOf(user.id));
+    const events = (await TicketEvent.find({ ticket: ticket._id }).sort({ at: 1, _id: 1 }).lean()).filter(showsHours);
     view.record = events.map((e) => ({
       _id: idOf(e._id),
       type: e.type,

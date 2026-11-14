@@ -41,7 +41,9 @@ async function load(id) {
   return s;
 }
 
-async function shape(s) {
+// Each person's hours on the shoot: the CEO and admin see everyone's, anyone
+// else only their own.
+async function shape(s, user) {
   const tickets = await Ticket.find({ _id: { $in: s.reels.map((r) => r.ticket) } }).select('number title clientName stage pipeline').lean();
   const people = await Employee.find({ _id: { $in: [...s.people, ...s.hours.map((h) => h.employee)] } }).select('firstName lastName').lean();
   const tmap = new Map(tickets.map((t) => [idOf(t._id), t]));
@@ -67,7 +69,9 @@ async function shape(s) {
         reason: r.reason || '',
       };
     }),
-    hours: s.hours.map((h) => ({ employee: idOf(h.employee), name: nameOf(people.find((x) => idOf(x._id) === idOf(h.employee))), minutes: h.minutes })),
+    hours: s.hours
+      .filter((h) => org.seesEveryone(user) || (user?.employeeLink && idOf(h.employee) === idOf(user.employeeLink)))
+      .map((h) => ({ employee: idOf(h.employee), name: nameOf(people.find((x) => idOf(x._id) === idOf(h.employee))), minutes: h.minutes })),
     weeklyEvent: s.weeklyEvent ? idOf(s.weeklyEvent) : null,
     doneAt: s.doneAt || null,
     cancelledAt: s.cancelledAt || null,
@@ -136,7 +140,7 @@ async function create(user, { day, startMin, endMin, location, note, people = []
     // eslint-disable-next-line no-await-in-loop
     await tsvc.moveByShoot(user, t, { toStage: 'shoot_planned', parkedIn: 'shoot_day', parkedUntil: at, note: `Shoot on ${fmtDay(day)}${location ? ` at ${location}` : ''}`, meta: { shoot: idOf(s._id) } });
   }
-  return shape(s);
+  return shape(s, user);
 }
 
 async function list(user, { from, to, status } = {}) {
@@ -152,7 +156,7 @@ async function list(user, { from, to, status } = {}) {
     const tickets = await Ticket.find({ _id: { $in: s.reels.map((r) => r.ticket) } });
     const involved = s.people.map(idOf).includes(me) || tickets.some((t) => ticketService().managesTicket(user, t, chart));
     // eslint-disable-next-line no-await-in-loop
-    if (involved) out.push(await shape(s));
+    if (involved) out.push(await shape(s, user));
   }
   return out;
 }
@@ -236,7 +240,7 @@ async function complete(user, id, { shot = [], notShot = [], hours = [], weights
   s.doneAt = now;
   s.doneBy = user.id;
   await s.save();
-  return shape(s);
+  return shape(s, user);
 }
 
 async function cancel(user, id, { reason } = {}) {
@@ -277,7 +281,7 @@ async function cancel(user, id, { reason } = {}) {
       }
     }
   }
-  return shape(s);
+  return shape(s, user);
 }
 
-module.exports = { create, list, complete, cancel, get: async (user, id) => shape(await load(id)) };
+module.exports = { create, list, complete, cancel, get: async (user, id) => shape(await load(id), user) };

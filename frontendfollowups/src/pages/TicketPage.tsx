@@ -219,6 +219,7 @@ function ReassignDialog({ t, open, onOpenChange }: { t: Ticket; open: boolean; o
 export default function TicketPage() {
   const { id } = useParams()
   const { data: t, isLoading, error } = useTicket(id)
+  const { data: meta } = useTicketMeta()
   const [dialog, setDialog] = useState<null | 'edit' | 'reassign' | 'review'>(null)
   const [comment, setComment] = useState('')
   const [linkUrl, setLinkUrl] = useState('')
@@ -353,7 +354,8 @@ export default function TicketPage() {
               </Panel>
             )}
 
-            {t.isWork && (
+            {/* Hours on a ticket: the CEO and admin only. */}
+            {t.isWork && meta?.me.seesEveryone && (
               <Panel title="Hours worked" action={<span className="text-[11px] text-muted-foreground">confirmed at each hand-over</span>}>
                 <TicketHours t={t} />
               </Panel>

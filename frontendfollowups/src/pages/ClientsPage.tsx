@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, ChevronLeft, ChevronRight, History, Loader2, Lock, PauseCircle, PlayCircle, Plus, Save } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, History, Loader2, Lock, PauseCircle, PlayCircle, Plus, Save, X } from 'lucide-react'
 import { TicketNav } from '@/components/layout/TicketNav'
 import { PersonPicker, pickablePeople } from '@/components/tickets/WorkPanels'
 import { Button } from '@/components/ui/button'
@@ -10,8 +10,24 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { errorMessage } from '@/api/tickets.api'
-import { addClient, addMonth, hm, monthKeyOf, monthName, rupees, saveClientMonth, setClientPaused, type ContentType, type Counts, type MonthTicket } from '@/api/work.api'
+import { errorMessage, type Person, type PickPerson, type TicketMeta } from '@/api/tickets.api'
+import {
+  addClient,
+  addExtraTicket,
+  addMonth,
+  hm,
+  monthKeyOf,
+  monthName,
+  rupees,
+  saveClientMonth,
+  setClientPaused,
+  type ClientCard,
+  type ContentType,
+  type Counts,
+  type MonthPlan,
+  type MonthTicket,
+  type PlanRole,
+} from '@/api/work.api'
 import { useTicketMeta } from '@/hooks/useTickets'
 import { useClientCards, useClientMonth, useWorkMutation } from '@/hooks/useWork'
 import { fade, fmtDate, inkOn } from '@/lib/ticketFormat'
@@ -94,6 +110,8 @@ function AddClientDialog({ month, onClose }: { month: string; onClose: () => voi
   )
 }
 
+const smmNames = (c: ClientCard) => (c.smms?.length ? c.smms : c.smm ? [c.smm] : []).map((p) => p.name).filter(Boolean)
+
 export function ClientsPage() {
   const [params, setParams] = useSearchParams()
   const month = params.get('month') || monthKeyOf()
@@ -136,12 +154,15 @@ export function ClientsPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {cards.map((c) => (
-              <Link key={c.client._id} to={`/clients/${c.client._id}?month=${month}`} className={cn('grid gap-3 rounded-2xl bg-card p-4 ring-1 ring-border transition hover:-translate-y-0.5 hover:shadow-md', c.client.workPaused && 'opacity-60')}>
+              <Link key={c.client._id} to={`/clients/${c.client._id}?month=${month}`} className={cn('grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 rounded-2xl bg-card p-4 ring-1 ring-border transition hover:-translate-y-0.5 hover:shadow-md', c.client.workPaused && 'opacity-60')}>
                 <div className="flex items-start gap-3">
                   {c.client.logoUrl ? <img src={c.client.logoUrl} alt="" className="size-10 rounded-xl object-cover ring-1 ring-border" /> : <span className="grid size-10 place-items-center rounded-xl bg-secondary text-sm font-black">{c.client.name.slice(0, 2).toUpperCase()}</span>}
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-extrabold">{c.client.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{[c.team?.title, c.smm?.name ? `SMM ${c.smm.name}` : null].filter(Boolean).join(' · ') || (c.planned ? '' : 'No plan for this month')}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {[c.team?.title, smmNames(c).length ? `SMM ${smmNames(c).join(', ')}` : null].filter(Boolean).join(' · ') || (c.planned ? '' : 'No plan for this month')}
+                    </p>
+                    {c.carriedFrom && <p className="text-[11px] text-muted-foreground">Same plan as {monthName(c.carriedFrom)}</p>}
                   </div>
                   {c.client.workPaused && <span className="rounded-full bg-slate-500/12 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-600">Paused</span>}
                 </div>
@@ -154,7 +175,8 @@ export function ClientsPage() {
                           <div className="flex items-center justify-between text-xs">
                             <span className="font-semibold">{data?.types.find((t) => t.key === k)?.plural}</span>
                             <span className="text-muted-foreground">
-                              {p.done}/{p.committed} done{p.toStart ? ` · ${p.toStart} to start` : ''}
+                              {p.done}/{p.committed} done{p.extra ? ` · ${p.extra} extra` : ''}
+                              {p.toStart ? ` · ${p.toStart} to start` : ''}
                             </span>
                           </div>
                           <Bar done={p.done} made={p.made} committed={p.committed} color={TYPE_COLOR[k]} />
@@ -166,7 +188,7 @@ export function ClientsPage() {
                   <p className="text-xs text-muted-foreground">{data?.canPlan ? 'Set the plan →' : 'Not planned yet.'}</p>
                 )}
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-                  <span>{c.hoursLogged} h logged</span>
+                  {c.hoursLogged != null && <span>{c.hoursLogged} h logged</span>}
                   {c.carriedOver > 0 && (
                     <span className="inline-flex items-center gap-1 font-semibold text-amber-700">
                       <History className="size-3" />
@@ -189,7 +211,7 @@ export function ClientsPage() {
   )
 }
 
-function TicketRow({ t }: { t: MonthTicket }) {
+function TicketRow({ t, showTime }: { t: MonthTicket; showTime: boolean }) {
   const color = t.locked ? fade(t.color, 0.55) : t.color
   return (
     <li className={cn('flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm', t.removed && 'opacity-50')}>
@@ -200,22 +222,96 @@ function TicketRow({ t }: { t: MonthTicket }) {
       <Link to={`/tickets/${t._id}`} className="min-w-0 flex-1 truncate hover:underline">
         <span className="font-mono text-xs font-bold">{t.code}</span> {t.title}
       </Link>
+      {t.extra && <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-primary">Extra</span>}
       {t.parkedIn && <PauseCircle className="size-3.5 text-muted-foreground" />}
       {t.carriedOver && <History className="size-3.5 text-amber-600" />}
       <span className="w-16 shrink-0 text-right text-xs text-muted-foreground">{fmtDate(t.dueAt)}</span>
-      <span className="w-14 shrink-0 text-right font-mono text-xs">{t.minutes ? hm(t.minutes) : ''}</span>
+      {showTime && <span className="w-14 shrink-0 text-right font-mono text-xs">{t.minutes ? hm(t.minutes) : ''}</span>}
     </li>
   )
 }
 
-type PeopleKey = 'smm' | 'designer' | 'shooter' | 'editor' | 'contentManager'
-const PEOPLE: { key: PeopleKey; label: string }[] = [
-  { key: 'contentManager', label: 'Content Manager' },
-  { key: 'smm', label: 'Social Media Manager' },
-  { key: 'designer', label: 'Graphic designer' },
-  { key: 'shooter', label: 'Videographer' },
-  { key: 'editor', label: 'Video editor' },
+// The roles on a client's tickets, and the boxes in a team that fill each.
+const PEOPLE: { key: PlanRole; label: string; boxes: string[]; none: string }[] = [
+  { key: 'contentManager', label: 'Content Manager', boxes: ['content_manager'], none: 'Nobody yet' },
+  { key: 'smm', label: 'Social Media Manager', boxes: ['social_media_manager'], none: 'Nobody yet' },
+  { key: 'designer', label: 'Graphic designer', boxes: ['graphic_designer'], none: 'None — the Social Media Manager makes the posts' },
+  { key: 'shooter', label: 'Videographer', boxes: ['videographer', 'videographer_editor'], none: 'Nobody yet' },
+  { key: 'editor', label: 'Video editor', boxes: ['editor', 'videographer_editor'], none: 'Nobody yet' },
 ]
+type People = Record<PlanRole, Person[]>
+const noPeople = (): People => ({ smm: [], designer: [], shooter: [], editor: [], contentManager: [] })
+
+// Everyone holding each role in a team (the Organisation chart) — what choosing the team fills in.
+function teamPeople(meta: TicketMeta | undefined, teamId: string): People {
+  const out = noPeople()
+  const team = meta?.teams.find((t) => t._id === teamId)
+  if (!team) return out
+  for (const p of PEOPLE) {
+    const seen = new Map<string, Person>()
+    team.roles.filter((r) => p.boxes.includes(r.role)).forEach((r) => r.holders.forEach((h) => seen.set(h._id, { _id: h._id, name: h.name })))
+    out[p.key] = [...seen.values()]
+  }
+  // No Content Manager box: the team's head.
+  if (!out.contentManager.length) out.contentManager = team.heads.map((h) => ({ _id: h._id, name: h.name }))
+  return out
+}
+
+// A plan's people per role: its lists, or the single fields of an older plan.
+function planPeople(plan: MonthPlan | null | undefined): People {
+  const out = noPeople()
+  if (!plan) return out
+  for (const p of PEOPLE) {
+    const one = plan[p.key]
+    out[p.key] = plan.people?.[p.key]?.length ? plan.people[p.key] : one ? [one] : []
+  }
+  return out
+}
+
+// One role's people: each as a chip (removable), and "Add someone" for more.
+function PeopleField({
+  label,
+  none,
+  people,
+  choices,
+  editable,
+  onChange,
+}: {
+  label: string
+  none: string
+  people: Person[]
+  choices: PickPerson[]
+  editable: boolean
+  onChange: (next: Person[]) => void
+}) {
+  const left = choices.filter((c) => !people.some((p) => p._id === c._id))
+  const add = (id: string) => {
+    const c = choices.find((x) => x._id === id)
+    if (c && !people.some((p) => p._id === id)) onChange([...people, { _id: c._id, name: c.name }])
+  }
+  return (
+    <div className="grid content-start gap-1.5">
+      <div>
+        <Label>{label}</Label>
+        {people.length > 1 && <p className="text-[11px] text-muted-foreground">{people.length} people — tickets shared in turn</p>}
+      </div>
+      <div className="flex min-h-7 flex-wrap items-center gap-1.5">
+        {people.length === 0 && <span className="text-xs text-muted-foreground">{none}</span>}
+        {people.map((p) => (
+          <span key={p._id} className="inline-flex max-w-full items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-xs font-semibold">
+            <span className="truncate">{p.name || 'Unknown'}</span>
+            {editable && (
+              <button type="button" aria-label={`Remove ${p.name || 'this person'}`} className="shrink-0 rounded-full text-muted-foreground hover:text-foreground" onClick={() => onChange(people.filter((x) => x._id !== p._id))}>
+                <X className="size-3" />
+              </button>
+            )}
+          </span>
+        ))}
+      </div>
+      {editable && left.length > 0 && <PersonPicker key={people.map((p) => p._id).join()} people={left} value="" onChange={add} placeholder="Add someone" />}
+    </div>
+  )
+}
 
 export function ClientMonthPage() {
   const { id } = useParams()
@@ -226,27 +322,32 @@ export function ClientMonthPage() {
   const { data, isLoading } = useClientMonth(id, month)
   const [counts, setCounts] = useState<Counts>({ reels: 0, posts: 0, stories: 0, festiveStories: 0 })
   const [team, setTeam] = useState('')
-  const [people, setPeople] = useState<Partial<Record<PeopleKey, string>>>({})
-  const [fee, setFee] = useState('')
+  const [people, setPeople] = useState<People>(noPeople)
   useEffect(() => {
     if (!data) return
     setCounts(data.plan?.counts || { reels: 0, posts: 0, stories: 0, festiveStories: 0 })
     setTeam(data.plan?.team || '')
-    setPeople(Object.fromEntries(PEOPLE.map((p) => [p.key, data.plan?.[p.key]?._id || ''])))
-    setFee(data.plan?.fee != null ? String(data.plan.fee) : '')
+    setPeople(planPeople(data.plan))
   }, [data])
   const choices = useMemo(() => pickablePeople(meta, team), [meta, team])
+  // Choosing a team fills every role with the team's people.
+  const chooseTeam = (teamId: string) => {
+    setTeam(teamId)
+    setPeople(teamPeople(meta, teamId))
+  }
+  // The fee is no longer set here: leaving it out keeps what is stored.
   const save = useWorkMutation(() =>
     saveClientMonth(id!, month, {
       counts,
       team: team || null,
-      ...Object.fromEntries(PEOPLE.map((p) => [p.key, people[p.key] || null])),
-      ...(data?.canSeeMoney ? { fee: fee.trim() === '' ? null : Number(fee) } : {}),
+      people: Object.fromEntries(PEOPLE.map((p) => [p.key, people[p.key].map((x) => x._id)])),
     })
   )
+  const extra = useWorkMutation((type: ContentType) => addExtraTicket(id!, month, type))
   const pause = useWorkMutation((v: boolean) => setClientPaused(id!, v))
   const go = (m: string) => navigate(`/clients/${id}?month=${m}`, { replace: true })
   const editable = Boolean(data?.canPlan)
+  const ownPlan = Boolean(data?.plan && !data.plan.isSuggestion && !data.plan.carried)
 
   return (
     <>
@@ -264,7 +365,13 @@ export function ClientMonthPage() {
               <div>
                 <h1 className="text-2xl font-black tracking-tight">{data.client.name}</h1>
                 <p className="text-sm text-muted-foreground">
-                  {data.plan?.isSuggestion ? `No plan for ${data.monthLabel} yet — showing ${monthName(data.plan.fromMonth)}'s to start from.` : data.plan ? `The plan for ${data.monthLabel}.` : `No plan for ${data.monthLabel} yet.`}
+                  {data.plan?.carried
+                    ? `Same plan as ${monthName(data.plan.fromMonth)} — it carries on every month until you change it.`
+                    : data.plan?.isSuggestion
+                      ? `No plan for ${data.monthLabel} — showing ${monthName(data.plan.fromMonth)}'s to start from.`
+                      : data.plan
+                        ? `The plan for ${data.monthLabel} — it carries on to the next months until you change it.`
+                        : `No plan for ${data.monthLabel} yet.`}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -294,7 +401,7 @@ export function ClientMonthPage() {
                 </div>
                 <div className="grid gap-1.5">
                   <Label>Team</Label>
-                  <Select value={team || undefined} onValueChange={(v) => setTeam(v)} disabled={!editable}>
+                  <Select value={team || undefined} onValueChange={chooseTeam} disabled={!editable}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="Choose the team" />
                     </SelectTrigger>
@@ -306,27 +413,21 @@ export function ClientMonthPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-[11px] text-muted-foreground">People left empty are filled from the team's boxes when you save.</p>
+                  <p className="text-[11px] text-muted-foreground">Choosing the team fills in its people below — add or remove anyone.</p>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-2">
                   {PEOPLE.map((p) => (
-                    <div key={p.key} className="grid gap-1.5">
-                      <Label>{p.label}</Label>
-                      {editable ? <PersonPicker people={choices} value={people[p.key] || ''} onChange={(v) => setPeople((x) => ({ ...x, [p.key]: v }))} placeholder="From the team" /> : <p className="text-sm">{data.plan?.[p.key]?.name || '—'}</p>}
-                    </div>
+                    <PeopleField
+                      key={p.key}
+                      label={p.label}
+                      none={p.none}
+                      people={people[p.key]}
+                      choices={choices}
+                      editable={editable && Boolean(team)}
+                      onChange={(next) => setPeople((x) => ({ ...x, [p.key]: next }))}
+                    />
                   ))}
                 </div>
-                {data.canSeeMoney && (
-                  <div className="grid gap-1.5">
-                    <Label>Monthly fee (₹)</Label>
-                    <Input type="number" min={0} value={fee} disabled={!editable} onChange={(e) => setFee(e.target.value)} placeholder="Used when there's no invoice for the month" />
-                    {data.invoice && (
-                      <p className="text-[11px] text-muted-foreground">
-                        Invoice {data.invoice.number}: {rupees(data.invoice.amount)} ({data.invoice.status}) — used instead of the fee.
-                      </p>
-                    )}
-                  </div>
-                )}
                 {editable && (
                   <Button
                     className="justify-self-end"
@@ -347,7 +448,7 @@ export function ClientMonthPage() {
                   </Button>
                 )}
                 <p className="text-[11px] text-muted-foreground">
-                  Tickets are made locked, due at the month's end until someone starts the work and sets the real due date. Lowering a number takes off tickets nobody has worked on yet (locked ones first).
+                  The plan stays the same every month until you change it. With more than one person in a role, the tickets are shared between them in turn. Tickets are made locked, due at the month's end until someone starts the work and sets the real due date. Lowering a number takes off tickets nobody has worked on yet (locked ones first).
                 </p>
               </section>
 
@@ -359,15 +460,44 @@ export function ClientMonthPage() {
                   data.types.map((t) => {
                     const of = data.tickets.filter((x) => x.type === t.key)
                     if (!of.length) return null
+                    const live = of.filter((x) => !x.removed)
+                    const extras = live.filter((x) => x.extra).length
+                    const committed = ownPlan ? data.plan!.counts[t.key] : live.length - extras
                     return (
                       <div key={t.key}>
                         <p className="mb-1 text-xs font-bold">
-                          {t.plural} · {of.filter((x) => x.status === 'completed').length}/{of.filter((x) => !x.removed).length} done
+                          {t.plural} · {live.filter((x) => x.status === 'completed').length}/{committed} done{extras ? ` · ${extras} extra` : ''}
                         </p>
-                        <ul className="grid">{of.map((x) => <TicketRow key={x._id} t={x} />)}</ul>
+                        <ul className="grid">{of.map((x) => <TicketRow key={x._id} t={x} showTime={Boolean(data.canSeeTime)} />)}</ul>
                       </div>
                     )
                   })
+                )}
+                {data.canAddExtra && (
+                  <div className="grid gap-2 border-t border-border pt-3">
+                    <p className="text-xs font-bold">More than the plan</p>
+                    <div className="flex flex-wrap gap-2">
+                      {data.types.map((t) => (
+                        <Button
+                          key={t.key}
+                          size="sm"
+                          variant="outline"
+                          disabled={extra.isPending}
+                          onClick={() => {
+                            if (!window.confirm(`Make one more ${t.label.toLowerCase()} ticket for ${data.client.name} in ${data.monthLabel}, beyond the plan's ${data.plan?.counts[t.key] ?? 0}?`)) return
+                            extra
+                              .mutateAsync(t.key)
+                              .then(() => toast.success(`Extra ${t.label.toLowerCase()} made`))
+                              .catch((err) => toast.error(errorMessage(err, 'Could not make the ticket')))
+                          }}
+                        >
+                          <Plus className="size-3.5" />
+                          {t.label}
+                        </Button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">An extra ticket doesn't change the plan — it shows as, say, 9/8. Raising the count later takes the extras into it.</p>
+                  </div>
                 )}
                 {data.carriedOver.length > 0 && (
                   <div>
@@ -375,7 +505,7 @@ export function ClientMonthPage() {
                       <History className="size-3.5" />
                       Carried over from earlier months
                     </p>
-                    <ul className="grid">{data.carriedOver.map((x) => <TicketRow key={x._id} t={x} />)}</ul>
+                    <ul className="grid">{data.carriedOver.map((x) => <TicketRow key={x._id} t={x} showTime={Boolean(data.canSeeTime)} />)}</ul>
                   </div>
                 )}
               </section>

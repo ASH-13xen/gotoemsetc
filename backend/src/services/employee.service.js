@@ -268,6 +268,84 @@ async function changeSalary(id, { monthlyPay, ctcAnnual, effectiveFrom }, file, 
   return employee;
 }
 
+// A promotion: a new salary and/or a new designation — a box in the
+// Organisation chart, which they move into — always with the promotion
+// letter. The date of last promotion is the day the letter is attached.
+async function promote(id, { monthlyPay, ctcAnnual, effectiveFrom, toNode, fromNode }, file, actor) {
+  const OrgNode = require('../models/OrgNode');
+  const existing = await employeeRepository.findById(id);
+  if (!existing) throw ApiError.notFound('Employee not found');
+  assertNotOwnRecord(actor, id, 'promotion');
+  if (!file) throw ApiError.badRequest('Attach the promotion letter');
+
+  const next = {
+    monthlyPay: monthlyPay !== undefined ? monthlyPay : existing.monthlyPay,
+    ctcAnnual: ctcAnnual !== undefined ? ctcAnnual : existing.ctcAnnual,
+  };
+  const salaryChanged = !sameValue(next.monthlyPay, existing.monthlyPay) || !sameValue(next.ctcAnnual, existing.ctcAnnual);
+  let target = null;
+  if (toNode) {
+    target = await OrgNode.findById(toNode);
+    if (!target || !target.parent || target.kind === 'team') throw ApiError.badRequest('Choose the box in the Organisation chart for the new designation');
+    if (existing.status !== 'active') throw ApiError.badRequest('Only an active employee can be placed in the Organisation chart');
+  }
+  const holdsTarget = target && target.assignees.map(String).includes(String(existing._id));
+  const designationChanged = Boolean(target) && (!holdsTarget || (target.title || '').trim() !== (existing.designation || '').trim());
+  if (!salaryChanged && !designationChanged) throw ApiError.badRequest('Nothing changes — choose a new salary or designation');
+
+  const letter = await uploadRequestService.adminUpload(id, { docType: 'promotion_letter' }, file, { keepPrevious: true });
+  const at = new Date();
+  const [year, month] = (effectiveFrom || at.toISOString().slice(0, 7)).split('-').map(Number);
+  const startsFrom = new Date(Date.UTC(year, month - 1, 1));
+  const set = { lastPromotionAt: at };
+  const push = {
+    promotions: {
+      at,
+      designationFrom: existing.designation,
+      designationTo: target ? target.title : existing.designation,
+      nodeFrom: fromNode || null,
+      nodeTo: target ? target._id : null,
+      salaryChanged,
+      effectiveFrom: startsFrom,
+      letter: letter._id,
+      by: actor?.id,
+    },
+  };
+  if (salaryChanged) {
+    Object.assign(set, next);
+    push.salaryHistory = {
+      previousMonthlyPay: existing.monthlyPay,
+      previousCtcAnnual: existing.ctcAnnual,
+      ...next,
+      effectiveFrom: startsFrom,
+      letter: letter._id,
+      changedBy: actor?.id,
+      changedAt: at,
+    };
+  }
+  if (target) set.designation = target.title;
+  const employee = await employeeRepository.updateById(id, { $set: set, $push: push });
+
+  // Into the new box — and out of the one they are moving from.
+  if (target && !holdsTarget) {
+    await orgChartService.setAssignees(target._id, [...target.assignees.map(String), String(existing._id)]);
+  }
+  if (target && fromNode && String(fromNode) !== String(target._id)) {
+    const from = await OrgNode.findById(fromNode);
+    if (from && from.assignees.map(String).includes(String(existing._id))) {
+      await orgChartService.setAssignees(from._id, from.assignees.map(String).filter((x) => x !== String(existing._id)));
+    }
+  }
+  await activityService.log(id, 'PROMOTED', {
+    designation: target ? { from: existing.designation, to: target.title } : undefined,
+    salaryChanged,
+    effectiveFrom: effectiveFrom || null,
+    letter: letter._id,
+    by: actor?.username,
+  });
+  return employee;
+}
+
 async function deleteEmployee(id) {
   const employee = await employeeRepository.softDeleteById(id);
   if (!employee) throw ApiError.notFound('Employee not found');
@@ -395,4 +473,5 @@ module.exports = {
   listAnniversaries,
   completeProbation,
   changeSalary,
+  promote,
 };

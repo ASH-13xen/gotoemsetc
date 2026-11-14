@@ -25,6 +25,10 @@ const generatedDocumentSchema = new Schema(
     // employee physically signs the generated document — same excluded-by-
     // default storage as docx/pdf above.
     signedFile: fileSchema,
+    // The exact HTML the PDF was rendered from (with the company's signature
+    // placed) — re-rendered with the employee's signature when they sign
+    // online (services/esign.service.js). Not loaded unless asked for.
+    html: { type: String, select: false },
     status: {
       type: String,
       enum: Object.values(GENERATED_DOCUMENT_STATUS),

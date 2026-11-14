@@ -114,7 +114,18 @@ export function RequestDocumentsModal({
         {!link ? (
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label>Documents to request</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label>Documents to request</Label>
+                {(() => {
+                  const all = (config?.docTypes ?? []).filter((d) => !d.internal).map((d) => d.key)
+                  const allPicked = all.length > 0 && all.every((k) => selectedTypes.includes(k))
+                  return (
+                    <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={!all.length} onClick={() => setSelectedTypes(allPicked ? [] : all)}>
+                      {allPicked ? 'Clear all' : 'Select all'}
+                    </Button>
+                  )
+                })()}
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {(config?.docTypes ?? []).filter((d) => !d.internal).map((docType) => {
                   const selected = selectedTypes.includes(docType.key)

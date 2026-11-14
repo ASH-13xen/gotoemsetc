@@ -33,11 +33,15 @@ async function generateHtmlPdf(employee, template, mergeData) {
     path.join(env.templatesHtmlDir, template.htmlFilePath),
     'utf8'
   );
-  const filledHtml = fillTemplate(templateHtml, mergeData);
+  // The company's signature (the CEO's or HR's, as the template names) is
+  // placed now, when it's on file; the exact HTML is kept so the employee can
+  // sign this same document online later (esign.service.js).
+  const { html: filledHtml } = await require('./esign.service').withCompanySignatures(fillTemplate(templateHtml, mergeData));
   const pdfBuffer = await renderPdfFromHtml(filledHtml, env.templatesHtmlDir);
 
   return {
     pdf: { data: pdfBuffer, contentType: PDF_CONTENT_TYPE, filename: `${template.key}.pdf` },
+    html: filledHtml,
   };
 }
 
@@ -65,13 +69,23 @@ async function generateOne(employee, template, overrides) {
 // The full & final settlement can only be made once both offboarding boxes
 // are ticked — the person is out of the groups and Go-To Reels, and their
 // company mail is deactivated.
-function assertCanGenerateFnf(employee) {
+async function assertCanGenerateFnf(employee) {
   const missing = [];
   if (!employee.removedFromGroupsAndReels) missing.push('"Removed from groups + Go-To Reels"');
   if (!employee.mailDeactivated) missing.push('"Mail deactivated"');
   if (missing.length) {
     throw ApiError.badRequest(
       `Tick ${missing.join(' and ')} in their offboarding details before generating the full & final settlement`
+    );
+  }
+  // Every company device has to be back first — returned, or marked lost
+  // (HR Work → Devices); a lost one's recovery still comes off the settlement.
+  const DeviceAssignment = require('../models/DeviceAssignment');
+  const held = await DeviceAssignment.find({ employee: employee._id, status: 'active' }).populate('device', 'code brand model').lean();
+  if (held.length) {
+    const names = held.map((a) => (a.device ? [a.device.code, a.device.brand, a.device.model].filter(Boolean).join(' ') : 'a device')).join(', ');
+    throw ApiError.badRequest(
+      `${employee.firstName} still has ${held.length === 1 ? 'a company device' : `${held.length} company devices`} (${names}) — take ${held.length === 1 ? 'it' : 'them'} back, or mark ${held.length === 1 ? 'it' : 'them'} lost, in HR Work → Devices before generating the full & final settlement`
     );
   }
 }
@@ -81,7 +95,7 @@ async function generateForEmployee(employeeId, templateIds, overrides = {}) {
   if (!employee) throw ApiError.notFound('Employee not found');
 
   const requested = await Promise.all(templateIds.map((id) => documentTemplateRepository.findById(id)));
-  if (requested.some((t) => t?.key === 'fnf-settlement')) assertCanGenerateFnf(employee);
+  if (requested.some((t) => t?.key === 'fnf-settlement')) await assertCanGenerateFnf(employee);
 
   const results = [];
 

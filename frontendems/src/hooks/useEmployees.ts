@@ -57,6 +57,19 @@ export function useCompleteProbation(id: string) {
   })
 }
 
+export function usePromote(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ letter, ...input }: { monthlyPay?: number; ctcAnnual?: number; effectiveFrom: string; toNode?: string; fromNode?: string; letter: File }) =>
+      employeesApi.promoteEmployee(id, input, letter),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: EMPLOYEES_KEY })
+      queryClient.invalidateQueries({ queryKey: ['uploadedDocuments', id] })
+      queryClient.invalidateQueries({ queryKey: ['org-nodes'] })
+    },
+  })
+}
+
 export function useChangeSalary(id: string) {
   const queryClient = useQueryClient()
   return useMutation({

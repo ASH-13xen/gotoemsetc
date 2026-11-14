@@ -25,7 +25,8 @@ import { STATUS_CONFIG } from './statusConfig'
 import type { AttendanceStatus } from '@/api/attendance.api'
 import type { HolidayType } from '@/api/holidays.api'
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+// Weeks start on Monday.
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const NO_STATUS = '__none__'
 
 function pad(n: number) {
@@ -84,7 +85,19 @@ function apiMessage(err: unknown, fallback: string) {
   return (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? fallback
 }
 
-export function AttendanceCalendar({ employeeId, compact = false }: { employeeId: string; compact?: boolean }) {
+// `month` / `onMonthChange`: the month shown, when the page shares it (the
+// attendance summary beside it follows the same month).
+export function AttendanceCalendar({
+  employeeId,
+  compact = false,
+  month: shownMonth,
+  onMonthChange,
+}: {
+  employeeId: string
+  compact?: boolean
+  month?: Date
+  onMonthChange?: (month: Date) => void
+}) {
   const { user } = useAuth()
   // Marking holidays / half days / SL days is part of HR Work.
   const isAdmin = can(user, 'hrms')
@@ -96,10 +109,16 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
   const isHr = hasRole(user, 'hr') && !can(user, 'attendance_no_time_limit')
   const reasonRequired = isHr
 
-  const [monthDate, setMonthDate] = useState(() => {
+  const [ownMonth, setOwnMonth] = useState(() => {
     const now = new Date()
     return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
   })
+  const monthDate = shownMonth ?? ownMonth
+  const setMonthDate = (next: (d: Date) => Date) => {
+    const value = next(monthDate)
+    if (onMonthChange) onMonthChange(value)
+    else setOwnMonth(value)
+  }
   const [openDay, setOpenDay] = useState<string | null>(null)
   const [pendingStatus, setPendingStatus] = useState<string>(NO_STATUS)
   const [pendingOvertimeMinutes, setPendingOvertimeMinutes] = useState('')
@@ -125,7 +144,8 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
   const overtimeByDate = new Map((data?.overtimeRequests ?? []).map((r) => [r.date.slice(0, 10), r]))
   const holidayByDate = new Map((holidaysData?.holidays ?? []).map((h) => [h.date.slice(0, 10), h]))
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate()
-  const firstWeekday = new Date(Date.UTC(year, month - 1, 1)).getUTCDay()
+  // Blank cells before the 1st, counting Monday as the week's first day.
+  const firstWeekday = (new Date(Date.UTC(year, month - 1, 1)).getUTCDay() + 6) % 7
   const today = todayKey()
 
   const cells: (string | null)[] = [
@@ -204,7 +224,7 @@ export function AttendanceCalendar({ employeeId, compact = false }: { employeeId
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border">
+    <div className="h-full overflow-hidden rounded-xl border border-border bg-card">
       <div
         className={cn(
           'flex items-center justify-between border-b border-border',

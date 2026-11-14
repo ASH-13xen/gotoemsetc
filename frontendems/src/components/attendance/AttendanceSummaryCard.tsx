@@ -29,6 +29,15 @@ function currentMonthRange(): { from: string; to: string } {
   return { from: dateKey(from), to: dateKey(now) }
 }
 
+// A month's range — up to today while it is still going.
+function monthRange(month: Date): { from: string; to: string } {
+  const from = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth(), 1))
+  const last = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 0))
+  const today = dateKey(new Date())
+  const to = dateKey(last) < today ? dateKey(last) : today
+  return { from: dateKey(from), to: to < dateKey(from) ? dateKey(from) : to }
+}
+
 function previousMonthRange(): { from: string; to: string } {
   const now = new Date()
   const from = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
@@ -86,6 +95,7 @@ export function AttendanceSummaryCard({
   employeeId,
   showViewFullButton = true,
   compact = false,
+  month,
 }: {
   employeeId: string
   showViewFullButton?: boolean
@@ -93,16 +103,19 @@ export function AttendanceSummaryCard({
   // calendar (see EmployeeDetailPage.tsx) instead of the card's own full
   // width. Purely visual — same data, same grid shape either way.
   compact?: boolean
+  // The month to total — the one the calendar beside it shows. Without it,
+  // the Current / Previous / Overall buttons choose.
+  month?: Date
 }) {
   const navigate = useNavigate()
   const [period, setPeriod] = useState<Period>('current')
-  const range = period === 'current' ? currentMonthRange() : period === 'previous' ? previousMonthRange() : undefined
+  const range = month ? monthRange(month) : period === 'current' ? currentMonthRange() : period === 'previous' ? previousMonthRange() : undefined
   const { data, isLoading } = useAttendanceSummary(employeeId, range)
   const summary = data?.summary
-  const statGridCols = compact ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'
+  const statGridCols = 'grid-cols-3'
 
   return (
-    <Card className={compact ? 'gap-4 p-4' : 'gap-6 p-6'}>
+    <Card className={cn('h-full', compact ? 'gap-3 p-4' : 'gap-5 p-6')}>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className={cn('font-semibold text-foreground', compact ? 'text-sm' : 'text-base')}>Attendance</h2>
@@ -122,6 +135,7 @@ export function AttendanceSummaryCard({
         )}
       </div>
 
+      {!month && (
       <div className="flex flex-wrap gap-2">
         {PERIOD_OPTIONS.map((opt) => (
           <Button
@@ -135,10 +149,11 @@ export function AttendanceSummaryCard({
           </Button>
         ))}
       </div>
+      )}
 
       {isLoading ? (
         <Skeleton className="h-20 w-full" />
-      ) : period === 'overall' && !summary?.dateOfJoining ? (
+      ) : !month && period === 'overall' && !summary?.dateOfJoining ? (
         <div className="flex items-center gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-amber-700">
           <TriangleAlert className="size-5 shrink-0" />
           <p className="text-sm font-medium">
@@ -147,12 +162,12 @@ export function AttendanceSummaryCard({
         </div>
       ) : (
         <>
-          <div className={cn('grid gap-3 border-t border-border pt-5', statGridCols)}>
+          <div className={cn('grid border-t border-border', compact ? 'gap-2 pt-3' : 'gap-3 pt-5', statGridCols)}>
             <StatBox compact={compact} label="Working days" value={summary?.totalWorkingDays ?? 0} tone={NEUTRAL_TONE} />
             <StatBox compact={compact} label="Unmarked" value={summary?.unmarkedDays ?? 0} tone={NEUTRAL_TONE} />
           </div>
 
-          <div className={cn('grid gap-3', statGridCols)}>
+          <div className={cn('grid', compact ? 'gap-2' : 'gap-3', statGridCols)}>
             {(Object.entries(STATUS_CONFIG) as [AttendanceStatus, (typeof STATUS_CONFIG)[AttendanceStatus]][]).map(
               ([key, cfg]) => (
                 <StatBox
@@ -170,7 +185,7 @@ export function AttendanceSummaryCard({
           {/* Stacking visibility — a day can be an arrival-side Short Leave
               AND an early departure at once; these surface that instead of
               it silently looking like "just 1 SL" above. */}
-          <div className={cn('grid gap-3 border-t border-border pt-5', statGridCols)}>
+          <div className={cn('grid border-t border-border', compact ? 'gap-2 pt-3' : 'gap-3 pt-5', statGridCols)}>
             <StatBox compact={compact} label="Early departures" value={summary?.earlyDepartureCount ?? 0} tone={PENALTY_TONE} />
             <StatBox compact={compact} label="Effective SL units" value={summary?.effectiveSLUnits ?? 0} tone={PENALTY_TONE} />
             <StatBox compact={compact} label="Half-day penalty units" value={summary?.halfDayPenaltyUnits ?? 0} tone={PENALTY_TONE} />

@@ -7,8 +7,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { EmployeePickerList } from '@/components/employees/EmployeePickerList'
-import { AttendanceCalendar } from '@/components/attendance/AttendanceCalendar'
-import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummaryCard'
+import { AttendancePair } from '@/components/attendance/AttendancePair'
 import { DevicePunchFeed } from '@/components/attendance/DevicePunchFeed'
 import { RequestModificationDialog } from '@/components/attendance/RequestModificationDialog'
 import { AttendanceRequestsPanel } from '@/components/attendance/AttendanceRequestsPanel'
@@ -121,8 +120,7 @@ export default function AttendancePage() {
                     View profile
                   </Button>
                 </Card>
-                <AttendanceSummaryCard employeeId={employeeId} showViewFullButton={false} />
-                <AttendanceCalendar employeeId={employeeId} />
+                <AttendancePair employeeId={employeeId} showViewFullButton={false} />
               </div>
             )}
             <AttendanceRequestsPanel />
@@ -137,8 +135,7 @@ export default function AttendancePage() {
                 scans as usual. Apply for leave for any day you're off.
               </p>
             )}
-            <AttendanceSummaryCard employeeId={employeeId} showViewFullButton={false} />
-            <AttendanceCalendar employeeId={employeeId} />
+            <AttendancePair employeeId={employeeId} showViewFullButton={false} />
           </div>
         )
       )}

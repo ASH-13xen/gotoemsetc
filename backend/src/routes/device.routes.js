@@ -43,6 +43,8 @@ const sendFile = (res, file) => {
 // ---------------------------------------------------------------- the holder's own
 
 router.get('/mine', asyncHandler(async (req, res) => res.json(await deviceService.mine(req.user))));
+// The devices someone holds, for their EMS profile — their own, or anyone's for HR.
+router.get('/held/:id', validate(id), asyncHandler(async (req, res) => res.json(await deviceService.heldForProfile(req.user, req.params.id))));
 router.post(
   '/mine/assignments/:id/accept',
   validate(id),

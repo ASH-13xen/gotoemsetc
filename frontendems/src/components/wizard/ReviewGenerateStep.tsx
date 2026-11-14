@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { CheckCircle2, Download, Eye, Loader2, XCircle } from 'lucide-react'
+import { CheckCircle2, Download, Eye, Loader2, PenTool, Send, XCircle } from 'lucide-react'
+import { SendDialog } from '@/components/documents/ESign'
+import { ISSUE_ONLY } from '@/api/esign.api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -26,6 +28,8 @@ interface ReviewGenerateStepProps {
   results: GenerateResult[] | null
   salaryComponents?: SalaryComponent[]
   responsibilities?: string[]
+  // Who it's for — to send what was generated, to sign or as a final copy.
+  employeeId?: string
 }
 
 export function ReviewGenerateStep({
@@ -36,7 +40,9 @@ export function ReviewGenerateStep({
   results,
   salaryComponents,
   responsibilities,
+  employeeId,
 }: ReviewGenerateStepProps) {
+  const [sending, setSending] = useState<{ documentId: string; templateKey: string; title: string } | null>(null)
   const monthlyGross = (salaryComponents ?? []).reduce((sum, c) => sum + (Number(c.monthlyAmount) || 0), 0)
   const [previewDocId, setPreviewDocId] = useState<string | null>(null)
   const [previewTitle, setPreviewTitle] = useState('')
@@ -106,6 +112,9 @@ export function ReviewGenerateStep({
         </Card>
       ))}
 
+      {sending && employeeId && (
+        <SendDialog employeeId={employeeId} documentId={sending.documentId} templateKey={sending.templateKey} title={sending.title} open onOpenChange={(v) => !v && setSending(null)} />
+      )}
       {results && (
         <Card>
           <CardHeader>
@@ -151,6 +160,21 @@ export function ReviewGenerateStep({
                         <Download className="size-3.5" />
                         Download
                       </Button>
+                      {employeeId && (
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            setSending({
+                              documentId: result.document!._id,
+                              templateKey: result.templateKey ?? '',
+                              title: templates.find((t) => t._id === result.templateId)?.title ?? result.templateKey ?? 'Document',
+                            })
+                          }
+                        >
+                          {ISSUE_ONLY.includes(result.templateKey ?? '') ? <Send className="size-3.5" /> : <PenTool className="size-3.5" />}
+                          {ISSUE_ONLY.includes(result.templateKey ?? '') ? 'Send' : 'Send to sign'}
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>

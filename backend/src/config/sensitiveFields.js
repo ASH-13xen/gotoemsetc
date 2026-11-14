@@ -10,6 +10,9 @@ module.exports = {
     'bankIFSC',
     'panNumber',
     'aadharNumber',
+    // the company mailbox password, and every past salary
+    'companyEmailPassword',
+    'salaryHistory',
   ],
   Quotation: [],
 };

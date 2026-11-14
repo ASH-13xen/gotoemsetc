@@ -3,8 +3,9 @@ const { Schema, model } = require('mongoose');
 // What one client is owed in one month — the client card's counts (reels,
 // posts, stories, festive stories), the Organisation chart team that does the
 // work and its people — and the tickets made from it (each carries
-// deliverable.clientMonth). Next month starts as a copy of this one on the
-// 1st (services/clientWork.service.js#rollMonth), unless the client is paused.
+// deliverable.clientMonth). A plan carries on until it is changed: each new
+// month starts as a copy of the latest one (services/clientWork.service.js#
+// rollMonth), unless the client is paused.
 const clientMonthSchema = new Schema(
   {
     client: { type: Schema.Types.ObjectId, ref: 'TaskClient', required: true, index: true },
@@ -24,6 +25,18 @@ const clientMonthSchema = new Schema(
     shooter: { type: Schema.Types.ObjectId, ref: 'Employee', default: null },
     editor: { type: Schema.Types.ObjectId, ref: 'Employee', default: null },
     contentManager: { type: Schema.Types.ObjectId, ref: 'Employee', default: null },
+    // Everyone in each role for this client — a team can have more than one
+    // Social Media Manager, videographer… The month's tickets are shared
+    // between them in turn (clientWork.service.js#peopleFor). The single
+    // fields above hold the first of each, and stand in for a month saved
+    // before these lists existed.
+    people: {
+      smm: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
+      designer: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
+      shooter: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
+      editor: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
+      contentManager: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
+    },
     // What the client pays for the month when there is no invoice for it in
     // the system — for the client value report (CEO/admin only).
     fee: { type: Number, default: null, min: 0 },

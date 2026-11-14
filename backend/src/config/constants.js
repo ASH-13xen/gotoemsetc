@@ -237,6 +237,9 @@ module.exports = {
     EMPLOYEE_ONBOARDED: 'employee_onboarded',
     EMPLOYEE_OFFBOARDED: 'employee_offboarded',
     FNF_PENDING_HR: 'fnf_pending_hr',
+    // A document sent for e-signing was signed / declined (to whoever sent it).
+    DOCUMENT_SIGNED: 'document_signed',
+    DOCUMENT_DECLINED: 'document_declined',
     FNF_PENDING_CEO: 'fnf_pending_ceo',
     FNF_APPROVED: 'fnf_approved',
     FNF_SENT_BACK: 'fnf_sent_back',

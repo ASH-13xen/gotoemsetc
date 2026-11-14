@@ -937,6 +937,44 @@ async function updateAccessory(id, data) {
 
 // ---------------------------------------------------------------- the holder's own view
 
+// The devices someone holds, for their EMS profile ("My devices"): what it
+// is, since when, its accessories and this month's check — never serials,
+// IMEI, SIM ids, accounts, prices or recovery values. Their own, or anyone's
+// for HR (who also get the link into HR Work).
+async function heldForProfile(viewer, employeeId) {
+  const { can } = require('../utils/roles');
+  const { ACCESS } = require('../config/access');
+  const manages = can(viewer, ACCESS.HRMS);
+  if (!manages && String(viewer.employeeLink || '') !== String(employeeId)) throw ApiError.forbidden('You can only see your own devices');
+  const devices = await Device.find({ holder: employeeId, status: DEVICE_STATUS.ASSIGNED }).sort({ code: 1 }).lean();
+  const ids = devices.map((d) => d._id);
+  const [assignments, checks, issues] = await Promise.all([
+    DeviceAssignment.find({ _id: { $in: devices.map((d) => d.assignment) } }).lean(),
+    DeviceCheck.find({ device: { $in: ids }, kind: CHECK_KIND.MONTHLY, month: monthKey() }).sort({ createdAt: -1 }).lean(),
+    DeviceIssue.find({ device: { $in: ids }, status: 'open' }).lean(),
+  ]);
+  return {
+    canManage: manages,
+    devices: devices.map((d) => {
+      const a = assignments.find((x) => String(x._id) === String(d.assignment));
+      const check = checks.find((c) => String(c.device) === String(d._id));
+      return {
+        _id: d._id,
+        code: d.code,
+        kind: d.kind,
+        brand: d.brand || '',
+        model: d.model || '',
+        color: d.color || '',
+        assignedAt: a?.assignedAt || null,
+        acceptedAt: a?.acceptedAt || null,
+        accessories: (a?.accessories || []).filter((x) => x?.label).map((x) => `${x.label}${x.qty > 1 ? ` ×${x.qty}` : ''}`),
+        monthCheck: check ? { status: check.status, createdAt: check.createdAt } : null,
+        openIssues: issues.filter((i) => String(i.device) === String(d._id)).length,
+      };
+    }),
+  };
+}
+
 async function mine(user) {
   if (!user.employeeLink) return { devices: [] };
   const [devices, settings] = await Promise.all([
@@ -1099,6 +1137,7 @@ async function sendMonthlyReminders(now = new Date()) {
 }
 
 module.exports = {
+  heldForProfile,
   getSettings,
   saveFile,
   getFile,

@@ -11,7 +11,13 @@ const generate = asyncHandler(async (req, res) => {
     templateIds,
     overrides
   );
-  res.status(201).json({ results });
+  // The kept HTML (for signing later) isn't sent back.
+  const shaped = results.map((r) => {
+    if (!r.document || typeof r.document.toObject !== 'function') return r;
+    const { html, ...doc } = r.document.toObject();
+    return { ...r, document: doc };
+  });
+  res.status(201).json({ results: shaped });
 });
 
 const listForEmployee = asyncHandler(async (req, res) => {
@@ -53,6 +59,10 @@ const downloadFile = asyncHandler(async (req, res) => {
 const remove = asyncHandler(async (req, res) => {
   const document = await generatedDocumentRepository.findById(req.params.id);
   if (!document) throw ApiError.notFound('Document not found');
+  // Sent for signing, signed or issued electronically: kept for verification.
+  if (await require('../services/esign.service').blocksDelete(document._id)) {
+    throw ApiError.conflict('This document was sent, signed or issued electronically — it is kept so it can always be verified');
+  }
 
   await generatedDocumentRepository.deleteById(document._id);
 

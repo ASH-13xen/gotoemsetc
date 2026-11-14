@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { getHeldDevices } from '@/api/devices.api'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -39,6 +41,8 @@ export default function EmployeeWizardPage() {
   const navigate = useNavigate()
 
   const { data: employeeData, isLoading: employeeLoading } = useEmployee(id)
+  // The full & final settlement can't be made while a company device is still with them.
+  const { data: heldDevices } = useQuery({ queryKey: ['held-devices', id], queryFn: () => getHeldDevices(id as string), enabled: Boolean(id), retry: false })
   const { data: templatesData, isLoading: templatesLoading } = useTemplates()
   const updateEmployee = useUpdateEmployee(id ?? '')
   const generateDocuments = useGenerateDocuments(id ?? '')
@@ -298,15 +302,29 @@ export default function EmployeeWizardPage() {
                     templates={templates}
                     blocked={Object.fromEntries(
                       templates
-                        .filter((t) => t.key === 'fnf-settlement' && employee && (!employee.removedFromGroupsAndReels || !employee.mailDeactivated))
+                        .filter(
+                          (t) =>
+                            t.key === 'fnf-settlement' &&
+                            employee &&
+                            (!employee.removedFromGroupsAndReels || !employee.mailDeactivated || (heldDevices?.devices.length ?? 0) > 0)
+                        )
                         .map((t) => [
                           t._id,
-                          `Tick ${[
-                            !employee?.removedFromGroupsAndReels && '"Removed from groups + Go-To Reels"',
-                            !employee?.mailDeactivated && '"Mail deactivated"',
+                          [
+                            !employee?.removedFromGroupsAndReels || !employee?.mailDeactivated
+                              ? `Tick ${[
+                                  !employee?.removedFromGroupsAndReels && '"Removed from groups + Go-To Reels"',
+                                  !employee?.mailDeactivated && '"Mail deactivated"',
+                                ]
+                                  .filter(Boolean)
+                                  .join(' and ')} in their offboarding details first.`
+                              : '',
+                            (heldDevices?.devices.length ?? 0) > 0
+                              ? `They still have ${heldDevices!.devices.map((d) => d.code).join(', ')} — take it back (or mark it lost) in HR Work → Devices first.`
+                              : '',
                           ]
                             .filter(Boolean)
-                            .join(' and ')} in their offboarding details first.`,
+                            .join(' '),
                         ])
                     )}
                     selectedIds={selectedTemplateIds}
@@ -356,6 +374,7 @@ export default function EmployeeWizardPage() {
                     onGenerate={handleGenerate}
                     isGenerating={generateDocuments.isPending}
                     results={results}
+                    employeeId={id}
                     salaryComponents={needsSalaryComponents ? salaryComponents : undefined}
                     responsibilities={
                       needsResponsibilities ? responsibilities.map((r) => r.trim()).filter(Boolean) : undefined

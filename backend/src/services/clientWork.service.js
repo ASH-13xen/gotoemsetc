@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const ApiError = require('../utils/ApiError');
 const logger = require('../utils/logger');
 const Ticket = require('../models/Ticket');
@@ -21,14 +22,17 @@ const cw = require('../utils/clientWork');
 // festive stories it is owed, and the team that makes them — and the tickets
 // made from it, one per deliverable, already on their pipeline with their
 // people. Raising a count adds tickets; lowering it takes off ones nobody has
-// started. On the 1st, each client's month starts as a copy of the last one,
-// and anything still open from an earlier month is carried over, flagged.
+// started; more can be made by hand beyond the count ("9 of 8 reels"). A plan
+// carries on month after month until it is changed: each new month starts as
+// a copy of the latest one, and anything still open from an earlier month is
+// carried over, flagged.
 
 const idOf = org.idOf;
 const nameOf = (e) => (e ? `${e.firstName} ${e.lastName || ''}`.trim() : null);
 
 // Who may set the counts and the people: CEO, admin and HR. The client's fee
-// and the money side: CEO and admin.
+// and the money side: CEO and admin. Time spent (hours per client, per
+// ticket): CEO and admin only.
 const { hasRole } = require('../utils/roles');
 const canPlan = (user) => org.seesEveryone(user) || can(user, ACCESS.HRMS) || hasRole(user, USER_ROLES.TEAM_LEAD);
 // Adding a client: the CEO and admin (Client Management, where clients were
@@ -36,6 +40,66 @@ const canPlan = (user) => org.seesEveryone(user) || can(user, ACCESS.HRMS) || ha
 const canAddClient = (user) => org.seesEveryone(user);
 const picksFromAnyTeam = (user) => org.seesEveryone(user) || hasRole(user, USER_ROLES.TEAM_LEAD);
 const canSeeMoney = (user) => can(user, ACCESS.PAYOUT_APPROVAL);
+const canSeeTime = (user) => org.seesEveryone(user);
+
+// ---------------------------------------------------------------- a month's people
+
+// The roles on a client's tickets, each a list of people.
+const ROLES = ['smm', 'designer', 'shooter', 'editor', 'contentManager'];
+const MAX_IN_ROLE = 20;
+
+// A role's people on a month: its list, or — for a month saved before the
+// lists existed — its single field.
+function listOf(cm, role) {
+  const list = cm?.people?.[role];
+  if (list?.length) return list.map(idOf);
+  return cm?.[role] ? [idOf(cm[role])] : [];
+}
+
+// The people on a month's `index`-th ticket of a type: each role's list
+// shared out in turn, and a reel's videographer and editor from those under
+// its own Social Media Manager in the chart when the list has any there.
+function peopleFor(cm, index, chart) {
+  const at = (list, n) => (list.length ? list[(n - 1) % list.length] : null);
+  const smms = listOf(cm, 'smm');
+  const smm = at(smms, index);
+  // The how-many-th time this SMM's turn has come round.
+  const turn = smms.length ? Math.ceil(index / smms.length) : index;
+  const own = chart && cm.team && smm ? org.smmsOf(chart, cm.team).find((s) => idOf(s.employeeId) === smm) : null;
+  const shooters = listOf(cm, 'shooter');
+  const editors = listOf(cm, 'editor');
+  const ownShooters = own ? shooters.filter((x) => own.videographers.map(idOf).includes(x)) : [];
+  const ownEditors = own ? editors.filter((x) => own.editors.map(idOf).includes(x)) : [];
+  return {
+    smm,
+    // Posts: the Graphic Designer; the Social Media Manager when there's none.
+    designer: at(listOf(cm, 'designer'), index) || smm,
+    shooter: ownShooters.length ? at(ownShooters, turn) : at(shooters, index),
+    editor: ownEditors.length ? at(ownEditors, turn) : at(editors, index),
+    contentManager: at(listOf(cm, 'contentManager'), index),
+  };
+}
+
+// What a month needs before its tickets can be made.
+function checkReady(cm, counts) {
+  const anything = Object.values(counts).some((n) => n > 0);
+  if (!anything) return;
+  if (!cm.team || !listOf(cm, 'smm').length) throw ApiError.badRequest('Choose the team and its Social Media Manager first');
+  if (!listOf(cm, 'contentManager').length) throw ApiError.badRequest('Choose the Content Manager');
+  if (counts.reels > 0 && (!listOf(cm, 'shooter').length || !listOf(cm, 'editor').length)) throw ApiError.badRequest('Reels need their videographer and video editor');
+}
+
+// Each client's latest plan before a month — the one still in force when the
+// month has none of its own.
+async function latestPlansBefore(clientIds, key) {
+  if (!clientIds.length) return [];
+  const rows = await ClientMonth.aggregate([
+    { $match: { client: { $in: clientIds }, month: { $lt: key } } },
+    { $sort: { month: -1 } },
+    { $group: { _id: '$client', doc: { $first: '$$ROOT' } } },
+  ]);
+  return rows.map((r) => r.doc);
+}
 
 function checkMonth(key) {
   if (!cw.parseMonth(key)) throw ApiError.badRequest('Choose a month');
@@ -54,24 +118,34 @@ const isActive = (t) => !t.deliverable?.removed;
 // ---------------------------------------------------------------- the cards
 
 // Every client with its month: what is committed, how many tickets are made
-// and done per type, what is carried over from before, and the time logged.
+// and done per type (extras included — "9 of 8"), what is carried over from
+// before, and — for the CEO and admin — the time logged and the money.
 async function cards(user, { month } = {}) {
   const key = checkMonth(month || cw.currentMonthKey());
   const { year, month: m } = cw.parseMonth(key);
   const range = istMonthRange(year, m);
+  const time = canSeeTime(user);
   const [clients, months, tickets, carried, logged] = await Promise.all([
     TaskClient.find({ isDeleted: { $ne: true } }).select('name brandName logoUrl workPaused').sort({ name: 1 }).lean(),
     ClientMonth.find({ month: key }).lean(),
     Ticket.find({ 'deliverable.month': key }).select('client deliverable status isRejected locked').lean(),
     Ticket.find({ carriedOver: true, status: TICKET_STATUS.OPEN }).select('client deliverable').lean(),
-    WorkLog.aggregate([
-      { $match: { deleted: false, superseded: { $ne: true }, client: { $ne: null }, startedAt: { $gte: range.start, $lt: range.end } } },
-      { $group: { _id: '$client', minutes: { $sum: '$minutes' } } },
-    ]),
+    time
+      ? WorkLog.aggregate([
+          { $match: { deleted: false, superseded: { $ne: true }, client: { $ne: null }, startedAt: { $gte: range.start, $lt: range.end } } },
+          { $group: { _id: '$client', minutes: { $sum: '$minutes' } } },
+        ])
+      : [],
   ]);
-  const teamIds = months.map((x) => x.team).filter(Boolean);
-  const chart = teamIds.length ? await org.loadChart() : null;
-  const people = await Employee.find({ _id: { $in: months.flatMap((x) => [x.smm]).filter(Boolean) } }).select('firstName lastName').lean();
+  // From this month on, a client (not paused) with no plan of its own for the
+  // month goes on with its latest one.
+  const goesOn = key >= cw.currentMonthKey();
+  const ownOf = (c) => months.find((x) => idOf(x.client) === idOf(c._id));
+  const earlier = goesOn ? await latestPlansBefore(clients.filter((c) => !c.workPaused && !ownOf(c)).map((c) => c._id), key) : [];
+  const planOf = (c) => ownOf(c) || earlier.find((x) => idOf(x.client) === idOf(c._id)) || null;
+  const plans = clients.map(planOf).filter(Boolean);
+  const chart = plans.some((x) => x.team) ? await org.loadChart() : null;
+  const people = await Employee.find({ _id: { $in: plans.flatMap((x) => listOf(x, 'smm')) } }).select('firstName lastName').lean();
   const personName = (id) => nameOf(people.find((p) => idOf(p._id) === idOf(id)));
   const money = canSeeMoney(user);
   const invoices = money ? await Invoice.find({ year, month: m }).select('client amount').lean() : [];
@@ -83,26 +157,41 @@ async function cards(user, { month } = {}) {
     canPlan: canPlan(user),
     canAddClient: canAddClient(user),
     canSeeMoney: money,
+    canSeeTime: time,
     cards: clients.map((c) => {
-      const cm = months.find((x) => idOf(x.client) === idOf(c._id));
+      const own = ownOf(c);
+      const cm = planOf(c);
       const mine = tickets.filter((t) => idOf(t.client) === idOf(c._id) && isActive(t));
       const progress = Object.fromEntries(
         cw.CONTENT_TYPE_KEYS.map((k) => {
           const of = mine.filter((t) => t.deliverable.type === k);
-          return [k, { committed: cm?.counts?.[k] || 0, made: of.length, toStart: of.filter((t) => t.locked && t.status === TICKET_STATUS.OPEN).length, done: of.filter((t) => t.status === TICKET_STATUS.COMPLETED).length }];
+          return [
+            k,
+            {
+              committed: cm?.counts?.[k] || 0,
+              made: of.length,
+              extra: of.filter((t) => t.deliverable.extra).length,
+              toStart: of.filter((t) => t.locked && t.status === TICKET_STATUS.OPEN).length,
+              done: of.filter((t) => t.status === TICKET_STATUS.COMPLETED).length,
+            },
+          ];
         })
       );
       const inv = invoices.find((i) => idOf(i.client) === idOf(c._id));
+      const smms = listOf(cm, 'smm').map((id) => ({ _id: id, name: personName(id) }));
       return {
         client: { _id: idOf(c._id), name: c.name, brandName: c.brandName || '', logoUrl: c.logoUrl || '', workPaused: Boolean(c.workPaused) },
         planned: Boolean(cm),
+        // Going on with an earlier month's plan (this month has none of its own).
+        carriedFrom: cm && !own ? cm.month : null,
         team: cm?.team ? { _id: idOf(cm.team), title: cm.teamName || chart?.byId.get(idOf(cm.team))?.title || '' } : null,
-        smm: cm?.smm ? { _id: idOf(cm.smm), name: personName(cm.smm) } : null,
-        generatedAt: cm?.generatedAt || null,
+        smm: smms[0] || null,
+        smms,
+        generatedAt: own?.generatedAt || null,
         progress,
         carriedOver: carried.filter((t) => idOf(t.client) === idOf(c._id)).length,
-        hoursLogged: Math.round(((logged.find((l) => idOf(l._id) === idOf(c._id))?.minutes || 0) / 60) * 10) / 10,
-        ...(money ? { revenue: inv ? { amount: inv.amount, source: 'invoice' } : cm?.fee != null ? { amount: cm.fee, source: 'fee' } : null } : {}),
+        ...(time ? { hoursLogged: Math.round(((logged.find((l) => idOf(l._id) === idOf(c._id))?.minutes || 0) / 60) * 10) / 10 } : {}),
+        ...(money ? { revenue: inv ? { amount: inv.amount, source: 'invoice' } : own?.fee != null ? { amount: own.fee, source: 'fee' } : null } : {}),
       };
     }),
   };
@@ -114,23 +203,24 @@ async function detail(user, clientId, month) {
   const key = checkMonth(month);
   const client = await loadClient(clientId);
   const { year, month: m } = cw.parseMonth(key);
-  let cm = await ClientMonth.findOne({ client: client._id, month: key }).lean();
-  // Not set yet: offer the last month's plan to start from.
-  let suggested = null;
-  if (!cm) {
-    suggested = await ClientMonth.findOne({ client: client._id, month: { $lt: key } }).sort({ month: -1 }).lean();
-  }
+  const cm = await ClientMonth.findOne({ client: client._id, month: key }).lean();
+  // None of its own: the latest plan before it — still in force from this
+  // month on (unless the client is paused), else offered to start from.
+  const earlier = cm ? null : await ClientMonth.findOne({ client: client._id, month: { $lt: key } }).sort({ month: -1 }).lean();
+  const carries = Boolean(earlier) && key >= cw.currentMonthKey() && !client.workPaused;
   const tickets = cm ? await Ticket.find({ 'deliverable.clientMonth': cm._id }).sort({ 'deliverable.type': 1, 'deliverable.index': 1 }).lean() : [];
   const carried = await Ticket.find({ client: client._id, carriedOver: true, status: TICKET_STATUS.OPEN, 'deliverable.month': { $lt: key } }).sort({ dueAt: 1 }).lean();
   const all = [...tickets, ...carried];
-  const minutes = all.length
-    ? await WorkLog.aggregate([
-        { $match: { deleted: false, superseded: { $ne: true }, ticket: { $in: all.map((t) => t._id) } } },
-        { $group: { _id: '$ticket', minutes: { $sum: '$minutes' } } },
-      ])
-    : [];
-  const src = cm || suggested;
-  const peopleIds = src ? [src.smm, src.designer, src.shooter, src.editor, src.contentManager].filter(Boolean) : [];
+  const time = canSeeTime(user);
+  const minutes =
+    time && all.length
+      ? await WorkLog.aggregate([
+          { $match: { deleted: false, superseded: { $ne: true }, ticket: { $in: all.map((t) => t._id) } } },
+          { $group: { _id: '$ticket', minutes: { $sum: '$minutes' } } },
+        ])
+      : [];
+  const src = cm || earlier;
+  const peopleIds = src ? [...new Set(ROLES.flatMap((r) => listOf(src, r)))] : [];
   const people = await Employee.find({ _id: { $in: peopleIds } }).select('firstName lastName').lean();
   const person = (id) => (id ? { _id: idOf(id), name: nameOf(people.find((p) => idOf(p._id) === idOf(id))) } : null);
   const money = canSeeMoney(user);
@@ -147,12 +237,13 @@ async function detail(user, clientId, month) {
     dueAt: t.dueAt,
     status: t.status,
     removed: Boolean(t.deliverable?.removed),
+    extra: Boolean(t.deliverable?.extra),
     locked: Boolean(t.locked),
     parkedIn: t.parkedIn || null,
     carriedOver: Boolean(t.carriedOver),
     stageLabel: pipe.stepLabel(t, t.stage),
     color: pipe.colorFor(t, now),
-    minutes: minutes.find((x) => idOf(x._id) === idOf(t._id))?.minutes || 0,
+    ...(time ? { minutes: minutes.find((x) => idOf(x._id) === idOf(t._id))?.minutes || 0 } : {}),
   });
 
   return {
@@ -161,19 +252,26 @@ async function detail(user, clientId, month) {
     monthLabel: cw.monthLabel(key),
     canPlan: canPlan(user),
     canSeeMoney: money,
+    canSeeTime: time,
+    // More tickets by hand, beyond the count: once the month has started and its plan is saved.
+    canAddExtra: canPlan(user) && Boolean(cm) && key <= cw.currentMonthKey(),
     types: cw.CONTENT_TYPES,
     plan: src
       ? {
           fromMonth: src.month,
-          isSuggestion: !cm,
+          // Going on with an earlier month's plan, unchanged.
+          carried: carries,
+          // An earlier month's plan, offered to start from (a past month, or a paused client).
+          isSuggestion: !cm && !carries,
           counts: countsOf(src),
           team: src.team ? idOf(src.team) : null,
           teamName: src.teamName || '',
-          smm: person(src.smm),
-          designer: person(src.designer),
-          shooter: person(src.shooter),
-          editor: person(src.editor),
-          contentManager: person(src.contentManager),
+          people: Object.fromEntries(ROLES.map((r) => [r, listOf(src, r).map(person)])),
+          smm: person(listOf(src, 'smm')[0]),
+          designer: person(listOf(src, 'designer')[0]),
+          shooter: person(listOf(src, 'shooter')[0]),
+          editor: person(listOf(src, 'editor')[0]),
+          contentManager: person(listOf(src, 'contentManager')[0]),
           ...(money ? { fee: cm ? cm.fee : null } : {}),
           generatedAt: cm?.generatedAt || null,
         }
@@ -203,20 +301,43 @@ async function saveMonth(user, clientId, month, input = {}) {
   if (input.team && (!team || team.kind !== 'team')) throw ApiError.badRequest('Choose the team from the Organisation chart');
   const holders = (role) => (team ? org.roleHolders(chart, team._id, role) : []);
   const members = team ? org.teamMembers(chart, team._id) : [];
-  // The team's Content Manager picks from the team; the Team Lead, CEO and admin from anyone.
-  for (const f of ['smm', 'designer', 'shooter', 'editor', 'contentManager']) {
-    if (input[f] && team && !picksFromAnyTeam(user) && !members.includes(idOf(input[f]))) throw ApiError.badRequest(`Choose people from ${team.title}`);
+  // Each role's people: `people.<role>` (a list), or the older single field.
+  const chosen = {};
+  for (const role of ROLES) {
+    const given = input.people?.[role] !== undefined ? input.people[role] : input[role];
+    const list = [];
+    for (const x of Array.isArray(given) ? given : given ? [given] : []) {
+      const id = idOf(x);
+      if (!mongoose.isValidObjectId(id)) throw ApiError.badRequest('Choose people from the list');
+      if (!list.includes(id)) list.push(id);
+    }
+    if (list.length > MAX_IN_ROLE) throw ApiError.badRequest(`At most ${MAX_IN_ROLE} people in one role`);
+    // The team's Content Manager picks from the team; the Team Lead, CEO and admin from anyone.
+    if (team && !picksFromAnyTeam(user) && list.some((id) => !members.includes(id))) throw ApiError.badRequest(`Choose people from ${team.title}`);
+    chosen[role] = list;
   }
-  const smm = input.smm || holders(org.TEAM_ROLE.SOCIAL_MEDIA_MANAGER)[0] || null;
+  // A role left empty: everyone holding it in the team.
+  const heads = team ? org.teamHeads(chart, team._id) : [];
+  const fill = (role, ...fromTeam) => (chosen[role].length ? chosen[role] : fromTeam.find((l) => l.length) || []);
+  const people = {
+    smm: fill('smm', holders(org.TEAM_ROLE.SOCIAL_MEDIA_MANAGER)),
+    // None in the team: the Social Media Manager makes the posts.
+    designer: fill('designer', holders(org.TEAM_ROLE.GRAPHIC_DESIGNER)),
+    shooter: fill('shooter', holders(org.TEAM_ROLE.VIDEOGRAPHER)),
+    editor: fill('editor', holders(org.TEAM_ROLE.EDITOR)),
+    contentManager: fill('contentManager', holders(org.TEAM_ROLE.CONTENT_MANAGER), heads),
+  };
   const set = {
     counts,
     team: team ? team._id : null,
     teamName: team ? team.title : '',
-    smm,
-    designer: input.designer || holders(org.TEAM_ROLE.GRAPHIC_DESIGNER)[0] || smm,
-    shooter: input.shooter || holders(org.TEAM_ROLE.VIDEOGRAPHER)[0] || holders(org.TEAM_ROLE.VIDEOGRAPHER_EDITOR)[0] || null,
-    editor: input.editor || holders(org.TEAM_ROLE.EDITOR)[0] || holders(org.TEAM_ROLE.VIDEOGRAPHER_EDITOR)[0] || null,
-    contentManager: input.contentManager || holders(org.TEAM_ROLE.CONTENT_MANAGER)[0] || (team ? org.teamHeads(chart, team._id)[0] : null) || null,
+    people,
+    // The first of each, for screens that show one.
+    smm: people.smm[0] || null,
+    designer: people.designer[0] || people.smm[0] || null,
+    shooter: people.shooter[0] || null,
+    editor: people.editor[0] || null,
+    contentManager: people.contentManager[0] || null,
     updatedBy: user.id,
   };
   if (canSeeMoney(user) && input.fee !== undefined) {
@@ -235,27 +356,55 @@ async function saveMonth(user, clientId, month, input = {}) {
   return { ...(await detail(user, client._id, key)), result };
 }
 
-// Makes the month's tickets match its counts.
+// One ticket of a month: the type's `index`-th, locked, with its people.
+async function makeTicket(user, client, cm, type, index, chart, { extra = false } = {}) {
+  const today = istParts(new Date());
+  const { year, month } = cw.parseMonth(cm.month);
+  const fromDay = today.year === year && today.month === month ? today.day : 1;
+  // Its real due date is set when work is started; until then, the month's end.
+  const [dueAt] = cw.spreadDueDates(cm.month, 1, { fromDay, total: 1, startIndex: 1 });
+  const n = countsOf(cm)[type.key];
+  const p = peopleFor(cm, index, chart);
+  const input = {
+    title: `${client.name} · ${type.label} ${index} · ${cw.monthLabel(cm.month)}`,
+    description: extra
+      ? `An extra ${type.label.toLowerCase()} for ${client.name} in ${cw.monthLabel(cm.month)}, beyond the plan's ${n}.`
+      : `From ${client.name}'s plan for ${cw.monthLabel(cm.month)}: ${n} ${type.plural.toLowerCase()}.`,
+    dueAt,
+    clientName: client.name,
+    pipeline: type.pipeline,
+    team: cm.team,
+    smm: p.smm,
+    assignments: { smm: p.smm, contentManager: p.contentManager, designer: p.designer, shooter: p.shooter, editor: p.editor },
+  };
+  const ticket = await ticketService.raise(user, input, {
+    system: true,
+    quiet: true,
+    bare: true,
+    locked: true,
+    chart,
+    extra: { client: client._id, deliverable: { clientMonth: cm._id, month: cm.month, type: type.key, index, ...(extra ? { extra: true } : {}) } },
+  });
+  return { _id: idOf(ticket._id), type: type.key, raisedFor: idOf(ticket.raisedFor) };
+}
+
+// Makes the month's tickets match its counts. Extra tickets (made by hand
+// beyond the count) are left alone, and taken into the count when it is raised.
 async function sync(user, cm, { client: givenClient = null, chart: givenChart = null, notify = true } = {}) {
   const client = givenClient || (await loadClient(cm.client));
   const chart = givenChart || (await org.loadChart());
   const counts = countsOf(cm);
-  const anything = Object.values(counts).some((n) => n > 0);
-  if (anything && (!cm.team || !cm.smm)) throw ApiError.badRequest('Choose the team and its Social Media Manager first');
-  if (anything && !cm.contentManager) throw ApiError.badRequest('Choose the Content Manager');
-  if (counts.reels > 0 && (!cm.shooter || !cm.editor)) throw ApiError.badRequest('Reels need their videographer and video editor');
+  checkReady(cm, counts);
 
   const existing = await Ticket.find({ 'deliverable.clientMonth': cm._id }).lean();
   const now = new Date();
-  const today = istParts(now);
-  const { year, month } = cw.parseMonth(cm.month);
-  const fromDay = today.year === year && today.month === month ? today.day : 1;
   const created = [];
   const removed = [];
+  const isPlanned = (t) => isActive(t) && !t.deliverable.extra;
 
   // Taking off first, so a lowered count fails before anything is made.
   for (const type of cw.CONTENT_TYPES) {
-    const active = existing.filter((t) => t.deliverable.type === type.key && isActive(t));
+    const active = existing.filter((t) => t.deliverable.type === type.key && isPlanned(t));
     const extra = active.length - counts[type.key];
     if (extra <= 0) continue;
     const worked = await WorkLog.distinct('ticket', { ticket: { $in: active.map((t) => t._id) }, deleted: false, minutes: { $gt: 0 } });
@@ -287,34 +436,21 @@ async function sync(user, cm, { client: givenClient = null, chart: givenChart = 
 
   for (const type of cw.CONTENT_TYPES) {
     const n = counts[type.key];
-    const active = existing.filter((t) => t.deliverable.type === type.key && isActive(t));
-    if (active.length >= n) continue;
-    const used = new Set(active.map((t) => t.deliverable.index));
-    const missing = [];
-    for (let i = 1; missing.length < n - active.length; i += 1) if (!used.has(i)) missing.push(i);
-    for (const index of missing) {
-      // Its real due date is set when work is started; until then, the month's end.
-      const [dueAt] = cw.spreadDueDates(cm.month, 1, { fromDay, total: 1, startIndex: 1 });
-      const input = {
-        title: `${client.name} · ${type.label} ${index} · ${cw.monthLabel(cm.month)}`,
-        description: `From ${client.name}'s plan for ${cw.monthLabel(cm.month)}: ${n} ${type.plural.toLowerCase()}.`,
-        dueAt,
-        clientName: client.name,
-        pipeline: type.pipeline,
-        team: cm.team,
-        smm: cm.smm,
-        assignments: { smm: cm.smm, contentManager: cm.contentManager, designer: cm.designer || cm.smm, shooter: cm.shooter, editor: cm.editor },
-      };
+    const planned = existing.filter((t) => t.deliverable.type === type.key && isPlanned(t));
+    if (planned.length >= n) continue;
+    // A raised count takes in the extras already made, before making more.
+    const extras = existing.filter((t) => t.deliverable.type === type.key && isActive(t) && t.deliverable.extra).sort((a, b) => a.deliverable.index - b.deliverable.index);
+    const takenIn = extras.slice(0, n - planned.length);
+    if (takenIn.length) {
       // eslint-disable-next-line no-await-in-loop
-      const ticket = await ticketService.raise(user, input, {
-        system: true,
-        quiet: true,
-        bare: true,
-        locked: true,
-        chart,
-        extra: { client: client._id, deliverable: { clientMonth: cm._id, month: cm.month, type: type.key, index } },
-      });
-      created.push({ _id: idOf(ticket._id), type: type.key, raisedFor: idOf(ticket.raisedFor) });
+      await Ticket.updateMany({ _id: { $in: takenIn.map((t) => t._id) } }, { $set: { 'deliverable.extra': false } });
+    }
+    const used = new Set(existing.filter((t) => t.deliverable.type === type.key && isActive(t)).map((t) => t.deliverable.index));
+    const missing = [];
+    for (let i = 1; missing.length < n - planned.length - takenIn.length; i += 1) if (!used.has(i)) missing.push(i);
+    for (const index of missing) {
+      // eslint-disable-next-line no-await-in-loop
+      created.push(await makeTicket(user, client, cm, type, index, chart));
     }
   }
 
@@ -351,6 +487,28 @@ async function generate(user, clientId, month) {
   if (!cm) throw ApiError.notFound('Set this month’s plan first');
   const result = await sync(user, cm);
   return { ...(await detail(user, clientId, month)), result };
+}
+
+// One more ticket of a type, by hand, beyond the month's count — "9 of 8
+// reels". The plan's count stays as it is.
+async function addExtra(user, clientId, month, type) {
+  if (!canPlan(user)) throw ApiError.forbidden('Only HR, the CEO and admin make a client’s tickets');
+  const key = checkMonth(month);
+  if (key > cw.currentMonthKey()) throw ApiError.badRequest('Extra tickets are made once the month has started');
+  const kind = cw.typeOf(type);
+  if (!kind) throw ApiError.badRequest('Choose a reel, post, story or festive story');
+  const client = await loadClient(clientId);
+  const cm = await ClientMonth.findOne({ client: client._id, month: key });
+  if (!cm) throw ApiError.badRequest('Save this month’s plan first');
+  checkReady(cm, { ...countsOf(cm), [kind.key]: Math.max(1, countsOf(cm)[kind.key]) });
+  const same = await Ticket.find({ 'deliverable.clientMonth': cm._id, 'deliverable.type': kind.key }).select('deliverable').lean();
+  if (same.filter(isActive).length >= COUNT_MAX) throw ApiError.badRequest(`${kind.plural}: at most ${COUNT_MAX} in a month`);
+  // The next number after every one made, so no two share a title.
+  const index = Math.max(0, ...same.map((t) => t.deliverable.index || 0)) + 1;
+  const chart = await org.loadChart();
+  const made = await makeTicket(user, client, cm, kind, index, chart, { extra: true });
+  await notifyMade(client, cm, [made]).catch((err) => logger.error({ err }, 'Client work notification failed'));
+  return { ...(await detail(user, client._id, key)), result: { created: 1, removed: 0 } };
 }
 
 // ---------------------------------------------------------------- adding a client
@@ -402,18 +560,18 @@ async function systemUser() {
   return { id: u._id, username: u.username, role: u.role, roles: [u.role], employeeLink: u.employeeLink || null, displayName: 'System' };
 }
 
-// Each client's new month as a copy of the last one (unless paused), then
-// the tickets for every month that has started and hasn't had them made.
+// Each client's new month as a copy of its latest plan (unless paused) — a
+// plan carries on until it is changed — then the tickets for every month
+// that has started and hasn't had them made.
 async function rollMonth(now = new Date()) {
   const key = cw.currentMonthKey(now);
-  const prev = cw.addMonths(key, -1);
   const user = await systemUser();
   if (!user) return { started: 0, generated: 0 };
   const clients = await TaskClient.find({ isDeleted: { $ne: true }, workPaused: { $ne: true } }).select('_id').lean();
   let started = 0;
   for (const c of clients) {
     // eslint-disable-next-line no-await-in-loop
-    const [have, last] = await Promise.all([ClientMonth.exists({ client: c._id, month: key }), ClientMonth.findOne({ client: c._id, month: prev }).lean()]);
+    const [have, last] = await Promise.all([ClientMonth.exists({ client: c._id, month: key }), ClientMonth.findOne({ client: c._id, month: { $lt: key } }).sort({ month: -1 }).lean()]);
     if (have || !last) continue;
     // eslint-disable-next-line no-await-in-loop
     await ClientMonth.create({
@@ -427,6 +585,7 @@ async function rollMonth(now = new Date()) {
       shooter: last.shooter,
       editor: last.editor,
       contentManager: last.contentManager,
+      people: Object.fromEntries(ROLES.map((r) => [r, listOf(last, r)])),
       fee: last.fee,
       createdBy: user.id,
     });
@@ -459,4 +618,4 @@ async function carryOver(now = new Date()) {
   return late.length;
 }
 
-module.exports = { cards, detail, saveMonth, sync, generate, addClient, setPaused, rollMonth, carryOver, canPlan, canSeeMoney };
+module.exports = { cards, detail, saveMonth, sync, generate, addExtra, addClient, setPaused, rollMonth, carryOver, canPlan, canSeeMoney, canSeeTime };

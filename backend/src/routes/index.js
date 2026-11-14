@@ -88,6 +88,8 @@ router.use('/events', requireAccess(ACCESS.EVENTS), eventRoutes);
 router.use('/device-punches', devicePunchRoutes);
 // HR Work → Devices (company phones, laptops…); a holder's own devices under /devices/mine.
 router.use('/devices', deviceRoutes);
+// E-signing generated documents (the signing page itself is under /public).
+router.use('/esign', require('./esign.routes'));
 router.use('/attendance-requests', attendanceRequestRoutes);
 // Task Management. Every employee needs access here; admin/HR-only vs.
 // self-service capability differences are branched per-route inside each

@@ -85,6 +85,9 @@ const ticketSchema = new Schema(
       index: { type: Number },
       // Taken off the plan when the month's count was lowered (never started).
       removed: { type: Boolean, default: false },
+      // Made by hand beyond the month's count ("9 of 8 reels") — not taken
+      // off when the plan is saved; taken into the count if it is raised.
+      extra: { type: Boolean, default: false },
     },
     // Still open when its month ended — it moves on, flagged, and still
     // counts against the month it was for.

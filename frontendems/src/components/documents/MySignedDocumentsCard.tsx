@@ -14,11 +14,14 @@ const DOCUMENT_TEMPLATE_KEYS = ['offer-letter', 'appointment-letter']
 // bare unsigned original. Ported from the frontendall dashboard's
 // MyDocumentsCard so it lives with the rest of an employee's own record
 // in EMS instead.
-export function MySignedDocumentsCard({ employeeId }: { employeeId: string }) {
+// `exclude`: documents already shown as signed online (their own list).
+// `hideWhenEmpty`: nothing to show — no card at all.
+export function MySignedDocumentsCard({ employeeId, exclude = [], hideWhenEmpty = false }: { employeeId: string; exclude?: string[]; hideWhenEmpty?: boolean }) {
   const { data, isLoading } = useEmployeeDocuments(employeeId)
   const documents = (data?.documents ?? []).filter(
-    (d) => d.signedFile && DOCUMENT_TEMPLATE_KEYS.includes(d.template.key)
+    (d) => d.signedFile && DOCUMENT_TEMPLATE_KEYS.includes(d.template.key) && !exclude.includes(d._id)
   )
+  if (hideWhenEmpty && !isLoading && documents.length === 0) return null
 
   return (
     <Card>

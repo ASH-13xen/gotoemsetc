@@ -18,6 +18,8 @@ import CompanyCalendarPage from '@/pages/CompanyCalendarPage'
 import WeeklyCalendarPage from '@/pages/WeeklyCalendarPage'
 import TaskCalendarPage from '@/pages/TaskCalendarPage'
 import CalendarInvitePage from '@/pages/CalendarInvitePage'
+import SignDocumentPage from '@/pages/SignDocumentPage'
+import VerifyDocumentPage from '@/pages/VerifyDocumentPage'
 import MyDevicesPage from '@/pages/MyDevicesPage'
 import { ShellLayout } from '@/components/layout/ShellLayout'
 import { ensureRemoteStyles } from '@/lib/remoteStyles'
@@ -67,6 +69,10 @@ export default function App() {
               <Route path="/login" element={<LoginPage />} />
               {/* From the Weekly Calendar invite email — no login needed. */}
               <Route path="/calendar-invite/:token" element={<CalendarInvitePage />} />
+              {/* Signing a document from its email, and checking any signed copy — no login needed. */}
+              <Route path="/sign/:token" element={<SignDocumentPage />} />
+              <Route path="/verify" element={<VerifyDocumentPage />} />
+              <Route path="/verify/:code" element={<VerifyDocumentPage />} />
               <Route
                 path="/"
                 element={

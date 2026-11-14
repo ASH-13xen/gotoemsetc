@@ -25,62 +25,6 @@ export interface ExtraDetail {
   value?: string
 }
 
-export type MobileOS = 'android' | 'ios' | ''
-
-export interface Inventory {
-  // Original fields — kept exactly as-is, the Hardware Consent Form's
-  // Equipment Inventory section auto-fills from these by name.
-  deviceName?: string
-  imeiOrSerialNumber?: string
-  deviceColor?: string
-  simProvider?: string
-  simPhoneNumber?: string
-  screenGuard?: boolean
-  backCover?: boolean
-  powerAdapter?: boolean
-  cable?: boolean
-
-  // Mobile — only shown/relevant once hasMobile is checked.
-  hasMobile?: boolean
-  mobileOS?: MobileOS
-  deviceCondition?: string
-  whatsappTwoFactor?: boolean
-  whatsappTwoFactorBackupMail?: string
-  whatsappTwoFactorPin?: string
-  whatsappNameUpdated?: boolean
-  whatsappProfiling?: boolean
-  whatsappBackupInEmployeeMail?: boolean
-  galleryBackupInEmployeeMail?: boolean
-  trueCallerUpdated?: boolean
-  theftProtection?: boolean
-  findMyDevice?: boolean
-  appleId?: string
-  password?: string
-  thumbOrFace?: boolean
-
-  // Laptop — a separate set mirroring the mobile fields, since one employee
-  // can be issued both at once. Distinct from the top-level Employee.hasLaptop
-  // (carried over from the Applicant record at hire time).
-  hasLaptop?: boolean
-  laptopDeviceName?: string
-  laptopSerialNumber?: string
-  laptopColor?: string
-  laptopCondition?: string
-  laptopTheftProtection?: boolean
-  laptopFindMyDevice?: boolean
-  laptopPassword?: string
-  laptopThumbOrFace?: boolean
-  laptopMouse?: boolean
-
-  // General — apply once, regardless of which device(s) are checked above.
-  consentFormLink?: string
-  gotofriendLoggedIn?: boolean
-  employeeMailLoggedIn?: boolean
-  clientMailLoggedIn?: boolean
-  goToDataTransfer?: boolean
-  podcastDataTransfer?: boolean
-}
-
 export interface EmployeeFlag {
   _id: string
   color: 'red' | 'green'
@@ -98,6 +42,8 @@ export interface Employee {
   lastName?: string
   personalEmail?: string
   phone?: string
+  // Who to call in an emergency.
+  emergencyContact?: string
   instagramId?: string
   permanentAddress?: Address
   localAddress?: Address
@@ -109,6 +55,9 @@ export interface Employee {
   gender?: string
   fatherName?: string
   designation: string
+  // The company mailbox and its password (stored encrypted).
+  companyEmail?: string
+  companyEmailPassword?: string
   department?: string
   dateOfJoining?: string
   dateOfHiring?: string
@@ -133,7 +82,6 @@ export interface Employee {
   panNumber?: string
   aadharNumber?: string
   extraDetails?: ExtraDetail[]
-  inventory?: Inventory
 
   biometricVerificationAdded?: boolean
   companyLoginAdded?: boolean
@@ -150,6 +98,10 @@ export interface Employee {
   // Every salary change after the first — each has a promotion letter and a
   // month it counts from (slips for earlier months keep the old amount).
   salaryHistory?: SalaryChange[]
+  // Promotions (a new salary and/or designation, with the letter). The date
+  // is set when the letter is attached — nobody can edit it.
+  lastPromotionAt?: string | null
+  promotions?: Promotion[]
 
   // Offboarding-only — meaningful once status is 'offboarded'.
   endDate?: string
@@ -243,6 +195,49 @@ export async function completeProbation(id: string, letter: File): Promise<{ emp
 
 // A salary that is already set only changes with a promotion letter, from a
 // chosen month ('YYYY-MM') on.
+export interface Promotion {
+  at: string
+  designationFrom?: string
+  designationTo?: string
+  nodeFrom?: string | null
+  nodeTo?: string | null
+  salaryChanged?: boolean
+  effectiveFrom?: string
+  letter?: string
+}
+
+// A box in the Organisation chart (GET /org-chart).
+export interface OrgNode {
+  _id: string
+  title: string
+  kind: 'position' | 'team' | 'team_role'
+  parent: string | null
+  teamRole?: string | null
+  assignees: { _id: string; firstName?: string; lastName?: string }[]
+}
+export async function getOrgNodes(): Promise<OrgNode[]> {
+  const { data } = await apiClient.get('/org-chart')
+  return data.nodes ?? []
+}
+
+// A promotion: a new salary and/or a new designation (a chart box they move
+// into), with the promotion letter.
+export async function promoteEmployee(
+  id: string,
+  input: { monthlyPay?: number; ctcAnnual?: number; effectiveFrom: string; toNode?: string; fromNode?: string },
+  letter: File
+): Promise<{ employee: Employee }> {
+  const formData = new FormData()
+  if (input.monthlyPay !== undefined) formData.append('monthlyPay', String(input.monthlyPay))
+  if (input.ctcAnnual !== undefined) formData.append('ctcAnnual', String(input.ctcAnnual))
+  formData.append('effectiveFrom', input.effectiveFrom)
+  if (input.toNode) formData.append('toNode', input.toNode)
+  if (input.fromNode) formData.append('fromNode', input.fromNode)
+  formData.append('letter', letter)
+  const { data } = await apiClient.post(`/employees/${id}/promotion`, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+  return data
+}
+
 export async function changeSalary(
   id: string,
   input: { monthlyPay?: number; ctcAnnual?: number; effectiveFrom: string },

@@ -19,12 +19,17 @@ export type Counts = Record<ContentType, number>
 export interface ClientCard {
   client: { _id: string; name: string; brandName: string; logoUrl: string; workPaused: boolean }
   planned: boolean
+  // Going on with an earlier month's plan ("2026-10") — this month has none of its own.
+  carriedFrom?: string | null
   team: { _id: string; title: string } | null
   smm: Person | null
+  smms?: Person[]
   generatedAt: string | null
-  progress: Record<ContentType, { committed: number; made: number; toStart: number; done: number }>
+  // `extra`: made by hand beyond the count — "9 of 8".
+  progress: Record<ContentType, { committed: number; made: number; extra?: number; toStart: number; done: number }>
   carriedOver: number
-  hoursLogged: number
+  // The CEO and admin only.
+  hoursLogged?: number
   revenue?: { amount: number; source: 'invoice' | 'fee' } | null
 }
 export interface ClientCards {
@@ -35,6 +40,7 @@ export interface ClientCards {
   // The CEO and admin add clients here.
   canAddClient?: boolean
   canSeeMoney: boolean
+  canSeeTime?: boolean
   cards: ClientCard[]
 }
 
@@ -48,19 +54,29 @@ export interface MonthTicket {
   dueAt: string
   status: 'open' | 'completed' | 'rejected'
   removed: boolean
+  // Made by hand beyond the month's count.
+  extra?: boolean
   locked: boolean
   parkedIn: string | null
   carriedOver: boolean
   stageLabel: string
   color: string
-  minutes: number
+  // The CEO and admin only.
+  minutes?: number
 }
+// The roles on a client's tickets — each a list of people (a team can have
+// more than one Social Media Manager, videographer…).
+export type PlanRole = 'smm' | 'designer' | 'shooter' | 'editor' | 'contentManager'
 export interface MonthPlan {
   fromMonth: string
+  // Going on with an earlier month's plan, unchanged.
+  carried?: boolean
+  // An earlier month's plan offered to start from (a past month, or a paused client).
   isSuggestion: boolean
   counts: Counts
   team: string | null
   teamName: string
+  people?: Record<PlanRole, Person[]>
   smm: Person | null
   designer: Person | null
   shooter: Person | null
@@ -75,6 +91,9 @@ export interface ClientMonthDetail {
   monthLabel: string
   canPlan: boolean
   canSeeMoney: boolean
+  canSeeTime?: boolean
+  // More tickets by hand, beyond the count.
+  canAddExtra?: boolean
   types: ContentTypeInfo[]
   plan: MonthPlan | null
   invoice?: { amount: number; status: string; number: string } | null
@@ -82,15 +101,11 @@ export interface ClientMonthDetail {
   carriedOver: MonthTicket[]
   result?: { created: number; removed: number }
 }
+// The fee is no longer set here — leaving it out keeps what is stored.
 export interface SaveMonthInput {
   counts: Counts
   team?: string | null
-  smm?: string | null
-  designer?: string | null
-  shooter?: string | null
-  editor?: string | null
-  contentManager?: string | null
-  fee?: number | null
+  people?: Partial<Record<PlanRole, string[]>>
 }
 
 export const getClientCards = async (month?: string) => (await apiClient.get<ClientCards>('/client-work/cards', { params: { month } })).data
@@ -99,6 +114,9 @@ export const saveClientMonth = async (clientId: string, month: string, input: Sa
   (await apiClient.put<ClientMonthDetail>(`/client-work/clients/${clientId}/months/${month}`, input)).data
 export const generateClientMonth = async (clientId: string, month: string) =>
   (await apiClient.post<ClientMonthDetail>(`/client-work/clients/${clientId}/months/${month}/generate`)).data
+// One more ticket of a type, beyond the month's count.
+export const addExtraTicket = async (clientId: string, month: string, type: ContentType) =>
+  (await apiClient.post<ClientMonthDetail>(`/client-work/clients/${clientId}/months/${month}/extra`, { type })).data
 export const setClientPaused = async (clientId: string, paused: boolean) => (await apiClient.patch(`/client-work/clients/${clientId}/paused`, { paused })).data
 // `restored`: a client removed before under this name came back, with its history.
 export const addClient = async (input: { name: string; brandName?: string }) =>

@@ -43,6 +43,14 @@ router.post(
     res.json(out);
   })
 );
+router.post(
+  '/clients/:id/months/:month/extra',
+  asyncHandler(async (req, res) => {
+    const out = await clientWork.addExtra(req.user, req.params.id, req.params.month, req.body.type);
+    audit(req, 'clientWork.addExtra', req.params.id, { month: req.params.month, type: req.body.type });
+    res.status(201).json(out);
+  })
+);
 router.patch('/clients/:id/paused', asyncHandler(async (req, res) => res.json(await clientWork.setPaused(req.user, req.params.id, req.body.paused))));
 
 // ---- the work timer

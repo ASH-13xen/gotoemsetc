@@ -5,8 +5,6 @@ const Employee = require('../models/Employee');
 const DevicePunch = require('../models/DevicePunch');
 const ticketService = require('./ticket.service');
 const org = require('./orgHierarchy.service');
-const { can } = require('../utils/roles');
-const { ACCESS } = require('../config/access');
 const { istInstant, istParts, istDateKey } = require('../utils/istDate');
 const { TICKET_STATUS } = require('../config/constants');
 const cw = require('../utils/clientWork');
@@ -16,9 +14,9 @@ const cw = require('../utils/clientWork');
 // ends it; "Pause" ends it. It stops itself at lunch (13:30), at the end of
 // the person's shift and at the end of the day; overnight, a stretch the
 // timer stopped is cut back to the person's last scan if they left earlier.
-// Starting again after the shift is overtime, and counts. Managers — the
-// person's boxes above them in the Organisation chart, HR, the CEO and admin —
-// add, correct and remove stretches; every change is kept on the stretch.
+// Starting again after the shift is overtime, and counts. Everyone sees their
+// own time; only the CEO and admin see anyone else's, and add, correct and
+// remove stretches — every change is kept on the stretch.
 
 const idOf = org.idOf;
 const nameOf = (e) => (e ? `${e.firstName} ${e.lastName || ''}`.trim() : null);
@@ -149,11 +147,11 @@ async function stop(user) {
 
 // ---------------------------------------------------------------- who sees and corrects whose time
 
+// Whose time someone sees and corrects besides their own: the CEO and admin
+// everyone's (null), nobody else anyone's.
 async function managedIds(user) {
-  if (org.seesEveryone(user) || can(user, ACCESS.HRMS)) return null; // everyone
-  const below = await org.raisableFor(user);
-  if (user.employeeLink) below.delete(idOf(user.employeeLink));
-  return below;
+  if (org.seesEveryone(user)) return null; // everyone
+  return new Set();
 }
 
 async function mayManage(user, employeeId) {
@@ -205,7 +203,7 @@ async function entries(filter) {
 // One person's day — their own, or someone they manage.
 async function day(user, { date, employee } = {}) {
   const target = employee || needEmployee(user);
-  if (idOf(target) !== idOf(user.employeeLink) && !(await mayManage(user, target))) throw ApiError.forbidden("You can only see your own time, or your team's");
+  if (idOf(target) !== idOf(user.employeeLink) && !(await mayManage(user, target))) throw ApiError.forbidden("You can only see your own time — the CEO and admin see everyone's");
   const { start, end } = dayRange(date || istDateKey(new Date()));
   const list = await entries({ employee: target, deleted: false, superseded: { $ne: true }, startedAt: { $gte: start, $lt: end } });
   const person = await Employee.findById(target).select('firstName lastName designation').lean();
@@ -238,11 +236,11 @@ async function team(user, { date } = {}) {
   };
 }
 
-// Time on one ticket, by person — for anyone who can see the ticket.
+// Time on one ticket, by person — for the CEO and admin.
 async function forTicket(user, ticketId) {
+  if (!org.seesEveryone(user)) throw ApiError.forbidden('Only the CEO and admin see the time spent on a ticket');
   const ticket = await Ticket.findById(ticketId);
   if (!ticket) throw ApiError.notFound('Ticket not found');
-  if (!(await ticketService.canView(user, ticket, await org.loadChart()))) throw ApiError.forbidden("You don't have access to this ticket");
   const logs = await WorkLog.find({ ticket: ticket._id, deleted: false, superseded: { $ne: true } }).lean();
   const people = await Employee.find({ _id: { $in: [...new Set(logs.map((l) => idOf(l.employee)))] } }).select('firstName lastName').lean();
   const by = new Map();
@@ -283,7 +281,7 @@ function checkTimes(startedAt, endedAt) {
 const editorName = (user) => user.displayName || user.username;
 
 async function add(user, input = {}) {
-  if (!input.employee || !(await mayManage(user, input.employee))) throw ApiError.forbidden("You can only add time for people in your team");
+  if (!input.employee || !(await mayManage(user, input.employee))) throw ApiError.forbidden("Only the CEO and admin add time for someone else");
   if (!input.note?.trim()) throw ApiError.badRequest('Say why it is being added');
   const { s, e } = checkTimes(input.startedAt, input.endedAt);
   const target = await resolveTarget(input);
@@ -308,7 +306,7 @@ async function add(user, input = {}) {
 async function edit(user, id, input = {}) {
   const log = await WorkLog.findOne({ _id: id, deleted: false });
   if (!log) throw ApiError.notFound('Entry not found');
-  if (!(await mayManage(user, log.employee))) throw ApiError.forbidden("You can only correct time for people in your team");
+  if (!(await mayManage(user, log.employee))) throw ApiError.forbidden("Only the CEO and admin correct someone else's time");
   if (!input.reason?.trim()) throw ApiError.badRequest('Say why it is being changed');
   if (!log.endedAt) throw ApiError.conflict('This timer is still running — it can be changed once it stops');
   const from = { startedAt: log.startedAt, endedAt: log.endedAt, kind: log.kind, ticket: log.ticket, otherKind: log.otherKind };
@@ -325,7 +323,7 @@ async function edit(user, id, input = {}) {
 async function remove(user, id, { reason } = {}) {
   const log = await WorkLog.findOne({ _id: id, deleted: false });
   if (!log) throw ApiError.notFound('Entry not found');
-  if (!(await mayManage(user, log.employee))) throw ApiError.forbidden("You can only remove time for people in your team");
+  if (!(await mayManage(user, log.employee))) throw ApiError.forbidden("Only the CEO and admin remove someone else's time");
   if (!reason?.trim()) throw ApiError.badRequest('Say why it is being removed');
   if (!log.endedAt) await close(log, new Date(), 'manager');
   log.deleted = true;

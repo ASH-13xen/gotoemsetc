@@ -380,13 +380,14 @@ function DayEntries({ day, employee }: { day: string; employee?: string }) {
   )
 }
 
-function TeamDay({ day }: { day: string }) {
-  const { data } = useTimeTeam(day)
+// Everyone's time, for the CEO and admin — nobody else sees anyone's but their own.
+function TeamDay({ day, enabled }: { day: string; enabled: boolean }) {
+  const { data } = useTimeTeam(day, enabled)
   const [who, setWho] = useState<string | null>(null)
   const people = useMemo(() => data?.people.filter((p) => p._id) || [], [data])
-  if (!data || people.length === 0) return null
+  if (!enabled || !data || people.length === 0) return null
   return (
-    <Panel title="Your team's time" action={<span className="text-xs text-muted-foreground">{people.length} people</span>}>
+    <Panel title="Everyone's time" action={<span className="text-xs text-muted-foreground">{people.length} people</span>}>
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <ul className="grid max-h-[480px] gap-1 overflow-y-auto">
           {people.map((p) => (
@@ -441,7 +442,7 @@ export default function TimePage() {
         {ownTime ? (
           <TimerCard />
         ) : meta ? (
-          <p className="rounded-2xl bg-secondary/40 p-4 text-sm text-muted-foreground ring-1 ring-border">This login isn't linked to an employee record, so it has no time of its own — below is the time of the people you manage.</p>
+          <p className="rounded-2xl bg-secondary/40 p-4 text-sm text-muted-foreground ring-1 ring-border">This login isn't linked to an employee record, so it has no time of its own — below is everyone's time.</p>
         ) : null}
 
         {pending && pending.length > 0 && (
@@ -460,10 +461,10 @@ export default function TimePage() {
           </Panel>
         )}
 
-        <TeamDay day={day} />
+        <TeamDay day={day} enabled={Boolean(meta?.me.seesEveryone)} />
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
           <Users className="size-3.5" />
-          Content Managers, the Team Lead, the CEO and admin see and correct their people's time.
+          You see your own time. Only the CEO and admin see — and correct — anyone else's.
         </p>
       </main>
     </>

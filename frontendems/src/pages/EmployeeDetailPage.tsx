@@ -1,26 +1,21 @@
-import { useState, type ReactNode } from 'react'
-import { Controller, useFieldArray, useForm } from 'react-hook-form'
+import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Controller, useFieldArray, useForm, type Path } from 'react-hook-form'
 import { useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { FileText, KeyRound, Loader2, Plus, Send, Trash2, Wallet } from 'lucide-react'
+import { FileText, KeyRound, Loader2, Plus, Save, Send, Trash2, Wallet } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Card } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { QuickActions, QuickActionItem } from '@/components/layout/QuickActions'
 import { StatusBadge } from '@/components/employees/StatusBadge'
 import { GeneratedDocumentsList } from '@/components/documents/GeneratedDocumentsList'
 import { MySignedDocumentsCard } from '@/components/documents/MySignedDocumentsCard'
+import { MyDocumentsToSign, latestByDocument, useSignatures } from '@/components/documents/ESign'
 import { UploadedDocumentsList } from '@/components/documents/UploadedDocumentsList'
 import { UploadedDocumentImage } from '@/components/documents/UploadedDocumentImage'
 import { RequestDocumentsModal } from '@/components/uploadRequests/RequestDocumentsModal'
@@ -30,33 +25,21 @@ import { GenerateSalarySlipDialog } from '@/components/salary/GenerateSalarySlip
 import { SalarySlipsList } from '@/components/salary/SalarySlipsList'
 import { RequestHistoryTable } from '@/components/uploadRequests/RequestHistoryTable'
 import { ActivityTimeline } from '@/components/employees/ActivityTimeline'
-import { AttendanceSummaryCard } from '@/components/attendance/AttendanceSummaryCard'
-import { AttendanceCalendar } from '@/components/attendance/AttendanceCalendar'
+import { AttendancePair } from '@/components/attendance/AttendancePair'
 import { NotInformedWarningsCard } from '@/components/attendance/NotInformedWarningsCard'
 import { PendingWarningsModal } from '@/components/attendance/PendingWarningsModal'
 import { OffboardDialog, type OffboardDetails } from '@/components/employees/OffboardDialog'
+import { EmployeeDevices } from '@/components/employees/EmployeeDevices'
+import { CheckboxRow, MissingBadge, SecretInput, Section, useOpenSections } from '@/components/employees/ProfileParts'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 import { extractApiErrorMessage } from '@/lib/errors'
 import { hasAnyPermission, hasPermission, isAdminLike } from '@/lib/permissions'
 import { can } from '@/lib/access'
-import {
-  useChangeSalary,
-  useCompleteProbation,
-  useDeleteEmployee,
-  useEmployee,
-  useEmployees,
-  useUpdateEmployee,
-} from '@/hooks/useEmployees'
+import { useCompleteProbation, useEmployee, usePromote, useUpdateEmployee } from '@/hooks/useEmployees'
 import { LetterDialog } from '@/components/employees/LetterDialog'
 import { useUploadedDocuments } from '@/hooks/useUploadRequests'
-import {
-  BLOOD_GROUPS,
-  type Address,
-  type Employee,
-  type EmployeeStatus,
-  type EmploymentType,
-} from '@/api/employees.api'
+import { BLOOD_GROUPS, getOrgNodes, type Address, type Employee, type EmployeeStatus, type EmploymentType, type OrgNode } from '@/api/employees.api'
 
 type AddressForm = {
   line1: string
@@ -67,12 +50,13 @@ type AddressForm = {
   country: string
 }
 
-export type FormValues = {
+type FormValues = {
   employeeCode: string
   firstName: string
   lastName: string
   personalEmail: string
   phone: string
+  emergencyContact: string
   instagramId: string
   permanentAddress: AddressForm
   localAddress: AddressForm
@@ -81,9 +65,10 @@ export type FormValues = {
   anniversaryDate: string
   bloodGroup: string
   designation: string
+  // The Organisation chart box the designation comes from (not saved directly —
+  // a change goes through the promotion, with its letter).
+  designationNode: string
   department: string
-  reportingManager: string
-  manager: string
   workLocation: string
   workingHoursStart: string
   workingHoursEnd: string
@@ -91,6 +76,8 @@ export type FormValues = {
   dateOfHiring: string
   employmentType: EmploymentType
   status: EmployeeStatus
+  companyEmail: string
+  companyEmailPassword: string
   ctcAnnual: string
   monthlyPay: string
   panNumber: string
@@ -115,9 +102,32 @@ export type FormValues = {
   extraDetails: { key: string; value: string }[]
 }
 
-const NO_MANAGER = '__none__'
+type SectionKey =
+  | 'personal'
+  | 'employment'
+  | 'onboarding'
+  | 'offboarding'
+  | 'address'
+  | 'bank'
+  | 'devices'
+  | 'generated'
+  | 'requested'
+  | 'salary'
+  | 'extra'
+  | 'attendance'
+  | 'recruitment'
+  | 'activity'
 
-function toDateInputValue(value: string | undefined): string {
+// Details that used to be typed into Extra details — shown in their own
+// fields as a starting value, and saved there the next time the profile is
+// saved. The Extra details entries themselves are left as they are.
+const FROM_EXTRA: { field: 'emergencyContact' | 'companyEmail' | 'companyEmailPassword'; key: RegExp }[] = [
+  { field: 'emergencyContact', key: /^\s*emergency/i },
+  { field: 'companyEmail', key: /^\s*company\s*mail\s*id\s*$/i },
+  { field: 'companyEmailPassword', key: /^\s*company\s*mail\s*password\s*$/i },
+]
+
+function toDateInputValue(value: string | undefined | null): string {
   if (!value) return ''
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
@@ -139,13 +149,26 @@ function addressesEqual(a: AddressForm, b: AddressForm): boolean {
   return a.line1 === b.line1 && a.line2 === b.line2 && a.city === b.city && a.state === b.state && a.pincode === b.pincode && a.country === b.country
 }
 
+// What Extra details holds for a field the profile now has its own place for.
+function extraFallbacks(employee: Employee): Partial<Record<'emergencyContact' | 'companyEmail' | 'companyEmailPassword', string>> {
+  const out: Partial<Record<'emergencyContact' | 'companyEmail' | 'companyEmailPassword', string>> = {}
+  for (const { field, key } of FROM_EXTRA) {
+    if ((employee[field] ?? '').trim()) continue
+    const hit = (employee.extraDetails ?? []).find((d) => key.test(d.key) && (d.value ?? '').trim())
+    if (hit?.value) out[field] = hit.value
+  }
+  return out
+}
+
 function toFormValues(employee: Employee): FormValues {
+  const fallback = extraFallbacks(employee)
   return {
     employeeCode: employee.employeeCode ?? '',
     firstName: employee.firstName ?? '',
     lastName: employee.lastName ?? '',
     personalEmail: employee.personalEmail ?? '',
     phone: employee.phone ?? '',
+    emergencyContact: employee.emergencyContact || fallback.emergencyContact || '',
     instagramId: employee.instagramId ?? '',
     permanentAddress: toAddressForm(employee.permanentAddress),
     localAddress: toAddressForm(employee.localAddress),
@@ -154,9 +177,8 @@ function toFormValues(employee: Employee): FormValues {
     anniversaryDate: toDateInputValue(employee.anniversaryDate ?? undefined),
     bloodGroup: employee.bloodGroup ?? '',
     designation: employee.designation ?? '',
+    designationNode: '',
     department: employee.department ?? '',
-    reportingManager: employee.reportingManager ?? '',
-    manager: typeof employee.manager === 'object' && employee.manager ? employee.manager._id : (employee.manager ?? ''),
     workLocation: employee.workLocation ?? '',
     workingHoursStart: employee.workingHoursStart ?? '09:30',
     workingHoursEnd: employee.workingHoursEnd ?? '18:30',
@@ -164,6 +186,8 @@ function toFormValues(employee: Employee): FormValues {
     dateOfHiring: toDateInputValue(employee.dateOfHiring),
     employmentType: employee.employmentType ?? 'full-time',
     status: employee.status ?? 'draft',
+    companyEmail: employee.companyEmail || fallback.companyEmail || '',
+    companyEmailPassword: employee.companyEmailPassword || fallback.companyEmailPassword || '',
     ctcAnnual: employee.ctcAnnual != null ? String(employee.ctcAnnual) : '',
     monthlyPay: employee.monthlyPay != null ? String(employee.monthlyPay) : '',
     panNumber: employee.panNumber ?? '',
@@ -189,6 +213,58 @@ function toFormValues(employee: Employee): FormValues {
   }
 }
 
+// Every detail "Save changes" needs filled in (Save as draft doesn't).
+// `admin`: only for those who see the salary, ID and bank fields.
+type Required = { name: string; label: string; section: SectionKey; admin?: boolean; when?: (v: FormValues, same: boolean) => boolean }
+const ADDRESS_PARTS: [keyof AddressForm, string][] = [
+  ['line1', 'address line 1'],
+  ['city', 'city'],
+  ['state', 'state'],
+  ['pincode', 'pincode'],
+  ['country', 'country'],
+]
+const REQUIRED: Required[] = [
+  { name: 'firstName', label: 'First name', section: 'personal' },
+  { name: 'lastName', label: 'Last name', section: 'personal' },
+  { name: 'personalEmail', label: 'Personal email', section: 'personal' },
+  { name: 'phone', label: 'Phone', section: 'personal' },
+  { name: 'emergencyContact', label: 'Emergency contact number', section: 'personal' },
+  { name: 'instagramId', label: 'Instagram ID', section: 'personal' },
+  { name: 'dob', label: 'Date of birth', section: 'personal' },
+  { name: 'bloodGroup', label: 'Blood group', section: 'personal' },
+  { name: 'maritalStatus', label: 'Marital status', section: 'personal' },
+  { name: 'anniversaryDate', label: 'Anniversary date', section: 'personal', when: (v) => v.maritalStatus === 'married' },
+  { name: 'panNumber', label: 'PAN number', section: 'personal', admin: true },
+  { name: 'aadharNumber', label: 'Aadhar number', section: 'personal', admin: true },
+  { name: 'designation', label: 'Designation', section: 'employment', when: (v) => !v.designationNode },
+  { name: 'department', label: 'Department', section: 'employment' },
+  { name: 'workLocation', label: 'Work location', section: 'employment' },
+  { name: 'workingHoursStart', label: 'Shift start', section: 'employment' },
+  { name: 'workingHoursEnd', label: 'Shift end', section: 'employment' },
+  { name: 'dateOfHiring', label: 'Date of hiring', section: 'employment' },
+  { name: 'dateOfJoining', label: 'Date of joining', section: 'employment' },
+  { name: 'companyEmail', label: 'Company mail ID', section: 'employment' },
+  { name: 'companyEmailPassword', label: 'Company mail password', section: 'employment', admin: true },
+  { name: 'monthlyPay', label: 'Monthly pay', section: 'employment', admin: true },
+  { name: 'ctcAnnual', label: 'Annual CTC', section: 'employment', admin: true },
+  { name: 'payDate', label: 'Pay date', section: 'employment', admin: true },
+  { name: 'employeeCode', label: 'Biometric PIN', section: 'onboarding', admin: true },
+  { name: 'endDate', label: 'Last working day', section: 'offboarding', when: (v) => v.status === 'offboarded' },
+  { name: 'reasonForLeaving', label: 'Reason for leaving', section: 'offboarding', when: (v) => v.status === 'offboarded' },
+  ...ADDRESS_PARTS.map(([part, label]) => ({ name: `permanentAddress.${part}`, label: `Permanent ${label}`, section: 'address' as SectionKey })),
+  ...ADDRESS_PARTS.map(([part, label]) => ({ name: `localAddress.${part}`, label: `Local ${label}`, section: 'address' as SectionKey, when: (_v: FormValues, same: boolean) => !same })),
+  { name: 'bankName', label: 'Bank name', section: 'bank', admin: true },
+  { name: 'bankAccountNumber', label: 'Bank A/C number', section: 'bank', admin: true },
+  { name: 'bankIFSC', label: 'IFSC code', section: 'bank', admin: true },
+]
+
+const valueAt = (v: FormValues, name: string): unknown => name.split('.').reduce<unknown>((o, k) => (o && typeof o === 'object' ? (o as Record<string, unknown>)[k] : undefined), v)
+const isEmpty = (x: unknown) => x == null || (typeof x === 'string' && !x.trim())
+
+function missingOf(v: FormValues, same: boolean, admin: boolean): Required[] {
+  return REQUIRED.filter((r) => (!r.admin || admin) && (!r.when || r.when(v, same)) && isEmpty(valueAt(v, r.name)))
+}
+
 function Field({ label, value }: { label: string; value?: string | null }) {
   return (
     <div className="flex flex-col gap-1 border-b border-border pb-3">
@@ -198,31 +274,16 @@ function Field({ label, value }: { label: string; value?: string | null }) {
   )
 }
 
-function SectionTitle({ children }: { children: ReactNode }) {
-  return <h2 className="border-b border-border pb-3 text-base font-semibold text-foreground">{children}</h2>
+// A chart box as a designation: its title, with its team (or the box above
+// it) so the same title in two teams can be told apart.
+function boxLabel(node: OrgNode, byId: Map<string, OrgNode>): string {
+  let up = node.parent ? byId.get(node.parent) : undefined
+  while (up && up.kind === 'team_role') up = up.parent ? byId.get(up.parent) : undefined
+  const where = up?.kind === 'team' ? up.title : up && up.parent ? `under ${up.title}` : ''
+  return where ? `${node.title} — ${where}` : node.title
 }
 
-function CheckboxRow({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string
-  checked: boolean
-  onChange: (checked: boolean) => void
-}) {
-  return (
-    <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-secondary/30 p-3 transition-colors select-none hover:bg-secondary/50">
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        className="size-4 shrink-0 cursor-pointer rounded border-border accent-primary"
-      />
-      <span className="text-sm font-medium text-foreground">{label}</span>
-    </label>
-  )
-}
+const fmtDay = (iso?: string | null) => (iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—')
 
 export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -237,10 +298,8 @@ export default function EmployeeDetailPage() {
     )
   }
 
-  // Keyed on the employee id so navigating between employees (or a refetch
-  // replacing the object) always mounts a fresh form instance — this is what
-  // guarantees useForm's defaultValues are correct on its very first render,
-  // so controlled Selects are never mounted with an undefined value.
+  // Keyed on the employee id so navigating between employees always mounts a
+  // fresh form — useForm's defaultValues are right on its very first render.
   return <EmployeeDetailForm key={data.employee._id} employee={data.employee} employeeId={id as string} />
 }
 
@@ -248,131 +307,188 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   const navigate = useNavigate()
   const { user } = useAuth()
   const isAdmin = isAdminLike(user)
-  // Flags are the CEO's and admin's only.
   const canFlag = can(user, 'performance_flags')
   const canSeeWarnings = can(user, 'hrms')
-  // A plain employee with no granted permissions always lands back on this
-  // exact page (see frontendems/App.tsx's Home()), so "Back to Portal"
-  // would just loop them right back here — only worth showing to someone
-  // who actually has somewhere else to go.
+  // A plain employee always lands back on their own page, so "Back to
+  // dashboard" is only for someone with somewhere else to go.
   const canBackToPortal = hasAnyPermission(user)
   const canGenerateDocs = hasPermission(user, 'generate_documents')
   const canRequestDocs = hasPermission(user, 'request_documents')
   const canAddCredentials = hasPermission(user, 'add_credentials')
   const canViewSalary = hasPermission(user, 'view_salary_slip')
-  const { data: uploadedDocsData } = useUploadedDocuments(employeeId, { enabled: canRequestDocs })
-  const photoDoc = uploadedDocsData?.uploadedDocuments.find((d) => d.docType === 'photo')
   const canEditDetails = hasPermission(user, 'edit_employee_details')
   const isOwnRecord = user?.employeeLink === employeeId
+  const { data: uploadedDocsData } = useUploadedDocuments(employeeId, { enabled: canRequestDocs })
+  const photoDoc = uploadedDocsData?.uploadedDocuments.find((d) => d.docType === 'photo')
   const updateEmployee = useUpdateEmployee(employeeId)
-  const deleteEmployee = useDeleteEmployee()
   const completeProbation = useCompleteProbation(employeeId)
-  const changeSalary = useChangeSalary(employeeId)
-  // Probation is only completed with a letter attached (its own dialog).
+  const promote = usePromote(employeeId)
+  const { data: orgNodes } = useQuery({ queryKey: ['org-nodes'], queryFn: getOrgNodes, staleTime: 60_000 })
+  const sections = useOpenSections(['personal', 'employment', 'attendance'])
+  // Documents sent to them to sign online (their own profile).
+  const { data: mySignatures } = useSignatures(employeeId, isOwnRecord && !canGenerateDocs)
+  const myLatest = isOwnRecord && !canGenerateDocs ? [...latestByDocument(mySignatures).values()] : []
+  const toSign = myLatest.filter((x) => x.status === 'sent' || x.status === 'viewed').length
   const [probationOpen, setProbationOpen] = useState(false)
-  // A salary that is already set only changes with a promotion letter — the
-  // save waits here until the letter and the starting month are given.
-  const [salaryChange, setSalaryChange] = useState<{ values: FormValues; monthlyPay?: number; ctcAnnual?: number } | null>(null)
+  // A promotion — a new designation, or a change to a salary already set —
+  // waits here for the letter and the month it counts from, then the rest saves.
+  const [promotion, setPromotion] = useState<{ values: FormValues; draft: boolean; toNode?: string; monthlyPay?: number; ctcAnnual?: number } | null>(null)
   const [effectiveFrom, setEffectiveFrom] = useState(() => new Date().toISOString().slice(0, 7))
-
-  const { register, handleSubmit, control, watch, setValue } = useForm<FormValues>({
-    defaultValues: toFormValues(employee),
-  })
-  const extraDetails = useFieldArray({ control, name: 'extraDetails' })
-  // For the Manager picker below — active roster minus this employee
-  // themself (can't be their own manager).
-  // Only for someone who can browse the directory (any granted permission) —
-  // an ordinary employee on their own page is refused the list (403) and has
-  // no Manager picker to fill anyway.
-  const { data: managerOptionsData } = useEmployees({ status: 'active', limit: 100 }, { enabled: canBackToPortal })
-  const managerOptions = (managerOptionsData?.items ?? []).filter((e) => e._id !== employeeId)
-
-  const permanentAddress = watch('permanentAddress')
-  const status = watch('status')
   const [offboardOpen, setOffboardOpen] = useState(false)
+  // After a "Save changes" with details still empty: those fields show red.
+  const [showMissing, setShowMissing] = useState(false)
 
-  // Confirming the off-boarding modal saves straight away — status plus the
-  // off-boarding details together — rather than waiting for "Save changes",
-  // so an employee is never left half off-boarded with no last working day.
-  const onConfirmOffboard = (details: OffboardDetails) => {
-    updateEmployee.mutate(
-      { status: 'offboarded', ...details },
-      {
-        onSuccess: () => {
-          setValue('status', 'offboarded')
-          setValue('endDate', details.endDate)
-          setValue('reasonForLeaving', details.reasonForLeaving)
-          setValue('removedFromGroupsAndReels', details.removedFromGroupsAndReels)
-          setValue('mailDeactivated', details.mailDeactivated)
-          setOffboardOpen(false)
-          toast.success('Employee off-boarded — their EMS login has been deactivated')
-        },
-        onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not off-board this employee')),
+  const initial = useMemo(() => toFormValues(employee), [employee])
+  const fallbacks = useMemo(() => extraFallbacks(employee), [employee])
+  const { register, handleSubmit, control, watch, setValue, getValues, reset, resetField, formState } = useForm<FormValues>({ defaultValues: initial })
+  const { isDirty, dirtyFields } = formState
+  const extraDetails = useFieldArray({ control, name: 'extraDetails' })
+  const [sameInitial, setSameInitial] = useState(() => addressesEqual(initial.permanentAddress, initial.localAddress))
+  const [sameAsPermanent, setSameAsPermanent] = useState(sameInitial)
+  const dirty = isDirty || sameAsPermanent !== sameInitial
+
+  const nodeById = useMemo(() => new Map((orgNodes ?? []).map((n) => [n._id, n])), [orgNodes])
+  const boxes = useMemo(
+    () =>
+      (orgNodes ?? [])
+        .filter((n) => n.parent && n.kind !== 'team')
+        .map((n) => ({ _id: n._id, label: boxLabel(n, nodeById) }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [orgNodes, nodeById]
+  )
+  const heldNode = useMemo(() => {
+    const held = (orgNodes ?? []).filter((n) => n.parent && n.kind !== 'team' && n.assignees.some((a) => a._id === employeeId))
+    return held.find((n) => n.title.trim().toUpperCase() === (employee.designation ?? '').trim().toUpperCase()) ?? held[0] ?? null
+  }, [orgNodes, employeeId, employee.designation])
+  useEffect(() => {
+    if (heldNode) resetField('designationNode', { defaultValue: heldNode._id })
+  }, [heldNode, resetField])
+
+  const values = watch()
+  const permanentAddress = values.permanentAddress
+  const status = values.status
+  const missing = missingOf(values, sameAsPermanent, isAdmin)
+  const missingIn = (s: SectionKey) => (canEditDetails ? missing.filter((m) => m.section === s).length : 0)
+  const bad = (name: string) => (showMissing && missing.some((m) => m.name === name) ? 'ring-2 ring-amber-500/70' : '')
+  const fullName = `${employee.firstName} ${employee.lastName ?? ''}`.trim()
+
+  // ---- saving: only what changed (plus details found in Extra details), never blanks over stored values
+
+  const buildPayload = (v: FormValues, exclude: string[] = []) => {
+    const keys = new Set<string>(Object.keys(dirtyFields).filter((k) => (dirtyFields as Record<string, unknown>)[k]))
+    keys.delete('designationNode')
+    exclude.forEach((k) => keys.delete(k))
+    Object.keys(fallbacks).forEach((k) => keys.add(k))
+    if (sameAsPermanent !== sameInitial || (sameAsPermanent && keys.has('permanentAddress'))) keys.add('localAddress')
+    if (keys.has('maritalStatus')) keys.add('anniversaryDate')
+    const out: Record<string, unknown> = {}
+    for (const k of keys) {
+      const raw = v[k as keyof FormValues]
+      switch (k) {
+        case 'employeeCode':
+          if (v.employeeCode.trim()) out.employeeCode = v.employeeCode.trim()
+          break
+        case 'ctcAnnual':
+        case 'monthlyPay':
+        case 'payDate':
+          if (String(raw).trim() !== '') out[k] = Number(raw)
+          break
+        case 'dob':
+        case 'dateOfJoining':
+        case 'dateOfHiring':
+        case 'endDate':
+          if (raw) out[k] = raw
+          break
+        case 'maritalStatus':
+          out.maritalStatus = v.maritalStatus || null
+          break
+        case 'anniversaryDate':
+          out.anniversaryDate = v.maritalStatus === 'married' && v.anniversaryDate ? v.anniversaryDate : null
+          break
+        case 'localAddress':
+          out.localAddress = sameAsPermanent ? v.permanentAddress : v.localAddress
+          break
+        case 'extraDetails':
+          out.extraDetails = v.extraDetails.filter((d) => d.key.trim().length > 0)
+          break
+        default:
+          out[k] = raw
       }
-    )
-  }
-  const [sameAsPermanent, setSameAsPermanent] = useState(() => addressesEqual(toFormValues(employee).permanentAddress, toFormValues(employee).localAddress))
-
-  const onToggleSameAsPermanent = (checked: boolean) => {
-    setSameAsPermanent(checked)
-    if (checked) {
-      setValue('localAddress', permanentAddress)
     }
+    return out
   }
 
-  const saveDetails = (values: FormValues) => {
-    updateEmployee.mutate(
-      {
-        ...values,
-        employeeCode: values.employeeCode || undefined,
-        ctcAnnual: values.ctcAnnual ? Number(values.ctcAnnual) : undefined,
-        monthlyPay: values.monthlyPay ? Number(values.monthlyPay) : undefined,
-        payDate: values.payDate ? Number(values.payDate) : undefined,
-        dob: values.dob || undefined,
-        maritalStatus: values.maritalStatus || null,
-        anniversaryDate: values.maritalStatus === 'married' && values.anniversaryDate ? values.anniversaryDate : null,
-        dateOfJoining: values.dateOfJoining || undefined,
-        dateOfHiring: values.dateOfHiring || undefined,
-        endDate: values.endDate || undefined,
-        manager: values.manager || null,
-        permanentAddress: values.permanentAddress,
-        localAddress: sameAsPermanent ? values.permanentAddress : values.localAddress,
-        extraDetails: values.extraDetails?.filter((d) => d.key.trim().length > 0),
-      },
-      {
-        onSuccess: () => toast.success('Employee updated'),
-        onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not save changes')),
-      }
-    )
+  const afterSave = () => {
+    reset(getValues())
+    setSameInitial(sameAsPermanent)
+    setShowMissing(false)
   }
 
-  // The first salary saves directly; changing one that is already set goes
-  // through the promotion-letter dialog first, then the rest of the form saves.
-  const onSubmit = (values: FormValues) => {
-    const hadSalary = Boolean(employee.monthlyPay || employee.ctcAnnual)
-    const nextMonthly = values.monthlyPay ? Number(values.monthlyPay) : undefined
-    const nextCtc = values.ctcAnnual ? Number(values.ctcAnnual) : undefined
-    const monthlyChanged = nextMonthly !== undefined && nextMonthly !== (employee.monthlyPay ?? undefined)
-    const ctcChanged = nextCtc !== undefined && nextCtc !== (employee.ctcAnnual ?? undefined)
-    if (hadSalary && (monthlyChanged || ctcChanged)) {
-      setSalaryChange({ values, monthlyPay: monthlyChanged ? nextMonthly : undefined, ctcAnnual: ctcChanged ? nextCtc : undefined })
+  const saveDetails = (v: FormValues, draft = false, exclude: string[] = []) => {
+    const payload = buildPayload(v, exclude)
+    if (!Object.keys(payload).length) {
+      afterSave()
       return
     }
-    saveDetails(values)
+    updateEmployee.mutate(payload, {
+      onSuccess: () => {
+        afterSave()
+        toast.success(draft ? 'Saved as draft — some details are still to fill in' : 'Saved')
+      },
+      onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not save changes')),
+    })
   }
 
-  const onConfirmSalaryChange = (letter: File) => {
-    if (!salaryChange) return
-    changeSalary.mutate(
-      { monthlyPay: salaryChange.monthlyPay, ctcAnnual: salaryChange.ctcAnnual, effectiveFrom, letter },
+  // The first salary saves directly. A new designation, or a change to a
+  // salary already set, is a promotion: the letter first, then the rest saves.
+  const save = (v: FormValues, draft: boolean) => {
+    const hadSalary = Boolean(employee.monthlyPay || employee.ctcAnnual)
+    const nextMonthly = v.monthlyPay ? Number(v.monthlyPay) : undefined
+    const nextCtc = v.ctcAnnual ? Number(v.ctcAnnual) : undefined
+    const monthlyChanged = nextMonthly !== undefined && nextMonthly !== (employee.monthlyPay ?? undefined)
+    const ctcChanged = nextCtc !== undefined && nextCtc !== (employee.ctcAnnual ?? undefined)
+    const toNode = v.designationNode && v.designationNode !== (heldNode?._id ?? '') ? v.designationNode : undefined
+    if (toNode || (hadSalary && (monthlyChanged || ctcChanged))) {
+      setPromotion({
+        values: v,
+        draft,
+        toNode,
+        monthlyPay: hadSalary && monthlyChanged ? nextMonthly : undefined,
+        ctcAnnual: hadSalary && ctcChanged ? nextCtc : undefined,
+      })
+      return
+    }
+    saveDetails(v, draft)
+  }
+
+  const onSaveChanges = handleSubmit((v) => {
+    const gaps = missingOf(v, sameAsPermanent, isAdmin)
+    if (gaps.length) {
+      setShowMissing(true)
+      sections.openAll([...new Set(gaps.map((g) => g.section))])
+      toast.error(`Fill in ${gaps.length} more detail${gaps.length === 1 ? '' : 's'} first — ${gaps.slice(0, 4).map((g) => g.label).join(', ')}${gaps.length > 4 ? '…' : ''}. Or save it as a draft.`)
+      return
+    }
+    save(v, false)
+  })
+  const onSaveDraft = handleSubmit((v) => save(v, true))
+
+  const onConfirmPromotion = (letter: File) => {
+    if (!promotion) return
+    const { values: v, draft, toNode, monthlyPay, ctcAnnual } = promotion
+    promote.mutate(
+      { monthlyPay, ctcAnnual, effectiveFrom, toNode, fromNode: toNode ? heldNode?._id : undefined, letter },
       {
         onSuccess: () => {
-          toast.success('Salary changed — the promotion letter is saved in documents')
-          const { values } = salaryChange
-          setSalaryChange(null)
-          saveDetails(values)
+          toast.success('Promotion saved — the letter is in their documents')
+          setPromotion(null)
+          resetField('monthlyPay', { defaultValue: v.monthlyPay })
+          resetField('ctcAnnual', { defaultValue: v.ctcAnnual })
+          resetField('designationNode', { defaultValue: v.designationNode })
+          // The rest of the changes (a first salary entered with it saves here too).
+          saveDetails(v, draft, monthlyPay !== undefined || ctcAnnual !== undefined ? ['monthlyPay', 'ctcAnnual', 'designation'] : ['designation'])
         },
-        onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not change the salary')),
+        onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not save the promotion')),
       }
     )
   }
@@ -380,7 +496,7 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
   const onConfirmProbation = (letter: File) => {
     completeProbation.mutate(letter, {
       onSuccess: () => {
-        setValue('probationCompleted', true)
+        resetField('probationCompleted', { defaultValue: true })
         setProbationOpen(false)
         toast.success('Probation completed — the letter is saved in documents')
       },
@@ -388,19 +504,51 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
     })
   }
 
-  const onDelete = () => {
-    if (!window.confirm(`Remove ${employee.firstName}? This can't be undone from the UI.`)) return
-    deleteEmployee.mutate(employeeId, {
-      onSuccess: () => {
-        toast.success('Employee removed')
-        navigate('/')
-      },
-      onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not remove employee')),
-    })
+  // Confirming the off-boarding modal saves straight away — status plus the
+  // off-boarding details together — so nobody is left half off-boarded.
+  const onConfirmOffboard = (details: OffboardDetails) => {
+    updateEmployee.mutate(
+      { status: 'offboarded', ...details },
+      {
+        onSuccess: () => {
+          resetField('status', { defaultValue: 'offboarded' })
+          resetField('endDate', { defaultValue: details.endDate })
+          resetField('reasonForLeaving', { defaultValue: details.reasonForLeaving })
+          resetField('removedFromGroupsAndReels', { defaultValue: details.removedFromGroupsAndReels })
+          resetField('mailDeactivated', { defaultValue: details.mailDeactivated })
+          setOffboardOpen(false)
+          toast.success('Employee off-boarded — their EMS login has been deactivated')
+        },
+        onError: (err) => toast.error(extractApiErrorMessage(err, 'Could not off-board this employee')),
+      }
+    )
   }
 
+  const onToggleSameAsPermanent = (checked: boolean) => {
+    setSameAsPermanent(checked)
+    if (checked) setValue('localAddress', permanentAddress)
+  }
+
+  // Monthly pay × 12 = annual CTC — changing either fills in the other.
+  const linkPay = (from: 'monthlyPay' | 'ctcAnnual', raw: string) => {
+    if (raw.trim() === '') return
+    const n = Number(raw)
+    if (!Number.isFinite(n)) return
+    if (from === 'monthlyPay') setValue('ctcAnnual', String(Math.round(n * 12 * 100) / 100), { shouldDirty: true })
+    else setValue('monthlyPay', String(Math.round((n / 12) * 100) / 100), { shouldDirty: true })
+  }
+
+  const text = (name: Path<FormValues>, label: string, opts: { upper?: boolean; type?: string; placeholder?: string } = {}) => (
+    <div className="grid gap-1.5">
+      <Label htmlFor={name} className="text-xs text-muted-foreground">
+        {label}
+      </Label>
+      <Input id={name} type={opts.type} placeholder={opts.placeholder} className={cn(opts.upper && 'uppercase', bad(name))} {...register(name)} />
+    </div>
+  )
+
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-8 py-8">
+    <div className="mx-auto flex max-w-4xl flex-col gap-5 py-6">
       {isOwnRecord && <PendingWarningsModal employeeId={employeeId} />}
 
       <LetterDialog
@@ -413,68 +561,30 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         onConfirm={onConfirmProbation}
       />
       <LetterDialog
-        open={Boolean(salaryChange)}
-        onOpenChange={(open) => !open && setSalaryChange(null)}
-        title="Change salary"
-        description={`${employee.firstName}'s salary is changing${
-          salaryChange?.monthlyPay !== undefined ? ` to ₹${salaryChange.monthlyPay.toLocaleString('en-IN')} a month` : ''
-        }. A salary only changes with the promotion letter attached.`}
-        confirmLabel="Attach & change salary"
-        isPending={changeSalary.isPending}
+        open={Boolean(promotion)}
+        onOpenChange={(open) => !open && setPromotion(null)}
+        title="Promotion"
+        description={`${employee.firstName}'s ${[
+          promotion?.toNode ? `designation becomes ${boxes.find((b) => b._id === promotion.toNode)?.label ?? 'the new one'} (they move into that box in the Organisation chart)` : '',
+          promotion?.monthlyPay !== undefined ? `pay becomes ₹${promotion.monthlyPay.toLocaleString('en-IN')} a month` : promotion?.ctcAnnual !== undefined ? `annual CTC becomes ₹${promotion.ctcAnnual.toLocaleString('en-IN')}` : '',
+        ]
+          .filter(Boolean)
+          .join(', and ')}. It only changes with the promotion letter attached; today becomes their date of last promotion.`}
+        confirmLabel="Attach & save the promotion"
+        isPending={promote.isPending}
         canConfirm={/^\d{4}-\d{2}$/.test(effectiveFrom)}
-        onConfirm={onConfirmSalaryChange}
+        onConfirm={onConfirmPromotion}
       >
         <div className="grid gap-1.5">
-          <Label htmlFor="salaryEffectiveFrom">New salary counts from</Label>
-          <Input id="salaryEffectiveFrom" type="month" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
-          <p className="text-xs text-muted-foreground">
-            Salary slips for this month and later use the new amount. Slips for earlier months keep the old one, even if generated again.
-          </p>
+          <Label htmlFor="promotionEffectiveFrom">Counts from (month)</Label>
+          <Input id="promotionEffectiveFrom" type="month" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />
+          <p className="text-xs text-muted-foreground">Salary slips for this month and later use the new pay; earlier months keep the old one, even if generated again.</p>
         </div>
       </LetterDialog>
-
-      {/* PROFILE HEADER — the passport photo (once one's on file, see
-          requested documents) renders as a fixed-size portrait beside the
-          name, not a background — same layout for both an admin/HR viewer
-          and the employee viewing their own profile. Tinted with the
-          brand primary (same blue-indigo token the login page's accent
-          family is built from) so this, the first thing an employee sees
-          after signing in, doesn't read as a bare white bar. */}
-      <div className="sticky top-0 z-30 flex flex-col gap-6 rounded-2xl border border-border bg-gradient-to-br from-primary/[0.08] via-card to-card px-6 py-5 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex gap-4">
-          {photoDoc && (
-            <UploadedDocumentImage
-              documentId={photoDoc._id}
-              alt={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
-              className="h-28 w-20 shrink-0 rounded-lg border border-primary/20 object-cover"
-            />
-          )}
-          <div className="flex flex-col gap-1.5">
-            <span className="inline-flex w-fit items-center rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-              Employee profile
-            </span>
-            <h1 className="text-3xl font-semibold uppercase tracking-tight text-foreground sm:text-4xl">
-              {employee.firstName} {employee.lastName}
-            </h1>
-            <p className="font-mono text-xs text-muted-foreground">{employee.employeeCode}</p>
-            <div className="flex flex-wrap items-center gap-3 pt-1">
-              <StatusBadge status={employee.status} />
-              <FlagStrip flags={employee.flags ?? []} />
-              {canFlag && <EmployeeFlagsManager employeeId={employeeId} flags={employee.flags ?? []} />}
-            </div>
-          </div>
-        </div>
-        {canBackToPortal && (
-          <Button variant="outline" onClick={() => navigate('/')}>
-            Back to dashboard
-          </Button>
-        )}
-      </div>
-
       <OffboardDialog
         open={offboardOpen}
         onOpenChange={setOffboardOpen}
-        employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
+        employeeName={fullName}
         initial={{
           endDate: toDateInputValue(employee.endDate),
           reasonForLeaving: employee.reasonForLeaving ?? '',
@@ -484,587 +594,520 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
         isPending={updateEmployee.isPending}
         onConfirm={onConfirmOffboard}
       />
+
+      {/* The name card — one line, pinned — and, under it while something
+          has changed, the save bar. */}
+      <div className="sticky top-0 z-30 rounded-2xl border border-border bg-card/95 px-4 py-2.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-card/85">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 md:flex-nowrap [&>*]:shrink-0">
+          {photoDoc && <UploadedDocumentImage documentId={photoDoc._id} alt={fullName} className="h-11 w-9 rounded-md border border-primary/20 object-cover" />}
+          <h1 className="min-w-0 !shrink truncate text-xl font-semibold uppercase tracking-tight text-foreground sm:text-2xl">{fullName}</h1>
+          {employee.employeeCode && <span className="font-mono text-xs text-muted-foreground">{employee.employeeCode}</span>}
+          <StatusBadge status={employee.status} />
+          <FlagStrip flags={employee.flags ?? []} />
+          {canFlag && <EmployeeFlagsManager employeeId={employeeId} flags={employee.flags ?? []} />}
+          {canEditDetails && missing.length > 0 && !dirty && (
+            <span className="rounded-full bg-amber-500/12 px-2 py-0.5 text-[11px] font-semibold text-amber-700" title="Details still to fill in">
+              {missing.length} missing
+            </span>
+          )}
+          {canBackToPortal && (
+            <Button variant="outline" size="sm" className="ml-auto" onClick={() => navigate('/')}>
+              Back to dashboard
+            </Button>
+          )}
+        </div>
+        {canEditDetails && dirty && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-border pt-2.5">
+            <span className="min-w-0 flex-1 text-sm text-foreground">
+              <b>Unsaved changes</b>
+              <span className="text-muted-foreground">{missing.length ? ` · ${missing.length} required detail${missing.length === 1 ? '' : 's'} still empty` : ' · everything is filled in'}</span>
+            </span>
+            <Button type="button" size="sm" variant="outline" disabled={updateEmployee.isPending || promote.isPending} onClick={onSaveDraft}>
+              Save as draft
+            </Button>
+            <Button type="button" size="sm" disabled={updateEmployee.isPending || promote.isPending} onClick={onSaveChanges}>
+              {updateEmployee.isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+              Save changes
+            </Button>
+          </div>
+        )}
+      </div>
+
       <QuickActions>
         {canGenerateDocs && (
-          <QuickActionItem
-            icon={<FileText className="size-4" />}
-            label="Generate docs"
-            description="Document system"
-            onClick={() => navigate(`/employees/${employeeId}/wizard`)}
-          />
+          <QuickActionItem icon={<FileText className="size-4" />} label="Generate docs" description="Document system" onClick={() => navigate(`/employees/${employeeId}/wizard`)} />
         )}
         {canRequestDocs && (
           <RequestDocumentsModal
             employeeId={employeeId}
-            employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
+            employeeName={fullName}
             employeePhone={employee.phone}
             trigger={<QuickActionItem icon={<Send className="size-4" />} label="Request files" description="HR collection" />}
           />
         )}
         {canAddCredentials && (
-          <CredentialsDialog
-            employeeId={employeeId}
-            employeeName={`${employee.firstName} ${employee.lastName ?? ''}`}
-            trigger={<QuickActionItem icon={<KeyRound className="size-4" />} label="Add credentials" description="Platform access" />}
-          />
+          <CredentialsDialog employeeId={employeeId} employeeName={fullName} trigger={<QuickActionItem icon={<KeyRound className="size-4" />} label="Add credentials" description="Platform access" />} />
         )}
         {canViewSalary && (
-          <GenerateSalarySlipDialog
-            employeeId={employeeId}
-            employeeName={`${employee.firstName} ${employee.lastName ?? ''}`}
-            trigger={<QuickActionItem icon={<Wallet className="size-4" />} label="Generate salary slip" description="Payroll" />}
-          />
+          <GenerateSalarySlipDialog employeeId={employeeId} employeeName={fullName} trigger={<QuickActionItem icon={<Wallet className="size-4" />} label="Generate salary slip" description="Payroll" />} />
         )}
       </QuickActions>
 
-      {/* DETAILS FORM */}
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-8">
-        <fieldset disabled={!canEditDetails} className="contents">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {/* Personal Details */}
-            <Card className="gap-6 p-6">
-              <SectionTitle>Personal details</SectionTitle>
-              <div className="grid grid-cols-1 gap-4">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="firstName" className="text-xs text-muted-foreground">First name</Label>
-                  <Input id="firstName" className="uppercase" {...register('firstName', { required: true })} />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="lastName" className="text-xs text-muted-foreground">Last name</Label>
-                  <Input id="lastName" className="uppercase" {...register('lastName')} />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="personalEmail" className="text-xs text-muted-foreground">Personal email</Label>
-                  <Input id="personalEmail" type="email" {...register('personalEmail')} />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="phone" className="text-xs text-muted-foreground">Phone</Label>
-                  <Input id="phone" {...register('phone')} />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="instagramId" className="text-xs text-muted-foreground">Instagram ID</Label>
-                  <Input id="instagramId" className="uppercase" {...register('instagramId')} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="dob" className="text-xs text-muted-foreground">Date of birth</Label>
-                    <Input id="dob" type="date" {...register('dob')} />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label className="text-xs text-muted-foreground">Blood group</Label>
-                    <Controller
-                      control={control}
-                      name="bloodGroup"
-                      render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {BLOOD_GROUPS.map((bg) => (
-                              <SelectItem key={bg} value={bg}>{bg}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-1.5">
-                    <Label className="text-xs text-muted-foreground">Marital status</Label>
-                    <Controller
-                      control={control}
-                      name="maritalStatus"
-                      render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="single">Single</SelectItem>
-                            <SelectItem value="married">Married</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
-                  {watch('maritalStatus') === 'married' && (
-                    <div className="grid gap-1.5">
-                      <Label htmlFor="anniversaryDate" className="text-xs text-muted-foreground">Anniversary date</Label>
-                      <Input id="anniversaryDate" type="date" {...register('anniversaryDate')} />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </Card>
-
-            {/* Employment */}
-            <Card className="gap-6 p-6">
-              <SectionTitle>Employment</SectionTitle>
-              <div className="grid grid-cols-1 gap-4">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="designation" className="text-xs text-muted-foreground">Designation</Label>
-                  <Input id="designation" className="uppercase" {...register('designation', { required: true })} />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="department" className="text-xs text-muted-foreground">Department</Label>
-                  <Input id="department" className="uppercase" {...register('department')} />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="reportingManager" className="text-xs text-muted-foreground">Reporting manager</Label>
-                  <Input id="reportingManager" className="uppercase" {...register('reportingManager')} />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label className="text-xs text-muted-foreground">Manager (task management)</Label>
-                  <Controller
-                    control={control}
-                    name="manager"
-                    render={({ field }) => (
-                      <Select
-                        value={field.value || NO_MANAGER}
-                        onValueChange={(value) => field.onChange(value === NO_MANAGER ? '' : value)}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={NO_MANAGER}>— None —</SelectItem>
-                          {managerOptions.map((option) => (
-                            <SelectItem key={option._id} value={option._id}>
-                              {`${option.firstName} ${option.lastName ?? ''}`.trim().toUpperCase()}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="workLocation" className="text-xs text-muted-foreground">Work location</Label>
-                  <Input id="workLocation" className="uppercase" {...register('workLocation')} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="workingHoursStart" className="text-xs text-muted-foreground">Shift start</Label>
-                    <Input id="workingHoursStart" type="time" {...register('workingHoursStart')} />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="workingHoursEnd" className="text-xs text-muted-foreground">Shift end</Label>
-                    <Input id="workingHoursEnd" type="time" {...register('workingHoursEnd')} />
-                  </div>
-                </div>
-                <Controller
-                  control={control}
-                  name="worksFromHome"
-                  render={({ field }) => (
-                    <CheckboxRow
-                      label="Works from home — a working day with no scans is marked Work From Home (any scan, and the day is marked from the scans as usual)"
-                      checked={field.value}
-                      onChange={field.onChange}
-                    />
-                  )}
-                />
-                {employee.worksFromHome && employee.worksFromHomeSince && (
-                  <p className="-mt-2 text-xs text-muted-foreground">
-                    Since{' '}
-                    {new Date(employee.worksFromHomeSince).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}{' '}
-                    — earlier days keep what they have.
-                  </p>
-                )}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="dateOfHiring" className="text-xs text-muted-foreground">Date of hiring</Label>
-                    <Input id="dateOfHiring" type="date" {...register('dateOfHiring')} />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label htmlFor="dateOfJoining" className="text-xs text-muted-foreground">Date of joining</Label>
-                    <Input id="dateOfJoining" type="date" {...register('dateOfJoining')} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-1.5">
-                    <Label className="text-xs text-muted-foreground">Employment type</Label>
-                    <Controller
-                      control={control}
-                      name="employmentType"
-                      render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="full-time">Full-time</SelectItem>
-                            <SelectItem value="part-time">Part-time</SelectItem>
-                            <SelectItem value="contract">Contract</SelectItem>
-                            <SelectItem value="intern">Intern</SelectItem>
-                            <SelectItem value="hybrid">Hybrid</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label className="text-xs text-muted-foreground">Status</Label>
-                    <Controller
-                      control={control}
-                      name="status"
-                      render={({ field }) => (
-                        <Select
-                          value={field.value}
-                          onValueChange={(value) => {
-                            // Off-boarding goes through the confirmation modal
-                            // (last working day etc.) — the status only changes
-                            // once that's confirmed and saved.
-                            if (value === 'offboarded' && employee.status !== 'offboarded') {
-                              setOffboardOpen(true)
-                              return
-                            }
-                            field.onChange(value)
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="draft">Draft</SelectItem>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="offboarded">Offboarded</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
-                </div>
-              </div>
-            </Card>
+      {/* ---- Personal details */}
+      <Section title="Personal details" open={sections.isOpen('personal')} onToggle={() => sections.toggle('personal')} badge={<MissingBadge count={missingIn('personal')} />}>
+        <fieldset disabled={!canEditDetails} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {text('firstName', 'First name', { upper: true })}
+          {text('lastName', 'Last name', { upper: true })}
+          <div className="grid gap-1.5">
+            <Label htmlFor="personalEmail" className="text-xs text-muted-foreground">
+              Personal email
+            </Label>
+            <Input id="personalEmail" type="email" className={cn('normal-case', bad('personalEmail'))} {...register('personalEmail')} />
           </div>
-
-          {/* Addresses */}
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <Card className="gap-4 p-6">
-              <SectionTitle>Permanent address</SectionTitle>
-              <div className="grid grid-cols-1 gap-4">
-                <Textarea {...register('permanentAddress.line1')} placeholder="Address line 1" className="uppercase" />
-                <Input {...register('permanentAddress.line2')} placeholder="Address line 2" className="uppercase" />
-                <div className="grid grid-cols-2 gap-4">
-                  <Input {...register('permanentAddress.city')} placeholder="City" className="uppercase" />
-                  <Input {...register('permanentAddress.state')} placeholder="State" className="uppercase" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <Input {...register('permanentAddress.pincode')} placeholder="Pincode" />
-                  <Input {...register('permanentAddress.country')} placeholder="Country" className="uppercase" />
-                </div>
-              </div>
-            </Card>
-
-            <Card className="gap-4 p-6">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
-                <h2 className="text-base font-semibold text-foreground">Local address</h2>
-                <CheckboxRow label="Same as permanent?" checked={sameAsPermanent} onChange={onToggleSameAsPermanent} />
-              </div>
-              <div className="grid grid-cols-1 gap-4">
-                <Textarea
-                  {...register('localAddress.line1')}
-                  placeholder="Address line 1"
-                  disabled={sameAsPermanent}
-                  value={sameAsPermanent ? permanentAddress?.line1 : undefined}
-                  className="uppercase disabled:opacity-50"
-                />
-                <Input
-                  {...register('localAddress.line2')}
-                  placeholder="Address line 2"
-                  disabled={sameAsPermanent}
-                  value={sameAsPermanent ? permanentAddress?.line2 : undefined}
-                  className="uppercase disabled:opacity-50"
-                />
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    {...register('localAddress.city')}
-                    placeholder="City"
-                    disabled={sameAsPermanent}
-                    value={sameAsPermanent ? permanentAddress?.city : undefined}
-                    className="uppercase disabled:opacity-50"
-                  />
-                  <Input
-                    {...register('localAddress.state')}
-                    placeholder="State"
-                    disabled={sameAsPermanent}
-                    value={sameAsPermanent ? permanentAddress?.state : undefined}
-                    className="uppercase disabled:opacity-50"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <Input
-                    {...register('localAddress.pincode')}
-                    placeholder="Pincode"
-                    disabled={sameAsPermanent}
-                    value={sameAsPermanent ? permanentAddress?.pincode : undefined}
-                    className="disabled:opacity-50"
-                  />
-                  <Input
-                    {...register('localAddress.country')}
-                    placeholder="Country"
-                    disabled={sameAsPermanent}
-                    value={sameAsPermanent ? permanentAddress?.country : undefined}
-                    className="uppercase disabled:opacity-50"
-                  />
-                </div>
-              </div>
-            </Card>
+          {text('phone', 'Phone')}
+          {text('emergencyContact', 'Emergency contact number')}
+          {text('instagramId', 'Instagram ID', { upper: true })}
+          {text('dob', 'Date of birth', { type: 'date' })}
+          <div className="grid gap-1.5">
+            <Label className="text-xs text-muted-foreground">Blood group</Label>
+            <Controller
+              control={control}
+              name="bloodGroup"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger className={bad('bloodGroup')}>
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BLOOD_GROUPS.map((bg) => (
+                      <SelectItem key={bg} value={bg}>
+                        {bg}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
+          <div className="grid gap-1.5">
+            <Label className="text-xs text-muted-foreground">Marital status</Label>
+            <Controller
+              control={control}
+              name="maritalStatus"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger className={bad('maritalStatus')}>
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="single">Single</SelectItem>
+                    <SelectItem value="married">Married</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </div>
+          {values.maritalStatus === 'married' && text('anniversaryDate', 'Anniversary date', { type: 'date' })}
+          {isAdmin && text('panNumber', 'PAN number', { upper: true })}
+          {isAdmin && text('aadharNumber', 'Aadhar number')}
+        </fieldset>
+      </Section>
 
-          {/* Onboarding Checklist */}
-          <Card className="gap-6 p-6">
-            <SectionTitle>Onboarding checklist</SectionTitle>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      {/* ---- Employment details */}
+      <Section title="Employment details" open={sections.isOpen('employment')} onToggle={() => sections.toggle('employment')} badge={<MissingBadge count={missingIn('employment')} />}>
+        <fieldset disabled={!canEditDetails} className="grid gap-5">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">Designation (Organisation chart)</Label>
               <Controller
                 control={control}
-                name="biometricVerificationAdded"
+                name="designationNode"
                 render={({ field }) => (
-                  <CheckboxRow label="Biometric verification added" checked={field.value} onChange={field.onChange} />
+                  <Select value={field.value || undefined} onValueChange={field.onChange} disabled={!isAdmin || !boxes.length}>
+                    <SelectTrigger className={bad('designation')}>
+                      <SelectValue placeholder={employee.designation ? `${employee.designation} (not in the chart)` : 'Choose their box'} />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-72">
+                      {boxes.map((b) => (
+                        <SelectItem key={b._id} value={b._id}>
+                          {b.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
               />
+              <p className="text-[11px] text-muted-foreground">
+                {heldNode
+                  ? heldNode.title.trim().toUpperCase() !== (employee.designation ?? '').trim().toUpperCase()
+                    ? `Saved as “${employee.designation}”. A change goes through a promotion.`
+                    : 'A change goes through a promotion (with the letter).'
+                  : 'Not placed in the Organisation chart yet — choosing a box places them in it (with the promotion letter).'}
+              </p>
+            </div>
+            {text('department', 'Department', { upper: true })}
+            {text('workLocation', 'Work location', { upper: true })}
+            <div className="grid grid-cols-2 gap-4">
+              {text('workingHoursStart', 'Shift start', { type: 'time' })}
+              {text('workingHoursEnd', 'Shift end', { type: 'time' })}
+            </div>
+            {text('dateOfHiring', 'Date of hiring', { type: 'date' })}
+            {text('dateOfJoining', 'Date of joining', { type: 'date' })}
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">Date of last promotion</Label>
+              <div className="flex h-10 items-center rounded-md border border-dashed border-border bg-secondary/30 px-3 text-sm text-foreground" title="Set when a promotion letter is attached — nobody can edit it">
+                {employee.lastPromotionAt ? fmtDay(employee.lastPromotionAt) : 'No promotion yet'}
+              </div>
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">Employment type</Label>
               <Controller
                 control={control}
-                name="companyLoginAdded"
+                name="employmentType"
                 render={({ field }) => (
-                  <CheckboxRow label="Gotofriend12345 log in?" checked={field.value} onChange={field.onChange} />
-                )}
-              />
-              <Controller
-                control={control}
-                name="officePhoneAdded"
-                render={({ field }) => (
-                  <CheckboxRow label="Goto office phone number added?" checked={field.value} onChange={field.onChange} />
-                )}
-              />
-              <Controller
-                control={control}
-                name="personalPhoneAdded"
-                render={({ field }) => (
-                  <CheckboxRow label="Goto personal phone number added?" checked={field.value} onChange={field.onChange} />
-                )}
-              />
-              <Controller
-                control={control}
-                name="assetAccessAdded"
-                render={({ field }) => (
-                  <CheckboxRow label="Access of asset (mails + grps) added?" checked={field.value} onChange={field.onChange} />
-                )}
-              />
-              <Controller
-                control={control}
-                name="updatedIn12345"
-                render={({ field }) => (
-                  <CheckboxRow label="Updated in 12345?" checked={field.value} onChange={field.onChange} />
-                )}
-              />
-              <Controller
-                control={control}
-                name="probationCompleted"
-                render={({ field }) => (
-                  <CheckboxRow
-                    label="Probation completed? (needs a letter · unlocks the one paid off a month)"
-                    checked={field.value}
-                    // Ticking it opens the letter dialog — it is only saved
-                    // with a letter. Unticking is a plain correction.
-                    onChange={(checked) => (checked ? setProbationOpen(true) : field.onChange(false))}
-                  />
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="full-time">Full-time</SelectItem>
+                      <SelectItem value="part-time">Part-time</SelectItem>
+                      <SelectItem value="contract">Contract</SelectItem>
+                      <SelectItem value="intern">Intern</SelectItem>
+                      <SelectItem value="hybrid">Hybrid</SelectItem>
+                    </SelectContent>
+                  </Select>
                 )}
               />
             </div>
-          </Card>
-
-          {/* Offboarding — only meaningful once status is set to Offboarded */}
-          {status === 'offboarded' && (
-            <Card className="gap-6 p-6">
-              <SectionTitle>Offboarding</SectionTitle>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="endDate" className="text-xs text-muted-foreground">Last working day *</Label>
-                  <Input id="endDate" type="date" {...register('endDate')} />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="reasonForLeaving" className="text-xs text-muted-foreground">Reason for leaving</Label>
-                  <Input id="reasonForLeaving" className="uppercase" {...register('reasonForLeaving')} />
-                </div>
+            <div className="grid gap-1.5">
+              <Label className="text-xs text-muted-foreground">Status</Label>
+              <Controller
+                control={control}
+                name="status"
+                render={({ field }) => (
+                  <Select
+                    value={field.value}
+                    onValueChange={(value) => {
+                      // Off-boarding goes through its confirmation (last working day etc.).
+                      if (value === 'offboarded' && employee.status !== 'offboarded') {
+                        setOffboardOpen(true)
+                        return
+                      }
+                      field.onChange(value)
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="draft">Draft</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="offboarded">Offboarded</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="companyEmail" className="text-xs text-muted-foreground">
+                Company mail ID
+              </Label>
+              <Input id="companyEmail" type="email" className={cn('normal-case', bad('companyEmail'))} {...register('companyEmail')} />
+            </div>
+            {isAdmin && (
+              <div className="grid gap-1.5">
+                <Label htmlFor="companyEmailPassword" className="text-xs text-muted-foreground">
+                  Company mail password
+                </Label>
+                <SecretInput id="companyEmailPassword" className={bad('companyEmailPassword')} {...register('companyEmailPassword')} />
               </div>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <Controller
-                  control={control}
-                  name="removedFromGroupsAndReels"
-                  render={({ field }) => (
-                    <CheckboxRow label="Removed from groups + Go-To Reels" checked={field.value} onChange={field.onChange} />
-                  )}
-                />
-                <Controller
-                  control={control}
-                  name="mailDeactivated"
-                  render={({ field }) => <CheckboxRow label="Mail deactivated" checked={field.value} onChange={field.onChange} />}
-                />
-              </div>
-            </Card>
-          )}
+            )}
+          </div>
 
-          {/* Compensation & IDs — admin-only */}
+          <Controller
+            control={control}
+            name="worksFromHome"
+            render={({ field }) => (
+              <CheckboxRow
+                label="Work from home"
+                checked={field.value}
+                onChange={field.onChange}
+                info={
+                  <>
+                    A working day with no scans is marked Work From Home. Any scan, and the day is marked from the scans as usual. It counts from the day it is ticked — earlier
+                    days keep what they have.
+                    {employee.worksFromHome && employee.worksFromHomeSince ? ` Working from home since ${fmtDay(employee.worksFromHomeSince)}.` : ''}
+                  </>
+                }
+              />
+            )}
+          />
+
           {isAdmin && (
-            <Card className="gap-6 p-6">
-              <SectionTitle>Compensation & identification</SectionTitle>
-              <div className="grid grid-cols-1 gap-6 md:grid-cols-4">
+            <div className="grid gap-4 rounded-xl border border-border bg-secondary/20 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Salary</p>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div className="grid gap-1.5">
-                  <Label htmlFor="employeeCode" className="text-xs text-muted-foreground">Code (biometric device PIN)</Label>
-                  <Input id="employeeCode" className="uppercase" {...register('employeeCode')} />
+                  <Label htmlFor="monthlyPay" className="text-xs text-muted-foreground">
+                    Monthly pay
+                  </Label>
+                  <Input id="monthlyPay" type="number" step="0.01" className={bad('monthlyPay')} {...register('monthlyPay', { onChange: (e) => linkPay('monthlyPay', e.target.value) })} />
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="ctcAnnual" className="text-xs text-muted-foreground">Annual CTC</Label>
-                  <Input id="ctcAnnual" type="number" {...register('ctcAnnual')} />
+                  <Label htmlFor="ctcAnnual" className="text-xs text-muted-foreground">
+                    Annual CTC (monthly × 12)
+                  </Label>
+                  <Input id="ctcAnnual" type="number" step="0.01" className={bad('ctcAnnual')} {...register('ctcAnnual', { onChange: (e) => linkPay('ctcAnnual', e.target.value) })} />
                 </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="monthlyPay" className="text-xs text-muted-foreground">Monthly pay</Label>
-                  <Input id="monthlyPay" type="number" {...register('monthlyPay')} />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="panNumber" className="text-xs text-muted-foreground">PAN number</Label>
-                  <Input id="panNumber" className="uppercase" {...register('panNumber')} />
-                </div>
+                {text('payDate', 'Pay date (day of month)', { type: 'number' })}
+              </div>
               {(employee.salaryHistory?.length ?? 0) > 0 && (
-                <div className="rounded-lg bg-secondary/30 p-3 md:col-span-4 text-xs text-muted-foreground">
+                <div className="rounded-lg bg-card p-3 text-xs text-muted-foreground">
                   <p className="mb-1 font-semibold text-foreground">Salary changes</p>
                   {[...(employee.salaryHistory ?? [])]
                     .sort((a, b) => b.effectiveFrom.localeCompare(a.effectiveFrom))
                     .map((c) => (
                       <p key={c.effectiveFrom + String(c.changedAt)}>
-                        From {new Date(c.effectiveFrom).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })}: ₹
-                        {(c.previousMonthlyPay ?? 0).toLocaleString('en-IN')} → ₹{(c.monthlyPay ?? 0).toLocaleString('en-IN')} a month
+                        From {new Date(c.effectiveFrom).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })}: ₹{(c.previousMonthlyPay ?? 0).toLocaleString('en-IN')} → ₹
+                        {(c.monthlyPay ?? 0).toLocaleString('en-IN')} a month
                       </p>
                     ))}
-                  <p className="mt-1">Changing the salary asks for the promotion letter and the month it starts from.</p>
                 </div>
               )}
-                <div className="grid gap-1.5">
-                  <Label htmlFor="aadharNumber" className="text-xs text-muted-foreground">Aadhar number</Label>
-                  <Input id="aadharNumber" {...register('aadharNumber')} />
+              {(employee.promotions?.length ?? 0) > 0 && (
+                <div className="rounded-lg bg-card p-3 text-xs text-muted-foreground">
+                  <p className="mb-1 font-semibold text-foreground">Promotions</p>
+                  {[...(employee.promotions ?? [])]
+                    .sort((a, b) => b.at.localeCompare(a.at))
+                    .map((p) => (
+                      <p key={p.at}>
+                        {fmtDay(p.at)}:{' '}
+                        {p.designationFrom !== p.designationTo ? `${p.designationFrom || '—'} → ${p.designationTo}` : p.designationTo}
+                        {p.salaryChanged ? ' · new salary' : ''}
+                      </p>
+                    ))}
                 </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="bankName" className="text-xs text-muted-foreground">Bank name</Label>
-                  <Input id="bankName" className="uppercase" {...register('bankName')} />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="bankAccountNumber" className="text-xs text-muted-foreground">Bank A/C number</Label>
-                  <Input id="bankAccountNumber" {...register('bankAccountNumber')} />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="bankIFSC" className="text-xs text-muted-foreground">IFSC code</Label>
-                  <Input id="bankIFSC" className="uppercase" {...register('bankIFSC')} />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="payDate" className="text-xs text-muted-foreground">Pay date (day of month)</Label>
-                  <Input id="payDate" type="number" min="1" max="31" {...register('payDate')} />
-                </div>
-              </div>
+              )}
+              <p className="text-xs text-muted-foreground">Changing the salary or designation asks for the promotion letter and the month it counts from.</p>
               <Controller
                 control={control}
                 name="excludeFromPayroll"
                 render={({ field }) => (
-                  <CheckboxRow
-                    label="Exclude from payroll (no salary slips, not on the master salary sheet)"
-                    checked={field.value}
-                    onChange={field.onChange}
-                  />
+                  <CheckboxRow label="Exclude from payroll" checked={field.value} onChange={field.onChange} info="No salary slips, and not on the master salary sheet." />
                 )}
               />
-            </Card>
-          )}
-
-          {/* Extra Details — freeform key/value pairs, like Render's env vars */}
-          <Card className="gap-6 p-6">
-            <SectionTitle>Extra details</SectionTitle>
-            <div className="space-y-3">
-              {extraDetails.fields.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  No extra details yet. Add anything that doesn't have its own field below.
-                </p>
-              )}
-              {extraDetails.fields.map((field, index) => {
-                // Mirrors backend/src/utils/extraDetailsCrypto.js#isPasswordKey
-                // exactly — this is the one field in the whole app exempted
-                // from the global uppercase display rule (see index.css),
-                // since a password needs to read back in its real case.
-                const isPasswordKey = /password/i.test(watch(`extraDetails.${index}.key`) || '')
-                return (
-                  <div key={field.id} className="flex items-center gap-3">
-                    <Input
-                      placeholder="Key"
-                      {...register(`extraDetails.${index}.key` as const)}
-                      className="flex-1 font-mono"
-                    />
-                    <Input
-                      placeholder="Value"
-                      {...register(`extraDetails.${index}.value` as const)}
-                      className={cn('flex-1 font-mono', isPasswordKey && 'normal-case')}
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => extraDetails.remove(index)}
-                      className="shrink-0 text-muted-foreground hover:text-destructive"
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </div>
-                )
-              })}
             </div>
-            <Button type="button" variant="outline" onClick={() => extraDetails.append({ key: '', value: '' })}>
+          )}
+        </fieldset>
+      </Section>
+
+      {/* ---- Onboarding details */}
+      <Section title="Onboarding details" open={sections.isOpen('onboarding')} onToggle={() => sections.toggle('onboarding')} badge={<MissingBadge count={missingIn('onboarding')} />}>
+        <fieldset disabled={!canEditDetails} className="grid gap-4">
+          <div className="grid gap-1.5 md:max-w-xs">
+            <Label htmlFor="employeeCode" className="text-xs text-muted-foreground">
+              Biometric PIN (device code)
+            </Label>
+            <Input id="employeeCode" className={cn('uppercase', bad('employeeCode'))} disabled={!isAdmin} {...register('employeeCode')} />
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {(
+              [
+                ['biometricVerificationAdded', 'Biometric verification added'],
+                ['companyLoginAdded', 'Gotofriend12345 log in?'],
+                ['officePhoneAdded', 'Goto office phone number added?'],
+                ['personalPhoneAdded', 'Goto personal phone number added?'],
+                ['assetAccessAdded', 'Access of asset (mails + grps) added?'],
+                ['updatedIn12345', 'Updated in 12345?'],
+              ] as const
+            ).map(([name, label]) => (
+              <Controller key={name} control={control} name={name} render={({ field }) => <CheckboxRow label={label} checked={field.value} onChange={field.onChange} />} />
+            ))}
+            <Controller
+              control={control}
+              name="probationCompleted"
+              render={({ field }) => (
+                <CheckboxRow
+                  label="Probation completed"
+                  checked={field.value}
+                  // Ticking it asks for the letter; unticking is a plain correction.
+                  onChange={(checked) => (checked ? setProbationOpen(true) : field.onChange(false))}
+                  info="Needs the letter confirming probation is over (it's saved in their documents). Completing probation unlocks the one paid leave a month."
+                />
+              )}
+            />
+          </div>
+        </fieldset>
+      </Section>
+
+      {/* ---- Offboarding — once they're off-boarded */}
+      {status === 'offboarded' && (
+        <Section title="Offboarding" open={sections.isOpen('offboarding')} onToggle={() => sections.toggle('offboarding')} badge={<MissingBadge count={missingIn('offboarding')} />}>
+          <fieldset disabled={!canEditDetails} className="grid gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {text('endDate', 'Last working day', { type: 'date' })}
+              {text('reasonForLeaving', 'Reason for leaving', { upper: true })}
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Controller
+                control={control}
+                name="removedFromGroupsAndReels"
+                render={({ field }) => <CheckboxRow label="Removed from groups + Go-To Reels" checked={field.value} onChange={field.onChange} />}
+              />
+              <Controller control={control} name="mailDeactivated" render={({ field }) => <CheckboxRow label="Mail deactivated" checked={field.value} onChange={field.onChange} />} />
+            </div>
+          </fieldset>
+        </Section>
+      )}
+
+      {/* ---- Address */}
+      <Section title="Address" open={sections.isOpen('address')} onToggle={() => sections.toggle('address')} badge={<MissingBadge count={missingIn('address')} />}>
+        <fieldset disabled={!canEditDetails} className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="grid content-start gap-3">
+            <p className="text-sm font-semibold text-foreground">Permanent address</p>
+            <Textarea {...register('permanentAddress.line1')} placeholder="Address line 1" className={cn('uppercase', bad('permanentAddress.line1'))} />
+            <Input {...register('permanentAddress.line2')} placeholder="Address line 2" className="uppercase" />
+            <div className="grid grid-cols-2 gap-3">
+              <Input {...register('permanentAddress.city')} placeholder="City" className={cn('uppercase', bad('permanentAddress.city'))} />
+              <Input {...register('permanentAddress.state')} placeholder="State" className={cn('uppercase', bad('permanentAddress.state'))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Input {...register('permanentAddress.pincode')} placeholder="Pincode" className={bad('permanentAddress.pincode')} />
+              <Input {...register('permanentAddress.country')} placeholder="Country" className={cn('uppercase', bad('permanentAddress.country'))} />
+            </div>
+          </div>
+          <div className="grid content-start gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-foreground">Local address</p>
+              <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-muted-foreground">
+                <input type="checkbox" checked={sameAsPermanent} onChange={(e) => onToggleSameAsPermanent(e.target.checked)} className="size-4 accent-primary" />
+                Same as permanent
+              </label>
+            </div>
+            {(['line1', 'line2', 'city', 'state', 'pincode', 'country'] as const).map((part) => {
+              const props = {
+                ...register(`localAddress.${part}`),
+                placeholder: { line1: 'Address line 1', line2: 'Address line 2', city: 'City', state: 'State', pincode: 'Pincode', country: 'Country' }[part],
+                disabled: sameAsPermanent || !canEditDetails,
+                value: sameAsPermanent ? permanentAddress?.[part] : undefined,
+                className: cn(part !== 'pincode' && 'uppercase', 'disabled:opacity-50', part !== 'line2' && bad(`localAddress.${part}`)),
+              }
+              return part === 'line1' ? <Textarea key={part} {...props} /> : <Input key={part} {...props} />
+            })}
+          </div>
+        </fieldset>
+      </Section>
+
+      {/* ---- Bank details */}
+      {isAdmin && (
+        <Section title="Bank details" open={sections.isOpen('bank')} onToggle={() => sections.toggle('bank')} badge={<MissingBadge count={missingIn('bank')} />}>
+          <fieldset disabled={!canEditDetails} className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {text('bankName', 'Bank name', { upper: true })}
+            {text('bankAccountNumber', 'Bank A/C number')}
+            {text('bankIFSC', 'IFSC code', { upper: true })}
+          </fieldset>
+        </Section>
+      )}
+
+      {/* ---- My devices */}
+      <Section title={isOwnRecord ? 'My devices' : 'Devices'} open={sections.isOpen('devices')} onToggle={() => sections.toggle('devices')}>
+        <EmployeeDevices employeeId={employeeId} isOwnRecord={isOwnRecord} />
+      </Section>
+
+      {/* ---- Generated documents */}
+      {(canGenerateDocs || isOwnRecord) && (
+        <Section
+          title="Generated documents"
+          open={sections.isOpen('generated') || toSign > 0}
+          onToggle={() => sections.toggle('generated')}
+          flat
+          badge={toSign > 0 ? <span className="rounded-full bg-primary/12 px-2 py-0.5 text-[11px] font-semibold text-primary">{toSign} to sign</span> : undefined}
+        >
+          {canGenerateDocs ? (
+            <GeneratedDocumentsList employeeId={employeeId} />
+          ) : (
+            <div className="grid gap-4">
+              <MyDocumentsToSign employeeId={employeeId} />
+              <MySignedDocumentsCard
+                employeeId={employeeId}
+                exclude={myLatest.filter((x) => x.status === 'signed' || x.status === 'issued').map((x) => x.document)}
+                hideWhenEmpty={myLatest.length > 0}
+              />
+            </div>
+          )}
+        </Section>
+      )}
+
+      {/* ---- Requested documents */}
+      {canRequestDocs && (
+        <Section title="Requested documents" open={sections.isOpen('requested')} onToggle={() => sections.toggle('requested')}>
+          <div className="grid gap-4">
+            <UploadedDocumentsList employeeId={employeeId} />
+            <RequestHistoryTable employeeId={employeeId} employeeName={fullName} employeePhone={employee.phone} />
+          </div>
+        </Section>
+      )}
+
+      {/* ---- Salary slips */}
+      {(canViewSalary || isOwnRecord) && (
+        <Section title="Salary slips" open={sections.isOpen('salary')} onToggle={() => sections.toggle('salary')} flat>
+          <SalarySlipsList employeeId={employeeId} employeeName={fullName} />
+        </Section>
+      )}
+
+      {/* ---- Extra details — freeform key/value pairs */}
+      <Section title="Extra details" open={sections.isOpen('extra')} onToggle={() => sections.toggle('extra')}>
+        <fieldset disabled={!canEditDetails} className="grid gap-3">
+          {extraDetails.fields.length === 0 && <p className="text-sm text-muted-foreground">No extra details yet. Add anything that doesn't have its own field.</p>}
+          {extraDetails.fields.map((field, index) => {
+            // A password reads back in its real case (see extraDetailsCrypto.js).
+            const isPasswordKey = /password/i.test(values.extraDetails?.[index]?.key || '')
+            return (
+              <div key={field.id} className="flex items-center gap-3">
+                <Input placeholder="Key" {...register(`extraDetails.${index}.key` as const)} className="flex-1 font-mono" />
+                <Input placeholder="Value" {...register(`extraDetails.${index}.value` as const)} className={cn('flex-1 font-mono', isPasswordKey && 'normal-case')} />
+                <Button type="button" variant="ghost" size="icon" onClick={() => extraDetails.remove(index)} className="shrink-0 text-muted-foreground hover:text-destructive">
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            )
+          })}
+          {canEditDetails && (
+            <Button type="button" variant="outline" className="justify-self-start" onClick={() => extraDetails.append({ key: '', value: '' })}>
               <Plus className="size-4" />
               Add variable
             </Button>
-          </Card>
+          )}
         </fieldset>
+      </Section>
 
-        {/* Form Action Buttons — Save needs edit_employee_details, Delete stays admin-only */}
-        {(canEditDetails || isAdmin) && (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {canEditDetails && (
-              <Button type="submit" size="lg" disabled={updateEmployee.isPending}>
-                {updateEmployee.isPending && <Loader2 className="size-4 animate-spin" />}
-                Save changes
-              </Button>
-            )}
-            {isAdmin && (
-              <Button type="button" size="lg" variant="destructive" onClick={onDelete} disabled={deleteEmployee.isPending}>
-                {deleteEmployee.isPending && <Loader2 className="size-4 animate-spin" />}
-                Delete employee
-              </Button>
-            )}
-          </div>
-        )}
-      </form>
+      {/* ---- Attendance */}
+      <Section title="Attendance" open={sections.isOpen('attendance')} onToggle={() => sections.toggle('attendance')}>
+        <div className="grid gap-4">
+          <AttendancePair employeeId={employeeId} side />
+          {canSeeWarnings && <NotInformedWarningsCard employeeId={employeeId} />}
+        </div>
+      </Section>
 
-      {/* Recruitment Details — carried over from the application, only present on employees hired through the pipeline */}
+      {/* ---- Recruitment details — only for people hired through the pipeline */}
       {employee.sourceApplicant && (
-        <Card className="gap-6 p-6">
-          <SectionTitle>Recruitment details</SectionTitle>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <Field label="Experience" value={employee.experienceLevel} />
-            <Field label="Availability at application" value={employee.availability} />
-            <Field label="Own laptop?" value={employee.hasLaptop === undefined ? undefined : employee.hasLaptop ? 'Yes' : 'No'} />
-            <Field label="Was willing to relocate?" value={employee.willingToRelocate === undefined ? undefined : employee.willingToRelocate ? 'Yes' : 'No'} />
-            <Field label="How they found us" value={employee.howDidYouFindUs} />
-            <Field label="Work style preference" value={employee.workStylePreference} />
-            <Field label="Salary at time of application" value={employee.currentSalary} />
-            <Field label="Expected salary" value={employee.expectedSalary} />
-          </div>
-          <div className="grid grid-cols-1 gap-6">
+        <Section title="Recruitment details" open={sections.isOpen('recruitment')} onToggle={() => sections.toggle('recruitment')}>
+          <div className="grid gap-6">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <Field label="Experience" value={employee.experienceLevel} />
+              <Field label="Availability at application" value={employee.availability} />
+              <Field label="Own laptop?" value={employee.hasLaptop === undefined ? undefined : employee.hasLaptop ? 'Yes' : 'No'} />
+              <Field label="Was willing to relocate?" value={employee.willingToRelocate === undefined ? undefined : employee.willingToRelocate ? 'Yes' : 'No'} />
+              <Field label="How they found us" value={employee.howDidYouFindUs} />
+              <Field label="Work style preference" value={employee.workStylePreference} />
+              <Field label="Salary at time of application" value={employee.currentSalary} />
+              <Field label="Expected salary" value={employee.expectedSalary} />
+            </div>
             <Field label="Why they wanted to join" value={employee.whyJoinCompany} />
             <Field label="Why they were hired" value={employee.whyHireYou} />
             <Field label="Why they were selected" value={employee.selectionNotes} />
-          </div>
-          {employee.resumes && employee.resumes.length > 0 && (
-            <div className="pt-2">
-              <p className="mb-2 text-xs text-muted-foreground">Resume file(s)</p>
+            {employee.resumes && employee.resumes.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {employee.resumes.map((resume, i) => (
                   <a
@@ -1078,34 +1121,17 @@ function EmployeeDetailForm({ employee, employeeId }: { employee: Employee; empl
                   </a>
                 ))}
               </div>
-            </div>
-          )}
-        </Card>
+            )}
+          </div>
+        </Section>
       )}
 
-      <div className="grid gap-8">
-        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <AttendanceSummaryCard employeeId={employeeId} compact />
-          <AttendanceCalendar employeeId={employeeId} compact />
-        </div>
-        {canSeeWarnings && <NotInformedWarningsCard employeeId={employeeId} />}
-        {(canViewSalary || isOwnRecord) && (
-          <SalarySlipsList employeeId={employeeId} employeeName={`${employee.firstName} ${employee.lastName ?? ''}`} />
-        )}
-        {canGenerateDocs && <GeneratedDocumentsList employeeId={employeeId} />}
-        {isOwnRecord && !canGenerateDocs && <MySignedDocumentsCard employeeId={employeeId} />}
-        {canRequestDocs && (
-          <>
-            <UploadedDocumentsList employeeId={employeeId} />
-            <RequestHistoryTable
-              employeeId={employeeId}
-              employeeName={`${employee.firstName} ${employee.lastName ?? ''}`.trim()}
-              employeePhone={employee.phone}
-            />
-          </>
-        )}
-        {!isOwnRecord && <ActivityTimeline employeeId={employeeId} />}
-      </div>
+      {/* ---- Activity — admin only */}
+      {isAdmin && (
+        <Section title="Activity" open={sections.isOpen('activity')} onToggle={() => sections.toggle('activity')} flat>
+          <ActivityTimeline employeeId={employeeId} />
+        </Section>
+      )}
     </div>
   )
 }

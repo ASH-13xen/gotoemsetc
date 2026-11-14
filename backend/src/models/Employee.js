@@ -177,6 +177,8 @@ const employeeSchema = new Schema(
     lastName: { type: String, trim: true },
     personalEmail: { type: String, trim: true, lowercase: true },
     phone: { type: String, trim: true },
+    // Who to call in an emergency (the profile's Personal details).
+    emergencyContact: { type: String, trim: true },
     instagramId: { type: String, trim: true },
     permanentAddress: addressSchema,
     localAddress: addressSchema,
@@ -190,6 +192,10 @@ const employeeSchema = new Schema(
     fatherName: String,
 
     designation: { type: String, required: true, trim: true },
+    // The company mailbox and its password (encrypted at rest, read back
+    // decrypted — like a password in Extra details).
+    companyEmail: { type: String, trim: true, lowercase: true },
+    companyEmailPassword: { type: String },
     department: String,
     dateOfJoining: Date,
     // Set when this record is created by hiring an applicant — the date the
@@ -248,6 +254,24 @@ const employeeSchema = new Schema(
     // (kept in the employee's documents) and takes effect from a month, so
     // slips for earlier months keep the amount that applied then. See
     // employee.service.js#changeSalary and salaryCalculation.service.js#salaryForPeriod.
+    // Promotions — a new salary and/or designation, always with the promotion
+    // letter. Set only by the promotion itself (employee.service.js#promote):
+    // the date is the day the letter was attached, and nobody can edit it.
+    lastPromotionAt: { type: Date, default: null },
+    promotions: [
+      {
+        _id: false,
+        at: { type: Date, required: true },
+        designationFrom: String,
+        designationTo: String,
+        nodeFrom: { type: Schema.Types.ObjectId, ref: 'OrgNode' },
+        nodeTo: { type: Schema.Types.ObjectId, ref: 'OrgNode' },
+        salaryChanged: { type: Boolean, default: false },
+        effectiveFrom: Date,
+        letter: { type: Schema.Types.ObjectId, ref: 'UploadedDocument' },
+        by: { type: Schema.Types.ObjectId, ref: 'User' },
+      },
+    ],
     salaryHistory: [
       {
         _id: false,
@@ -323,5 +347,24 @@ employeeSchema.index({ firstName: 'text', lastName: 'text', personalEmail: 'text
 // MAIL PASSWORD") is encrypted at rest and transparently decrypted on read
 // — see utils/extraDetailsCrypto.js.
 attachExtraDetailsEncryption(employeeSchema);
+
+// The company mailbox password: encrypted on every write, decrypted on read.
+{
+  const { encrypt, decrypt, isEncrypted } = require('../utils/secretCrypto');
+  const seal = (v) => (v && !isEncrypted(v) ? encrypt(v) : v);
+  const open = (doc) => {
+    if (doc && isEncrypted(doc.companyEmailPassword)) doc.companyEmailPassword = decrypt(doc.companyEmailPassword);
+  };
+  employeeSchema.pre('save', async function sealMailPassword() {
+    if (this.isModified('companyEmailPassword')) this.companyEmailPassword = seal(this.companyEmailPassword);
+  });
+  employeeSchema.pre('findOneAndUpdate', async function sealMailPasswordOnUpdate() {
+    const update = this.getUpdate() || {};
+    if (update.companyEmailPassword) update.companyEmailPassword = seal(update.companyEmailPassword);
+    if (update.$set && update.$set.companyEmailPassword) update.$set.companyEmailPassword = seal(update.$set.companyEmailPassword);
+  });
+  employeeSchema.post('find', (docs) => docs.forEach(open));
+  employeeSchema.post(['findOne', 'findOneAndUpdate'], open);
+}
 
 module.exports = model('Employee', employeeSchema);

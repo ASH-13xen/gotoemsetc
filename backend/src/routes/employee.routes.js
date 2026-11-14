@@ -71,6 +71,13 @@ router.post(
   validate(employeeValidator.changeSalary),
   employeeController.changeSalary
 );
+router.post(
+  '/:id/promotion',
+  requireAccess(ACCESS.EMS_ALL),
+  upload.single('letter'),
+  validate(employeeValidator.promote),
+  employeeController.promote
+);
 // Deletion — EMS-for-everyone (admin, CEO, HR); not a grantable permission.
 router.delete('/:id', requireAccess(ACCESS.EMS_ALL), validate(employeeValidator.getOrDelete), employeeController.remove);
 

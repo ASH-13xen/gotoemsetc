@@ -32,6 +32,12 @@ const changeSalary = asyncHandler(async (req, res) => {
   res.json({ employee: shapeForRole('Employee', employee, req.user) });
 });
 
+const promote = asyncHandler(async (req, res) => {
+  const employee = await employeeService.promote(req.params.id, req.body, req.file, req.user);
+  req.auditContext = { action: 'employee.promote', resourceType: 'Employee', resourceId: employee._id, metadata: req.body };
+  res.json({ employee: shapeForRole('Employee', employee, req.user) });
+});
+
 const birthdays = asyncHandler(async (req, res) => {
   const employees = await employeeService.listBirthdays();
   res.json({ employees });
@@ -112,4 +118,4 @@ const flagPeople = asyncHandler(async (req, res) => {
   res.json({ people: await employeeService.listFlagPeople(req.user) });
 });
 
-module.exports = { list, getById, birthdays, anniversaries, completeProbation, changeSalary, directory, create, update, remove, activity, addFlag, removeFlag, flagHistory, flagsGiven, flagPeople };
+module.exports = { list, getById, birthdays, anniversaries, completeProbation, changeSalary, promote, directory, create, update, remove, activity, addFlag, removeFlag, flagHistory, flagsGiven, flagPeople };
