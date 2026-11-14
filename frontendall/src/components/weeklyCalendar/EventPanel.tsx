@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   Ban,
@@ -35,6 +36,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/useAuth'
 import { featureOn } from '@/lib/access'
 import type { CalEvent, CalNote, CalPerson, Scope, WeeklyCategory } from '@/api/weeklyCalendar.api'
+import { listClients } from '@/api/clients.api'
 import {
   useAddNote,
   useCalEvent,
@@ -42,7 +44,9 @@ import {
   useDeleteNote,
   useInviteMore,
   useJoin,
+  useMarkMinutes,
   useNoteToTask,
+  useSetMeetingClient,
   useRemoveAttendee,
   useRespond,
   useSetSegments,
@@ -269,6 +273,8 @@ function EventPanelBody({ event, onClose, onDuplicate }: { event: CalEvent; onCl
       {!event.isPersonal && (event.segments?.length || event.canManage) ? (
         <AgendaSection event={event} members={members} isPast={isPast} upcomingInSeries={upcomingInSeries} />
       ) : null}
+
+      {!event.isPersonal && featureOn(user, 'TASK_MANAGEMENT') && (event.canNote || event.canManage) && <MeetingSection event={event} isPast={isPast} />}
 
       {event.canNote && <NotesSection event={event} members={members} viewerId={user?.id ?? ''} isAdmin={isAdmin} />}
 
@@ -570,6 +576,86 @@ function AgendaSection({ event, members, isPast, upcomingInSeries }: { event: Ca
 
 // ---------------------------------------------------------------------------
 
+// A meeting, for client work: the client it's about (everyone's time on it
+// then counts as that client's), the minutes marked done — after which its
+// action items become tickets — and the hours, logged by themselves for the
+// host and everyone who accepted once it ends.
+function MeetingSection({ event, isPast }: { event: CalEvent; isPast: boolean }) {
+  const mark = useMarkMinutes()
+  const setClient = useSetMeetingClient()
+  const { data: clients } = useQuery({ queryKey: ['task-clients', 'list'], queryFn: listClients, staleTime: 5 * 60_000 })
+  const people = 1 + (event.attendees ?? []).filter((a) => a.status === 'accepted').length
+  const hoursText = event.hoursLoggedAt
+    ? `Hours logged for everyone in it, as ${event.client ? `${event.clientName || 'the client'}'s` : 'internal'} time.`
+    : isPast
+      ? 'Its hours are being logged for the host and everyone who accepted.'
+      : `When it ends, ${people > 1 ? `its ${people} people get` : 'everyone in it gets'} the meeting's hours logged${event.client ? " as the client's time" : ''}.`
+  return (
+    <Sec title="Meeting">
+      <div className="grid gap-2 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="size-2.5 shrink-0 rounded-full bg-zinc-900 dark:bg-zinc-100" />
+          <span className="text-xs font-semibold text-muted-foreground">Client</span>
+          {event.canManage ? (
+            <select
+              value={event.client ?? ''}
+              disabled={setClient.isPending}
+              onChange={(e) =>
+                setClient
+                  .mutateAsync({ id: event._id, client: e.target.value || null })
+                  .then(() => toast.success(e.target.value ? 'Tagged with the client' : 'Client removed'))
+                  .catch((err) => toast.error(apiError(err, 'Could not set the client')))
+              }
+              className="h-8 min-w-0 flex-1 rounded-lg border border-border bg-background px-2 text-xs font-semibold"
+            >
+              <option value="">None — internal (overhead)</option>
+              {(clients ?? []).map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-xs font-bold">{event.clientName || 'None — internal'}</span>
+          )}
+        </div>
+
+        {event.momAt ? (
+          <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-300">
+            <CheckCircle2 className="size-3.5" />
+            Minutes done{event.momBy ? ` by ${event.momBy.name}` : ''} · {timeAgo(event.momAt)} — action items can become tickets.
+          </p>
+        ) : event.writesMinutes ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={mark.isPending}
+              onClick={() =>
+                mark
+                  .mutateAsync({ id: event._id })
+                  .then(() => toast.success('Minutes marked done'))
+                  .catch((err) => toast.error(apiError(err, 'Could not mark them done')))
+              }
+            >
+              {mark.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <ClipboardList className="size-3.5" />}
+              Minutes done
+            </Button>
+            <span className="text-[11px] text-muted-foreground">Then turn the action items into tickets.</span>
+          </div>
+        ) : (
+          <p className="text-[11px] text-muted-foreground">A Content Manager, the Team Lead, the CEO or admin marks the minutes done; then action items become tickets.</p>
+        )}
+
+        <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Clock3 className="size-3.5" />
+          {hoursText}
+        </p>
+      </div>
+    </Sec>
+  )
+}
+
 function NotesSection({ event, members, viewerId, isAdmin }: { event: CalEvent; members: CalPerson[]; viewerId: string; isAdmin: boolean }) {
   const add = useAddNote()
   const [kind, setKind] = useState<'note' | 'action'>('note')
@@ -655,6 +741,7 @@ function NoteCard({ event, note, canDelete, members }: { event: CalEvent; note: 
   const update = useUpdateNote()
   const remove = useDeleteNote()
   const toTask = useNoteToTask()
+  const [approver, setApprover] = useState('')
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState(note.text)
   const [showHistory, setShowHistory] = useState(false)
@@ -752,21 +839,39 @@ function NoteCard({ event, note, canDelete, members }: { event: CalEvent; note: 
             <span className="ml-auto flex items-center gap-1 rounded-lg bg-emerald-500/12 px-2 py-1 font-bold text-emerald-700 dark:text-emerald-300">
               <ClipboardList className="size-3" /> In Task Management
             </span>
-          ) : !tasksOn ? null : (
-            <button
-              type="button"
-              disabled={toTask.isPending || !note.assignee}
-              onClick={() =>
-                toTask
-                  .mutateAsync({ id: event._id, noteId: note._id })
-                  .then(() => toast.success(`Ticket raised for ${note.assignee?.name.split(' ')[0]}`))
-                  .catch((err) => toast.error(apiError(err, 'Could not raise the ticket')))
-              }
-              className="ml-auto flex items-center gap-1 rounded-lg bg-primary px-2 py-1 font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
-              title={note.assignee ? 'Raise a ticket for them in Task Management' : 'Pick who it is for first'}
-            >
-              <Ticket className="size-3" /> Raise ticket
-            </button>
+          ) : !tasksOn || !event.writesMinutes ? null : (
+            <span className="ml-auto flex flex-wrap items-center gap-1.5">
+              <select
+                value={approver}
+                disabled={!event.momAt}
+                onChange={(e) => setApprover(e.target.value)}
+                className="h-7 rounded-lg border border-border bg-background px-1.5 text-[11px] font-semibold"
+                title="Who approves and closes the ticket"
+              >
+                <option value="">Approver: me</option>
+                {members
+                  .filter((m) => m._id !== note.assignee?._id)
+                  .map((m) => (
+                    <option key={m._id} value={m._id}>
+                      Approver: {m.name}
+                    </option>
+                  ))}
+              </select>
+              <button
+                type="button"
+                disabled={toTask.isPending || !note.assignee || !event.momAt}
+                onClick={() =>
+                  toTask
+                    .mutateAsync({ id: event._id, noteId: note._id, approver: approver || undefined })
+                    .then(() => toast.success(`Ticket raised for ${note.assignee?.name.split(' ')[0]}`))
+                    .catch((err) => toast.error(apiError(err, 'Could not raise the ticket')))
+                }
+                className="flex items-center gap-1 rounded-lg bg-primary px-2 py-1 font-bold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+                title={!event.momAt ? 'Mark the minutes done first' : note.assignee ? 'Raise a General ticket for them in Task Management' : 'Pick who it is for first'}
+              >
+                <Ticket className="size-3" /> Raise ticket
+              </button>
+            </span>
           )}
         </div>
       )}

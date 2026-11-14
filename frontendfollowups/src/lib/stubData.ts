@@ -23,6 +23,12 @@ export function ticketStub(t: Ticket): StubData {
     waitingOnLabel: t.waitingOnLabel,
     nextStepLabel: t.nextStepLabel,
     waitingOn: t.waitingOn,
+    locked: t.locked,
+    typeColor: t.typeColor,
+    lineupLabel: t.parkedIn ? t.lineupLabel : null,
+    parkedIn: t.parkedIn,
+    scheduledFor: t.scheduledFor,
+    carriedOver: t.carriedOver,
   }
 }
 

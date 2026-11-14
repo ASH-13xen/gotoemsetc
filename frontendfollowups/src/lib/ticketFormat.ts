@@ -70,6 +70,14 @@ export function inkOn(hex: string | null | undefined) {
   return lum > 0.4 ? '#111827' : '#ffffff'
 }
 
+// A colour washed towards white — a locked ticket wears its type's colour faded.
+export function fade(hex: string | null | undefined, amount = 0.55) {
+  if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return '#d1d5db'
+  const n = parseInt(hex.slice(1), 16)
+  const mix = (c: number) => Math.round(c + (255 - c) * amount)
+  return `#${[(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => mix(c).toString(16).padStart(2, '0')).join('')}`
+}
+
 export function tint(hex: string | null | undefined, alpha = 0.12) {
   if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return 'transparent'
   const n = parseInt(hex.slice(1), 16)
@@ -93,4 +101,8 @@ export const RECORD_LABEL: Record<string, string> = {
   submitted_to_ceo: 'Submitted to the CEO',
   ceo_reviewed: 'Reviewed by the CEO',
   repeat_stopped: 'Stopped repeating',
+  started: 'Work started',
+  parked: 'Waiting in a lineup',
+  unparked: 'Out of the lineup',
+  hours: 'Hours',
 }

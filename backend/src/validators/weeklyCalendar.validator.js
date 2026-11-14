@@ -109,6 +109,10 @@ const addNote = {
 };
 
 const noteParams = { params: z.object({ id: objectId, noteId: objectId }) };
+// An action item as a General ticket: who approves it (else whoever raises it).
+const noteToTask = { params: z.object({ id: objectId, noteId: objectId }), body: z.object({ approver: objectId.optional() }).optional() };
+const minutes = { params: z.object({ id: objectId }), body: z.object({ client: objectId.nullable().optional() }).optional() };
+const meetingClient = { params: z.object({ id: objectId }), body: z.object({ client: objectId.nullable() }) };
 const updateNote = {
   ...noteParams,
   body: z.object({
@@ -140,6 +144,9 @@ module.exports = {
   segments,
   addNote,
   noteParams,
+  noteToTask,
+  minutes,
+  meetingClient,
   updateNote,
   copyWeek,
   publicToken,

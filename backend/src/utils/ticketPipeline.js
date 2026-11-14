@@ -6,6 +6,7 @@
 // colours the palette already has. Pink (sent back), red (rejected) and grey
 // (overdue) layer on top exactly as they do on the calendar.
 const cmsPipelines = require('../config/cmsPipelines');
+const wp = require('../config/workPipelines');
 const { CMS_STAGE_COLORS, TICKET_PIPELINE } = require('../config/constants');
 
 const P = TICKET_PIPELINE;
@@ -65,7 +66,14 @@ const ROLE_NAME = {
 // Who a step waits on, in words — "Social Media Manager", "Team Lead".
 function actorLabel(actor, ticket) {
   if (!actor) return null;
+  if (wp.isWorkPipeline(ticket?.pipeline) && actor.type === 'assignment') return wp.ROLE_LABEL[actor.field] || 'Assigned person';
   switch (actor.type) {
+    case 'planner':
+      return 'Content Manager, Team Lead or CEO';
+    case 'tl_ceo':
+      return 'Team Lead or CEO';
+    case 'approver':
+      return 'Approver';
     case 'raised_for':
       return 'Assignee';
     case 'raiser':
@@ -88,6 +96,7 @@ function actorLabel(actor, ticket) {
 }
 
 function stepsFor(ticket) {
+  if (wp.isWorkPipeline(ticket.pipeline)) return wp.PIPELINES[ticket.pipeline].steps;
   if (ticket.pipeline === P.SIMPLE) return SIMPLE_STEPS;
   if (ticket.pipeline === P.CUSTOM) {
     const custom = ticket.customSteps || [];
@@ -100,6 +109,7 @@ function stepsFor(ticket) {
 }
 
 function stepColor(ticket, key) {
+  if (wp.isWorkPipeline(ticket.pipeline)) return wp.PIPELINES[ticket.pipeline].steps.find((s) => s.key === key)?.color;
   if (ticket.pipeline === P.SIMPLE) return SIMPLE_COLORS[key];
   if (ticket.pipeline === P.CUSTOM) {
     if (key === 'created') return CMS_STAGE_COLORS.post.created;
@@ -109,6 +119,7 @@ function stepColor(ticket, key) {
 }
 
 function stepLabel(ticket, key) {
+  if (wp.isWorkPipeline(ticket.pipeline)) return wp.PIPELINES[ticket.pipeline].steps.find((s) => s.key === key)?.label || key;
   if (ticket.pipeline === P.CUSTOM) {
     if (key === 'created') return 'Raised';
     return (ticket.customSteps || []).find((s) => s.key === key)?.label || key;
@@ -138,6 +149,13 @@ function isTerminal(ticket) {
 // past due, else the step's own colour. A finished ticket keeps its final
 // colour.
 function colorFor(ticket, now = new Date()) {
+  if (wp.isWorkPipeline(ticket.pipeline)) {
+    if (ticket.isRejected) return wp.COLOR.rejected;
+    if (ticket.isSentBack) return wp.COLOR.changes;
+    // Locked or waiting in a lineup isn't overdue: nobody holds it.
+    if (!ticket.locked && !ticket.parkedIn && !isTerminal(ticket) && ticket.dueAt && new Date(ticket.dueAt) < now) return wp.COLOR.overdue;
+    return stepColor(ticket, ticket.stage) || wp.PIPELINES[ticket.pipeline].typeColor;
+  }
   if (ticket.isRejected) return CMS_STAGE_COLORS.rejected;
   if (ticket.isSentBack) return CMS_STAGE_COLORS.sent_back;
   if (!isTerminal(ticket) && ticket.dueAt && new Date(ticket.dueAt) < now) return CMS_STAGE_COLORS.overdue;
@@ -158,6 +176,8 @@ function trail(ticket) {
     color: stepColor(ticket, step.key),
     actorLabel: actorLabel(step.actor, ticket),
     terminal: Boolean(step.terminal),
+    approval: Boolean(step.approval),
+    lineupAfter: step.lineupAfter || null,
     reached: i <= idx,
     current: i === idx,
   }));
@@ -175,14 +195,25 @@ function catalogue() {
       actorLabel: actorLabel(s.actor, sample(pipeline)),
       terminal: Boolean(s.terminal),
     }));
+  const work = Object.entries(wp.PIPELINES).map(([key, p]) => ({
+    key,
+    name: p.name,
+    description: p.description,
+    typeColor: p.typeColor,
+    phases: p.phases || null,
+    steps: p.steps.map((s) => ({ key: s.key, label: s.label, color: s.color, actorLabel: actorLabel(s.actor, { pipeline: key }), terminal: Boolean(s.terminal), approval: Boolean(s.approval), lineupAfter: s.lineupAfter || null })),
+  }));
   return {
-    pipelines: [
-      { key: P.SIMPLE, name: 'Simple', description: 'A one-person job: they do it, you close it.', steps: describe(P.SIMPLE) },
-      { key: P.STORY, name: 'Story', description: "The content calendar's story steps and colours.", steps: describe(P.STORY) },
-      { key: P.POST, name: 'Post', description: "The content calendar's post steps and colours.", steps: describe(P.POST) },
-      { key: P.REEL, name: 'Reel', description: "The content calendar's reel steps and colours.", steps: describe(P.REEL) },
-      { key: P.CUSTOM, name: 'Custom', description: '2–5 steps of your own, each with a colour and a person.', steps: [] },
+    // What a new ticket can be raised on; the older tables only show tickets made on them.
+    pipelines: [...work, { key: P.CUSTOM, name: 'Custom', description: '2–5 steps of your own, each with a colour and a person.', steps: [] }],
+    legacyPipelines: [
+      { key: P.SIMPLE, name: 'Simple', steps: describe(P.SIMPLE) },
+      { key: P.STORY, name: 'Story (old)', steps: describe(P.STORY) },
+      { key: P.POST, name: 'Post (old)', steps: describe(P.POST) },
+      { key: P.REEL, name: 'Reel (old)', steps: describe(P.REEL) },
     ],
+    workColors: wp.COLOR,
+    lineups: wp.LINEUPS,
     overrides: {
       sent_back: CMS_STAGE_COLORS.sent_back,
       rejected: CMS_STAGE_COLORS.rejected,

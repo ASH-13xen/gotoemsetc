@@ -54,9 +54,41 @@ const ticketSchema = new Schema(
       shooter: { type: Schema.Types.ObjectId, ref: 'Employee' },
       editor: { type: Schema.Types.ObjectId, ref: 'Employee' },
       contentManager: { type: Schema.Types.ObjectId, ref: 'Employee' },
+      // Work pipelines: the Social Media Manager who approves posts and uploads.
+      smm: { type: Schema.Types.ObjectId, ref: 'Employee' },
     },
+    // General: who approves and closes it — the raiser unless someone is chosen.
+    approver: { type: Schema.Types.ObjectId, ref: 'Employee', default: null },
+    // General, when the approver is a login with no employee record (the CEO,
+    // admin): they approve it as that login.
+    approverUser: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    // Made from a client's plan and not started yet: on nobody's board, no
+    // time counting, until the Content Manager, Team Lead, CEO or admin
+    // starts it (and sets its due date).
+    locked: { type: Boolean, default: false, index: true },
+    // Waiting between phases, nobody holding it: 'shoot' | 'editing' |
+    // 'calendar' (lineups), 'posting' (scheduled — until parkedUntil), 'hold'.
+    parkedIn: { type: String, default: null, index: true },
+    parkedUntil: { type: Date, default: null },
+    parkNote: { type: String, trim: true },
+    // The posting date, once scheduled.
+    scheduledFor: { type: Date, default: null },
     customSteps: [customStepSchema],
 
+    // A client's deliverable (services/clientWork.service.js): made from the
+    // client's month — "Reel 3 of November" — and counted against it.
+    client: { type: Schema.Types.ObjectId, ref: 'TaskClient', default: null, index: true },
+    deliverable: {
+      clientMonth: { type: Schema.Types.ObjectId, ref: 'ClientMonth', default: null },
+      month: { type: String }, // "2026-11"
+      type: { type: String }, // reels | posts | stories | festiveStories
+      index: { type: Number },
+      // Taken off the plan when the month's count was lowered (never started).
+      removed: { type: Boolean, default: false },
+    },
+    // Still open when its month ended — it moves on, flagged, and still
+    // counts against the month it was for.
+    carriedOver: { type: Boolean, default: false },
     // Raised by a repeat (models/TicketRepeat.js) — each date's copy, and the first one.
     repeat: { type: Schema.Types.ObjectId, ref: 'TicketRepeat', default: null, index: true },
     raisedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
@@ -96,6 +128,7 @@ const ticketSchema = new Schema(
 
 ticketSchema.index({ status: 1, dueAt: 1 });
 ticketSchema.index({ raisedBy: 1, createdAt: -1 });
+ticketSchema.index({ 'deliverable.clientMonth': 1, 'deliverable.type': 1 });
 
 ticketSchema.virtual('code').get(function code() {
   return `TKT-${String(this.number).padStart(4, '0')}`;

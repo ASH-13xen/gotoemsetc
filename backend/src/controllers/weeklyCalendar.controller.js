@@ -110,7 +110,7 @@ const deleteNote = asyncHandler(async (req, res) => {
 });
 
 const noteToTask = asyncHandler(async (req, res) => {
-  const event = await weeklyCalendarService.noteToTask(viewer(req), req.params.id, req.params.noteId);
+  const event = await weeklyCalendarService.noteToTask(viewer(req), req.params.id, req.params.noteId, req.body || {});
   audit(req, 'weeklyCalendar.note.toTask', req.params.id, { noteId: req.params.noteId });
   res.json({ event });
 });
@@ -150,6 +150,8 @@ module.exports = {
   updateNote,
   deleteNote,
   noteToTask,
+  markMinutes: asyncHandler(async (req, res) => res.json({ event: await weeklyCalendarService.markMinutes(viewer(req), req.params.id, req.body || {}) })),
+  setMeetingClient: asyncHandler(async (req, res) => res.json({ event: await weeklyCalendarService.setMeetingClient(viewer(req), req.params.id, req.body || {}) })),
   copyWeek,
   publicInvite,
   publicRespond,

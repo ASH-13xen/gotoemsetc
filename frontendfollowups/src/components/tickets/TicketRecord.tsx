@@ -1,4 +1,4 @@
-import { ArrowRight, Eye, Link2, MessageSquare, Pencil, Repeat2, ShieldCheck, Send, Timer, UserRoundCog } from 'lucide-react'
+import { ArrowRight, Clock3, Eye, Link2, MessageSquare, PauseCircle, Pencil, PlayCircle, Repeat2, ShieldCheck, Send, Timer, Unlock, UserRoundCog } from 'lucide-react'
 import type { RecordEntry } from '@/api/tickets.api'
 import { RECORD_LABEL, fmtDateTime, fmtDuration, fmtStamp, inkOn } from '@/lib/ticketFormat'
 import { cn } from '@/lib/utils'
@@ -13,6 +13,10 @@ const ICON: Partial<Record<RecordEntry['type'], typeof Eye>> = {
   submitted_to_ceo: Send,
   ceo_reviewed: ShieldCheck,
   repeat_stopped: Repeat2,
+  started: Unlock,
+  parked: PauseCircle,
+  unparked: PlayCircle,
+  hours: Clock3,
 }
 
 const isDateLike = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)

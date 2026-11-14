@@ -31,12 +31,24 @@ router.post('/calendar/items/:id/advance', validate(v.calendarDecision), c.calen
 router.post('/calendar/items/:id/send-back', validate(v.calendarDecision), c.calendarSendBack);
 router.post('/calendar/items/:id/reject', validate(v.reason), c.calendarReject);
 
+// Work pipelines.
+router.post('/start', validate(v.startMany), c.startMany);
+router.get('/estimates', validate(v.estimates), c.estimates);
+router.post('/batch/advance', validate(v.advanceMany), c.advanceMany);
+router.get('/hours/pending', c.pendingHours);
+router.post('/hours/:id/confirm', validate(v.confirmHours), c.confirmHours);
+
 router.get('/', validate(v.list), c.list);
 router.post('/', validate(v.raise), c.raise);
 router.post('/repeats/:id/stop', validate(v.stopRepeat), c.stopRepeat);
 router.get('/:id', validate(v.idParam), c.get);
 router.patch('/:id', validate(v.edit), c.edit);
-router.post('/:id/advance', validate(v.note), c.advance);
+router.post('/:id/advance', validate(v.advance), c.advance);
+router.get('/:id/estimate', validate(v.idParam), c.estimate);
+router.post('/:id/start', validate(v.start), c.start);
+router.post('/:id/pick-up', validate(v.idParam), c.pickUp);
+router.post('/:id/hold', validate(v.reason), c.hold);
+router.post('/:id/resume', validate(v.note), c.resume);
 router.post('/:id/send-back', validate(v.requiredNote), c.sendBack);
 router.post('/:id/reject', validate(v.reason), c.reject);
 router.post('/:id/reassign', validate(v.reassign), c.reassign);

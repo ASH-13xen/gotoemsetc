@@ -8,6 +8,7 @@ import { StepTrail } from '@/components/tickets/StepTrail'
 import { StepDurations } from '@/components/tickets/StepDurations'
 import { TicketRecord } from '@/components/tickets/TicketRecord'
 import { MoveButtons, NoteDialog } from '@/components/tickets/TicketActions'
+import { HoldButton, PeoplePanel, TicketHours, TimerButton, WorkReassignDialog, WorkStatus } from '@/components/tickets/WorkPanels'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -39,7 +40,7 @@ import { cn } from '@/lib/utils'
 
 function Panel({ title, children, action, className }: { title: string; children: ReactNode; action?: ReactNode; className?: string }) {
   return (
-    <section className={cn('rounded-2xl bg-card p-5 ring-1 ring-border', className)}>
+    <section className={cn('min-w-0 rounded-2xl bg-card p-5 ring-1 ring-border', className)}>
       <div className="mb-4 flex items-center justify-between gap-2">
         <h2 className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground">{title}</h2>
         {action}
@@ -262,7 +263,9 @@ export default function TicketPage() {
 
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-[280px] flex-1">
+            {t.isWork && <WorkStatus t={t} />}
             <MoveButtons
+              ticket={t}
               can={t.can}
               nextStepLabel={t.nextStepLabel}
               nextColor={nextColor}
@@ -280,7 +283,7 @@ export default function TicketPage() {
                 toast.success('Rejected')
               }}
             />
-            {!t.can.act && t.status === 'open' && (
+            {!t.can.act && t.status === 'open' && !t.locked && !t.parkedIn && (
               <div className="rounded-2xl bg-secondary/40 p-4 text-sm ring-1 ring-border">
                 Waiting on <span className="font-bold">{t.waitingOn.length ? t.waitingOn.join(', ') : t.waitingOnLabel}</span> for “{t.nextStepLabel}”.
               </div>
@@ -293,7 +296,9 @@ export default function TicketPage() {
                 Edit
               </Button>
             )}
-            {t.can.edit && (
+            {t.isWork && <TimerButton t={t} />}
+            {t.isWork && <HoldButton t={t} />}
+            {(t.isWork ? t.can.reassign : t.can.edit) && (
               <Button variant="outline" onClick={() => setDialog('reassign')}>
                 <UserRoundCog className="size-4" />
                 Reassign
@@ -310,7 +315,7 @@ export default function TicketPage() {
         </div>
 
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
-          <div className="grid gap-6">
+          <div className="grid min-w-0 grid-cols-1 gap-6">
             <Panel title="Details">
               {t.description ? <p className="whitespace-pre-wrap text-sm leading-relaxed">{t.description}</p> : <p className="text-sm text-muted-foreground">No details given.</p>}
               <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs">
@@ -323,6 +328,9 @@ export default function TicketPage() {
                   ['Priority', PRIORITY_LABEL[t.priority]],
                   ['Team', t.team?.title || '—'],
                   ['Client', t.clientName || '—'],
+                  ...(t.pipeline === 'general' ? [['Approver', t.approver?.name || t.raisedBy.name || '—']] : []),
+                  ...(t.scheduledFor ? [['Posting', fmtDateTime(t.scheduledFor)]] : []),
+                  ...(t.carriedOver ? [['Carried over', `From ${t.deliverable?.month || 'last month'}`]] : []),
                   ...(t.completedAt ? [['Completed', fmtDateTime(t.completedAt)]] : []),
                   ...(t.rejectedAt ? [['Rejected', fmtDateTime(t.rejectedAt)]] : []),
                   ['Times sent back', String(t.metrics.reverts)],
@@ -338,6 +346,18 @@ export default function TicketPage() {
             <Panel title="Pipeline">
               <StepTrail trail={t.trail} labels />
             </Panel>
+
+            {t.isWork && (
+              <Panel title="People">
+                <PeoplePanel t={t} />
+              </Panel>
+            )}
+
+            {t.isWork && (
+              <Panel title="Hours worked" action={<span className="text-[11px] text-muted-foreground">confirmed at each hand-over</span>}>
+                <TicketHours t={t} />
+              </Panel>
+            )}
 
             <Panel title="Time at each step">
               <StepDurations trail={t.trail} stepMs={t.metrics.stepMs} />
@@ -418,7 +438,8 @@ export default function TicketPage() {
       </main>
 
       {dialog === 'edit' && <EditDialog t={t} open onOpenChange={(v) => !v && setDialog(null)} />}
-      {dialog === 'reassign' && <ReassignDialog t={t} open onOpenChange={(v) => !v && setDialog(null)} />}
+      {dialog === 'reassign' &&
+        (t.isWork ? <WorkReassignDialog t={t} open onOpenChange={(v) => !v && setDialog(null)} /> : <ReassignDialog t={t} open onOpenChange={(v) => !v && setDialog(null)} />)}
       <NoteDialog
         open={dialog === 'review'}
         onOpenChange={(v) => setDialog(v ? 'review' : null)}

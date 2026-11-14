@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ChevronDown, Palette } from 'lucide-react'
+import { ChevronDown, Lock, Palette, PauseCircle } from 'lucide-react'
+import { fade } from '@/lib/ticketFormat'
 import type { TicketMeta } from '@/api/tickets.api'
 import { cn } from '@/lib/utils'
 
@@ -17,7 +18,7 @@ export function ColorGuide({ meta }: { meta: TicketMeta }) {
         <span className="flex items-center gap-2">
           <span className="hidden gap-1 sm:flex">
             {meta.pipelines
-              .find((p) => p.key === 'reel')
+              .find((p) => p.key === 'reel_v2')
               ?.steps.map((s) => <span key={s.key} className="size-2.5 rounded-full" style={{ background: s.color }} />)}
           </span>
           <ChevronDown className={cn('size-4 text-muted-foreground transition', open && 'rotate-180')} />
@@ -41,6 +42,49 @@ export function ColorGuide({ meta }: { meta: TicketMeta }) {
                 </ul>
               </div>
             ))}
+          <div>
+            <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">Kinds of ticket</p>
+            <ul className="grid gap-1.5 text-xs">
+              {meta.pipelines
+                .filter((p) => p.typeColor)
+                .map((p) => (
+                  <li key={p.key} className="flex items-center gap-2">
+                    <span className="size-3.5 shrink-0 rounded-full ring-1 ring-black/5" style={{ background: p.typeColor }} />
+                    <span className="font-medium">{p.name}</span>
+                    <span className="ml-1 inline-flex items-center gap-1 text-muted-foreground">
+                      · locked:
+                      <span className="inline-flex size-3.5 items-center justify-center rounded-full" style={{ background: fade(p.typeColor, 0.55) }}>
+                        <Lock className="size-2" />
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              {meta.workColors?.meeting && (
+                <li className="flex items-center gap-2">
+                  <span className="size-3.5 shrink-0 rounded-full" style={{ background: meta.workColors.meeting }} />
+                  <span className="font-medium">Meeting</span>
+                  <span className="text-muted-foreground">· on the Weekly Calendar, not a ticket</span>
+                </li>
+              )}
+            </ul>
+            <p className="mt-2 text-[11px] text-muted-foreground">A ticket made from a client's plan starts locked — its colour faded, with a lock — until Start work.</p>
+          </div>
+          {meta.lineups && (
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">Lineups — waiting, no time counts</p>
+              <ul className="grid gap-1.5 text-xs">
+                {Object.entries(meta.lineups).map(([k, l]) => (
+                  <li key={k} className="flex items-start gap-2">
+                    <PauseCircle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                    <span>
+                      <span className="font-medium">{l.label}</span>
+                      <span className="text-muted-foreground"> · leaves {l.leaves}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div>
             <p className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">On top of any step</p>
             <ul className="grid gap-1.5 text-xs">

@@ -99,6 +99,15 @@ export interface CalEvent extends Occurrence {
   segments?: CalSegment[]
   notes?: CalNote[]
   occurrences?: (Occurrence & { _id: string; slot?: number | null })[]
+  // Meetings (client work): the client it's about (its people's time then
+  // counts as that client's), the minutes marked done, the hours logged.
+  client?: string | null
+  clientName?: string | null
+  momAt?: string | null
+  momBy?: CalPerson | null
+  hoursLoggedAt?: string | null
+  // May the viewer mark the minutes done and make tickets from them?
+  writesMinutes?: boolean
 }
 
 export interface WeekGridConfig {
@@ -200,8 +209,15 @@ export const updateNote = async (
 ) => (await apiClient.patch<{ event: CalEvent }>(`${BASE}/events/${id}/notes/${noteId}`, input)).data.event
 export const deleteNote = async (id: string, noteId: string) =>
   (await apiClient.delete<{ event: CalEvent }>(`${BASE}/events/${id}/notes/${noteId}`)).data.event
-export const noteToTask = async (id: string, noteId: string) =>
-  (await apiClient.post<{ event: CalEvent }>(`${BASE}/events/${id}/notes/${noteId}/task`)).data.event
+// An action item as a General ticket; `approver` (a person in the meeting)
+// approves and closes it — whoever raises it, when not chosen.
+export const noteToTask = async (id: string, noteId: string, approver?: string) =>
+  (await apiClient.post<{ event: CalEvent }>(`${BASE}/events/${id}/notes/${noteId}/task`, approver ? { approver } : {})).data.event
+// Meetings: the minutes are done (then action items can become tickets), and the client it's about.
+export const markMinutes = async (id: string, client?: string | null) =>
+  (await apiClient.post<{ event: CalEvent }>(`${BASE}/events/${id}/minutes`, client !== undefined ? { client } : {})).data.event
+export const setMeetingClient = async (id: string, client: string | null) =>
+  (await apiClient.patch<{ event: CalEvent }>(`${BASE}/events/${id}/client`, { client })).data.event
 
 export const copyWeek = async (input: { from: string; to: string }) =>
   (await apiClient.post<{ created: number; skipped: { title: string; day: string; reason: string }[] }>(`${BASE}/copy-week`, input)).data

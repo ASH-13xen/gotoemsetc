@@ -16,6 +16,7 @@ import { PRIORITY_LABEL, inkOn } from '@/lib/ticketFormat'
 import { ticketStub } from '@/lib/stubData'
 import { cn } from '@/lib/utils'
 import { TicketStub, type StubData } from './TicketStub'
+import { PersonPicker, ROLE_LABEL, pickablePeople } from './WorkPanels'
 
 function pad(n: number) {
   return String(n).padStart(2, '0')
@@ -32,35 +33,41 @@ interface CustomStepDraft {
   assignee: string
 }
 
-function PersonSelect({
-  meta,
-  value,
-  onChange,
-  placeholder = 'Choose a person',
-  id,
-}: {
-  meta: TicketMeta
-  value: string
-  onChange: (v: string) => void
-  placeholder?: string
-  id?: string
-}) {
-  return (
-    <Select value={value || undefined} onValueChange={onChange}>
-      <SelectTrigger id={id} className="w-full">
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {meta.raisable.map((p) => (
-          <SelectItem key={p._id} value={p._id}>
-            {p.name}
-            {p.isSelf ? ' (you)' : ''}
-            {p.designation ? <span className="text-muted-foreground"> · {p.designation}</span> : null}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  )
+type Role = 'contentManager' | 'smm' | 'designer' | 'shooter' | 'editor'
+// The people each kind of ticket needs, in the order they work on it.
+const ROLES: Partial<Record<Pipeline, Role[]>> = {
+  reel_v2: ['contentManager', 'shooter', 'editor', 'smm'],
+  post_v2: ['designer', 'smm', 'contentManager'],
+  story_v2: ['smm', 'contentManager'],
+}
+const ROLE_HINT: Record<Role, string> = {
+  contentManager: 'writes the topic and script, approves, schedules',
+  shooter: 'shoots it, transfers the data',
+  editor: 'edits it',
+  smm: 'uploads it',
+  designer: 'designs it (the Social Media Manager when the team has no designer)',
+}
+const ORDER: Pipeline[] = ['general', 'reel_v2', 'post_v2', 'story_v2', 'custom']
+const TEAM_PIPELINES: Pipeline[] = ['reel_v2', 'post_v2', 'story_v2']
+
+// Who the team's boxes say does each role — the defaults, all changeable.
+function teamDefaults(meta: TicketMeta, teamId: string): Record<Role, string> {
+  const team = meta.teams.find((t) => t._id === teamId)
+  const holder = (...roles: string[]) => {
+    for (const r of roles) {
+      const box = team?.roles.find((x) => x.role === r && x.holders.length)
+      if (box) return box.holders[0]._id
+    }
+    return ''
+  }
+  const smm = team?.smms[0]?._id || holder('social_media_manager')
+  return {
+    contentManager: holder('content_manager') || team?.heads[0]?._id || '',
+    smm,
+    designer: holder('graphic_designer') || smm,
+    shooter: team?.smms[0]?.videographers[0]?._id || holder('videographer', 'videographer_editor'),
+    editor: team?.smms[0]?.editors[0]?._id || holder('editor', 'videographer_editor'),
+  }
 }
 
 export function RaiseTicketDialog({ trigger }: { trigger?: React.ReactNode }) {
@@ -71,52 +78,43 @@ export function RaiseTicketDialog({ trigger }: { trigger?: React.ReactNode }) {
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [pipeline, setPipeline] = useState<Pipeline>('simple')
+  const [pipeline, setPipeline] = useState<Pipeline>('general')
   const [priority, setPriority] = useState<Priority>('normal')
   const [due, setDue] = useState(defaultDue())
   const [clientName, setClientName] = useState('')
   const [repeat, setRepeat] = useState<TicketRepeatKind | 'none'>('none')
   const [raisedFor, setRaisedFor] = useState('')
+  const [approver, setApprover] = useState('')
   const [team, setTeam] = useState('')
-  const [smm, setSmm] = useState('')
-  const [assignments, setAssignments] = useState<Record<string, string>>({})
+  const [people, setPeople] = useState<Partial<Record<Role, string>>>({})
   const [steps, setSteps] = useState<CustomStepDraft[]>([])
 
   const raise = useTicketMutation(raiseTicket)
-  const nameOf = (id: string) => meta?.raisable.find((p) => p._id === id)?.name || null
-  const info = meta?.pipelines.find((p) => p.key === pipeline)
-  const needsTeam = pipeline === 'story' || pipeline === 'post' || pipeline === 'reel'
+  const pipelines = useMemo(() => (meta?.pipelines || []).slice().sort((a, b) => ORDER.indexOf(a.key) - ORDER.indexOf(b.key)), [meta])
+  const info = pipelines.find((p) => p.key === pipeline)
+  const needsTeam = TEAM_PIPELINES.includes(pipeline)
+  const roles = ROLES[pipeline] || []
   const teamInfo = meta?.teams.find((t) => t._id === team)
-  const teamSmms = teamInfo?.smms ?? []
-  const smmInfo = teamSmms.find((s) => s._id === smm)
-  // A team with no SMM yet: anyone they may raise for can stand in.
-  const smmOptions = teamSmms.length ? teamSmms : (meta?.raisable ?? []).map((p) => ({ _id: p._id, name: p.name, videographers: [], editors: [] }))
+  const choices = useMemo(() => pickablePeople(meta, needsTeam ? team : null, !needsTeam), [meta, team, needsTeam])
+  const nameOf = (id: string) => meta?.everyone?.find((p) => p._id === id)?.name || meta?.raisable.find((p) => p._id === id)?.name || choices.find((p) => p._id === id)?.name || null
+  const palette = meta?.customPalette || []
 
-  // Picking the SMM fills in a reel's Videographer and Editor from that
-  // SMM's own boxes (they can still be changed).
-  function chooseSmm(id: string) {
-    setSmm(id)
-    const s = teamSmms.find((x) => x._id === id)
-    if (s) setAssignments((a) => ({ ...a, shooter: s.videographers[0]?._id || a.shooter || '', editor: s.editors[0]?._id || a.editor || '' }))
-  }
   function chooseTeam(id: string) {
     setTeam(id)
-    setSmm('')
-    setAssignments({})
+    if (meta) setPeople(teamDefaults(meta, id))
   }
-  const palette = meta?.customPalette || []
 
   function reset() {
     setTitle('')
     setDescription('')
-    setPipeline('simple')
+    setPipeline('general')
     setPriority('normal')
     setDue(defaultDue())
     setClientName('')
     setRaisedFor('')
+    setApprover('')
     setTeam('')
-    setSmm('')
-    setAssignments({})
+    setPeople({})
     setSteps([])
     setPrinted(null)
   }
@@ -129,39 +127,40 @@ export function RaiseTicketDialog({ trigger }: { trigger?: React.ReactNode }) {
         { label: '', color: palette[Math.min(4, palette.length - 1)], assignee: '' },
       ])
     }
-    if ((p === 'story' || p === 'post' || p === 'reel') && !team && meta) {
-      setTeam(meta.me.teams[0] || meta.teams[0]?._id || '')
+    if (TEAM_PIPELINES.includes(p) && !team && meta) {
+      const first = meta.me.cmOf?.[0] || meta.me.teams[0] || meta.teams[0]?._id || ''
+      if (first) chooseTeam(first)
     }
   }
 
   // The ticket as it will print — updated as you type.
   const preview: StubData | null = useMemo(() => {
     if (!meta) return null
+    const generalStart = pipelines.find((p) => p.key === 'general')?.steps[0]?.color || '#9ca3af'
     const trail =
       pipeline === 'custom'
-        ? [{ key: 'created', label: 'Raised', color: meta.pipelines.find((p) => p.key === 'simple')!.steps[0].color }, ...steps.map((s, i) => ({ key: `s${i}`, label: s.label || `Step ${i + 1}`, color: s.color }))]
+        ? [{ key: 'created', label: 'Raised', color: generalStart }, ...steps.map((s, i) => ({ key: `s${i}`, label: s.label || `Step ${i + 1}`, color: s.color }))]
         : (info?.steps || [])
-    const firstPerson =
-      pipeline === 'post' || pipeline === 'story' ? smm : pipeline === 'reel' ? assignments.shooter : pipeline === 'custom' ? steps[0]?.assignee : raisedFor
+    const firstPerson = pipeline === 'general' ? raisedFor : pipeline === 'custom' ? steps[0]?.assignee : people[roles[0]] || ''
     return {
       id: 'preview',
       code: 'TKT-••••',
       title: title || 'Your ticket title',
       pipelineName: info?.name || '',
       priority,
-      color: trail[0]?.color || '#f97316',
+      color: trail[0]?.color || '#9ca3af',
       stageLabel: trail[0]?.label,
       trail: trail.map((s, i) => ({ ...s, actorLabel: null, terminal: i === trail.length - 1, reached: i === 0, current: i === 0 })),
       clientName,
-      teamTitle: needsTeam ? meta.teams.find((t) => t._id === team)?.title : null,
+      teamTitle: needsTeam ? teamInfo?.title : null,
       raisedByName: 'You',
-      raisedForName: firstPerson ? nameOf(firstPerson) || smmOptions.find((s) => s._id === firstPerson)?.name || '—' : '—',
+      raisedForName: firstPerson ? nameOf(firstPerson) || '—' : '—',
       dueAt: due ? new Date(due).toISOString() : new Date().toISOString(),
       status: 'open',
       nextStepLabel: trail[1]?.label,
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [meta, pipeline, steps, info, title, priority, clientName, team, due, raisedFor, assignments, needsTeam, smm])
+  }, [meta, pipelines, pipeline, steps, info, title, priority, clientName, team, due, raisedFor, people, needsTeam])
 
   async function submit() {
     if (!meta) return
@@ -176,20 +175,19 @@ export function RaiseTicketDialog({ trigger }: { trigger?: React.ReactNode }) {
       pipeline,
       repeat,
     }
-    if (pipeline === 'simple') {
+    if (pipeline === 'general') {
       if (!raisedFor) return toast.error('Choose who this ticket is for')
       body.raisedFor = raisedFor
+      if (approver.startsWith('login:')) body.approverUser = approver.slice(6)
+      else if (approver) body.approver = approver
     }
     if (needsTeam) {
       if (!team) return toast.error('Choose the team')
-      if (!smm) return toast.error('Choose the Social Media Manager')
+      const missing = roles.find((r) => !people[r] && !(r === 'designer' && people.smm))
+      if (missing) return toast.error(`Choose the ${ROLE_LABEL[missing].toLowerCase()}`)
       body.team = team
-      body.smm = smm
-    }
-    if (pipeline === 'reel') {
-      if (!assignments.shooter || !assignments.editor) return toast.error('Choose the videographer and the editor')
-      // The team's Content Manager is filled in on the server.
-      body.assignments = { shooter: assignments.shooter, editor: assignments.editor }
+      body.smm = people.smm
+      body.assignments = Object.fromEntries(roles.map((r) => [r, people[r]]).filter(([, v]) => v)) as Parameters<typeof raiseTicket>[0]['assignments']
     }
     if (pipeline === 'custom') {
       if (steps.some((s) => !s.label.trim() || !s.assignee)) return toast.error('Every step needs a name and a person')
@@ -233,11 +231,7 @@ export function RaiseTicketDialog({ trigger }: { trigger?: React.ReactNode }) {
               <div className="mx-auto max-w-2xl">
                 <div className="relative z-10 mx-2 h-4 rounded-full bg-gradient-to-b from-zinc-800 to-zinc-600 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)]" />
                 <div className="-mt-2 overflow-hidden px-4 pb-6">
-                  <motion.div
-                    initial={{ y: '-105%' }}
-                    animate={{ y: 0 }}
-                    transition={{ duration: 1.6, ease: [0.22, 1, 0.36, 1] }}
-                  >
+                  <motion.div initial={{ y: '-105%' }} animate={{ y: 0 }} transition={{ duration: 1.6, ease: [0.22, 1, 0.36, 1] }}>
                     <TicketStub d={ticketStub(printed)} />
                   </motion.div>
                 </div>
@@ -263,7 +257,7 @@ export function RaiseTicketDialog({ trigger }: { trigger?: React.ReactNode }) {
                 <DialogHeader>
                   <DialogTitle className="text-xl">Raise a ticket</DialogTitle>
                   <DialogDescription>
-                    For anyone in your own box or below you in the Organisation chart.
+                    {meta?.me.picksFromAnyTeam ? 'For anyone, in any team.' : 'For anyone in your own box or below you in the Organisation chart.'}
                     {meta ? ` You're raising as ${meta.me.postLabel}.` : ''}
                   </DialogDescription>
                 </DialogHeader>
@@ -282,19 +276,19 @@ export function RaiseTicketDialog({ trigger }: { trigger?: React.ReactNode }) {
                     </div>
 
                     <div className="grid gap-2">
-                      <Label>Pipeline</Label>
+                      <Label>Kind of ticket</Label>
                       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                        {meta.pipelines.map((p) => (
+                        {pipelines.map((p) => (
                           <button
                             type="button"
                             key={p.key}
                             onClick={() => choosePipeline(p.key)}
-                            className={cn(
-                              'grid gap-2 rounded-xl p-3 text-left ring-1 transition-all',
-                              pipeline === p.key ? 'bg-primary/5 ring-2 ring-primary' : 'bg-secondary/40 ring-border hover:bg-secondary'
-                            )}
+                            className={cn('grid gap-2 rounded-xl p-3 text-left ring-1 transition-all', pipeline === p.key ? 'bg-primary/5 ring-2 ring-primary' : 'bg-secondary/40 ring-border hover:bg-secondary')}
                           >
-                            <span className="text-sm font-bold">{p.name}</span>
+                            <span className="flex items-center gap-2 text-sm font-bold">
+                              {p.typeColor && <span className="size-3 rounded-full ring-1 ring-black/10" style={{ background: p.typeColor }} />}
+                              {p.name}
+                            </span>
                             <span className="text-[11px] leading-snug text-muted-foreground">{p.description}</span>
                             <span className="flex gap-1">
                               {(p.key === 'custom' ? palette.slice(0, 6) : p.steps.map((s) => s.color)).map((c, i) => (
@@ -321,57 +315,42 @@ export function RaiseTicketDialog({ trigger }: { trigger?: React.ReactNode }) {
                             ))}
                           </SelectContent>
                         </Select>
-                        {teamInfo && (
-                          <p className="text-[11px] text-muted-foreground">
-                            Content Manager: {teamInfo.heads.length ? teamInfo.heads.map((h) => h.name).join(', ') : 'vacant — the CEO stands in'}
-                          </p>
-                        )}
+                        <p className="text-[11px] text-muted-foreground">The people below come from the team's boxes in the Organisation chart — change any of them.</p>
                       </div>
                     )}
 
                     {needsTeam && team && (
-                      <div className="grid gap-1.5">
-                        <Label>Social Media Manager{pipeline === 'post' ? ' (designs it)' : pipeline === 'story' ? ' (makes it)' : ''}</Label>
-                        <Select value={smm || undefined} onValueChange={chooseSmm}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Choose the SMM" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {smmOptions.map((s) => (
-                              <SelectItem key={s._id} value={s._id}>
-                                {s.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-[11px] text-muted-foreground">
-                          {teamSmms.length ? 'The SMM steps go to this person only.' : 'This team has no Social Media Manager box filled yet.'}
-                        </p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {roles.map((r) => (
+                          <div key={r} className="grid min-w-0 gap-1.5">
+                            <Label>{ROLE_LABEL[r]}</Label>
+                            <PersonPicker people={choices} value={people[r] || ''} onChange={(v) => setPeople((p) => ({ ...p, [r]: v }))} placeholder={`Choose the ${ROLE_LABEL[r].toLowerCase()}`} />
+                            <p className="text-[11px] text-muted-foreground">{ROLE_HINT[r]}</p>
+                          </div>
+                        ))}
                       </div>
                     )}
 
-                    {pipeline === 'simple' && (
-                      <div className="grid gap-1.5">
-                        <Label>For</Label>
-                        <PersonSelect meta={meta} value={raisedFor} onChange={setRaisedFor} />
-                      </div>
-                    )}
-                    {pipeline === 'reel' && smm && (
+                    {pipeline === 'general' && (
                       <div className="grid gap-3 sm:grid-cols-2">
-                        {(
-                          [
-                            ['shooter', 'Videographer', smmInfo?.videographers],
-                            ['editor', 'Video Editor', smmInfo?.editors],
-                          ] as const
-                        ).map(([field, label, own]) => (
-                          <div key={field} className="grid gap-1.5">
-                            <Label>{label}</Label>
-                            <PersonSelect meta={meta} value={assignments[field] || ''} onChange={(v) => setAssignments((a) => ({ ...a, [field]: v }))} />
-                            <p className="text-[11px] text-muted-foreground">
-                              {own?.length ? `${smmInfo?.name}'s ${label.toLowerCase()}: ${own.map((p) => p.name).join(', ')}` : `${smmInfo?.name || 'This SMM'} has no ${label.toLowerCase()} yet — pick someone.`}
-                            </p>
-                          </div>
-                        ))}
+                        <div className="grid min-w-0 gap-1.5">
+                          <Label>For</Label>
+                          <PersonPicker people={choices} value={raisedFor} onChange={setRaisedFor} />
+                          <p className="text-[11px] text-muted-foreground">Does the work and marks it done.</p>
+                        </div>
+                        <div className="grid min-w-0 gap-1.5">
+                          <Label>Approver</Label>
+                          <PersonPicker
+                            people={[
+                              ...(meta.approverLogins || []).map((l) => ({ _id: `login:${l._id}`, name: l.name, designation: '', teams: [] })),
+                              ...(meta.everyone || meta.raisable),
+                            ]}
+                            value={approver}
+                            onChange={setApprover}
+                            placeholder="You (unless you choose someone)"
+                          />
+                          <p className="text-[11px] text-muted-foreground">Checks the work and closes it.</p>
+                        </div>
                       </div>
                     )}
                     {pipeline === 'custom' && (
@@ -402,7 +381,7 @@ export function RaiseTicketDialog({ trigger }: { trigger?: React.ReactNode }) {
                                 />
                               ))}
                             </div>
-                            <PersonSelect meta={meta} value={s.assignee} onChange={(v) => setSteps((all) => all.map((x, j) => (j === i ? { ...x, assignee: v } : x)))} />
+                            <PersonPicker people={meta.raisable} value={s.assignee} onChange={(v) => setSteps((all) => all.map((x, j) => (j === i ? { ...x, assignee: v } : x)))} />
                           </div>
                         ))}
                         {steps.length < 5 && (
@@ -411,7 +390,7 @@ export function RaiseTicketDialog({ trigger }: { trigger?: React.ReactNode }) {
                             Add a step
                           </Button>
                         )}
-                        <p className="text-[11px] text-muted-foreground">Only colours the pipelines already use — pink, red and grey stay reserved for sent back, rejected and overdue.</p>
+                        <p className="text-[11px] text-muted-foreground">Only colours the pipelines already use — pink, red and yellow stay reserved for sent back, rejected and overdue.</p>
                       </div>
                     )}
 
@@ -421,19 +400,14 @@ export function RaiseTicketDialog({ trigger }: { trigger?: React.ReactNode }) {
                         <DateTimePicker value={due} onChange={setDue} />
                       </div>
                       <div className="grid gap-1.5">
-                        <Label htmlFor="t-client">Client name {needsTeam ? '' : '(optional)'}</Label>
-                        <Input id="t-client" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Typed, since Client Management is off" maxLength={120} />
+                        <Label htmlFor="t-client">Client name (optional)</Label>
+                        <Input id="t-client" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Who it's for" maxLength={120} />
                       </div>
                     </div>
 
                     <div className="grid gap-1.5">
                       <Label htmlFor="t-repeat">Repeat</Label>
-                      <select
-                        id="t-repeat"
-                        value={repeat}
-                        onChange={(e) => setRepeat(e.target.value as TicketRepeatKind | 'none')}
-                        className="h-9 rounded-md border border-border bg-background px-3 text-sm"
-                      >
+                      <select id="t-repeat" value={repeat} onChange={(e) => setRepeat(e.target.value as TicketRepeatKind | 'none')} className="h-9 rounded-md border border-border bg-background px-3 text-sm">
                         <option value="none">Doesn't repeat</option>
                         <option value="daily">Every day (not Sundays or holidays)</option>
                         <option value="weekly">Every week</option>
@@ -486,10 +460,15 @@ export function RaiseTicketDialog({ trigger }: { trigger?: React.ReactNode }) {
                   <div className="mt-6 grid gap-2">
                     <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Its steps</p>
                     {info.steps.map((s, i) => (
-                      <div key={s.key} className="flex items-center gap-2 text-xs">
-                        <span className="size-3 shrink-0 rounded-full" style={{ background: s.color }} />
-                        <span className="font-semibold">{s.label}</span>
-                        {i > 0 && s.actorLabel && <span className="text-muted-foreground">· {s.actorLabel}</span>}
+                      <div key={s.key} className="grid gap-1">
+                        <div className="flex items-center gap-2 text-xs">
+                          <span className="size-3 shrink-0 rounded-full" style={{ background: s.color }} />
+                          <span className="font-semibold">{s.label}</span>
+                          {i > 0 && s.actorLabel && <span className="text-muted-foreground">· {s.actorLabel}</span>}
+                        </div>
+                        {s.lineupAfter && meta?.lineups?.[s.lineupAfter] && (
+                          <span className="ml-5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">then waits in the {meta.lineups[s.lineupAfter].label.toLowerCase()}</span>
+                        )}
                       </div>
                     ))}
                   </div>

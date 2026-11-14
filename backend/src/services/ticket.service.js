@@ -10,6 +10,7 @@ const notificationService = require('./notification.service');
 const notifyRecipients = require('./notifyRecipients.service');
 const org = require('./orgHierarchy.service');
 const pipe = require('../utils/ticketPipeline');
+const wp = require('../config/workPipelines');
 const { hasRole } = require('../utils/roles');
 const { ROLE_LABEL, ROLE_RANK } = require('../config/access');
 const {
@@ -31,7 +32,14 @@ const {
 // only; tickets never send email.
 
 const idOf = org.idOf;
-const PIPELINE_NAME = { simple: 'Simple', story: 'Story', post: 'Post', reel: 'Reel', custom: 'Custom' };
+const PIPELINE_NAME = {
+  simple: 'Simple',
+  story: 'Story (old)',
+  post: 'Post (old)',
+  reel: 'Reel (old)',
+  custom: 'Custom',
+  ...Object.fromEntries(Object.entries(wp.PIPELINES).map(([k, p]) => [k, p.name])),
+};
 const codeOf = (number) => `TKT-${String(number).padStart(4, '0')}`;
 const isAdmin = (user) => hasRole(user, USER_ROLES.ADMIN);
 const isCeo = (user) => hasRole(user, USER_ROLES.CEO);
@@ -88,7 +96,22 @@ async function actorsFor(ticket, step, chart) {
     return { employeeIds: ticket.raisedByEmployee ? [idOf(ticket.raisedByEmployee)] : [], userIds: [idOf(ticket.raisedBy)], fallback: null };
   }
   if (actor.type === 'direct') return one((ticket.customSteps || []).find((s) => s.key === actor.stepKey)?.assignee);
-  if (actor.type === 'assignment') return one(ticket.assignments?.[actor.field]);
+  if (actor.type === 'assignment') return one(ticket.assignments?.[actor.field] || (actor.field === 'smm' ? ticket.smm : null));
+  if (actor.type === 'approver') {
+    if (ticket.approver) return one(ticket.approver);
+    if (ticket.approverUser) return { employeeIds: [], userIds: [idOf(ticket.approverUser)], fallback: null };
+    return { employeeIds: ticket.raisedByEmployee ? [idOf(ticket.raisedByEmployee)] : [], userIds: [idOf(ticket.raisedBy)], fallback: null };
+  }
+  // Work pipelines: the team's Content Manager (planner only), the Team Lead, the CEO.
+  if (actor.type === 'planner' || actor.type === 'tl_ceo') {
+    const leads = await org.teamLeads(chart);
+    const ceo = await org.ceoAndAdmin(chart, { includeAdmin: false });
+    const cms =
+      actor.type === 'planner'
+        ? [...(ticket.team ? org.roleHolders(chart, ticket.team, org.TEAM_ROLE.CONTENT_MANAGER) : []), ...(ticket.assignments?.contentManager ? [idOf(ticket.assignments.contentManager)] : [])]
+        : [];
+    return { employeeIds: [...new Set([...cms, ...leads.employeeIds, ...ceo.employeeIds])], userIds: [...new Set([...leads.userIds, ...ceo.userIds])], fallback: null };
+  }
 
   const lead = () => org.leadActors(chart);
   const teamRole = async (role, label) => {
@@ -119,21 +142,50 @@ function isOpen(ticket) {
   return ticket.status === TICKET_STATUS.OPEN && !ticket.isRejected && !pipe.isTerminal(ticket);
 }
 
+// Waiting in a lineup, on hold, or scheduled with its posting date still to
+// come — nobody holds it. Null when someone does.
+function parkedNow(ticket, now = new Date()) {
+  if (!ticket.parkedIn) return null;
+  if (ticket.parkedUntil && new Date(ticket.parkedUntil) <= now) return null;
+  return ticket.parkedIn;
+}
+
+const isTeamLead = (user) => hasRole(user, USER_ROLES.TEAM_LEAD);
+// The team's Content Manager, the Team Lead, the CEO and admin: start a
+// locked ticket, set its due date, change anyone on it, move it out of a
+// lineup, put it on hold. The Team Lead, CEO and admin may pick people from
+// any team; a Content Manager from their own.
+function managesTicket(user, ticket, chart) {
+  if (seesEveryone(user) || isTeamLead(user)) return true;
+  if (!user.employeeLink || !ticket.team) return false;
+  return org.roleHolders(chart, ticket.team, org.TEAM_ROLE.CONTENT_MANAGER).includes(idOf(user.employeeLink));
+}
+const picksFromAnyTeam = (user) => seesEveryone(user) || isTeamLead(user);
+
 // May this person act on the step the ticket is waiting on? Its own people,
 // or the CEO/admin for any step.
 async function actingContext(user, ticket, chart) {
-  if (!isOpen(ticket)) return { canAct: false };
+  if (!isOpen(ticket) || ticket.locked) return { canAct: false };
   const step = pipe.nextStep(ticket);
   if (!step) return { canAct: false };
+  // A ticket in a lineup waits — except the calendar lineup, which is left by
+  // scheduling it: that step can be done while it waits there, by its Content
+  // Manager, the team's, the Team Lead, the CEO or admin.
+  const parked = parkedNow(ticket);
+  const scheduling = parked === 'calendar' && Boolean(step.needsDate);
+  if (parked && !scheduling) return { canAct: false };
   const actors = await actorsFor(ticket, step, chart);
-  const natural = isIn(user, actors);
+  const managing = scheduling && !isIn(user, actors) && !seesEveryone(user) && managesTicket(user, ticket, chart);
+  const natural = isIn(user, actors) || managing;
   const force = !natural && seesEveryone(user);
   if (!natural && !force) return { canAct: false, actors, step };
   const label = pipe.actorLabel(step.actor, ticket);
   const teamSuffix = ['team_role', 'smm_or_lead'].includes(step.actor?.type) && ticket.teamName ? ` · ${ticket.teamName}` : '';
   let actingAs = `${label}${teamSuffix}`;
   let onBehalfOf = null;
-  if (force) {
+  if (managing) {
+    actingAs = isTeamLead(user) ? 'Team Lead' : `Content Manager${ticket.teamName ? ` · ${ticket.teamName}` : ''}`;
+  } else if (force) {
     actingAs = isCeo(user) ? 'CEO' : 'Admin';
     onBehalfOf = label;
   } else if (actors.fallback && !(actors.fallback === 'Team Lead' && hasRole(user, USER_ROLES.TEAM_LEAD))) {
@@ -220,9 +272,9 @@ async function toView(user, ticket, chart, { withRecord = false } = {}) {
     // eslint-disable-next-line no-await-in-loop
     stepActors.push(await actorsFor(ticket, step, chart));
   }
-  const allEmployeeIds = [ticket.raisedFor, ticket.raisedByEmployee, ticket.smm, ...stepActors.flatMap((a) => a.employeeIds)];
+  const allEmployeeIds = [ticket.raisedFor, ticket.raisedByEmployee, ticket.smm, ticket.approver, ...Object.values(ticket.assignments || {}), ...stepActors.flatMap((a) => a.employeeIds)];
   const people = await peopleMap(allEmployeeIds);
-  const users = await userMap([ticket.raisedBy, ticket.ceoReviewedBy, ...stepActors.flatMap((a) => a.userIds), ...(ticket.links || []).map((l) => l.addedBy)]);
+  const users = await userMap([ticket.raisedBy, ticket.ceoReviewedBy, ticket.approverUser, ...stepActors.flatMap((a) => a.userIds), ...(ticket.links || []).map((l) => l.addedBy)]);
   const ctx = await actingContext(user, ticket, chart);
   const nextIdx = pipe.currentIndex(ticket) + 1;
   const waiting = isOpen(ticket) && stepActors[nextIdx] ? stepPeopleNames(stepActors[nextIdx], people, users) : [];
@@ -237,6 +289,9 @@ async function toView(user, ticket, chart, { withRecord = false } = {}) {
     priority: ticket.priority,
     dueAt: ticket.dueAt,
     clientName: ticket.clientName || '',
+    client: ticket.client ? idOf(ticket.client) : null,
+    deliverable: ticket.deliverable?.month ? { month: ticket.deliverable.month, type: ticket.deliverable.type, index: ticket.deliverable.index } : null,
+    carriedOver: Boolean(ticket.carriedOver),
     pipeline: ticket.pipeline,
     pipelineName: PIPELINE_NAME[ticket.pipeline],
     team: ticket.team ? { _id: idOf(ticket.team), title: ticket.teamName || chart.byId.get(idOf(ticket.team))?.title || '' } : null,
@@ -270,7 +325,34 @@ async function toView(user, ticket, chart, { withRecord = false } = {}) {
     assignments: ticket.assignments || {},
     smm: ticket.smm ? { _id: idOf(ticket.smm), name: nameOf(people.get(idOf(ticket.smm))) } : null,
     customSteps: (ticket.customSteps || []).map((s) => ({ key: s.key, label: s.label, color: s.color, assignee: idOf(s.assignee) })),
+    isWork: wp.isWorkPipeline(ticket.pipeline),
+    typeColor: wp.isWorkPipeline(ticket.pipeline) ? wp.PIPELINES[ticket.pipeline].typeColor : null,
+    locked: Boolean(ticket.locked),
+    parkedIn: parkedNow(ticket, now),
+    lineupLabel: parkedNow(ticket, now) ? wp.LINEUPS[parkedNow(ticket, now)]?.label || null : null,
+    parkNote: ticket.parkNote || '',
+    scheduledFor: ticket.scheduledFor || null,
+    approver: ticket.approver
+      ? { _id: idOf(ticket.approver), name: nameOf(people.get(idOf(ticket.approver))) }
+      : ticket.approverUser
+        ? { _id: null, userId: idOf(ticket.approverUser), name: userName(users.get(idOf(ticket.approverUser))) }
+        : null,
+    people: Object.fromEntries(Object.entries(ticket.assignments || {}).filter(([, v]) => v).map(([k, v]) => [k, { _id: idOf(v), name: nameOf(people.get(idOf(v))) }])),
+    next: (() => {
+      const st = steps[nextIdx];
+      if (!isOpen(ticket) || !st) return null;
+      return { key: st.key, needsDate: Boolean(st.needsDate), needsLink: Boolean(st.needsLink), approval: Boolean(st.approval), viaShoot: Boolean(st.viaShoot) };
+    })(),
     can: {
+      start: isOpen(ticket) && Boolean(ticket.locked) && managesTicket(user, ticket, chart),
+      pickUp:
+        parkedNow(ticket, now) === 'editing' &&
+        (managesTicket(user, ticket, chart) || (user.employeeLink && idOf(ticket.assignments?.editor) === idOf(user.employeeLink))),
+      schedule: parkedNow(ticket, now) === 'calendar' && ctx.canAct,
+      hold: isOpen(ticket) && !ticket.locked && parkedNow(ticket, now) !== 'hold' && managesTicket(user, ticket, chart),
+      resume: parkedNow(ticket, now) === 'hold' && managesTicket(user, ticket, chart),
+      reassign: isOpen(ticket) && (managesTicket(user, ticket, chart) || canEdit(user, ticket)),
+      setDue: isOpen(ticket) && (managesTicket(user, ticket, chart) || canEdit(user, ticket)),
       act: ctx.canAct,
       sendBack: ctx.canAct && pipe.currentIndex(ticket) > 0,
       edit: canEdit(user, ticket),
@@ -348,8 +430,23 @@ async function meta(user) {
   const allHolderIds = teams.flatMap((t) => t.roles.flatMap((r) => r.holders));
   const holderNames = await peopleMap(allHolderIds);
   const below = [...raisable].filter((id) => id !== idOf(user.employeeLink));
+  // The Team Lead, CEO and admin pick anyone, from any team, on a work ticket.
+  const anyone = picksFromAnyTeam(user)
+    ? (await Employee.find({ status: 'active', isDeleted: { $ne: true } }).select('firstName lastName designation').lean())
+        .map((e) => ({ _id: idOf(e._id), name: nameOf(e), designation: e.designation || '', teams: org.teamsOfEmployee(chart, e._id).map((t) => idOf(t._id)) }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    : null;
+  const me = idOf(user.employeeLink);
   return {
     ...pipe.catalogue(),
+    everyone: anyone,
+    // The CEO / admin logins with no employee record — they can still be a
+    // General ticket's approver (as their login).
+    approverLogins: (await User.find({ role: { $in: [USER_ROLES.CEO, USER_ROLES.ADMIN] }, isActive: { $ne: false }, employeeLink: null }).select('username role').lean()).map((u) => ({
+      _id: idOf(u._id),
+      name: userName(u),
+      username: u.username,
+    })),
     priorities: Object.values(TICKET_PRIORITY),
     raisable: [...people.values()]
       .map((e) => ({
@@ -378,15 +475,39 @@ async function meta(user) {
       isCeo: isCeo(user),
       isAdmin: isAdmin(user),
       hasTeam: below.length > 0,
+      isTeamLead: isTeamLead(user),
+      picksFromAnyTeam: picksFromAnyTeam(user),
+      // The teams this person is the Content Manager of (they start, hold and plan its work).
+      cmOf: me ? teams.filter((t) => org.roleHolders(chart, t._id, org.TEAM_ROLE.CONTENT_MANAGER).includes(me)).map((t) => t._id) : [],
     },
   };
 }
 
 // scope: 'mine' (waiting on me), 'raised' (I raised), 'team' (anyone below
 // me), 'all' (CEO/admin), 'submitted' (the CEO's section).
-async function list(user, { scope = 'mine', status = 'open', q } = {}) {
+async function list(user, { scope = 'mine', status = 'open', q, lineup } = {}) {
   const chart = await org.loadChart();
   const filter = {};
+  // Locked tickets to start, or tickets waiting in a lineup — for the people
+  // who manage them, and (lineups) the people they wait on.
+  if (scope === 'to_start' || scope === 'lineup') {
+    const f = { status: TICKET_STATUS.OPEN };
+    if (scope === 'to_start') f.locked = true;
+    else {
+      f.locked = { $ne: true };
+      f.parkedIn = lineup && wp.LINEUPS[lineup] ? lineup : { $ne: null };
+    }
+    const found = await Ticket.find(f).sort({ dueAt: 1 }).limit(500);
+    const out = [];
+    for (const t of found) {
+      /* eslint-disable no-await-in-loop */
+      if (scope === 'lineup' && !parkedNow(t)) continue;
+      const mine = managesTicket(user, t, chart) || (scope === 'lineup' && (await involvedEmployees(t, chart)).has(idOf(user.employeeLink)));
+      if (mine) out.push(await toView(user, t, chart));
+      /* eslint-enable no-await-in-loop */
+    }
+    return out;
+  }
   if (scope === 'submitted') {
     if (!seesEveryone(user)) throw ApiError.forbidden('Only the CEO and admin see submitted tickets');
     filter.submittedToCeoAt = { $ne: null };
@@ -412,8 +533,9 @@ async function list(user, { scope = 'mine', status = 'open', q } = {}) {
   for (const t of tickets) {
     /* eslint-disable no-await-in-loop */
     if (scope === 'mine') {
+      // Tickets waiting in a lineup are in the lineup lists, not on the board.
       const ctx = await actingContext(user, t, chart);
-      if (ctx.canAct && ctx.natural) keep.push(t);
+      if (ctx.canAct && ctx.natural && !parkedNow(t)) keep.push(t);
     } else if (scope === 'team') {
       if (seesEveryone(user)) keep.push(t);
       else {
@@ -447,7 +569,9 @@ async function summary(user) {
   const waiting = await list(user, { scope: 'mine' });
   const raised = await Ticket.countDocuments({ raisedBy: user.id, status: TICKET_STATUS.OPEN });
   const unreviewed = seesEveryone(user) ? await Ticket.countDocuments({ submittedToCeoAt: { $ne: null }, ceoReviewedAt: null }) : 0;
+  const startable = await list(user, { scope: 'to_start' });
   return {
+    toStart: startable.length,
     waitingCount: waiting.length,
     overdueCount: waiting.filter((t) => t.isOverdue).length,
     raisedOpen: raised,
@@ -465,12 +589,16 @@ function cleanAssignments(pipeline, a = {}) {
 }
 
 // `repeatId`: raised by a repeat (ticketRepeat.service.js) — the copy is
-// tied to it and its record says so.
-async function raise(user, input, { repeatId = null, repeatLabel = null } = {}) {
-  const chart = await org.loadChart();
-  const raisable = await org.raisableFor(user, chart);
+// tied to it and its record says so. `system`: made from a client's month
+// (clientWork.service.js) — the people come from the client's team, so the
+// "your own box or below" rule doesn't apply; `quiet` skips the per-ticket
+// notifications (one summary goes instead); `extra` links it to the client
+// and the month; `bare` returns the document rather than the screen's view.
+async function raise(user, input, { repeatId = null, repeatLabel = null, system = false, quiet = false, extra = null, bare = false, chart: givenChart = null, locked = false } = {}) {
+  const chart = givenChart || (await org.loadChart());
+  const raisable = system ? null : await org.raisableFor(user, chart);
   const { pipeline } = input;
-  const mayRaiseFor = (id) => raisable.has(idOf(id));
+  const mayRaiseFor = (id) => system || raisable.has(idOf(id));
   const deny = () => ApiError.forbidden('You can only raise tickets for people in your own box or below it in the Organisation chart');
 
   let raisedFor = input.raisedFor;
@@ -482,6 +610,45 @@ async function raise(user, input, { repeatId = null, repeatLabel = null } = {}) 
   // reel, the team's Content Manager) — chosen, not raised for.
   const approvers = [];
 
+  const work = wp.isWorkPipeline(pipeline);
+  let approver = null;
+  let approverUser = null;
+  // The older tables only show tickets already made on them (and repeats).
+  if (!work && pipeline !== P.CUSTOM && !repeatId && !system) throw ApiError.badRequest('Raise it as General, Reel, Post or Story');
+  if (work && pipeline !== P.GENERAL) {
+    team = chart.byId.get(idOf(input.team));
+    if (!team || team.kind !== ORG_NODE_KIND.TEAM) throw ApiError.badRequest('Choose the team this ticket is for');
+    const free = system || picksFromAnyTeam(user);
+    const a = input.assignments || {};
+    const teamSmms = org.roleHolders(chart, team._id, org.TEAM_ROLE.SOCIAL_MEDIA_MANAGER);
+    smm = a.smm || input.smm || teamSmms[0];
+    if (!smm) throw ApiError.badRequest(`${team.title} has no Social Media Manager — choose one`);
+    if (!free && teamSmms.length && !teamSmms.includes(idOf(smm))) throw ApiError.badRequest(`That person is not a Social Media Manager in ${team.title}`);
+    const cms = org.roleHolders(chart, team._id, org.TEAM_ROLE.CONTENT_MANAGER);
+    const contentManager = a.contentManager || cms[0] || org.teamHeads(chart, team._id)[0] || null;
+    if (pipeline === P.STORY2) {
+      if (!contentManager) throw ApiError.badRequest(`${team.title} has no Content Manager — choose one`);
+      assignments = { smm, contentManager };
+      raisedFor = smm;
+    } else if (pipeline === P.POST2) {
+      // The team's Graphic Designer; the Social Media Manager when there's none.
+      const designer = a.designer || org.roleHolders(chart, team._id, org.TEAM_ROLE.GRAPHIC_DESIGNER)[0] || smm;
+      assignments = { designer, smm, contentManager };
+      raisedFor = designer;
+    } else if (pipeline === P.REEL2) {
+      if (!a.shooter || !a.editor) throw ApiError.badRequest('A reel needs its videographer and video editor');
+      if (!contentManager) throw ApiError.badRequest(`${team.title} has no Content Manager — choose one`);
+      assignments = { shooter: a.shooter, editor: a.editor, contentManager, smm };
+      raisedFor = contentManager;
+    }
+  } else if (pipeline === P.GENERAL) {
+    raisedFor = input.raisedFor;
+    // Whoever is chosen, else whoever raises it — kept on the ticket so it
+    // shows, and can be changed. (A login without an employee record still
+    // approves its own as the raiser.)
+    approver = input.approver || (input.approverUser ? null : user.employeeLink) || null;
+    approverUser = !input.approver && input.approverUser ? input.approverUser : null;
+  }
   if ([P.STORY, P.POST, P.REEL].includes(pipeline)) {
     team = chart.byId.get(idOf(input.team));
     if (!team || team.kind !== ORG_NODE_KIND.TEAM) throw ApiError.badRequest('Choose the team this ticket is for');
@@ -527,7 +694,7 @@ async function raise(user, input, { repeatId = null, repeatLabel = null } = {}) 
   const people = [raisedFor, ...Object.values(assignments), ...customSteps.map((s) => s.assignee)]
     .filter(Boolean)
     .filter((p) => !approverIds.has(idOf(p)) || idOf(p) === idOf(raisedFor));
-  if (!people.every(mayRaiseFor)) throw deny();
+  if (!(work && picksFromAnyTeam(user)) && !people.every(mayRaiseFor)) throw deny();
 
   const number = await counterRepository.nextSequence('ticket');
   const now = new Date();
@@ -547,7 +714,11 @@ async function raise(user, input, { repeatId = null, repeatLabel = null } = {}) 
     raisedBy: user.id,
     raisedByEmployee: user.employeeLink || null,
     raisedFor,
+    approver,
+    approverUser,
+    locked: Boolean(locked),
     repeat: repeatId,
+    ...(extra || {}),
     stage: 'created',
     metrics: { stepMs: {}, reverts: 0, lastMovedAt: now },
   });
@@ -573,9 +744,11 @@ async function raise(user, input, { repeatId = null, repeatLabel = null } = {}) 
       people: Object.fromEntries(Object.entries(assignments).map(([k, v]) => [k, nameOf(names.get(idOf(v)))])),
       customSteps: customSteps.map((s) => ({ label: s.label, color: s.color, person: nameOf(names.get(idOf(s.assignee))) })),
       ...(repeatLabel ? { repeat: repeatLabel } : {}),
+      ...(extra?.deliverable ? { deliverable: { month: extra.deliverable.month, type: extra.deliverable.type, index: extra.deliverable.index } } : {}),
     },
   });
 
+  if (quiet || locked) return bare ? ticket : toView(user, ticket, chart);
   const raiser = (await userMap([user.id])).get(idOf(user.id));
   await notify([], [raisedFor], {
     type: NT.TICKET_RAISED,
@@ -586,7 +759,7 @@ async function raise(user, input, { repeatId = null, repeatLabel = null } = {}) 
   // The first step's people, when it isn't the person it was raised for.
   await notifyWaiting(ticket, chart, user.id, NT.TICKET_YOUR_STEP, `Ticket ${codeOf(number)} is waiting on you`, `"${ticket.title}" — ${pipe.stepLabel(ticket, pipe.nextStep(ticket)?.key)} is your step.`).catch(() => {});
 
-  return toView(user, ticket, chart);
+  return bare ? ticket : toView(user, ticket, chart);
 }
 
 // ---- moving through the pipeline ---------------------------------------------
@@ -640,16 +813,51 @@ async function finishIfTerminal(user, ticket, chart) {
   return done;
 }
 
-async function advance(user, id, { note } = {}) {
+// What reaching a step sets: a work pipeline's ticket goes into the lineup
+// after its phase, or waits for its posting date once scheduled.
+function arrival(ticket, step, { when = null } = {}) {
+  if (!wp.isWorkPipeline(ticket.pipeline)) return {};
+  if (step.needsDate) {
+    const later = when && when > new Date();
+    return { scheduledFor: when, parkedIn: later ? 'posting' : null, parkedUntil: later ? when : null };
+  }
+  return { parkedIn: step.lineupAfter || null, parkedUntil: null };
+}
+
+async function noteParked(moved, user) {
+  if (!moved.parkedIn) return;
+  const lineup = wp.LINEUPS[moved.parkedIn];
+  await record(moved, EV.PARKED, user, {
+    toStage: moved.stage,
+    toLabel: pipe.stepLabel(moved, moved.stage),
+    note: moved.parkedIn === 'posting' ? `Scheduled for ${new Date(moved.parkedUntil).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}` : `In the ${lineup?.label.toLowerCase() || 'lineup'} — waits ${lineup?.leaves || ''}`,
+    meta: { lineup: moved.parkedIn, until: moved.parkedUntil || null },
+  });
+}
+
+// `viaShoot`: the shoot service completing a shoot step. `hours`: what the
+// person confirmed for their step (ticketHours.service.js).
+async function advance(user, id, { note, date, link, minutes, reason } = {}, { viaShoot = false } = {}) {
   const chart = await org.loadChart();
   const ticket = await loadOr404(id);
   const ctx = await actingContext(user, ticket, chart);
   if (!ctx.canAct) throw ApiError.forbidden("This step isn't yours to complete");
+  const step = ctx.step;
+  const when = date ? new Date(date) : null;
+  if (step.viaShoot && !viaShoot) throw ApiError.badRequest('This step is done through the shoot — plan it, or mark it shot, in Shoots');
+  if (step.needsDate && (!when || Number.isNaN(when.getTime()))) throw ApiError.badRequest('Choose the posting date');
+  if (step.needsLink && !/^https?:\/\//i.test(String(link || '').trim())) throw ApiError.badRequest('Paste the link (it starts with https://)');
 
   const now = new Date();
   const restart = Boolean(ticket.isSentBack);
   const fromColor = pipe.colorFor(ticket, now);
-  let moved = await applyMove(ticket, { stage: ctx.step.key, isSentBack: false });
+  const hours = require('./ticketHours.service');
+  const held = await hours.beforeMove(user, ticket, step, ctx, chart, { minutes, reason });
+  let moved = await applyMove(ticket, { stage: step.key, isSentBack: false, ...arrival(ticket, step, { when }) });
+  if (step.needsLink) {
+    await Ticket.updateOne({ _id: moved._id }, { $push: { links: { url: String(link).trim(), label: pipe.stepLabel(moved, step.key), addedBy: user.id, at: now } } });
+    moved = await Ticket.findById(moved._id);
+  }
   await record(moved, restart ? EV.RESTARTED : EV.ADVANCED, user, {
     actingAs: ctx.actingAs,
     onBehalfOf: ctx.onBehalfOf,
@@ -660,16 +868,21 @@ async function advance(user, id, { note } = {}) {
     fromColor,
     toColor: pipe.colorFor(moved, now),
     note: note?.trim() || '',
+    ...(step.needsLink || step.needsDate ? { meta: { ...(step.needsLink ? { link: String(link).trim() } : {}), ...(step.needsDate ? { date: when } : {}) } } : {}),
   });
+  await hours.afterMove(user, moved, step, held);
+  await noteParked(moved, user);
 
-  // Same-person auto-skip, as on the calendar: a Team Lead completing a step
-  // isn't asked to approve their own work at the Team Lead step right after.
+  // Same-person auto-skip, as on the calendar: a Team Lead (or the CEO, on a
+  // work pipeline) completing a step isn't asked to approve their own work
+  // at the approval step right after.
   const following = pipe.nextStep(moved);
-  if (following && !pipe.isTerminal(moved) && ['global_team_lead', 'smm_or_lead'].includes(following.actor?.type)) {
+  if (following && !pipe.isTerminal(moved) && !moved.parkedIn && ['global_team_lead', 'smm_or_lead', 'tl_ceo'].includes(following.actor?.type)) {
     const leads = await org.teamLeads(chart);
-    if (isIn(user, { ...leads })) {
+    const ceo = following.actor.type === 'tl_ceo' ? await org.ceoAndAdmin(chart, { includeAdmin: false }) : { employeeIds: [], userIds: [] };
+    if (isIn(user, { employeeIds: [...leads.employeeIds, ...ceo.employeeIds], userIds: [...leads.userIds, ...ceo.userIds] })) {
       const before = moved;
-      moved = await applyMove(moved, { stage: following.key });
+      moved = await applyMove(moved, { stage: following.key, ...arrival(moved, following) });
       await record(moved, EV.ADVANCED, user, {
         actingAs: 'Team Lead',
         fromStage: before.stage,
@@ -680,12 +893,13 @@ async function advance(user, id, { note } = {}) {
         toColor: pipe.colorFor(moved, now),
         note: 'Skipped automatically — the same person is the Team Lead',
       });
+      await noteParked(moved, user);
     }
   }
 
   if (pipe.isTerminal(moved)) {
     moved = await finishIfTerminal(user, moved, chart);
-  } else {
+  } else if (!parkedNow(moved)) {
     await notifyWaiting(moved, chart, user.id, NT.TICKET_YOUR_STEP, `Ticket ${codeOf(moved.number)} is waiting on you`, `"${moved.title}" moved to "${pipe.stepLabel(moved, moved.stage)}" — the next step is yours.`);
   }
   return toView(user, moved, chart);
@@ -703,7 +917,15 @@ async function sendBack(user, id, { note }) {
   const now = new Date();
   const steps = pipe.stepsFor(ticket);
   const fromColor = pipe.colorFor(ticket, now);
-  const moved = await applyMove(ticket, { stage: steps[idx - 1].key, isSentBack: true }, { 'metrics.reverts': 1 });
+  let target = idx - 1;
+  if (wp.isWorkPipeline(ticket.pipeline)) {
+    // Changes asked at an approval go back to the last piece of work, not to
+    // the approval before it.
+    let w = idx;
+    while (w > 0 && (steps[w].approval || steps[w].viaShoot)) w -= 1;
+    target = Math.max(0, w - 1);
+  }
+  const moved = await applyMove(ticket, { stage: steps[target].key, isSentBack: true, parkedIn: null, parkedUntil: null }, { 'metrics.reverts': 1 });
   await record(moved, EV.SENT_BACK, user, {
     actingAs: ctx.actingAs,
     onBehalfOf: ctx.onBehalfOf,
@@ -759,6 +981,149 @@ async function reject(user, id, { reason }) {
   return toView(user, done, chart);
 }
 
+
+// ---- locked tickets, lineups, hold (work pipelines) --------------------------------
+
+function checkDue(dueAt) {
+  const due = dueAt ? new Date(dueAt) : null;
+  if (!due || Number.isNaN(due.getTime())) throw ApiError.badRequest('Set the due date');
+  return due;
+}
+
+// Start work on a locked ticket: its first step opens and its due date is set.
+async function start(user, id, { dueAt, note } = {}, { chart: givenChart = null, quiet = false } = {}) {
+  const chart = givenChart || (await org.loadChart());
+  const ticket = await loadOr404(id);
+  if (!ticket.locked) throw ApiError.conflict('This ticket has already been started');
+  if (!isOpen(ticket)) throw ApiError.conflict('This ticket is closed');
+  if (!managesTicket(user, ticket, chart)) throw ApiError.forbidden('Only the team’s Content Manager, the Team Lead, the CEO or admin start work on it');
+  const due = checkDue(dueAt);
+  const now = new Date();
+  await Ticket.updateOne({ _id: ticket._id, locked: true }, { $set: { locked: false, dueAt: due, overdueAt: null, 'metrics.lastMovedAt': now } });
+  const started = await Ticket.findById(ticket._id);
+  await record(started, EV.STARTED, user, {
+    actingAs: postLabel(user, chart),
+    toStage: started.stage,
+    toLabel: pipe.stepLabel(started, started.stage),
+    toColor: pipe.colorFor(started, now),
+    note: note?.trim() || '',
+    changes: [{ field: 'Due', from: null, to: due }],
+  });
+  if (!quiet) {
+    await notifyWaiting(started, chart, user.id, NT.TICKET_YOUR_STEP, `Ticket ${codeOf(started.number)} has started`, `"${started.title}" — ${pipe.stepLabel(started, pipe.nextStep(started)?.key)} is your step, due ${due.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}.`).catch(() => {});
+  }
+  return toView(user, started, chart);
+}
+
+// Several at once — each with its own due date, or one for all.
+async function startMany(user, { items = [], ids = [], dueAt } = {}) {
+  const chart = await org.loadChart();
+  const list = items.length ? items : ids.map((x) => ({ id: x, dueAt }));
+  if (!list.length) throw ApiError.badRequest('Choose the tickets to start');
+  if (list.length > 100) throw ApiError.badRequest('At most 100 at a time');
+  const out = [];
+  for (const it of list) {
+    // eslint-disable-next-line no-await-in-loop
+    out.push(await start(user, it.id, { dueAt: it.dueAt }, { chart }));
+  }
+  return out;
+}
+
+async function setParked(user, ticket, chart, parkedIn, { note, until = null } = {}) {
+  const now = new Date();
+  const was = parkedNow(ticket, now);
+  await Ticket.updateOne({ _id: ticket._id }, { $set: { parkedIn, parkedUntil: until, parkNote: note?.trim() || '', 'metrics.lastMovedAt': now } });
+  const moved = await Ticket.findById(ticket._id);
+  if (parkedIn) {
+    await record(moved, EV.PARKED, user, { actingAs: postLabel(user, chart), toStage: moved.stage, note: note?.trim() || wp.LINEUPS[parkedIn]?.label || '', meta: { lineup: parkedIn, until } });
+  } else {
+    await record(moved, EV.UNPARKED, user, { actingAs: user ? postLabel(user, chart) : null, toStage: moved.stage, note: note?.trim() || `Out of the ${(wp.LINEUPS[was]?.label || 'lineup').toLowerCase()}` });
+  }
+  return moved;
+}
+
+// The editor takes a shot reel out of the editing lineup — its time counts from now.
+async function pickUp(user, id) {
+  const chart = await org.loadChart();
+  const ticket = await loadOr404(id);
+  if (parkedNow(ticket) !== 'editing') throw ApiError.conflict('This ticket isn’t waiting in the editing lineup');
+  const isEditor = user.employeeLink && idOf(ticket.assignments?.editor) === idOf(user.employeeLink);
+  if (!isEditor && !managesTicket(user, ticket, chart)) throw ApiError.forbidden('Only its editor (or the Content Manager, Team Lead, CEO or admin) starts editing it');
+  const moved = await setParked(user, ticket, chart, null, { note: 'Editing started' });
+  return toView(user, moved, chart);
+}
+
+async function hold(user, id, { reason }) {
+  const chart = await org.loadChart();
+  const ticket = await loadOr404(id);
+  if (!isOpen(ticket) || ticket.locked) throw ApiError.conflict('Only a started, open ticket can be put on hold');
+  if (!managesTicket(user, ticket, chart)) throw ApiError.forbidden('Only the team’s Content Manager, the Team Lead, the CEO or admin put a ticket on hold');
+  if (!reason?.trim()) throw ApiError.badRequest('Say why it is on hold');
+  const moved = await setParked(user, ticket, chart, 'hold', { note: `On hold: ${reason.trim()}` });
+  return toView(user, moved, chart);
+}
+
+async function resume(user, id, { note } = {}) {
+  const chart = await org.loadChart();
+  const ticket = await loadOr404(id);
+  if (parkedNow(ticket) !== 'hold') throw ApiError.conflict('This ticket isn’t on hold');
+  if (!managesTicket(user, ticket, chart)) throw ApiError.forbidden('Only the team’s Content Manager, the Team Lead, the CEO or admin resume it');
+  const moved = await setParked(user, ticket, chart, null, { note: note?.trim() || 'Resumed' });
+  await notifyWaiting(moved, chart, user.id, NT.TICKET_YOUR_STEP, `Ticket ${codeOf(moved.number)} is back on`, `"${moved.title}" is off hold — ${pipe.stepLabel(moved, pipe.nextStep(moved)?.key)} is your step.`).catch(() => {});
+  return toView(user, moved, chart);
+}
+
+// Daily: a scheduled ticket whose posting date has come is the Social Media
+// Manager's to upload — written to its record.
+async function releaseScheduled(now = new Date()) {
+  const due = await Ticket.find({ parkedIn: { $ne: null }, parkedUntil: { $lte: now }, status: TICKET_STATUS.OPEN });
+  const chart = due.length ? await org.loadChart() : null;
+  for (const t of due) {
+    const posting = t.parkedIn === 'posting';
+    // eslint-disable-next-line no-await-in-loop
+    const moved = await setParked(null, t, chart, null, { note: posting ? 'Posting date — ready to upload' : 'Shoot day' });
+    // eslint-disable-next-line no-await-in-loop
+    await notifyWaiting(
+      moved,
+      chart,
+      null,
+      NT.TICKET_YOUR_STEP,
+      posting ? `Upload today: ${codeOf(moved.number)}` : `Shoot today: ${codeOf(moved.number)}`,
+      posting ? `"${moved.title}" is scheduled for today — upload it and add the link.` : `"${moved.title}" is on today's shoot.`
+    ).catch(() => {});
+  }
+  return due.length;
+}
+
+// A shoot moving its reels (shootSession.service.js checks who may):
+// planned (out of the shoot lineup, waiting for the day), shot, or back to
+// the lineup. Not a step anyone completes on the ticket itself.
+async function moveByShoot(user, ticket, { toStage, parkedIn = null, parkedUntil = null, note, meta } = {}) {
+  const chart = await org.loadChart();
+  const now = new Date();
+  const fromColor = pipe.colorFor(ticket, now);
+  const back = pipe.stepsFor(ticket).findIndex((s) => s.key === toStage) < pipe.currentIndex(ticket);
+  const res = await Ticket.updateOne(
+    { _id: ticket._id, stage: ticket.stage, status: TICKET_STATUS.OPEN },
+    { $set: { stage: toStage, isSentBack: false, parkedIn, parkedUntil, 'metrics.lastMovedAt': now }, $inc: { [`metrics.stepMs.${ticket.stage}`]: Math.max(0, now - new Date(ticket.metrics?.lastMovedAt || ticket.createdAt)) } }
+  );
+  if (!res.modifiedCount) throw ApiError.conflict(`${ticket.title} has just moved — refresh and try again`);
+  const moved = await Ticket.findById(ticket._id);
+  await record(moved, back ? EV.SENT_BACK : EV.ADVANCED, user, {
+    actingAs: postLabel(user, chart),
+    fromStage: ticket.stage,
+    toStage,
+    fromLabel: pipe.stepLabel(ticket, ticket.stage),
+    toLabel: pipe.stepLabel(moved, toStage),
+    fromColor,
+    toColor: pipe.colorFor(moved, now),
+    note: note || '',
+    meta,
+  });
+  await noteParked(moved, user);
+  return moved;
+}
+
 // ---- edits, reassigning, comments, links -------------------------------------
 
 const FIELD_LABEL = { title: 'Title', description: 'Description', priority: 'Priority', clientName: 'Client', dueAt: 'Due' };
@@ -766,7 +1131,9 @@ const FIELD_LABEL = { title: 'Title', description: 'Description', priority: 'Pri
 async function edit(user, id, input) {
   const chart = await org.loadChart();
   const ticket = await loadViewable(user, id, chart);
-  if (!canEdit(user, ticket)) throw ApiError.forbidden('Only whoever raised it, the CEO or admin can change an open ticket');
+  if (!canEdit(user, ticket) && !(isOpen(ticket) && managesTicket(user, ticket, chart))) {
+    throw ApiError.forbidden('Only whoever raised it, the team’s Content Manager, the Team Lead, the CEO or admin can change an open ticket');
+  }
 
   const changes = [];
   const set = {};
@@ -799,6 +1166,7 @@ async function edit(user, id, input) {
 async function reassign(user, id, { field, stepKey, employeeId, note }) {
   const chart = await org.loadChart();
   const ticket = await loadViewable(user, id, chart);
+  if (wp.isWorkPipeline(ticket.pipeline)) return reassignWork(user, ticket, chart, { field, employeeId, note });
   if (!canEdit(user, ticket)) throw ApiError.forbidden('Only whoever raised it, the CEO or admin can reassign it');
   if (!(await org.canRaiseFor(user, employeeId, chart))) {
     throw ApiError.forbidden('You can only hand a ticket to people in your own box or below');
@@ -849,6 +1217,76 @@ async function reassign(user, id, { field, stepKey, employeeId, note }) {
     message: `You are now "${label}" on "${updated.title}".`,
     ticket: updated,
   }, user.id);
+  return toView(user, updated, chart);
+}
+
+
+// Work pipelines: the Team Lead, CEO and admin change anyone, from any team,
+// at any point; the team's Content Manager anyone in their team; whoever
+// raised it, people they could raise it for.
+const WORK_FIELDS = {
+  general: ['raisedFor', 'approver'],
+  reel_v2: ['contentManager', 'shooter', 'editor', 'smm'],
+  post_v2: ['designer', 'smm', 'contentManager'],
+  story_v2: ['smm', 'contentManager'],
+};
+async function reassignWork(user, ticket, chart, { field, employeeId, note }) {
+  if (!isOpen(ticket)) throw ApiError.conflict('This ticket is closed');
+  const fields = WORK_FIELDS[ticket.pipeline] || [];
+  if (!fields.includes(field)) throw ApiError.badRequest('Pick the role to change');
+  const target = await Employee.findById(employeeId).select('_id status').lean();
+  if (!target) throw ApiError.badRequest('That person was not found');
+  if (!picksFromAnyTeam(user)) {
+    const cmOfTeam = managesTicket(user, ticket, chart);
+    const inTeam = ticket.team ? org.teamMembers(chart, ticket.team).includes(idOf(employeeId)) : false;
+    if (cmOfTeam && !inTeam) throw ApiError.forbidden('A Content Manager can choose people in their own team — the Team Lead or CEO can choose from any team');
+    if (!cmOfTeam) {
+      if (!canEdit(user, ticket)) throw ApiError.forbidden('Only the team’s Content Manager, the Team Lead, the CEO, admin or whoever raised it can change people on it');
+      if (!(await org.canRaiseFor(user, employeeId, chart))) throw ApiError.forbidden('You can only hand a ticket to people in your own box or below');
+    }
+  }
+  // Not a step that is already behind it.
+  const steps = pipe.stepsFor(ticket);
+  const reached = pipe.currentIndex(ticket);
+  const usesField = (s) => (field === 'raisedFor' ? s.actor?.type === 'raised_for' : field === 'approver' ? s.actor?.type === 'approver' : s.actor?.type === 'assignment' && s.actor.field === field);
+  const last = steps.reduce((acc, s, i) => (usesField(s) ? i : acc), -1);
+  const plannerLeft = field === 'contentManager' && steps.some((s, i) => i > reached && (s.actor?.type === 'planner'));
+  if (last <= reached && !plannerLeft) throw ApiError.badRequest("That person's steps are already done");
+
+  let from;
+  let set;
+  if (field === 'raisedFor') {
+    from = ticket.raisedFor;
+    set = { raisedFor: employeeId };
+  } else if (field === 'approver') {
+    from = ticket.approver || ticket.raisedByEmployee;
+    set = { approver: employeeId, approverUser: null };
+  } else {
+    from = ticket.assignments?.[field] || (field === 'smm' ? ticket.smm : null);
+    set = { [`assignments.${field}`]: employeeId };
+    if (field === 'smm') set.smm = employeeId;
+    // Who the ticket is "for" follows its first doer.
+    const firstDoer = { reel_v2: 'contentManager', post_v2: 'designer', story_v2: 'smm' }[ticket.pipeline];
+    if (field === firstDoer) set.raisedFor = employeeId;
+  }
+  if (idOf(from) === idOf(employeeId)) return toView(user, ticket, chart);
+  await Ticket.updateOne({ _id: ticket._id }, { $set: set });
+  const updated = await Ticket.findById(ticket._id);
+  const names = await peopleMap([from, employeeId]);
+  const label = field === 'raisedFor' ? 'Assignee' : field === 'approver' ? 'Approver' : wp.ROLE_LABEL[field];
+  await record(updated, EV.REASSIGNED, user, {
+    actingAs: postLabel(user, chart),
+    changes: [{ field: label, from: nameOf(names.get(idOf(from))), to: nameOf(names.get(idOf(employeeId))) }],
+    note: note?.trim() || '',
+  });
+  if (!updated.locked) {
+    await notify([], [employeeId], {
+      type: NT.TICKET_RAISED,
+      title: `Ticket ${codeOf(updated.number)} handed to you`,
+      message: `You are now "${label}" on "${updated.title}".`,
+      ticket: updated,
+    }, user.id);
+  }
   return toView(user, updated, chart);
 }
 
@@ -1021,7 +1459,7 @@ async function analysis(user, { from, to, pipeline, team, person } = {}) {
 
 // Stamps every open ticket whose due date has passed, once, in its record.
 async function sweepOverdue(now = new Date()) {
-  const due = await Ticket.find({ status: TICKET_STATUS.OPEN, isRejected: false, dueAt: { $lt: now }, overdueAt: null });
+  const due = await Ticket.find({ status: TICKET_STATUS.OPEN, isRejected: false, dueAt: { $lt: now }, overdueAt: null, locked: { $ne: true }, parkedIn: null });
   if (!due.length) return 0;
   const chart = await org.loadChart();
   let count = 0;
@@ -1076,4 +1514,15 @@ module.exports = {
   actorsFor,
   actingContext,
   codeOf,
+  isOpen,
+  canView,
+  start,
+  startMany,
+  pickUp,
+  hold,
+  resume,
+  releaseScheduled,
+  moveByShoot,
+  parkedNow,
+  managesTicket,
 };

@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
 import { Link, useHref } from 'react-router-dom'
-import { ArrowRight, CalendarClock, Clock, User2 } from 'lucide-react'
+import { ArrowRight, CalendarClock, Clock, History, Lock, PauseCircle, User2 } from 'lucide-react'
 import type { Priority, TrailStep } from '@/api/tickets.api'
 import { cn } from '@/lib/utils'
-import { PRIORITY_CLASS, PRIORITY_LABEL, dueText, fmtDateTime, inkOn, tint } from '@/lib/ticketFormat'
+import { PRIORITY_CLASS, PRIORITY_LABEL, dueText, fade, fmtDateTime, inkOn, tint } from '@/lib/ticketFormat'
 import { StepTrail } from './StepTrail'
 import { QrCode } from './QrCode'
 
@@ -32,6 +32,14 @@ export interface StubData {
   doneCount?: number
   total?: number
   auto?: boolean
+  // Work pipelines: made from a client's plan and not started yet (faded
+  // type colour + a lock); waiting in a lineup; carried over from last month.
+  locked?: boolean
+  typeColor?: string | null
+  lineupLabel?: string | null
+  parkedIn?: string | null
+  scheduledFor?: string | null
+  carriedOver?: boolean
 }
 
 // A bar code made from the ticket number — decorative, but the same ticket
@@ -74,8 +82,15 @@ function Stamp({ status, isSentBack }: { status: StubData['status']; isSentBack?
 function StatusPill({ d }: { d: StubData }) {
   if (d.status === 'rejected') return <span className="rounded-full bg-red-500/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-600">Rejected</span>
   if (d.status === 'completed') return <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">Completed</span>
+  if (d.locked)
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">
+        <Lock className="size-3" />
+        Locked
+      </span>
+    )
   if (d.isSentBack) return <span className="rounded-full bg-pink-500/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-pink-600">Sent back</span>
-  if (d.isOverdue) return <span className="rounded-full bg-slate-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-600">Overdue</span>
+  if (d.isOverdue) return <span className="rounded-full bg-yellow-400/25 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-yellow-800">Overdue</span>
   return null
 }
 
@@ -83,7 +98,9 @@ function StatusPill({ d }: { d: StubData }) {
 export function TicketStub({ d, to, hero = false, footer }: { d: StubData; to?: string; hero?: boolean; footer?: ReactNode }) {
   const qrHref = useHref(to || '.')
   const qrValue = typeof window !== 'undefined' ? `${window.location.origin}${qrHref}` : qrHref
-  const ink = inkOn(d.color)
+  // Locked: its type's colour, faded, until someone presses Start work.
+  const color = d.locked ? fade(d.typeColor || d.color, 0.55) : d.color
+  const ink = inkOn(color)
 
   const body = (
     <div
@@ -94,8 +111,8 @@ export function TicketStub({ d, to, hero = false, footer }: { d: StubData; to?: 
       )}
     >
       {/* the colour of the step it is at */}
-      <span className={cn('absolute inset-y-0 left-0', hero ? 'w-2.5' : 'w-1.5')} style={{ background: d.color }} />
-      <span className="absolute inset-x-0 top-0 h-px opacity-60" style={{ background: d.color }} />
+      <span className={cn('absolute inset-y-0 left-0', hero ? 'w-2.5' : 'w-1.5')} style={{ background: color }} />
+      <span className="absolute inset-x-0 top-0 h-px opacity-60" style={{ background: color }} />
 
       <div className={cn('relative min-w-0 flex-1', hero ? 'p-6 pl-8 sm:p-8 sm:pl-10' : 'p-4 pl-5')}>
         <Stamp status={d.status} isSentBack={d.isSentBack} />
@@ -121,11 +138,24 @@ export function TicketStub({ d, to, hero = false, footer }: { d: StubData; to?: 
 
         <div className={cn('flex flex-wrap items-center gap-2', hero ? 'mt-5' : 'mt-3')}>
           {d.stageLabel && (
-            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: d.color, color: ink }}>
-              {d.stageLabel}
+            <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: color, color: ink }}>
+              {d.locked && <Lock className="size-3" />}
+              {d.locked ? 'Locked — waiting for Start work' : d.stageLabel}
             </span>
           )}
-          {d.status === 'open' && d.nextStepLabel && (
+          {d.status === 'open' && d.lineupLabel && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-bold text-foreground/80 ring-1 ring-border">
+              <PauseCircle className="size-3" />
+              {d.parkedIn === 'posting' && d.scheduledFor ? `Scheduled for ${fmtDateTime(d.scheduledFor)}` : `In the ${d.lineupLabel.toLowerCase()}`}
+            </span>
+          )}
+          {d.carriedOver && d.status === 'open' && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/12 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-700">
+              <History className="size-3" />
+              Carried over
+            </span>
+          )}
+          {d.status === 'open' && !d.locked && !d.lineupLabel && d.nextStepLabel && (
             <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
               <ArrowRight className="size-3" />
               next: <span className="font-semibold text-foreground">{d.nextStepLabel}</span>
@@ -175,7 +205,7 @@ export function TicketStub({ d, to, hero = false, footer }: { d: StubData; to?: 
       {/* the stub */}
       <div
         className={cn('relative flex shrink-0 flex-col items-center justify-between gap-2', hero ? 'w-[92px] p-3 sm:w-44 sm:p-5' : 'w-[84px] p-3 sm:w-24')}
-        style={{ background: tint(d.color, 0.16) }}
+        style={{ background: tint(color, 0.16) }}
       >
         <span className="text-[9px] font-black uppercase tracking-[0.25em] text-muted-foreground">{d.auto ? 'Calendar' : 'Ticket'}</span>
         {hero ? (

@@ -28,6 +28,7 @@ const {
   WEEKLY_GRID,
   WEEKLY_REPEAT,
   FEATURES,
+  USER_ROLES,
 } = require('../config/constants');
 
 // ---------------------------------------------------------------------------
@@ -533,6 +534,12 @@ function shapeEvent(event, viewer, people, { forUser = viewer.id } = {}) {
           ticket: n.ticket ? { _id: idOf(n.ticket), code: n.ticketCode || null } : null,
         }))
       : [],
+    // Meetings (client work): the client it's about, when its minutes were
+    // marked done (and by whom), and when everyone's hours were logged.
+    client: event.client ? idOf(event.client) : null,
+    momAt: event.momAt ?? null,
+    momBy: event.momBy ? personOrGone(people, event.momBy) : null,
+    hoursLoggedAt: event.hoursLoggedAt ?? null,
     cancelledAt: event.cancelledAt ?? null,
   };
 }
@@ -934,6 +941,13 @@ async function getEvent(viewer, id) {
   const [withSize] = await withSeriesSize([event]);
   const shaped = shapeEvent(withSize, viewer, people);
   if (shaped.busy) throw ApiError.forbidden("You can't see the details of this event");
+  // May this viewer mark the minutes done and turn action items into tickets?
+  shaped.writesMinutes = writesMinutes(viewer, await require('./orgHierarchy.service').loadChart());
+  if (event.client) {
+    const TaskClient = require('../models/TaskClient');
+    const c = await TaskClient.findById(event.client).select('name').lean();
+    shaped.clientName = c?.name || null;
+  }
   if (event.series) {
     const siblings = await WeeklyEvent.find({ series: event.series, cancelledAt: null }).sort({ day: 1, startMin: 1 }).select('day startMin endMin slot').lean();
     shaped.occurrences = siblings.map((s) => ({ _id: idOf(s._id), day: s.day, startMin: s.startMin, endMin: s.endMin, slot: s.slot ?? null }));
@@ -1525,12 +1539,45 @@ async function deleteNote(viewer, id, noteId) {
   return getEvent(viewer, id);
 }
 
-// An action item becomes a ticket (Simple pipeline) for its assignee in Task
-// Management — raised by whoever presses the button, so the Organisation
-// chart's rule applies: only for someone in their own box or below.
-async function noteToTask(viewer, id, noteId) {
-  if (!FEATURES.TASK_MANAGEMENT) throw ApiError.badRequest('Task Management is switched off for now');
+// Who writes a meeting's minutes and turns its action items into tasks: a
+// Content Manager (any team's), the Team Lead, the CEO or admin.
+function writesMinutes(viewer, chart) {
+  const { hasRole } = require('../utils/roles');
+  if (hasRole(viewer, USER_ROLES.ADMIN, USER_ROLES.CEO, USER_ROLES.TEAM_LEAD)) return true;
+  const me = idOf(viewer.employeeLink);
+  return Boolean(me) && chart.nodes.some((n) => n.teamRole === 'content_manager' && (n.assignees || []).map(idOf).includes(me));
+}
+
+// The minutes are done: from now on its action items can become tasks.
+async function markMinutes(viewer, id, { client } = {}) {
+  const org = require('./orgHierarchy.service');
   const event = await noteContext(viewer, id);
+  if (!writesMinutes(viewer, await org.loadChart())) throw ApiError.forbidden('The minutes are marked done by a Content Manager, the Team Lead, the CEO or admin');
+  event.momAt = new Date();
+  event.momBy = viewer.id;
+  if (client !== undefined) event.client = client || null;
+  await event.save();
+  return getEvent(viewer, id);
+}
+
+// The client a meeting is about — its people's time then counts as that client's.
+async function setMeetingClient(viewer, id, { client }) {
+  const event = await noteContext(viewer, id);
+  if (!isHost(event, viewer) && !isAdmin(viewer)) throw ApiError.forbidden('Only the host or admin sets the client');
+  event.client = client || null;
+  await event.save();
+  return getEvent(viewer, id);
+}
+
+// An action item becomes a General ticket for its assignee — once the
+// minutes are done, by a Content Manager, the Team Lead, the CEO or admin —
+// approved by whoever is chosen (else whoever raises it).
+async function noteToTask(viewer, id, noteId, { approver } = {}) {
+  if (!FEATURES.TASK_MANAGEMENT) throw ApiError.badRequest('Task Management is switched off for now');
+  const org = require('./orgHierarchy.service');
+  const event = await noteContext(viewer, id);
+  if (!writesMinutes(viewer, await org.loadChart())) throw ApiError.forbidden('Tasks are made from the minutes by a Content Manager, the Team Lead, the CEO or admin');
+  if (!event.momAt) throw ApiError.badRequest('Mark the minutes done first');
   const note = event.notes.id(noteId);
   if (!note) throw ApiError.notFound('Note not found');
   if (note.kind !== WEEKLY_NOTE_KIND.ACTION) throw ApiError.badRequest('Only action items can become tickets');
@@ -1539,19 +1586,89 @@ async function noteToTask(viewer, id, noteId) {
   const assigneeUser = await User.findById(note.assignee).select('employeeLink');
   if (!assigneeUser?.employeeLink) throw ApiError.badRequest("This person has no employee record, so they can't get a ticket");
 
+  // The approver is picked from the meeting's people (logins); a ticket's approver is their employee record.
+  // (The CEO or admin may have no employee record: then they approve as their login.)
+  let approverEmployee;
+  let approverUser;
+  if (approver) {
+    const u = await User.findById(approver).select('employeeLink isActive');
+    if (!u || u.isActive === false) throw ApiError.badRequest('The approver was not found');
+    if (u.employeeLink) approverEmployee = u.employeeLink;
+    else approverUser = u._id;
+  }
   const due = note.dueDay || addDays(nowIst().day > event.day ? nowIst().day : event.day, 2);
   const ticket = await ticketService.raise(viewer, {
     title: note.text.length > 120 ? `${note.text.slice(0, 117)}…` : note.text,
     description: `From the meeting "${event.title}" on ${fmtDay(event.day)}.\n\n${note.text}`,
-    pipeline: 'simple',
+    pipeline: 'general',
     dueAt: toUtc(due, 18 * 60 + 30),
     raisedFor: assigneeUser.employeeLink,
+    approver: approverEmployee,
+    approverUser,
   });
   note.ticket = ticket._id;
   note.ticketCode = ticket.code;
   note.updatedBy = viewer.id;
   await event.save();
   return getEvent(viewer, id);
+}
+
+// ---- Meeting hours ------------------------------------------------------------------------
+
+// Every half hour: a meeting that has ended logs its length as meeting time
+// for the host and everyone who accepted — overhead, or the client's time
+// when it's tagged with one. Personal blocks, cancelled events and a shoot's
+// own calendar block (its hours come from the shoot) are skipped.
+async function logMeetingHours(now = new Date()) {
+  const WorkLog = require('../models/WorkLog');
+  const ShootSession = require('../models/ShootSession');
+  const today = nowIst().day;
+  const since = addDays(today, -3);
+  const events = await WeeklyEvent.find({ day: { $gte: since, $lte: today }, hoursLoggedAt: null, cancelledAt: null, isPersonal: { $ne: true } });
+  const shootBlocks = new Set((await ShootSession.find({ weeklyEvent: { $in: events.map((e) => e._id) } }).select('weeklyEvent').lean()).map((s) => idOf(s.weeklyEvent)));
+  let logged = 0;
+  for (const e of events) {
+    if (toUtc(e.day, e.endMin) > now) continue;
+    if (shootBlocks.has(idOf(e._id))) {
+      e.hoursLoggedAt = now;
+      // eslint-disable-next-line no-await-in-loop
+      await e.save();
+      continue;
+    }
+    const userIds = [idOf(e.host), ...(e.attendees || []).filter((a) => a.status === WEEKLY_INVITE_STATUS.ACCEPTED).map((a) => idOf(a.user))];
+    if (userIds.length < 2) {
+      e.hoursLoggedAt = now;
+      // eslint-disable-next-line no-await-in-loop
+      await e.save();
+      continue;
+    }
+    // eslint-disable-next-line no-await-in-loop
+    const users = await User.find({ _id: { $in: userIds }, employeeLink: { $ne: null } }).select('employeeLink').lean();
+    for (const u of users) {
+      const pieces = (e.segments || []).length ? heldPieces(e.toObject(), idOf(u._id)) : [{ startMin: e.startMin, endMin: e.endMin }];
+      const minutes = pieces.reduce((t, p) => t + Math.max(0, (p.endMin ?? e.endMin) - (p.startMin ?? e.startMin)), 0) || e.endMin - e.startMin;
+      // eslint-disable-next-line no-await-in-loop
+      await WorkLog.create({
+        employee: u.employeeLink,
+        user: u._id,
+        kind: 'other',
+        otherKind: 'meeting',
+        client: e.client || null,
+        note: e.title,
+        startedAt: toUtc(e.day, e.startMin),
+        endedAt: toUtc(e.day, e.endMin),
+        minutes,
+        source: 'meeting',
+        meeting: e._id,
+        confirmedAt: now,
+      });
+      logged += 1;
+    }
+    e.hoursLoggedAt = now;
+    // eslint-disable-next-line no-await-in-loop
+    await e.save();
+  }
+  return logged;
 }
 
 // ---- Planning helpers ---------------------------------------------------------------------
@@ -1864,6 +1981,9 @@ module.exports = {
   updateNote,
   deleteNote,
   noteToTask,
+  markMinutes,
+  setMeetingClient,
+  logMeetingHours,
   copyWeek,
   // public links
   getPublicInvite,

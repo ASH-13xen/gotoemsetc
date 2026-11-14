@@ -1,10 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import { Check, Loader2, Undo2, XCircle } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Camera, Check, Loader2, Undo2, XCircle } from 'lucide-react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { errorMessage } from '@/api/tickets.api'
+import { errorMessage, type Ticket } from '@/api/tickets.api'
+import { HandOverDialog } from './HandOverDialog'
 import { inkOn, tint } from '@/lib/ticketFormat'
 
 // One dialog for every "do it, with a note" action — move forward, send
@@ -89,6 +91,7 @@ export function MoveButtons({
   onSendBack,
   onReject,
   sendBackRequired = true,
+  ticket,
 }: {
   can: { act: boolean; sendBack: boolean }
   nextStepLabel: string | null | undefined
@@ -98,9 +101,12 @@ export function MoveButtons({
   onSendBack: (note: string) => Promise<unknown>
   onReject: (reason: string) => Promise<unknown>
   sendBackRequired?: boolean
+  // A work ticket: moving on asks for the hours (and a date or link).
+  ticket?: Ticket
 }) {
   const [dlg, setDlg] = useState<null | 'advance' | 'back' | 'reject'>(null)
   if (!can.act) return null
+  const viaShoot = Boolean(ticket?.isWork && ticket.next?.viaShoot)
   return (
     <div className="grid gap-3 rounded-2xl p-4 ring-1 ring-border" style={{ background: tint(nextColor, 0.08) }}>
       <div>
@@ -111,10 +117,19 @@ export function MoveButtons({
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button onClick={() => setDlg('advance')} className="bg-none shadow-none" style={{ background: nextColor || undefined, color: inkOn(nextColor) }}>
-          <Check className="size-4" />
-          Mark “{nextStepLabel}”
-        </Button>
+        {viaShoot ? (
+          <Button asChild variant="outline">
+            <Link to="/shoots">
+              <Camera className="size-4" />
+              Done through Shoots
+            </Link>
+          </Button>
+        ) : (
+          <Button onClick={() => setDlg('advance')} className="bg-none shadow-none" style={{ background: nextColor || undefined, color: inkOn(nextColor) }}>
+            <Check className="size-4" />
+            Mark “{nextStepLabel}”
+          </Button>
+        )}
         {can.sendBack && (
           <Button variant="outline" onClick={() => setDlg('back')} className="text-pink-700">
             <Undo2 className="size-4" />
@@ -126,14 +141,18 @@ export function MoveButtons({
           Reject
         </Button>
       </div>
-      <NoteDialog
-        open={dlg === 'advance'}
-        onOpenChange={(v) => setDlg(v ? 'advance' : null)}
-        title={`Mark “${nextStepLabel}”`}
-        description="The ticket moves on and takes this step's colour. Your note is kept in the record."
-        confirmLabel="Move it on"
-        onConfirm={onAdvance}
-      />
+      {ticket?.isWork ? (
+        <HandOverDialog t={ticket} open={dlg === 'advance'} onOpenChange={(v) => setDlg(v ? 'advance' : null)} />
+      ) : (
+        <NoteDialog
+          open={dlg === 'advance'}
+          onOpenChange={(v) => setDlg(v ? 'advance' : null)}
+          title={`Mark “${nextStepLabel}”`}
+          description="The ticket moves on and takes this step's colour. Your note is kept in the record."
+          confirmLabel="Move it on"
+          onConfirm={onAdvance}
+        />
+      )}
       <NoteDialog
         open={dlg === 'back'}
         onOpenChange={(v) => setDlg(v ? 'back' : null)}

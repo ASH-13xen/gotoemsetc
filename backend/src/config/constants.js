@@ -196,6 +196,8 @@ module.exports = {
     // A repeating ticket stopped by itself (the raiser can no longer raise it).
     TICKET_REPEAT_STOPPED: 'ticket_repeat_stopped',
     TICKET_YOUR_STEP: 'ticket_your_step',
+    // A client's month made a batch of tickets (clientWork.service.js) — one per person.
+    CLIENT_WORK_TICKETS: 'client_work_tickets',
     TICKET_SENT_BACK: 'ticket_sent_back',
     TICKET_REJECTED: 'ticket_rejected',
     TICKET_COMPLETED: 'ticket_completed',
@@ -780,7 +782,9 @@ module.exports = {
   // CMS_STAGE_COLORS), unchanged; Custom is 2–5 steps the raiser defines,
   // each with its own colour and person; Simple is the one-person job.
   // ---------------------------------------------------------------------
-  TICKET_PIPELINE: { SIMPLE: 'simple', STORY: 'story', POST: 'post', REEL: 'reel', CUSTOM: 'custom' },
+  // General, Reel, Post and Story are the work pipelines (config/workPipelines.js);
+  // Simple and the older Story/Post/Reel only show tickets already made on them.
+  TICKET_PIPELINE: { SIMPLE: 'simple', STORY: 'story', POST: 'post', REEL: 'reel', CUSTOM: 'custom', GENERAL: 'general', REEL2: 'reel_v2', POST2: 'post_v2', STORY2: 'story_v2' },
   TICKET_PRIORITY: { LOW: 'low', NORMAL: 'normal', HIGH: 'high', URGENT: 'urgent' },
   // A ticket raised again automatically (models/TicketRepeat.js) until it is
   // stopped. Daily skips Sundays and company holidays; monthly and yearly keep
@@ -807,6 +811,12 @@ module.exports = {
     CEO_REVIEWED: 'ceo_reviewed',
     // Its repeat was stopped — no more copies will be raised.
     REPEAT_STOPPED: 'repeat_stopped',
+    // Locked tickets (client plans) and lineups — work pipelines.
+    STARTED: 'started',
+    PARKED: 'parked',
+    UNPARKED: 'unparked',
+    // Hours confirmed (or changed, with a reason) when a step is handed on.
+    HOURS: 'hours',
   },
   PAID_LEAVE_COMPENSATION_FROM: '2026-09-01',
   // Days set by an approved request are checked against their scans from

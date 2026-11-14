@@ -11,6 +11,10 @@ import TicketPage from '@/pages/TicketPage'
 import SubmittedPage from '@/pages/SubmittedPage'
 import AnalysisPage from '@/pages/AnalysisPage'
 import { CalendarItemPage, StoriesPage } from '@/pages/CalendarTicketPages'
+import TimePage from '@/pages/TimePage'
+import ShootsPage from '@/pages/ShootsPage'
+import ValuePage from '@/pages/ValuePage'
+import { ClientMonthPage, ClientsPage } from '@/pages/ClientsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +47,11 @@ export default function App({ basename }: AppProps = {}) {
               <Route path="/calendar/stories/:id" element={<RequireAuth><StoriesPage /></RequireAuth>} />
               <Route path="/submitted" element={<RequireAuth><SubmittedPage /></RequireAuth>} />
               <Route path="/analysis" element={<RequireAuth><AnalysisPage /></RequireAuth>} />
+              <Route path="/clients" element={<RequireAuth><ClientsPage /></RequireAuth>} />
+              <Route path="/clients/:id" element={<RequireAuth><ClientMonthPage /></RequireAuth>} />
+              <Route path="/shoots" element={<RequireAuth><ShootsPage /></RequireAuth>} />
+              <Route path="/time" element={<RequireAuth><TimePage /></RequireAuth>} />
+              <Route path="/value" element={<RequireAuth><ValuePage /></RequireAuth>} />
               {/* Old task links land on the board. */}
               <Route path="*" element={<Navigate to="/tickets" replace />} />
             </Routes>

@@ -34,6 +34,7 @@ const taskClientRoutes = require('./taskClient.routes');
 const taskEventRoutes = require('./taskEvent.routes');
 const employeeTaskRoutes = require('./employeeTask.routes');
 const ticketRoutes = require('./ticket.routes');
+const clientWorkRoutes = require('./clientWork.routes');
 const { requireFeature } = require('../middlewares/feature.middleware');
 const cmsRoutes = require('./cms.routes');
 const salesChatRoutes = require('./salesChat.routes');
@@ -101,6 +102,8 @@ router.use('/task-events', taskEventRoutes);
 router.use('/employee-tasks', requireFeature('LEGACY_TASKS'), employeeTaskRoutes);
 // Task Management — tickets (see ticket.routes.js).
 router.use('/tickets', ticketRoutes);
+// Client work: monthly plans that make tickets, the work timer, the client value report.
+router.use('/client-work', clientWorkRoutes);
 // The Action centre's per-person "Acknowledge" (frontendall ActionCentre.tsx).
 router.use('/action-centre', actionCentreRoutes);
 // Client Management System — the client registry itself stays on

@@ -76,6 +76,9 @@ const taskClientSchema = new Schema(
     // ClientCalendar — this field is "what they're on now", the snapshot is
     // "what this month was committed at".
     currentPlan: { type: String, enum: [...Object.values(CMS_PLAN), null], default: null },
+    // Client work (services/clientWork.service.js): while paused, a new month
+    // isn't started from the last one on the 1st.
+    workPaused: { type: Boolean, default: false },
 
     isDeleted: { type: Boolean, default: false },
   },

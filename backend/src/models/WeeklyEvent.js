@@ -92,6 +92,16 @@ const weeklyEventSchema = new Schema(
     segments: [segmentSchema],
     notes: [noteSchema],
 
+    // Meetings (client work): the client it's about — its people's time on it
+    // then counts as that client's; when the minutes were marked done (by a
+    // Content Manager, the Team Lead, the CEO or admin), after which action
+    // items become General tickets; and when everyone's meeting hours were
+    // logged (services/weeklyCalendar.service.js#logMeetingHours).
+    client: { type: Schema.Types.ObjectId, ref: 'TaskClient', default: null },
+    momAt: { type: Date, default: null },
+    momBy: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    hoursLoggedAt: { type: Date, default: null },
+
     reminderSentAt: { type: Date },
     cancelledAt: { type: Date },
     cancelledBy: { type: Schema.Types.ObjectId, ref: 'User' },

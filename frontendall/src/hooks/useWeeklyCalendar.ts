@@ -86,5 +86,7 @@ export const useUpdateNote = () =>
     api.updateNote(id, noteId, input)
   )
 export const useDeleteNote = () => useWeeklyMutation(({ id, noteId }: { id: string; noteId: string }) => api.deleteNote(id, noteId))
-export const useNoteToTask = () => useWeeklyMutation(({ id, noteId }: { id: string; noteId: string }) => api.noteToTask(id, noteId))
+export const useNoteToTask = () => useWeeklyMutation(({ id, noteId, approver }: { id: string; noteId: string; approver?: string }) => api.noteToTask(id, noteId, approver))
+export const useMarkMinutes = () => useWeeklyMutation(({ id, client }: { id: string; client?: string | null }) => api.markMinutes(id, client))
+export const useSetMeetingClient = () => useWeeklyMutation(({ id, client }: { id: string; client: string | null }) => api.setMeetingClient(id, client))
 export const useCopyWeek = () => useWeeklyMutation(api.copyWeek)

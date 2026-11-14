@@ -4,7 +4,16 @@ import { apiClient } from './client'
 // colour comes from the server (the content calendar's own palette), never
 // from here.
 
-export type Pipeline = 'simple' | 'story' | 'post' | 'reel' | 'custom'
+// The work pipelines (General, Reel, Post, Story) are what new tickets use;
+// 'simple' and the old story/post/reel only show tickets made on them.
+export type Pipeline = 'general' | 'reel_v2' | 'post_v2' | 'story_v2' | 'custom' | 'simple' | 'story' | 'post' | 'reel'
+export const WORK_PIPELINES: Pipeline[] = ['general', 'reel_v2', 'post_v2', 'story_v2']
+export type Lineup = 'shoot' | 'editing' | 'calendar' | 'posting' | 'shoot_day' | 'hold'
+export type WorkRole = 'designer' | 'shooter' | 'editor' | 'contentManager' | 'smm'
+export interface Person {
+  _id: string
+  name: string | null
+}
 export type Priority = 'low' | 'normal' | 'high' | 'urgent'
 export type TicketStatus = 'open' | 'completed' | 'rejected'
 
@@ -39,6 +48,10 @@ export interface RecordEntry {
     | 'submitted_to_ceo'
     | 'ceo_reviewed'
     | 'repeat_stopped'
+    | 'started'
+    | 'parked'
+    | 'unparked'
+    | 'hours'
   at: string
   byName: string
   actingAs: string | null
@@ -94,8 +107,35 @@ export interface Ticket {
   assignments: Record<string, string | undefined>
   smm: { _id: string; name: string | null } | null
   customSteps: { key: string; label: string; color: string; assignee: string }[]
-  can: { act: boolean; sendBack: boolean; edit: boolean; review: boolean; comment: boolean }
+  can: {
+    act: boolean
+    sendBack: boolean
+    edit: boolean
+    review: boolean
+    comment: boolean
+    start?: boolean
+    pickUp?: boolean
+    schedule?: boolean
+    hold?: boolean
+    resume?: boolean
+    reassign?: boolean
+    setDue?: boolean
+  }
   actingAs: string | null
+  // Work pipelines (General, Reel, Post, Story).
+  isWork?: boolean
+  typeColor?: string | null
+  locked?: boolean
+  parkedIn?: Lineup | null
+  lineupLabel?: string | null
+  parkNote?: string
+  scheduledFor?: string | null
+  approver?: (Person & { userId?: string }) | null
+  people?: Partial<Record<WorkRole, Person>>
+  next?: { key: string; needsDate: boolean; needsLink: boolean; approval: boolean; viaShoot: boolean } | null
+  client?: string | null
+  deliverable?: { clientMonth: string | null; month: string | null; type: string | null; index: number | null; removed?: boolean } | null
+  carriedOver?: boolean
   // Raised by a repeat — how it repeats, whether it still does, who may stop it.
   repeat: TicketRepeatInfo | null
   record?: RecordEntry[]
@@ -179,11 +219,28 @@ export interface PipelineInfo {
   key: Pipeline
   name: string
   description: string
-  steps: { key: string; label: string; color: string; actorLabel: string | null; terminal: boolean }[]
+  typeColor?: string
+  phases?: { key: string; label: string; from: string; to: string }[] | null
+  steps: { key: string; label: string; color: string; actorLabel: string | null; terminal: boolean; approval?: boolean; lineupAfter?: Lineup | null }[]
+}
+
+export interface PickPerson {
+  _id: string
+  name: string
+  designation: string
+  teams: string[]
+  isSelf?: boolean
 }
 
 export interface TicketMeta {
   pipelines: PipelineInfo[]
+  legacyPipelines?: PipelineInfo[]
+  workColors?: Record<string, string>
+  lineups?: Record<Lineup, { label: string; leaves: string }>
+  // The Team Lead, CEO and admin pick anyone (any team) on a work ticket.
+  everyone?: PickPerson[] | null
+  // CEO / admin logins with no employee record — still choosable as a General ticket's approver.
+  approverLogins?: { _id: string; name: string; username: string }[]
   overrides: { sent_back: string; rejected: string; overdue: string }
   customPalette: string[]
   priorities: Priority[]
@@ -198,7 +255,19 @@ export interface TicketMeta {
     // The team's Content Manager(s).
     heads: { _id: string; name: string }[]
   }[]
-  me: { employeeId: string | null; postLabel: string; teams: string[]; seesEveryone: boolean; isCeo: boolean; isAdmin: boolean; hasTeam: boolean }
+  me: {
+    employeeId: string | null
+    postLabel: string
+    teams: string[]
+    seesEveryone: boolean
+    isCeo: boolean
+    isAdmin: boolean
+    hasTeam: boolean
+    isTeamLead?: boolean
+    picksFromAnyTeam?: boolean
+    // Teams this person is the Content Manager of.
+    cmOf?: string[]
+  }
 }
 
 export interface TicketSummary {
@@ -208,6 +277,7 @@ export interface TicketSummary {
   unreviewed: number
   waiting: Ticket[]
   calendarWaiting: number
+  toStart?: number
 }
 
 export interface RaiseInput {
@@ -222,7 +292,11 @@ export interface RaiseInput {
   raisedFor?: string
   team?: string
   smm?: string
-  assignments?: { designer?: string; shooter?: string; editor?: string; contentManager?: string }
+  assignments?: { designer?: string; shooter?: string; editor?: string; contentManager?: string; smm?: string }
+  // General: who approves and closes it (you, unless someone is chosen) —
+  // an employee, or a login with no employee record (approverUser).
+  approver?: string
+  approverUser?: string
   customSteps?: { label: string; color: string; assignee: string }[]
 }
 
@@ -260,17 +334,27 @@ export interface Analysis {
   rows: AnalysisRow[]
 }
 
-export type Scope = 'mine' | 'raised' | 'team' | 'all' | 'submitted'
+export type Scope = 'mine' | 'raised' | 'team' | 'all' | 'submitted' | 'to_start' | 'lineup'
 
 export const getMeta = async () => (await apiClient.get<TicketMeta>('/tickets/meta')).data
-export const listTickets = async (params: { scope: Scope; status?: string; q?: string }) =>
+export const listTickets = async (params: { scope: Scope; status?: string; q?: string; lineup?: Lineup }) =>
   (await apiClient.get<{ tickets: Ticket[] }>('/tickets', { params })).data.tickets
 export const getTicket = async (id: string) => (await apiClient.get<{ ticket: Ticket }>(`/tickets/${id}`)).data.ticket
 export const getSummary = async () => (await apiClient.get<TicketSummary>('/tickets/summary')).data
 export const getAnalysis = async (params: Record<string, string | undefined>) =>
   (await apiClient.get<Analysis>('/tickets/analysis', { params })).data
 export const raiseTicket = async (input: RaiseInput) => (await apiClient.post<{ ticket: Ticket }>('/tickets', input)).data.ticket
-export const advanceTicket = async (id: string, note?: string) => (await apiClient.post<{ ticket: Ticket }>(`/tickets/${id}/advance`, { note })).data.ticket
+// Handing a step on: the hours (minutes) as estimated or changed with a
+// reason, the posting date, the link — whatever the step asks.
+export interface AdvanceInput {
+  note?: string
+  date?: string
+  link?: string
+  minutes?: number
+  reason?: string
+}
+export const advanceTicket = async (id: string, input: AdvanceInput | string = {}) =>
+  (await apiClient.post<{ ticket: Ticket }>(`/tickets/${id}/advance`, typeof input === 'string' ? { note: input || undefined } : input)).data.ticket
 export const sendBackTicket = async (id: string, note: string) => (await apiClient.post<{ ticket: Ticket }>(`/tickets/${id}/send-back`, { note })).data.ticket
 export const rejectTicket = async (id: string, reason: string) => (await apiClient.post<{ ticket: Ticket }>(`/tickets/${id}/reject`, { reason })).data.ticket
 export const editTicket = async (id: string, input: Partial<Pick<Ticket, 'title' | 'description' | 'priority' | 'clientName' | 'dueAt'>> & { note?: string }) =>
@@ -295,3 +379,40 @@ export function errorMessage(err: unknown, fallback: string) {
   if (details) return Object.values(details)[0] || fallback
   return e?.response?.data?.message || fallback
 }
+
+// ---- work pipelines: starting, lineups, hold, hours --------------------------------
+
+export interface StepEstimate {
+  ticket: string
+  // false: nothing to ask (done for someone else — they confirm their own)
+  ask: boolean
+  step?: string
+  stepLabel?: string
+  approval?: boolean
+  since?: string
+  minutes?: number
+  source?: 'approval' | 'timer' | 'estimate'
+}
+export interface PendingHours {
+  _id: string
+  ticket: { _id: string; code: string; title: string } | null
+  stepLabel: string
+  from: string | null
+  to: string | null
+  estimateMinutes: number | null
+  createdAt: string
+}
+
+export const startTicket = async (id: string, dueAt: string, note?: string) => (await apiClient.post<{ ticket: Ticket }>(`/tickets/${id}/start`, { dueAt, note })).data.ticket
+export const startTickets = async (input: { ids?: string[]; dueAt?: string; items?: { id: string; dueAt: string }[] }) =>
+  (await apiClient.post<{ tickets: Ticket[] }>('/tickets/start', input)).data.tickets
+export const pickUpTicket = async (id: string) => (await apiClient.post<{ ticket: Ticket }>(`/tickets/${id}/pick-up`)).data.ticket
+export const holdTicket = async (id: string, reason: string) => (await apiClient.post<{ ticket: Ticket }>(`/tickets/${id}/hold`, { reason })).data.ticket
+export const resumeTicket = async (id: string, note?: string) => (await apiClient.post<{ ticket: Ticket }>(`/tickets/${id}/resume`, { note })).data.ticket
+export const getEstimate = async (id: string) => (await apiClient.get<StepEstimate>(`/tickets/${id}/estimate`)).data
+export const getEstimates = async (ids: string[]) => (await apiClient.get<{ tickets: StepEstimate[]; totalMinutes: number }>('/tickets/estimates', { params: { ids: ids.join(',') } })).data
+export const advanceTickets = async (input: { ids: string[]; minutes?: number; reason?: string; note?: string }) =>
+  (await apiClient.post<{ advanced: number }>('/tickets/batch/advance', input)).data
+export const getPendingHours = async () => (await apiClient.get<{ entries: PendingHours[] }>('/tickets/hours/pending')).data.entries
+export const confirmHours = async (id: string, input: { minutes?: number; reason?: string }) =>
+  (await apiClient.post<{ entries: PendingHours[] }>(`/tickets/hours/${id}/confirm`, input)).data.entries

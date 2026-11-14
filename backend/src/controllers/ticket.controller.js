@@ -134,7 +134,47 @@ const calendarAct = (action) =>
     res.json({ ticket: await calendarTickets.act(req.user, req.params.id, action, req.body) });
   });
 
+// Work pipelines: starting locked tickets, lineups, hold, and the hours
+// confirmed when a step is handed on (ticketHours.service.js).
+const ticketHours = require('../services/ticketHours.service');
+const start = asyncHandler(async (req, res) => {
+  const ticket = await ticketService.start(req.user, req.params.id, req.body);
+  audit(req, 'ticket.start', ticket);
+  res.json({ ticket });
+});
+const startMany = asyncHandler(async (req, res) => {
+  const tickets = await ticketService.startMany(req.user, req.body);
+  req.auditContext = { action: 'ticket.startMany', resourceType: 'Ticket', resourceId: 'many', metadata: { codes: tickets.map((t) => t.code) } };
+  res.json({ tickets });
+});
+const pickUp = asyncHandler(async (req, res) => res.json({ ticket: await ticketService.pickUp(req.user, req.params.id) }));
+const hold = asyncHandler(async (req, res) => {
+  const ticket = await ticketService.hold(req.user, req.params.id, req.body);
+  audit(req, 'ticket.hold', ticket);
+  res.json({ ticket });
+});
+const resume = asyncHandler(async (req, res) => res.json({ ticket: await ticketService.resume(req.user, req.params.id, req.body) }));
+const estimate = asyncHandler(async (req, res) => res.json(await ticketHours.forStep(req.user, req.params.id)));
+const estimates = asyncHandler(async (req, res) => res.json(await ticketHours.forSteps(req.user, String(req.query.ids).split(',').filter(Boolean))));
+const advanceMany = asyncHandler(async (req, res) => {
+  const out = await ticketHours.advanceMany(req.user, req.body.ids, req.body);
+  req.auditContext = { action: 'ticket.advanceMany', resourceType: 'Ticket', resourceId: 'many', metadata: { count: out.advanced } };
+  res.json(out);
+});
+const pendingHours = asyncHandler(async (req, res) => res.json(await ticketHours.pending(req.user)));
+const confirmHours = asyncHandler(async (req, res) => res.json(await ticketHours.confirm(req.user, req.params.id, req.body)));
+
 module.exports = {
+  start,
+  startMany,
+  pickUp,
+  hold,
+  resume,
+  estimate,
+  estimates,
+  advanceMany,
+  pendingHours,
+  confirmHours,
   meta,
   list,
   summary,

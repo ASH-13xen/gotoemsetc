@@ -27,6 +27,9 @@ router.put('/events/:id/segments', validate(v.segments), c.segments);
 router.post('/events/:id/notes', validate(v.addNote), c.addNote);
 router.patch('/events/:id/notes/:noteId', validate(v.updateNote), c.updateNote);
 router.delete('/events/:id/notes/:noteId', validate(v.noteParams), c.deleteNote);
-router.post('/events/:id/notes/:noteId/task', validate(v.noteParams), c.noteToTask);
+router.post('/events/:id/notes/:noteId/task', validate(v.noteToTask), c.noteToTask);
+// Meetings: the minutes are done (Content Manager / Team Lead / CEO / admin), and the client it's about.
+router.post('/events/:id/minutes', validate(v.minutes), c.markMinutes);
+router.patch('/events/:id/client', validate(v.meetingClient), c.setMeetingClient);
 
 module.exports = router;

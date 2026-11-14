@@ -17,6 +17,7 @@ const weeklyCalendarJob = require('./jobs/weeklyCalendar.job');
 const overtimeRequestJob = require('./jobs/overtimeRequest.job');
 const ticketOverdueJob = require('./jobs/ticketOverdue.job');
 const deviceCheckJob = require('./jobs/deviceCheck.job');
+const clientWorkJob = require('./jobs/clientWork.job');
 
 async function main() {
   await connectDb();
@@ -28,6 +29,7 @@ async function main() {
   // to the replaced task screens.
   if (FEATURES.LEGACY_TASKS) employeeTaskFollowUpReminderJob.start();
   if (FEATURES.TASK_MANAGEMENT) ticketOverdueJob.start();
+  if (FEATURES.TASK_MANAGEMENT) clientWorkJob.start();
   cmsMonthCloseJob.start();
   if (FEATURES.CLIENT_MANAGEMENT) meetingReminderJob.start();
   monthlyBillCycleJob.start();

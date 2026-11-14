@@ -20,14 +20,18 @@ const raise = {
       // Story/Post/Reel: the team's Social Media Manager it is for.
       smm: id.optional(),
       assignments: z
-        .object({ designer: id.optional(), shooter: id.optional(), editor: id.optional(), contentManager: id.optional() })
+        .object({ designer: id.optional(), shooter: id.optional(), editor: id.optional(), contentManager: id.optional(), smm: id.optional() })
         .optional(),
+      // General: who approves and closes it (the raiser when not chosen).
+      approver: id.optional(),
+      // …or a login with no employee record (the CEO, admin).
+      approverUser: id.optional(),
       customSteps: z
         .array(z.object({ label: z.string().trim().min(1).max(60), color: z.string().trim(), assignee: id }))
         .optional(),
     })
     .superRefine((d, ctx) => {
-      if (d.pipeline === TICKET_PIPELINE.SIMPLE && !d.raisedFor) {
+      if ((d.pipeline === TICKET_PIPELINE.SIMPLE || d.pipeline === TICKET_PIPELINE.GENERAL) && !d.raisedFor) {
         ctx.addIssue({ code: 'custom', path: ['raisedFor'], message: 'Choose who this ticket is for' });
       }
       if (d.pipeline === TICKET_PIPELINE.STORY && !d.raisedFor && !d.smm) {
@@ -38,7 +42,8 @@ const raise = {
 
 const list = {
   query: z.object({
-    scope: z.enum(['mine', 'raised', 'team', 'all', 'submitted']).optional(),
+    scope: z.enum(['mine', 'raised', 'team', 'all', 'submitted', 'to_start', 'lineup']).optional(),
+    lineup: z.enum(['shoot', 'editing', 'calendar', 'posting', 'hold']).optional(),
     status: z.enum(['open', 'completed', 'rejected', 'all', 'unreviewed', 'reviewed']).optional(),
     q: z.string().trim().max(100).optional(),
   }),
@@ -52,6 +57,29 @@ const calendarList = {
 };
 
 const note = { ...idParam, body: z.object({ note: z.string().trim().max(2000).optional() }) };
+// Completing a step: a note, the posting date or a link when the step asks
+// for one, and the hours worked (minutes) — with a reason if they differ from
+// the estimate.
+const hoursFields = {
+  minutes: z.coerce.number().int().min(0).max(20160).optional(),
+  reason: z.string().trim().max(500).optional(),
+};
+const advance = {
+  ...idParam,
+  body: z.object({ note: z.string().trim().max(2000).optional(), date: z.coerce.date().optional(), link: z.string().trim().max(1000).optional(), ...hoursFields }),
+};
+const ids = z.array(id).min(1).max(100);
+const advanceMany = { body: z.object({ ids, note: z.string().trim().max(2000).optional(), ...hoursFields }) };
+const estimates = { query: z.object({ ids: z.string().trim().min(1) }) };
+const start = { ...idParam, body: z.object({ dueAt: z.coerce.date(), note: z.string().trim().max(2000).optional() }) };
+const startMany = {
+  body: z.object({
+    ids: ids.optional(),
+    dueAt: z.coerce.date().optional(),
+    items: z.array(z.object({ id, dueAt: z.coerce.date() })).max(100).optional(),
+  }),
+};
+const confirmHours = { ...idParam, body: z.object(hoursFields) };
 const requiredNote = { ...idParam, body: z.object({ note: z.string().trim().min(1, 'Say why').max(2000) }) };
 const reason = { ...idParam, body: z.object({ reason: z.string().trim().min(1, 'A reason is required').max(2000) }) };
 
@@ -70,7 +98,7 @@ const edit = {
 const reassign = {
   ...idParam,
   body: z.object({
-    field: z.enum(['designer', 'shooter', 'editor', 'contentManager']).optional(),
+    field: z.enum(['designer', 'shooter', 'editor', 'contentManager', 'smm', 'approver', 'raisedFor']).optional(),
     stepKey: z.string().trim().optional(),
     employeeId: id,
     note: z.string().trim().max(2000).optional(),
@@ -129,4 +157,4 @@ module.exports = {
   planList,
   planCreate,
   planUpdate,
-  stopRepeat: { params: z.object({ id }), body: z.object({ reason: z.string().trim().max(300).optional() }) }, idParam, taskCalendar, raise, list, calendarList, note, requiredNote, reason, edit, reassign, comment, link, analysis, calendarDecision };
+  stopRepeat: { params: z.object({ id }), body: z.object({ reason: z.string().trim().max(300).optional() }) }, idParam, advance, advanceMany, estimates, start, startMany, confirmHours, taskCalendar, raise, list, calendarList, note, requiredNote, reason, edit, reassign, comment, link, analysis, calendarDecision };

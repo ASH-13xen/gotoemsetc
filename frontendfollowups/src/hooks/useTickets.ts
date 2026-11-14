@@ -8,6 +8,10 @@ export const useTicketMeta = () => useQuery({ queryKey: [...KEY, 'meta'], queryF
 export const useTickets = (scope: api.Scope, status?: string, q?: string, enabled = true) =>
   useQuery({ queryKey: [...KEY, 'list', scope, status, q], queryFn: () => api.listTickets({ scope, status, q }), enabled, refetchInterval: 60_000 })
 
+// Locked tickets to start, or tickets waiting in a lineup (one, or any).
+export const useWorkList = (scope: 'to_start' | 'lineup', lineup?: api.Lineup, enabled = true) =>
+  useQuery({ queryKey: [...KEY, 'list', scope, lineup], queryFn: () => api.listTickets({ scope, lineup }), enabled, refetchInterval: 60_000 })
+
 export const useTicket = (id: string | undefined) =>
   useQuery({ queryKey: [...KEY, 'one', id], queryFn: () => api.getTicket(id!), enabled: Boolean(id) })
 
@@ -30,6 +34,10 @@ export function useTicketMutation<TArgs, TResult>(fn: (args: TArgs) => Promise<T
   const qc = useQueryClient()
   return useMutation({
     mutationFn: fn,
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: KEY })
+      // Handing a step on records hours; plans and shoots show ticket progress.
+      qc.invalidateQueries({ queryKey: ['work'] })
+    },
   })
 }
