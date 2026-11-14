@@ -205,10 +205,23 @@ export interface Device {
   }
   apps?: AppState[]
   monthCheck?: 'submitted' | 'verified' | null
+  // A device is checked once a month: its latest verified check this month (HR's
+  // own, or the holder's once verified). A handover or return this month uses it.
+  checkThisMonth?: MonthCheck | null
   // Handed over this month: the handover check covers it, the first monthly check is next month's.
   newThisMonth?: boolean
   checkOverdue?: boolean
   createdAt: string
+}
+export interface MonthCheck {
+  _id: string
+  kind: DeviceCheck['kind']
+  grade?: Grade | null
+  flags?: string[]
+  createdAt: string
+  byHolder?: boolean
+  by?: { username: string } | null
+  employee?: PersonRef | null
 }
 export const deviceName = (d: { brand?: string; model?: string; code?: string }) => [d.brand, d.model].filter(Boolean).join(' ') || d.code || ''
 
@@ -437,9 +450,10 @@ export const devicesApi = {
   detail: async (id: string) => (await apiClient.get<DeviceDetail>(`/devices/${id}`)).data,
   create: async (input: Partial<Device>) => (await apiClient.post<{ device: Device }>('/devices', input)).data.device,
   update: async (id: string, input: Partial<Device>) => (await apiClient.patch<{ device: Device }>(`/devices/${id}`, input)).data.device,
-  assign: async (id: string, input: { employeeId: string; accessories: { accessory: string; qty: number }[]; check: CheckInput }, photos?: File[]) =>
+  // No check: the device's check this month is used.
+  assign: async (id: string, input: { employeeId: string; accessories: { accessory: string; qty: number }[]; check?: CheckInput }, photos?: File[]) =>
     (await apiClient.post(`/devices/${id}/assign`, withPhotos(input, photos))).data,
-  returnDevice: async (id: string, input: { check: CheckInput; accessoriesReturned: { accessory: string; qty: number }[]; note?: string; toRepair?: boolean }, photos?: File[]) =>
+  returnDevice: async (id: string, input: { check?: CheckInput; accessoriesReturned: { accessory: string; qty: number }[]; note?: string; toRepair?: boolean }, photos?: File[]) =>
     (await apiClient.post(`/devices/${id}/return`, withPhotos(input, photos))).data,
   lost: async (id: string, note: string) => (await apiClient.post(`/devices/${id}/lost`, { note })).data,
   found: async (id: string) => (await apiClient.post(`/devices/${id}/found`, {})).data,

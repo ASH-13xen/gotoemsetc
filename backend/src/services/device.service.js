@@ -49,6 +49,8 @@ const {
 //   register  ->  hand over (handover check + accessories + agreement)
 //             ->  holder confirms on their dashboard; monthly self-check, HR verifies
 //             ->  returned (return check + receipt)  |  lost (runbook + recovery)
+//   A device is checked once a month: a handover or return later in the same
+//   month goes on that check (checksOfMonth) unless HR chooses to check again.
 //   A leaver can't be settled (full & final) while they still hold a device,
 //   and a lost / unreturned one is recovered there.
 
@@ -263,6 +265,30 @@ async function monthChecks(deviceIds) {
   return new Map(checks.map((c) => [String(c.device), c]));
 }
 
+// HR checks a device once a month. Its check this month is the latest verified
+// one since the 1st (in India): HR's own (a handover, a return, "Check now")
+// or the holder's monthly check once HR verified it. A handover or a return
+// later in the month uses it instead of asking for another, and it counts as
+// the holder's monthly check too.
+const monthStart = () => new Date(`${monthKey()}-01T00:00:00+05:30`);
+const MONTH_CHECK_FIELDS = 'device kind grade flags createdAt byHolder by employee';
+
+async function checksOfMonth(deviceIds) {
+  const checks = await DeviceCheck.find({ device: { $in: deviceIds }, status: CHECK_STATUS.VERIFIED, createdAt: { $gte: monthStart() } })
+    .sort({ createdAt: -1 })
+    .select(MONTH_CHECK_FIELDS)
+    .populate('by', 'username')
+    .populate('employee', 'firstName lastName')
+    .lean();
+  const out = new Map();
+  for (const c of checks) if (!out.has(String(c.device))) out.set(String(c.device), c);
+  return out;
+}
+
+async function checkOfMonth(deviceId) {
+  return DeviceCheck.findOne({ device: deviceId, status: CHECK_STATUS.VERIFIED, createdAt: { $gte: monthStart() } }).sort({ createdAt: -1 });
+}
+
 async function list({ status, kind, q } = {}) {
   const filter = {};
   if (status) filter.status = status;
@@ -272,16 +298,19 @@ async function list({ status, kind, q } = {}) {
     filter.$or = [{ code: re }, { brand: re }, { model: re }, { imei1: re }, { imei2: re }, { serialNumber: re }, { simNumber: re }, { modelNumber: re }, { iccid: re }, { eid: re }, { meid: re }];
   }
   const [devices, settings] = await Promise.all([Device.find(filter).populate(HOLDER_POPULATE).sort({ code: 1 }).lean(), getSettings()]);
-  const [checks, fresh] = await Promise.all([monthChecks(devices.map((d) => d._id)), handedOverThisMonth(devices)]);
+  const ids = devices.map((d) => d._id);
+  const [checks, fresh, done] = await Promise.all([monthChecks(ids), handedOverThisMonth(devices), checksOfMonth(ids)]);
   const pastDue = istDay() > settings.checkDueDay;
   return devices.map((d) => {
     const check = checks.get(String(d._id));
+    const checkThisMonth = done.get(String(d._id)) || null;
     const newThisMonth = d.status === DEVICE_STATUS.ASSIGNED && fresh.has(String(d._id));
     return {
       ...d,
       monthCheck: check ? check.status : null,
+      checkThisMonth,
       newThisMonth,
-      checkOverdue: d.status === DEVICE_STATUS.ASSIGNED && !check && !newThisMonth && pastDue,
+      checkOverdue: d.status === DEVICE_STATUS.ASSIGNED && !check && !checkThisMonth && !newThisMonth && pastDue,
     };
   });
 }
@@ -369,7 +398,7 @@ async function loadDevice(id) {
 async function detail(id) {
   const device = await Device.findById(id).populate(HOLDER_POPULATE).populate('locationVerified.by', 'username').lean();
   if (!device) throw ApiError.notFound('Device not found');
-  const [assignments, checks, issues, accounts, runbooks, footage, settings] = await Promise.all([
+  const [assignments, checks, issues, accounts, runbooks, footage, settings, done] = await Promise.all([
     DeviceAssignment.find({ device: id })
       .sort({ assignedAt: -1 })
       .populate('employee', 'firstName lastName employeeCode designation status')
@@ -381,7 +410,9 @@ async function detail(id) {
     DeviceRunbook.find({ device: id }).sort({ createdAt: -1 }).populate('device', 'code brand model').populate('employee', 'firstName lastName').populate('startedBy steps.doneBy', 'username').lean(),
     FootageUpload.find({ device: id }).sort({ createdAt: -1 }).limit(30).populate(FOOTAGE_POPULATE).lean(),
     getSettings(),
+    checksOfMonth([device._id]),
   ]);
+  device.checkThisMonth = done.get(String(device._id)) || null;
   return { device, assignments, checks, issues, accounts, runbooks, footage, apps: settings.apps };
 }
 
@@ -422,12 +453,22 @@ async function stockCheck(requested) {
   return out;
 }
 
+// The check a handover or return goes on: a new one when HR filled one in,
+// otherwise the device's check this month (HR checks once a month).
+async function checkToUse(device, input) {
+  if (input?.grade) return null;
+  const done = await checkOfMonth(device._id);
+  if (!done) throw ApiError.badRequest(`${device.code} hasn't been checked this month — check it: choose the overall condition (A–D)`);
+  return done;
+}
+
 async function assign(id, { employeeId, accessories, check }, user, photos = []) {
   const device = await loadDevice(id);
   if (device.status !== DEVICE_STATUS.AVAILABLE) throw ApiError.conflict(`${device.code} is ${device.status}, not available to hand over`);
   const employee = await employeeRepository.findById(String(employeeId));
   if (!employee || employee.status !== EMPLOYEE_STATUS.ACTIVE) throw ApiError.badRequest('Choose an active employee');
   const items = await stockCheck(accessories);
+  const monthCheck = await checkToUse(device, check);
 
   const assignment = await DeviceAssignment.create({
     device: device._id,
@@ -440,7 +481,7 @@ async function assign(id, { employeeId, accessories, check }, user, photos = [])
   device.holder = employee._id;
   device.assignment = assignment._id;
   await device.save();
-  const handover = await recordCheck(device, { kind: CHECK_KIND.HANDOVER, input: check, photos, user, assignment });
+  const handover = monthCheck || (await recordCheck(device, { kind: CHECK_KIND.HANDOVER, input: check, photos, user, assignment }));
   assignment.handoverCheck = handover._id;
   await assignment.save();
 
@@ -465,6 +506,7 @@ async function activeAssignment(device) {
 async function returnDevice(id, { check, accessoriesReturned, note, toRepair }, user, photos = []) {
   const device = await loadDevice(id);
   const assignment = await activeAssignment(device);
+  const monthCheck = await checkToUse(device, check);
   const returned = new Map((accessoriesReturned || []).map((a) => [String(a.accessory), Math.max(0, Math.floor(Number(a.qty) || 0))]));
   let missingValue = 0;
   const unitValues = new Map((await DeviceAccessory.find({ _id: { $in: assignment.accessories.map((a) => a.accessory) } }).lean()).map((a) => [String(a._id), a.unitValue || 0]));
@@ -472,7 +514,7 @@ async function returnDevice(id, { check, accessoriesReturned, note, toRepair }, 
     item.returnedQty = Math.min(item.qty, returned.has(String(item.accessory)) ? returned.get(String(item.accessory)) : item.qty);
     missingValue += (item.qty - item.returnedQty) * (unitValues.get(String(item.accessory)) || 0);
   }
-  const back = await recordCheck(device, { kind: CHECK_KIND.RETURN, input: check, photos, user, assignment });
+  const back = monthCheck || (await recordCheck(device, { kind: CHECK_KIND.RETURN, input: check, photos, user, assignment }));
   const employee = await employeeRepository.findById(String(assignment.employee));
   assignment.status = ASSIGNMENT_STATUS.RETURNED;
   assignment.returnedAt = new Date();
@@ -693,6 +735,7 @@ async function holderCheck(id, input, user, photos) {
   if (!device.holder || !isSelf(user, device.holder)) throw ApiError.forbidden('This device is not with you');
   const already = await DeviceCheck.findOne({ device: device._id, kind: CHECK_KIND.MONTHLY, month: monthKey(), status: { $ne: CHECK_STATUS.REJECTED } });
   if (already) throw ApiError.conflict(`This month's check is already ${already.status === CHECK_STATUS.VERIFIED ? 'done' : 'waiting for HR'}`);
+  if (await checkOfMonth(device._id)) throw ApiError.conflict("HR has already checked it this month — nothing to send until next month");
   const check = await recordCheck(device, { kind: CHECK_KIND.MONTHLY, input, photos, user, byHolder: true });
   const hr = await userRepository.findHr();
   if (hr.length) {
@@ -901,11 +944,12 @@ async function mine(user) {
     getSettings(),
   ]);
   const ids = devices.map((d) => d._id);
-  const [assignments, checks, issues, uploads] = await Promise.all([
+  const [assignments, checks, issues, uploads, done] = await Promise.all([
     DeviceAssignment.find({ _id: { $in: devices.map((d) => d.assignment) } }).lean(),
     DeviceCheck.find({ device: { $in: ids }, kind: CHECK_KIND.MONTHLY, month: monthKey() }).sort({ createdAt: -1 }).lean(),
     DeviceIssue.find({ device: { $in: ids }, status: 'open' }).sort({ createdAt: -1 }).lean(),
     FootageUpload.find({ $or: [{ employee: user.employeeLink }, { uploadedBy: user.employeeLink }] }).sort({ createdAt: -1 }).limit(50).populate(FOOTAGE_POPULATE).lean(),
+    checksOfMonth(ids),
   ]);
   const byId = (list, key) => (id) => list.find((x) => String(x[key]) === String(id));
   return {
@@ -917,6 +961,7 @@ async function mine(user) {
     devices: devices.map((d) => {
       const assignment = byId(assignments, '_id')(d.assignment);
       const check = checks.find((c) => String(c.device) === String(d._id));
+      const doneThisMonth = done.get(String(d._id));
       const newThisMonth = Boolean(assignment && monthKey(assignment.assignedAt) === monthKey());
       return {
         ...d,
@@ -930,8 +975,10 @@ async function mine(user) {
           accessories: assignment.accessories,
         },
         monthCheck: check ? { status: check.status, reviewNote: check.reviewNote, createdAt: check.createdAt } : null,
+        // Checked this month (HR's own check, or theirs once verified): nothing more to send.
+        checkedThisMonth: doneThisMonth ? { createdAt: doneThisMonth.createdAt, byHolder: Boolean(doneThisMonth.byHolder) } : null,
         newThisMonth,
-        checkOverdue: !check && !newThisMonth && istDay() > settings.checkDueDay,
+        checkOverdue: !check && !doneThisMonth && !newThisMonth && istDay() > settings.checkDueDay,
         openIssues: issues.filter((i) => String(i.device) === String(d._id)),
       };
     }),
@@ -1025,7 +1072,7 @@ async function sendMonthlyReminders(now = new Date()) {
   const day = istDay(now);
   if (day !== 1 && day !== settings.checkDueDay + 1) return 0;
   const devices = await list({ status: DEVICE_STATUS.ASSIGNED });
-  const targets = devices.filter((d) => !d.newThisMonth && (day === 1 || !d.monthCheck));
+  const targets = devices.filter((d) => !d.newThisMonth && !d.checkThisMonth && (day === 1 || !d.monthCheck));
   const byHolder = new Map();
   for (const d of targets) {
     if (!d.holder || d.holder.status !== EMPLOYEE_STATUS.ACTIVE) continue;

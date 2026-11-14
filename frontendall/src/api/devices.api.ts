@@ -72,6 +72,8 @@ export interface MyDevice {
   locationItems: { key: string; label: string }[]
   assignment?: { _id: string; assignedAt: string; acceptedAt?: string; accessories: { label: string; qty: number }[] } | null
   monthCheck: { status: 'submitted' | 'verified' | 'rejected'; reviewNote?: string; createdAt: string } | null
+  // Checked this month (HR's own check, or theirs once verified): nothing more to send.
+  checkedThisMonth?: { createdAt: string; byHolder: boolean } | null
   checkOverdue: boolean
   // Handed over this month: the first monthly check is next month's.
   newThisMonth?: boolean

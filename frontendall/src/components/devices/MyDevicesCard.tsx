@@ -590,6 +590,8 @@ export function DeviceRow({ device, data, onCheck, onIssue }: { device: MyDevice
     onError: (err) => toast.error(apiMessage(err, 'Could not accept')),
   })
   const c = device.monthCheck
+  // HR checked it this month (or verified theirs): nothing to send until next month.
+  const done = Boolean(device.checkedThisMonth) && c?.status !== 'submitted'
   return (
     <div className="grid min-w-0 grid-cols-1 gap-2 rounded-xl bg-secondary/30 p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -605,6 +607,8 @@ export function DeviceRow({ device, data, onCheck, onIssue }: { device: MyDevice
         <span className="shrink-0">
         {!c && device.newThisMonth ? (
           <Badge variant="secondary">First check in {nextMonth()}</Badge>
+        ) : done ? (
+          <Badge variant="success">Checked this month</Badge>
         ) : !c || c.status === 'rejected' ? (
           device.checkOverdue ? (
             <Badge variant="destructive">Check overdue</Badge>
@@ -626,14 +630,14 @@ export function DeviceRow({ device, data, onCheck, onIssue }: { device: MyDevice
           </Button>
         </div>
       )}
-      {c?.status === 'rejected' && <p className="rounded-lg bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">HR sent your check back: {c.reviewNote || 'please redo it'}</p>}
+      {c?.status === 'rejected' && !done && <p className="rounded-lg bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">HR sent your check back: {c.reviewNote || 'please redo it'}</p>}
       {device.openIssues.map((i) => (
         <p key={i._id} className="text-xs text-muted-foreground">
           Reported {fmt(i.createdAt)}: {ISSUE_LABEL[i.category] ?? i.category} — HR is on it
         </p>
       ))}
       <div className="flex flex-wrap gap-2">
-        {((!c && !device.newThisMonth) || c?.status === 'rejected') && (
+        {((!c && !device.newThisMonth) || c?.status === 'rejected') && !done && (
           <Button size="sm" className="h-8" onClick={onCheck}>
             Do this month's check
           </Button>

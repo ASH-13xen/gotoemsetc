@@ -186,6 +186,8 @@ export function RegisterTab({ summary }: { summary?: Summary }) {
                         <Badge variant="warning">To verify</Badge>
                       ) : d.newThisMonth ? (
                         <Badge variant="outline">New — first check next month</Badge>
+                      ) : d.checkThisMonth ? (
+                        <Badge variant="success">Checked by HR</Badge>
                       ) : d.checkOverdue ? (
                         <Badge variant="destructive">Overdue</Badge>
                       ) : (

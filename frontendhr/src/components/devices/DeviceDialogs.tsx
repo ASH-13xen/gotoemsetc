@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { Loader2 } from 'lucide-react'
+import { CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CheckFields, emptyCheck } from './CheckFields'
 import {
+  FLAG_LABEL,
+  GRADE_LABEL,
   KIND_LABEL,
   apiMessage,
   deviceName,
@@ -19,6 +21,7 @@ import {
   type CheckInput,
   type Device,
   type DeviceKind,
+  type MonthCheck,
 } from '@/api/devices.api'
 
 export const DEVICES_KEY = ['devices']
@@ -142,6 +145,61 @@ export function DeviceFormDialog({ open, onOpenChange, device }: { open: boolean
   )
 }
 
+// ---------------------------------------------------------------- this month's check
+
+const CHECK_KIND_NAME: Record<MonthCheck['kind'], string> = { handover: 'handover check', return: 'return check', monthly: 'monthly check', adhoc: 'HR check' }
+const shortDate = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+
+// A device is checked once a month: a handover or return later in the month
+// goes on that check, unless HR chooses to check it again.
+function MonthCheckNote({ check, onRecheck }: { check: MonthCheck; onRecheck: () => void }) {
+  const who = check.byHolder ? `${personName(check.employee)}'s ${CHECK_KIND_NAME[check.kind]}, verified` : `${CHECK_KIND_NAME[check.kind]}${check.by ? ` by ${check.by.username}` : ''}`
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-emerald-500/10 px-3 py-2.5 text-sm">
+      <CheckCircle2 className="size-4 shrink-0 text-emerald-700" />
+      <div className="min-w-0 flex-1">
+        <p className="font-medium">
+          Already checked this month — {shortDate(check.createdAt)}, {who}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {check.grade ? GRADE_LABEL[check.grade] : 'No grade'}
+          {check.flags?.length ? ` · ${check.flags.map((f) => FLAG_LABEL[f] ?? f).join(', ')}` : ''}. That check is used — no need to check it again.
+        </p>
+      </div>
+      <Button size="sm" variant="outline" className="h-8" onClick={onRecheck}>
+        Check again
+      </Button>
+    </div>
+  )
+}
+
+// The check part of a handover / return: this month's check if there is one
+// (HR can still check again), otherwise the check form.
+function CheckOrMonthCheck({
+  device,
+  recheck,
+  onRecheck,
+  children,
+}: {
+  device: Device
+  recheck: boolean
+  onRecheck: (v: boolean) => void
+  children: ReactNode
+}) {
+  const done = device.checkThisMonth
+  if (done && !recheck) return <MonthCheckNote check={done} onRecheck={() => onRecheck(true)} />
+  return (
+    <>
+      {done && (
+        <button type="button" className="w-fit text-xs text-primary hover:underline" onClick={() => onRecheck(false)}>
+          Use the check of {shortDate(done.createdAt)} instead
+        </button>
+      )}
+      {children}
+    </>
+  )
+}
+
 // ---------------------------------------------------------------- hand over
 
 export function AssignDialog({ open, onOpenChange, device }: { open: boolean; onOpenChange: (v: boolean) => void; device: Device }) {
@@ -153,9 +211,19 @@ export function AssignDialog({ open, onOpenChange, device }: { open: boolean; on
   const [qty, setQty] = useState<Record<string, number>>({})
   const [check, setCheck] = useState<CheckInput>({ ...emptyCheck(), storageTotalGb: device.storageGb })
   const [photos, setPhotos] = useState<File[]>([])
+  // Checked this month already: that check is the handover check unless HR checks again.
+  const [recheck, setRecheck] = useState(!device.checkThisMonth)
   const assign = useMutation({
     mutationFn: () =>
-      devicesApi.assign(device._id, { employeeId, accessories: Object.entries(qty).filter(([, n]) => n > 0).map(([accessory, n]) => ({ accessory, qty: n })), check }, photos),
+      devicesApi.assign(
+        device._id,
+        {
+          employeeId,
+          accessories: Object.entries(qty).filter(([, n]) => n > 0).map(([accessory, n]) => ({ accessory, qty: n })),
+          check: recheck ? check : undefined,
+        },
+        recheck ? photos : []
+      ),
     onSuccess: () => {
       toast.success('Handed over — they confirm it on their dashboard. Print the agreement for signing.')
       refresh()
@@ -171,7 +239,11 @@ export function AssignDialog({ open, onOpenChange, device }: { open: boolean; on
           <DialogTitle>
             Hand over {device.code} — {deviceName(device)}
           </DialogTitle>
-          <DialogDescription>Who gets it, which accessories go with it, and its condition right now (this is the handover check).</DialogDescription>
+          <DialogDescription>
+            {device.checkThisMonth
+              ? 'Who gets it and which accessories go with it. It was checked this month, so that check goes on the handover.'
+              : 'Who gets it, which accessories go with it, and its condition right now (this is the handover check).'}
+          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <Field label="To">
@@ -209,10 +281,12 @@ export function AssignDialog({ open, onOpenChange, device }: { open: boolean; on
               </div>
             </Field>
           )}
-          <CheckFields kind={device.kind} os={device.os} locationAccount={settings?.locationAccount} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
+          <CheckOrMonthCheck device={device} recheck={recheck} onRecheck={setRecheck}>
+            <CheckFields kind={device.kind} os={device.os} locationAccount={settings?.locationAccount} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
+          </CheckOrMonthCheck>
         </div>
         <DialogFooter>
-          <Button onClick={() => assign.mutate()} disabled={!employeeId || !check.grade || assign.isPending}>
+          <Button onClick={() => assign.mutate()} disabled={!employeeId || (recheck && !check.grade) || assign.isPending}>
             {assign.isPending && <Loader2 className="size-4 animate-spin" />}
             Hand over
           </Button>
@@ -232,9 +306,15 @@ export function ReturnDialog({ open, onOpenChange, device, assignment }: { open:
   const [photos, setPhotos] = useState<File[]>([])
   const [note, setNote] = useState('')
   const [toRepair, setToRepair] = useState(false)
+  // Checked this month already: that check is the return check unless HR checks again.
+  const [recheck, setRecheck] = useState(!device.checkThisMonth)
   const ret = useMutation({
     mutationFn: () =>
-      devicesApi.returnDevice(device._id, { check, accessoriesReturned: Object.entries(back).map(([accessory, qty]) => ({ accessory, qty })), note, toRepair }, photos),
+      devicesApi.returnDevice(
+        device._id,
+        { check: recheck ? check : undefined, accessoriesReturned: Object.entries(back).map(([accessory, qty]) => ({ accessory, qty })), note, toRepair },
+        recheck ? photos : []
+      ),
     onSuccess: () => {
       toast.success('Returned — print the return receipt for signing')
       refresh()
@@ -250,7 +330,11 @@ export function ReturnDialog({ open, onOpenChange, device, assignment }: { open:
           <DialogTitle>
             Take back {device.code} from {personName(device.holder)}
           </DialogTitle>
-          <DialogDescription>Check it in front of them — anything damaged or missing is recorded against their handover.</DialogDescription>
+          <DialogDescription>
+            {device.checkThisMonth
+              ? "It was checked this month, so that check goes on the return. If something has changed since (new damage, a setting off), check it again in front of them."
+              : 'Check it in front of them — anything damaged or missing is recorded against their handover.'}
+          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           {(assignment?.accessories ?? []).length > 0 && (
@@ -274,7 +358,9 @@ export function ReturnDialog({ open, onOpenChange, device, assignment }: { open:
               </div>
             </Field>
           )}
-          <CheckFields kind={device.kind} os={device.os} locationAccount={settings?.locationAccount} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
+          <CheckOrMonthCheck device={device} recheck={recheck} onRecheck={setRecheck}>
+            <CheckFields kind={device.kind} os={device.os} locationAccount={settings?.locationAccount} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
+          </CheckOrMonthCheck>
           <Field label="Note">
             <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
           </Field>
@@ -284,7 +370,7 @@ export function ReturnDialog({ open, onOpenChange, device, assignment }: { open:
           </label>
         </div>
         <DialogFooter>
-          <Button onClick={() => ret.mutate()} disabled={!check.grade || ret.isPending}>
+          <Button onClick={() => ret.mutate()} disabled={(recheck && !check.grade) || ret.isPending}>
             {ret.isPending && <Loader2 className="size-4 animate-spin" />}
             Take it back
           </Button>
@@ -354,7 +440,10 @@ export function HrCheckDialog({ open, onOpenChange, device }: { open: boolean; o
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>Check {device.code}</DialogTitle>
-          <DialogDescription>Recorded as verified by you.</DialogDescription>
+          <DialogDescription>
+            Recorded as verified by you.
+            {device.checkThisMonth ? ` It was already checked this month (${shortDate(device.checkThisMonth.createdAt)}) — this one replaces it as this month's check.` : ''}
+          </DialogDescription>
         </DialogHeader>
         <CheckFields kind={device.kind} os={device.os} locationAccount={settings?.locationAccount} apps={settings?.apps ?? []} value={check} onChange={setCheck} photos={photos} onPhotos={setPhotos} />
         <DialogFooter>
