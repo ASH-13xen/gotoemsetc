@@ -948,16 +948,24 @@ async function heldForProfile(viewer, employeeId) {
   if (!manages && String(viewer.employeeLink || '') !== String(employeeId)) throw ApiError.forbidden('You can only see your own devices');
   const devices = await Device.find({ holder: employeeId, status: DEVICE_STATUS.ASSIGNED }).sort({ code: 1 }).lean();
   const ids = devices.map((d) => d._id);
-  const [assignments, checks, issues] = await Promise.all([
+  const [assignments, checks, issues, done, settings] = await Promise.all([
     DeviceAssignment.find({ _id: { $in: devices.map((d) => d.assignment) } }).lean(),
     DeviceCheck.find({ device: { $in: ids }, kind: CHECK_KIND.MONTHLY, month: monthKey() }).sort({ createdAt: -1 }).lean(),
     DeviceIssue.find({ device: { $in: ids }, status: 'open' }).lean(),
+    checksOfMonth(ids),
+    getSettings(),
   ]);
   return {
     canManage: manages,
+    checkDueDay: settings.checkDueDay,
     devices: devices.map((d) => {
       const a = assignments.find((x) => String(x._id) === String(d.assignment));
       const check = checks.find((c) => String(c.device) === String(d._id));
+      const doneThisMonth = done.get(String(d._id));
+      // Same rules as the holder's own card (mine): handed over this month, the
+      // first monthly check is next month's; checked this month (by HR, or
+      // theirs once verified), nothing more is due.
+      const newThisMonth = Boolean(a && monthKey(a.assignedAt) === monthKey());
       return {
         _id: d._id,
         code: d.code,
@@ -969,6 +977,9 @@ async function heldForProfile(viewer, employeeId) {
         acceptedAt: a?.acceptedAt || null,
         accessories: (a?.accessories || []).filter((x) => x?.label).map((x) => `${x.label}${x.qty > 1 ? ` ×${x.qty}` : ''}`),
         monthCheck: check ? { status: check.status, createdAt: check.createdAt } : null,
+        checkedThisMonth: doneThisMonth ? { createdAt: doneThisMonth.createdAt, byHolder: Boolean(doneThisMonth.byHolder) } : null,
+        newThisMonth,
+        checkOverdue: !check && !doneThisMonth && !newThisMonth && istDay() > settings.checkDueDay,
         openIssues: issues.filter((i) => String(i.device) === String(d._id)).length,
       };
     }),

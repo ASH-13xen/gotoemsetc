@@ -5,10 +5,23 @@ import { getHeldDevices, type HeldDevice } from '@/api/devices.api'
 
 const ICON = { phone: Smartphone, laptop: Laptop, tablet: Tablet, other: Package }
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' }) : '—')
-const CHECK: Record<string, { text: string; cls: string }> = {
-  verified: { text: 'Checked this month', cls: 'bg-emerald-500/12 text-emerald-700' },
-  submitted: { text: 'Check sent — waiting for HR', cls: 'bg-sky-500/12 text-sky-700' },
-  rejected: { text: 'Check sent back — redo it', cls: 'bg-red-500/12 text-red-600' },
+const nextMonthName = () => {
+  const d = new Date()
+  return new Date(d.getFullYear(), d.getMonth() + 1, 1).toLocaleDateString('en-IN', { month: 'long' })
+}
+const ordinal = (n: number) => `${n}${[11, 12, 13].includes(n % 100) ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`
+
+// The month's check, by the same rules as the holder's own "My devices" card:
+// a device handed over this month has its first monthly check next month, and
+// one already checked this month (by HR, or theirs once verified) needs nothing more.
+function checkBadge(d: HeldDevice, dueDay?: number): { text: string; cls: string } {
+  const c = d.monthCheck
+  if (!c && d.newThisMonth) return { text: `New — first check in ${nextMonthName()}`, cls: 'bg-secondary text-muted-foreground' }
+  if (c?.status === 'submitted') return { text: 'Check sent — waiting for HR', cls: 'bg-sky-500/12 text-sky-700' }
+  if (d.checkedThisMonth || c?.status === 'verified') return { text: 'Checked this month', cls: 'bg-emerald-500/12 text-emerald-700' }
+  if (c?.status === 'rejected') return { text: 'Check sent back — redo it', cls: 'bg-red-500/12 text-red-600' }
+  if (d.checkOverdue) return { text: 'Monthly check overdue', cls: 'bg-red-500/12 text-red-600' }
+  return { text: dueDay ? `Monthly check due by the ${ordinal(dueDay)}` : 'Monthly check not sent yet', cls: 'bg-amber-500/12 text-amber-700' }
 }
 
 // The company devices this person holds (HR Work → Devices). The employee
@@ -23,7 +36,7 @@ export function EmployeeDevices({ employeeId, isOwnRecord }: { employeeId: strin
     <div className="grid gap-3">
       {data.devices.map((d: HeldDevice) => {
         const Icon = ICON[d.kind] || Package
-        const check = d.monthCheck ? CHECK[d.monthCheck.status] : null
+        const check = checkBadge(d, data.checkDueDay)
         return (
           <div key={d._id} className="flex flex-wrap items-start gap-3 rounded-xl border border-border bg-secondary/20 p-3">
             <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
@@ -40,11 +53,7 @@ export function EmployeeDevices({ employeeId, isOwnRecord }: { employeeId: strin
                 {d.accessories.length ? ` · ${d.accessories.join(', ')}` : ''}
               </p>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
-                {check ? (
-                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${check.cls}`}>{check.text}</span>
-                ) : (
-                  <span className="rounded-full bg-amber-500/12 px-2 py-0.5 text-[11px] font-semibold text-amber-700">Monthly check not sent yet</span>
-                )}
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${check.cls}`}>{check.text}</span>
                 {d.openIssues > 0 && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-600">
                     <TriangleAlert className="size-3" />
