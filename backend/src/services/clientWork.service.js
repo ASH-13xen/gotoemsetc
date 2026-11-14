@@ -31,6 +31,9 @@ const nameOf = (e) => (e ? `${e.firstName} ${e.lastName || ''}`.trim() : null);
 // and the money side: CEO and admin.
 const { hasRole } = require('../utils/roles');
 const canPlan = (user) => org.seesEveryone(user) || can(user, ACCESS.HRMS) || hasRole(user, USER_ROLES.TEAM_LEAD);
+// Adding a client: the CEO and admin (Client Management, where clients were
+// registered, is hidden for now).
+const canAddClient = (user) => org.seesEveryone(user);
 const picksFromAnyTeam = (user) => org.seesEveryone(user) || hasRole(user, USER_ROLES.TEAM_LEAD);
 const canSeeMoney = (user) => can(user, ACCESS.PAYOUT_APPROVAL);
 
@@ -78,6 +81,7 @@ async function cards(user, { month } = {}) {
     monthLabel: cw.monthLabel(key),
     types: cw.CONTENT_TYPES,
     canPlan: canPlan(user),
+    canAddClient: canAddClient(user),
     canSeeMoney: money,
     cards: clients.map((c) => {
       const cm = months.find((x) => idOf(x.client) === idOf(c._id));
@@ -349,6 +353,39 @@ async function generate(user, clientId, month) {
   return { ...(await detail(user, clientId, month)), result };
 }
 
+// ---------------------------------------------------------------- adding a client
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// A new client, by name (and brand). One removed before under the same name
+// comes back, with its months and tickets, rather than clashing with it —
+// names are unique even among removed clients.
+async function addClient(user, { name, brandName } = {}) {
+  if (!canAddClient(user)) throw ApiError.forbidden('Only the CEO and admin add a client');
+  const clean = String(name || '').trim().replace(/\s+/g, ' ');
+  if (!clean) throw ApiError.badRequest('Write the client’s name');
+  if (clean.length > 120) throw ApiError.badRequest('That name is too long');
+  const brand = String(brandName || '').trim().replace(/\s+/g, ' ').slice(0, 120) || undefined;
+
+  const same = await TaskClient.find({ name: new RegExp(`^${escapeRe(clean)}$`, 'i') });
+  const live = same.find((c) => !c.isDeleted);
+  if (live) throw ApiError.conflict(`${live.name} is already a client`);
+  const removed = same.find((c) => c.name === clean) || same[0];
+  if (removed) {
+    removed.isDeleted = false;
+    if (brand) removed.brandName = brand;
+    await removed.save();
+    return { client: { _id: idOf(removed._id), name: removed.name }, restored: true };
+  }
+  try {
+    const client = await TaskClient.create({ name: clean, brandName: brand });
+    return { client: { _id: idOf(client._id), name: client.name }, restored: false };
+  } catch (err) {
+    if (err.code === 11000) throw ApiError.conflict(`${clean} is already a client`);
+    throw err;
+  }
+}
+
 async function setPaused(user, clientId, paused) {
   if (!canPlan(user)) throw ApiError.forbidden('Only HR, the CEO and admin pause a client');
   const client = await loadClient(clientId);
@@ -422,4 +459,4 @@ async function carryOver(now = new Date()) {
   return late.length;
 }
 
-module.exports = { cards, detail, saveMonth, sync, generate, setPaused, rollMonth, carryOver, canPlan, canSeeMoney };
+module.exports = { cards, detail, saveMonth, sync, generate, addClient, setPaused, rollMonth, carryOver, canPlan, canSeeMoney };

@@ -32,6 +32,8 @@ export interface ClientCards {
   monthLabel: string
   types: ContentTypeInfo[]
   canPlan: boolean
+  // The CEO and admin add clients here.
+  canAddClient?: boolean
   canSeeMoney: boolean
   cards: ClientCard[]
 }
@@ -98,6 +100,9 @@ export const saveClientMonth = async (clientId: string, month: string, input: Sa
 export const generateClientMonth = async (clientId: string, month: string) =>
   (await apiClient.post<ClientMonthDetail>(`/client-work/clients/${clientId}/months/${month}/generate`)).data
 export const setClientPaused = async (clientId: string, paused: boolean) => (await apiClient.patch(`/client-work/clients/${clientId}/paused`, { paused })).data
+// `restored`: a client removed before under this name came back, with its history.
+export const addClient = async (input: { name: string; brandName?: string }) =>
+  (await apiClient.post<{ client: { _id: string; name: string }; restored: boolean }>('/client-work/clients', input)).data
 
 // ---- the work timer and time entries ------------------------------------------------
 

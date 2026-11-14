@@ -18,6 +18,14 @@ const audit = (req, action, resourceId, metadata) => {
 
 // ---- clients and their months
 router.get('/cards', asyncHandler(async (req, res) => res.json(await clientWork.cards(req.user, req.query))));
+router.post(
+  '/clients',
+  asyncHandler(async (req, res) => {
+    const out = await clientWork.addClient(req.user, req.body);
+    audit(req, out.restored ? 'clientWork.restoreClient' : 'clientWork.addClient', out.client._id, { name: out.client.name });
+    res.status(201).json(out);
+  })
+);
 router.get('/clients/:id/months/:month', asyncHandler(async (req, res) => res.json(await clientWork.detail(req.user, req.params.id, req.params.month))));
 router.put(
   '/clients/:id/months/:month',

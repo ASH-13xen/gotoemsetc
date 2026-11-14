@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, ChevronLeft, ChevronRight, History, Loader2, Lock, PauseCircle, PlayCircle, Save } from 'lucide-react'
+import { ArrowLeft, ChevronLeft, ChevronRight, History, Loader2, Lock, PauseCircle, PlayCircle, Plus, Save } from 'lucide-react'
 import { TicketNav } from '@/components/layout/TicketNav'
 import { PersonPicker, pickablePeople } from '@/components/tickets/WorkPanels'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { errorMessage } from '@/api/tickets.api'
-import { addMonth, hm, monthKeyOf, monthName, rupees, saveClientMonth, setClientPaused, type ContentType, type Counts, type MonthTicket } from '@/api/work.api'
+import { addClient, addMonth, hm, monthKeyOf, monthName, rupees, saveClientMonth, setClientPaused, type ContentType, type Counts, type MonthTicket } from '@/api/work.api'
 import { useTicketMeta } from '@/hooks/useTickets'
 import { useClientCards, useClientMonth, useWorkMutation } from '@/hooks/useWork'
 import { fade, fmtDate, inkOn } from '@/lib/ticketFormat'
@@ -43,11 +44,62 @@ function Bar({ done, made, committed, color }: { done: number; made: number; com
   )
 }
 
+// The CEO and admin add a client: its name (and brand), then on to its month
+// to set the plan that makes its tickets.
+function AddClientDialog({ month, onClose }: { month: string; onClose: () => void }) {
+  const navigate = useNavigate()
+  const [name, setName] = useState('')
+  const [brandName, setBrandName] = useState('')
+  const add = useWorkMutation(() => addClient({ name: name.trim(), brandName: brandName.trim() || undefined }))
+  const submit = () =>
+    add
+      .mutateAsync(undefined)
+      .then(({ client, restored }) => {
+        toast.success(restored ? `${client.name} is back — removed before, its history is kept` : `${client.name} added — now set this month's plan`)
+        onClose()
+        navigate(`/clients/${client._id}?month=${month}`)
+      })
+      .catch((err) => toast.error(errorMessage(err, 'Could not add the client')))
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add a client</DialogTitle>
+          <DialogDescription>Next, set the month's plan (reels, posts, stories and the team) to make its tickets.</DialogDescription>
+        </DialogHeader>
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (name.trim() && !add.isPending) submit()
+          }}
+        >
+          <div className="grid gap-1.5">
+            <Label htmlFor="client-name">Client name</Label>
+            <Input id="client-name" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Pvt Ltd" maxLength={120} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="client-brand">Brand name (optional)</Label>
+            <Input id="client-brand" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="Acme" maxLength={120} />
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={!name.trim() || add.isPending}>
+              {add.isPending ? <Loader2 className="size-4 animate-spin" /> : <Plus className="size-4" />}
+              Add client
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export function ClientsPage() {
   const [params, setParams] = useSearchParams()
   const month = params.get('month') || monthKeyOf()
   const { data, isLoading } = useClientCards(month)
   const [q, setQ] = useState('')
+  const [adding, setAdding] = useState(false)
   const cards = (data?.cards || []).filter((c) => !q.trim() || c.client.name.toLowerCase().includes(q.trim().toLowerCase()))
   return (
     <>
@@ -62,8 +114,19 @@ export function ClientsPage() {
           <div className="flex flex-wrap items-center gap-2">
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search clients" className="w-48" />
             <MonthSwitch month={month} onChange={(m) => setParams({ month: m }, { replace: true })} />
+            {data?.canAddClient && (
+              <Button onClick={() => setAdding(true)}>
+                <Plus className="size-4" />
+                Add client
+              </Button>
+            )}
           </div>
         </div>
+        {!isLoading && data && data.cards.length === 0 && (
+          <p className="rounded-2xl bg-card p-6 text-center text-sm text-muted-foreground ring-1 ring-border">
+            No clients yet.{data.canAddClient ? ' Add one to plan its month and make its tickets.' : ''}
+          </p>
+        )}
         {isLoading ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {[0, 1, 2].map((i) => (
@@ -121,6 +184,7 @@ export function ClientsPage() {
           </div>
         )}
       </main>
+      {adding && <AddClientDialog month={month} onClose={() => setAdding(false)} />}
     </>
   )
 }
